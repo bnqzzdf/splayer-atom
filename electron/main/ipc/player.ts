@@ -905,9 +905,10 @@ export const registerPlayerIpc = (): void => {
     wsBroadcast(stoppedEvent);
   };
   powerMonitor.on("resume", resumeHandler);
-  // 退出前停止设备监听并清理进程级 Direct 输入
+  // 退出前停止设备监听、释放播放器并清理进程级 Direct 输入
   app.on("before-quit", stopDeviceMonitoring);
   app.on("before-quit", () => {
+    resetPlayer();
     void cleanupDirectInputs();
   });
 };

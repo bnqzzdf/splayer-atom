@@ -4,15 +4,20 @@
 #include <ACQUA/Clock>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
 
 namespace {
 
 constexpr std::size_t kTextCapacity = 256;
+constexpr auto kConnectTimeout = std::chrono::seconds(10);
+constexpr auto kConnectPollInterval = std::chrono::milliseconds(10);
+constexpr auto kDisconnectTimeout = std::chrono::seconds(2);
 thread_local std::string g_last_error;
 
 using AtomDirettaNextBlock = bool (*)(void*, const std::uint8_t**, std::size_t*);
@@ -73,6 +78,32 @@ struct DirettaConnection {
   std::unique_ptr<DIRETTA::Find> find;
   std::unique_ptr<DirectSync> sync;
   DIRETTA::FormatConfigure format;
+
+  ~DirettaConnection() {
+    shutdown();
+  }
+
+  void shutdown() noexcept {
+    if (!sync) return;
+    try {
+      if (sync->is_connect()) {
+        sync->stop();
+        sync->releaseSourceBlock();
+        sync->disconnect_flgset();
+        sync->disconnect(false);
+        const auto disconnect_deadline = std::chrono::steady_clock::now() + kDisconnectTimeout;
+        while (sync->is_connect() &&
+               std::chrono::steady_clock::now() < disconnect_deadline) {
+          std::this_thread::sleep_for(kConnectPollInterval);
+        }
+      } else {
+        sync->releaseSourceBlock();
+      }
+      sync->close();
+    } catch (...) {
+      // SDK 清理失败不能穿过 C ABI 或析构边界。
+    }
+  }
 };
 
 bool discover(DIRETTA::Find& find, DIRETTA::Find::PortResalts& results) {
@@ -183,10 +214,22 @@ void* open_direct_with_format(
       ACQUA::Clock(),
       ACQUA::Clock::MicroSeconds(100000));
 
-    if (!connection->sync->connectPrepare() ||
-        !connection->sync->connect(0) ||
-        !connection->sync->connectWait()) {
-      set_error("failed to connect Diretta Source Direct target");
+    if (!connection->sync->connectPrepare()) {
+      set_error("failed to prepare Diretta Source Direct connection");
+      return nullptr;
+    }
+    if (!connection->sync->connect(0)) {
+      set_error("failed to start Diretta Source Direct connection");
+      return nullptr;
+    }
+
+    const auto connect_deadline = std::chrono::steady_clock::now() + kConnectTimeout;
+    while (!connection->sync->is_online() &&
+           std::chrono::steady_clock::now() < connect_deadline) {
+      std::this_thread::sleep_for(kConnectPollInterval);
+    }
+    if (!connection->sync->is_online()) {
+      set_error("timed out waiting for Diretta Source Direct connection");
       return nullptr;
     }
 
@@ -358,18 +401,6 @@ bool atom_diretta_pause(void* opaque) {
 void atom_diretta_close(void* opaque) {
   clear_error();
   auto connection = std::unique_ptr<DirettaConnection>(static_cast<DirettaConnection*>(opaque));
-  if (!connection || !connection->sync) return;
-  try {
-    if (connection->sync->is_connect()) {
-      connection->sync->stop();
-      connection->sync->releaseSourceBlock();
-      connection->sync->disconnect(true);
-      connection->sync->disconnectWait();
-    }
-    connection->sync->close();
-  } catch (...) {
-    // C ABI 析构路径不能传播异常。
-  }
 }
 
 } // extern "C"

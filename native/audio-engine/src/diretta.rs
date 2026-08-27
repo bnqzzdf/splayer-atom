@@ -515,6 +515,39 @@ mod tests {
             imp::DirettaDirectDsdConnection::finished;
     }
 
+    #[test]
+    fn bridge_cleans_partial_and_active_connections_without_unbounded_wait() {
+        let bridge = include_str!("../diretta/bridge.cpp");
+        let connection = bridge
+            .split("struct DirettaConnection")
+            .nth(1)
+            .and_then(|tail| tail.split("bool discover").next())
+            .expect("Diretta connection cleanup should exist");
+        assert!(connection.contains("~DirettaConnection()"));
+        assert!(connection.contains("shutdown();"));
+        assert!(connection.contains("disconnect_flgset();"));
+        assert!(connection.contains("disconnect(false);"));
+        assert!(connection.contains("kDisconnectTimeout"));
+        assert!(connection.contains("is_connect()"));
+        assert!(connection.contains("sync->close();"));
+        assert!(!connection.contains("disconnectWait"));
+
+        let open = bridge
+            .split("void* open_direct_with_format(")
+            .nth(1)
+            .and_then(|tail| tail.split("} // namespace").next())
+            .expect("Diretta open path should exist");
+        assert!(open.contains("kConnectTimeout"));
+        assert!(open.contains("is_online()"));
+        assert!(!open.contains("connectWait"));
+
+        let close = bridge
+            .split("void atom_diretta_close(void* opaque)")
+            .nth(1)
+            .expect("Diretta close entry should exist");
+        assert!(close.contains("unique_ptr<DirettaConnection>"));
+    }
+
     #[cfg(not(atom_diretta))]
     #[test]
     fn builds_without_sdk_and_reports_no_discoverable_targets() {

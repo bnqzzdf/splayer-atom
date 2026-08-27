@@ -7,7 +7,7 @@ Build SPlayer Atom as a continuously-updatable downstream of SPlayer-Next. Reuse
 Phase 16 — Diretta downstream backend
 
 ## Next Step
-All pre-hardware Diretta product work remains automated-proof complete, and the first non-interactive real-machine pass has now started on a real **DX5 II** Target. Real Target discovery, stable repeated selectors, Direct entry/fidelity guards, first 44.1 kHz/16-bit/stereo PCM Direct load/format negotiation, and exact seek are observed PASS. The current highest-priority acceptance defect is now concrete: after an abnormal client timeout/termination, discovery remains healthy but fresh processes can hang while creating the next Direct stream. The next exact stop is to localize and fix this **host-side Diretta session teardown/recovery** problem before continuing PCM lifecycle, gapless, DSD and long-run acceptance. Do not add speculative latency/thread/MTU tuning before measurements. Qobuz/TIDAL live-account acceptance remains separately deferred until user-owned credentials are available. See `docs/handoff-2026-08-27.md` for the operational commit and validation transfer.
+The two ownership-oriented safety commits and full committed baseline are complete. The real **DX5 II** stale-session defect is localized to SDK connection completion: all phases through `connect(0)` return, while `connectWait()` can hang. The bridge now bounds connection completion at 10 seconds, explicitly cleans partial/active connections without `disconnectWait()`, drains disconnect state before `close()`, and Electron `before-quit` explicitly stops the native player. Fresh processes now return a clear timeout and exit naturally, but the already-orphaned DX5 II session still rejects connection completion after bounded host cleanup. Stop automatic Direct loads until the Target state is externally reset; then run one bounded fresh-process recovery check before continuing PCM lifecycle, gapless, DSD and long-run acceptance. Qobuz/TIDAL live-account acceptance remains separately deferred until user-owned credentials are available.
 
 ## Principles
 - Track current SPlayer-Next `dev`; historical commits are archaeology only, never the permanent base.
@@ -110,10 +110,10 @@ All pre-hardware Diretta product work remains automated-proof complete, and the 
 
 ## Next Session Checklist
 1. Read `docs/handoff-2026-08-26.md` for architecture history, then `docs/handoff-2026-08-27.md` for the current operational handoff after `AGENTS.md`, `task_plan.md`, `findings.md`, and `progress.md`.
-2. Use normal local Git write access to create the two ownership-oriented commits described in the 2026-08-27 handoff; the previous DevSpace session could inspect Git but could not stage/commit.
-3. Re-run the complete automated baseline, then continue only from the real DX5 II session teardown/recovery defect. Do not redo discovery, online Direct input or Direct UI work.
+2. Preserve safety commits `e809887` and `c3cf146`; do not squash the maintenance-ownership split unless explicitly requested.
+3. The complete committed baseline and bounded-recovery regression are green. Resume hardware acceptance only after DX5 II state has been externally reset; do not redo discovery, online Direct input or Direct UI work.
 4. Keep reusing the existing `AudioDevice`, `settings.player.outputDevice`, `switchDevice()`, `DeviceSelector`, settings schema and player controls; do not add a second device store, OutputBackend, Zone, or Direct settings domain.
-5. Do not repeatedly hammer Direct `load()` against the currently stale session. First localize which SDK open/connect/close call blocks and implement only evidence-based bounded recovery. Continue PCM lifecycle/gapless/DSD/long-run acceptance after recovery is green. Keep Qobuz/TIDAL live-account and genuinely manual DAC/physical cases deferred.
+5. Do not issue another Direct `load()` against the currently stale session. After an external Target reset, verify one fresh process can connect/load/stop/exit within bounds, then continue PCM lifecycle/gapless/DSD/long-run acceptance. Keep Qobuz/TIDAL live-account and genuinely manual DAC/physical cases deferred.
 
 ## Architecture Guardrails
 - Default to **no Atom abstraction** until current upstream proves one is needed.
@@ -160,3 +160,4 @@ All pre-hardware Diretta product work remains automated-proof complete, and the 
 | Direct-UI touch audit exceeded the frozen 25-file business budget with exactly six planned mature UI/i18n surfaces | 1 | Re-evaluate the seam; confirm the only new upstream touches are Toolbar, EQ dialog, speed dialog, player settings, zh-CN and en-US. Keep Direct derivation/notice/tests Atom-owned and raise the explicit audited budget to 31. |
 | One DevSpace validation shell did not include Cargo in `PATH` | 1 | Use the installed `/home/bnqzzdf/.cargo/bin/cargo` explicitly; no project environment/config changes are needed. |
 | First local safety commit was rejected because this checkout had no Git author identity | 1 | Reused the established `Achilles Zhang <bnqzzdf@gmail.com>` identity from the related `tinylms-next` repository and configured it only for this repository. |
+| First recovery cleanup patch used a stale partial test-function anchor | 1 | The combined patch was rejected without changes; re-read the exact test tail and applied separate bridge/test patches with precise anchors. |

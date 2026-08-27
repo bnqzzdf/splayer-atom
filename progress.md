@@ -1,5 +1,19 @@
 # SPlayer Atom — Progress
 
+## 2026-08-27 — Local safety checkpoint and recovery investigation resumed
+
+- Created the two ownership-oriented safety commits: `e809887` for Atom-owned/downstream implementation and `c3cf146` for SPlayer integration seams. The working tree was clean immediately afterward.
+- Re-ran the full committed baseline successfully: Node 71/71, Web 54/54, typecheck, ESLint, production build, no-SDK audio-engine 100/100, SDK 149 audio-engine 95/95, SDK-enabled release build/addon load, required Direct exports, no TEXTREL, no dynamic libstdc++, 31-business + 2-generated touch audit, and committed diff whitespace checks.
+- Began the recovery investigation without issuing another Direct load. The first code inspection confirms that open/connect phases are not individually observable and close can wait indefinitely in `disconnectWait()`; the next step is to inspect SDK-supported timing/cancellation behavior before adding narrow diagnostics.
+- Built the SDK debug addon and used GDB breakpoints for one controlled silent-fixture attempt. DX5 II remained discoverable; every open phase through `connect(0)` returned, then `connectWait()` returned false and Node exited naturally. No repeated blind load loop was run.
+- Added shared RAII cleanup for partially opened and active bridge connections plus a static regression guard. Focused no-SDK and SDK-enabled tests pass.
+- The first post-cleanup recovery attempt still exceeded its 30-second external bound inside connection completion and was terminated with status 124. This rules out cleanup-only recovery and justifies replacing unbounded `connectWait()` with a deadline over the SDK's atomic connection state.
+- Replaced unbounded `connectWait()` with a 10-second poll of SDK atomic online state. Focused no-SDK/SDK tests pass; two hardware processes now fail explicitly in ~10.75 seconds and exit naturally rather than hanging. The second fresh-process attempt confirms immediate asynchronous disconnect + close does not yet clear the stale Target session.
+- Added a bounded disconnect-state drain before SDK `close()` and tested one cleanup process followed by one fresh reconnect. Both remained bounded and exited naturally, but DX5 II still rejected connection completion. Stopped further automatic Direct loads against this stale Target.
+- Audited Electron shutdown and found the native player was not explicitly stopped on `before-quit`. The existing `resetPlayer()` hook is already imported by the player IPC module and can close Direct playback without expanding the upstream touch inventory.
+- Added explicit native-player reset to the existing Electron `before-quit` path and an Atom-owned static shutdown guard. The upstream touch inventory remains 31 business files + 2 generated declarations.
+- Final recovery-patch validation is green: Node 72/72, Web 54/54, typecheck, ESLint, production build, no-SDK audio-engine 101/101, SDK 149 audio-engine 96/96, SDK-enabled release build/addon load, Direct exports, no TEXTREL, no dynamic libstdc++, touch audit and `git diff --check`.
+
 ## 2026-08-27 — First automated real-Diretta pass and local-agent transfer
 
 - Local-agent safety checkpoint confirmed the handoff inventory exactly: 31 upstream business files, 2 generated declarations, 3 downstream metadata files and 47 Atom-owned additions. The repository-local Git author identity was restored from the existing `tinylms-next` configuration before creating the ownership-oriented commits.
