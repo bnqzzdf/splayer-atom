@@ -2,9 +2,11 @@
 
 ## 2026-08-27 — Local safety commits and recovery-path inspection
 
+- 用户新增的 proven oracles 路径已确认：`tinyLMS`、`tinylms-next`、`slim2Diretta`、`DirettaRendererUPnP`。四者仅作为连接/生命周期行为证据；Atom 仍不得复制它们的播放器、重采样、全轨 RAM、重试或 watchdog 架构。
+- `DirettaRendererUPnP` v2.5.10 README 记录了一个与 Atom 现象高度一致的已修缺陷：Target 超过约 2 秒才进入 online 时，发送侧因 ring 为空而停止接收/填充真实音频，Target 持续收到静音并无法完成 online，形成死锁；其修复允许 `sendAudio()` 在 online 超时后继续填 ring，使 Target 收到真实数据并正常转为 online。Atom 当前 paused-load 顺序同样是“等待 online 后 `load(false)` 才返回，而 `play()` 只能随后调用”，需检查是否存在相同的上线前真实数据/启动握手闭环。
 - 新一轮离线对照必须区分 SDK 149 `SinHost` 中的两种调用模型：`SyncBuffer` 示例使用 `setSink(..., false, mtu)`，而直接派生 `Sync` 的示例使用 `setSink(..., true, mtu)`。Atom 的 `DirectSync` 直接派生 `DIRETTA::Sync`，因此不能仅因 tinyLMS 使用 `false` 就认定该布尔值错误；需先核对 tinyLMS 的具体基类、数据供给模型和完整时序。
 - 完整源码确认 tinyLMS 的 `DirettaSyncImpl` 同样直接派生 `DIRETTA::Sync`，并在用户已验证的长期播放路径中使用 `THRED_MODE(289)`、按 MTU/源码率计算的 info cycle、`setSink(..., 30 ms, false, measured_mtu)`、优先 PCM32、相同的 `MSMODE_AUTO`、`connectPrepare(true)`、`connect(0)` 和 `connectWait()`。因此它与 Atom 属于同一 pull-callback 调用模型，不是 `SyncBuffer` 架构差异。
-- SDK 头文件把 `setSink` 第三个参数描述为“Disable Sink's playback rejection (NOP)”。官方直接派生 `Sync` 示例传 `true`，tinyLMS 则明确以“由手动 `play()` 控制”为理由传 `false`。Atom 也是 load-paused 后显式 `play()`，所以该布尔值是当前最窄、最契合产品时序的候选差异，但仍需通过历史和静态证据排除其它协商参数后再修改。
+- SDK 头文件把 `setSink` 第三个参数描述为“Disable Sink's playback rejection (NOP)”。官方直接派生 `Sync` 示例传 `true`，tinyLMS 则传 `false`；结合头文件与后续实测，这个差异不是连接修复变量，Atom 保持官方 pull 示例的 `true`。
 - 对 44.1 kHz / 16-bit / stereo 静音输入，Atom 与已验证 tinyLMS 的连接前差异矩阵为：线程模式 `5` vs `289`；info cycle `100 ms` vs 约 `8231 us`；Sink buffer `100 ms` vs `30 ms`；NOP `true` vs `false`；wire PCM `S16` vs 优先 `S32`；transfer 最长恢复周期 `100 ms` vs `30 ms`。连接顺序和 Target/interface/MTU/`MSMODE_AUTO` 相同。成功后的 300 ms 等待不可能解释进入 online 前的超时。
 - Git 历史确认 Atom 第一次真实 Direct paused load 成功时的 bridge 已使用当前相同的 mode 5 / 100 ms / NOP `true` / exact S16 / 100 ms transfer 参数；之后 `55fa9eb` 才把 `connectWait()` 替换为固定 10 秒 `is_online()` 轮询并加入清理。故这些基础参数至少曾完成过同一 DX5 II 的连接，当前首要回归差异是过早的 10 秒截止，而不是应先复制 tinyLMS 的调优/位宽策略。
 - SDK 自身 `connectWait()` 的观察窗口约 50 秒，而有效 root 测试在约 10.76 秒由 Atom 自己返回超时。现有静态事实只能证明 `is_online()` 可观察最终状态，不能证明 10 秒足以覆盖正常 Target 协商；因此 `55fa9eb` 的 10 秒常量可能把仍在 SDK 合法连接窗口内的请求误判失败。下一证据应来自 tinyLMS 已有连接日志或一次经用户确认的延长窗口单变量测试。
@@ -274,3 +276,19 @@
 - Exact PCM negotiation currently supports S16 and S32 transport at the original source sample rate and channel count. Unsupported Target combinations fail explicitly; no 32→24/16 fallback, resampling, remix, or silent processed path exists.
 - DirettaHostSDK 149 Linux x64 static archives are non-PIC, so a normal Rust `cdylib` link initially failed even though executable/test links succeeded. A standalone link probe showed the safe in-process solution: statically bind libstdc++ and link the final addon with `-Bsymbolic`. The real release `audio-engine.node` now links and loads successfully with no `TEXTREL` and no dynamic `libstdc++.so` dependency, preserving the single-address-space zero-copy design.
 - Premature NAPI/TypeScript Diretta device-scanning exposure was removed from this HiFi Gate. Until the user approves the audio proof, the Diretta direct core remains an internal optional native seam compiled only for `atom_diretta`/tests; ordinary no-SDK SPlayer builds contain no Diretta direct core and remain warning-free.
+### 2026-08-27：四组可工作实现的连接完成语义
+
+- `tinyLMS`、`slim2Diretta`、`DirettaRendererUPnP` 的源码连接路径，以及 Diretta SDK 自带示例，都在 `connectPrepare()` / `connect(0)` 之后调用 `connectWait()`。
+- `slim2Diretta` 与 `DirettaRendererUPnP` 都在 `connectWait()` 完成后调用 `play()`，随后才等待 `is_online()`；Renderer 2.5.10 甚至明确修复了“等待 online 时不给 Target 音频，导致 Target 永远不能 online”的闭环。
+- `tinyLMS` 的暂停加载语义更直接：`SetFormat` 通过 `connectWait()` 完成连接并返回，真正的 `play()` 留到后续播放命令。也就是说，连接准备完成不等同于尚未播放时必须已经 `online`。
+- Atom 当前是唯一跳过 `connectWait()`、并在 `play()` 发生前强制等待 `is_online()` 的实现。此前用限时 `is_online()` 轮询替换 `connectWait()`，把“连接完成”和“Target 已进入传输在线态”混为一谈，极可能正是暂停加载稳定失败的语义回归。
+- 因此优先修复方向不是继续延长 online 超时，而是恢复 SDK 的连接完成协议：连接阶段以 `connectWait()` 为准；暂停加载不得要求预先 online；只有开始传输后才观察 online。仍需独立解决异常条件下连接等待必须可退出的问题。
+- `DirettaRendererUPnP` 当前 Makefile 明确编译 `src/DirettaSync.cpp`，不是仓库中保留的 `src/sync/DirettaSync.cpp` 旧副本；因此 2.5.10 的 online-timeout/ring 恢复逻辑确实属于当前构建路径，而非未使用的参考代码。
+- `tinylms-next` 可审计证据止于 TypeScript/N-API 边界：应用仅通过同一个 `AudioPlayer` 调用 `setOutputBackend("diretta", deviceId)`，没有另建播放器或在 JavaScript 传输 PCM；连接细节封装在保留的 `audio-engine.node` 中。该仓库能证明产品调用边界与暂停/后续播放模型，但不能从现有源码直接证明 SDK 内部连接时序，因此不对二进制继续做反汇编推断。
+- Git 对照确认 `55fa9eb` 之前的 Atom bridge 本来就使用 `connectPrepare()` → `connect(0)` → `connectWait()`，且不在 open 阶段要求 `is_online()`；`55fa9eb` 为限制异常等待而改成了 10 秒 online 轮询。当前故障因此不是最初连接参数从未可用，而是退出性修复错误替换了 SDK 的连接完成语义。
+- Rust `DirectPlayback::open_local(..., auto_play)` 已经正确区分暂停加载和开始播放：Native bridge open 返回后，只有 `auto_play=true` 才调用 `atom_diretta_play()`。最小修复应保留这个既有生命周期，不把 `play()` 偷渡进 bridge open。
+- SDK 149 公共头文件把 `connectWait()` 明确定义为“wait for connection completion”；同时 `is_connect()` 包含 `CONNECT_REQ / CONNECT / DISCONNECT_REQ`，而 `is_online()` 只等于 `CONNECT`。因此现有 online 轮询既不是 connectWait 的等价替代，也不能用 `is_connect()` 简单替代。
+- SDK 的 `setSink(..., bool, ...)` 第三个参数在 149 头文件中标为 NOP（“Disable Sink's playback rejection (NOP)”）。工作实现普遍传 `false`、Atom/官方 pull 示例传 `true` 的差异不是当前连接失败的有效修复变量。
+- SDK 149 没有公开带超时的 `connectWait()` 重载，也没有公开连接等待取消 API；三个工作实现都同步调用它。最小可证修复应先恢复该公开协议，不发明跨线程中止 SDK 对象的未文档化并发用法；异常占用/权限状态仍由外层硬件测试边界和明确错误处理继续收敛。
+- 最小修复的真实 root/独占 Target 验证成功：动态发现唯一 `DX5 II`，PCM16 44.1 kHz 本地音源 `load(false)` 在约 384 ms 返回，播放器状态为 `paused`，随后 `stop()`并自然退出 0。该结果直接证明 SDK 连接完成不要求暂停态预先 online，也证明此前 10/60 秒 online 超时不是 Target 性能或等待窗口问题。
+- 5 秒 PCM16/44.1 kHz/stereo Source Direct 生命周期也通过真实 Target：首次播放约 750 ms 后位置 0.743 s，暂停稳定保持在 0.836 s，恢复后推进到 1.579 s，最终 stop 并自然退出 0。连接修复同时覆盖实际 online/数据传输、暂停和恢复，不只是让 open 提前返回。

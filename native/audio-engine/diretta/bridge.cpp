@@ -15,7 +15,6 @@
 namespace {
 
 constexpr std::size_t kTextCapacity = 256;
-constexpr auto kConnectTimeout = std::chrono::seconds(10);
 constexpr auto kConnectPollInterval = std::chrono::milliseconds(10);
 constexpr auto kDisconnectTimeout = std::chrono::seconds(2);
 thread_local std::string g_last_error;
@@ -222,14 +221,8 @@ void* open_direct_with_format(
       set_error("failed to start Diretta Source Direct connection");
       return nullptr;
     }
-
-    const auto connect_deadline = std::chrono::steady_clock::now() + kConnectTimeout;
-    while (!connection->sync->is_online() &&
-           std::chrono::steady_clock::now() < connect_deadline) {
-      std::this_thread::sleep_for(kConnectPollInterval);
-    }
-    if (!connection->sync->is_online()) {
-      set_error("timed out waiting for Diretta Source Direct connection");
+    if (!connection->sync->connectWait()) {
+      set_error("failed to complete Diretta Source Direct connection");
       return nullptr;
     }
 

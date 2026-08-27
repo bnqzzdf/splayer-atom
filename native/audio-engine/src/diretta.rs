@@ -516,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn bridge_cleans_partial_and_active_connections_without_unbounded_wait() {
+    fn bridge_keeps_connection_completion_separate_from_playback_online_state() {
         let bridge = include_str!("../diretta/bridge.cpp");
         let connection = bridge
             .split("struct DirettaConnection")
@@ -537,9 +537,11 @@ mod tests {
             .nth(1)
             .and_then(|tail| tail.split("} // namespace").next())
             .expect("Diretta open path should exist");
-        assert!(open.contains("kConnectTimeout"));
-        assert!(open.contains("is_online()"));
-        assert!(!open.contains("connectWait"));
+        assert!(open.contains("connectPrepare()"));
+        assert!(open.contains("connect(0)"));
+        assert!(open.contains("connectWait()"));
+        assert!(!open.contains("is_online()"));
+        assert!(!open.contains("->play()"));
 
         let close = bridge
             .split("void atom_diretta_close(void* opaque)")

@@ -2,6 +2,7 @@
 
 ## 2026-08-27 — Local safety checkpoint and recovery investigation resumed
 
+- User added three more proven local connection oracles beside tinyLMS: tinylms-next, slim2Diretta and DirettaRendererUPnP. Starting a read-only four-way SDK connection/lifecycle matrix; no Target access or implementation change occurs until the shared successful contract is identified.
 - Resumed the user-requested root-cause fix without touching the Target. Full same-model comparison shows Atom and tinyLMS both derive `DIRETTA::Sync`; Atom's format/transport parameters had already produced the first successful real paused load, while `55fa9eb` later introduced the only connection-completion regression: a fixed 10-second `is_online()` deadline replacing the SDK's full wait. Existing tests prove boundedness but not a sufficient negotiation window. Preparing a one-constant 60-second bounded-wait correction plus regression assertion; no tinyLMS tuning, format widening or new architecture is being copied.
 - Applied the one-constant 60-second bounded negotiation candidate and locked it with the existing bridge static regression. Focused no-SDK and SDK-enabled tests both pass. The first SDK release addon rebuild then hit an internal Rust 1.98 LLVM/LTO `GlobalOptPass` SIGSEGV rather than a source diagnostic; retrying with rustc's recommended larger `RUST_MIN_STACK`, not repeating the identical failed invocation.
 - Retried the SDK-enabled release build with `RUST_MIN_STACK=16777216`; LTO completed and all four native release modules built successfully. The compiler crash is resolved as a toolchain-stack event rather than a source failure.
@@ -196,3 +197,23 @@
 - Qobuz credential discovery is being simplified around the qobuz-dl-proven Web Player Bundle route: no runtime dependency on qobuz-dl, no qobuz-dl config import, no disk cache of discovered app secrets; environment credentials remain an explicit override.
 - Implemented Atom-owned Web Player credential discovery with app-id + timezone/seed-derived secret candidates, in-memory winner reuse for signed requests, and updated Qobuz token validation to current `X-User-Auth-Token` + `user/get` semantics so `QOBUZ_USER_ID` is no longer required.
 - Live Web Player discovery succeeds against the current site and returns four signing candidates without logging any secret values. Full regression remains green: Node 49/49, Web 54/54, typecheck, lint, production Electron/Vite build, and the upstream-touch budget all pass; upstream business-code touches remain 8.
+### 2026-08-27：连接语义交叉验证（进行中）
+
+- 已对照 `tinyLMS`、`slim2Diretta`、`DirettaRendererUPnP` 与 SDK 示例，确认四者都保留 `connectWait()`。
+- 已确认 Atom 当前独有的“跳过 `connectWait()`，在播放前等待 `is_online()`”不符合这些实现的连接时序；下一步核实实际构建源文件与 tinyLMS-NEXT 调用证据，再制定最小修复。
+- 本轮只做离线源码分析，未访问 Diretta Target。
+- 已确认 `tinylms-next` 的可维护源码只在统一 Native 播放器上切换 `diretta` 后端；其具体 SDK 连接逻辑仅存在于保留二进制，后续不把不可审计的内部细节当作修复依据。
+- 已通过 Git 历史定位回归点：`55fa9eb` 把 `connectWait()` 替换成了播放前 `is_online()` 轮询；正在寻找 SDK 支持的可退出等待方式，避免只恢复旧的潜在无限等待。
+- 已完成最小 bridge 修复：恢复 `connectPrepare()` → `connect(0)` → `connectWait()`，删除播放前 online 轮询；未改格式、传输参数、Source Direct 数据路径或 Rust 播放生命周期。
+- 已更新静态回归，明确 open 必须执行 `connectWait()`、不得等待 `is_online()`、不得提前 `play()`；无 SDK 聚焦测试 6/6 通过。
+- SDK 149 实际编译/链接后的聚焦测试 5/5 通过；输出仅包含既有 SDK 头文件与 cfg 测试告警。
+- 完整 Native 回归通过：无 SDK 101/101，SDK 149 96/96。
+- 仓库级 `cargo fmt --check` 会要求重排多份未修改且已提交的 Rust 文件，属于当前 rustfmt 版本与基线的既有差异；未批量改动。`git diff --check` 对本轮全部差异通过。
+- SDK 149 release Native 构建完成；`audio-engine` LTO 约 1 分 49 秒，四个 Native 模块全部构建成功，仅有既有 SDK 头文件告警。
+- 新构建的 `audio-engine.node` 是有效 x86-64 ELF；动态段无 `TEXTREL`，依赖中无动态 `libstdc++`。下一步验证实际 Node 加载与导出，再执行单次 root 硬件检查。
+- release addon 已由 Node 实际加载，`AudioPlayer`、`scanDirettaDevices`、`stageDirectNext` 导出存在；本机 `sudo -n` 可用，能够按硬性要求以 root 运行单次测试。
+- 第一次 `sudo node` 在执行脚本前因 root PATH 中没有 `node` 退出，未扫描或接触 Target；改用 Node 绝对路径后才执行唯一硬件尝试。
+- root 实测成功：唯一 DX5 II 被动态发现，PCM16/44.1 kHz `load(false)` 约 384 ms 完成，返回 paused/position 0/duration 0.12/volume 1；随后 stop，进程自然退出 0，无重试、无 SSH、无 Target 重启。
+- root 完整生命周期实测通过：5 秒 PCM16/44.1 kHz/stereo 静音源 load-paused 成功，play 后位置 0.743 s，pause 保持 0.836 s，resume 后推进到 1.579 s，stop 后进程自然退出 0。
+- 比例项目门禁全部通过：Node 72/72、Web 54/54、typecheck、ESLint、跳过重复 Native 编译的 production build、touch audit（31 business + 2 generated）与 `git diff --check`。
+- 已删除一次性 Node 生命周期脚本和 5 秒静音测试文件；Target 由成功测试正常 stop/release，未执行 SSH 或重启。
