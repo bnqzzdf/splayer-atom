@@ -1,5 +1,42 @@
 # AGENTS.md
 
+## SPlayer Atom mandatory downstream rules
+
+These rules have priority over downstream architectural preferences. Preserve the upstream engineering conventions below unless an Atom rule explicitly constrains the design.
+
+**SPlayer owns the architecture; Atom owns only the delta.** SPlayer Atom is a continuously updated downstream of SPlayer-Next. The default decision is always to reuse current upstream implementation, data models, stores, services, plugin hooks, and native interfaces. Atom must not create a parallel application architecture around SPlayer.
+
+1. **Reuse before abstraction.** Before adding an Atom interface, registry, adapter, model, service, store, or state machine, inspect current upstream for an existing capability that can be reused directly.
+2. **No speculative abstractions.** Add an Atom abstraction only when upstream lacks the capability, a real Atom requirement exists, and a concrete integration point cannot be served cleanly without it.
+3. **Prefer upstream types.** Do not duplicate SPlayer media, queue, library, player, lyric, settings, transport, or persistence models unless a proven incompatibility requires a small extension type.
+4. **Prefer thin integration over translation layers.** If Atom can call an upstream service/store/type directly, do that. Do not add ports/adapters merely for architectural symmetry.
+5. **One source of truth.** Never maintain a second player, queue, library, settings state, or media model alongside SPlayer. Headless and compatibility surfaces must use the same upstream runtime state as the desktop UI.
+6. **Delay domain creation.** Headless/Core, Zones, output-management layers, and similar concepts are not automatically first-class Atom domains. Promote them only after a real requirement proves upstream cannot represent them cleanly.
+7. **Concrete first, generic later.** Implement the first real provider/output integration concretely against current upstream. Generalize only after repeated real duplication appears.
+8. **No broad upstream surgery.** A feature requiring widespread edits across upstream pages, stores, services, or native modules is an architecture smell. Stop and redesign the seam before proceeding.
+9. **Minimize upstream-owned edits.** Track upstream touch count, but never add wrappers merely to satisfy a file-count target.
+10. **Legacy is an oracle, not architecture.** `/home/bnqzzdf/code/tinylms-next` and retained tinyLMS artifacts describe compatibility behavior; do not preserve recovered internal structure unless it remains a real Atom requirement.
+
+For every feature, decide in this order: reuse current upstream → use an existing upstream hook → confirm a true Atom-specific gap → implement the smallest concrete delta → generalize only after repeated need.
+
+The only currently confirmed major Atom-owned product deltas are Qobuz and Tidal capabilities missing from current upstream, plus Diretta output integration. Current upstream already owns NetEase, QQ Music, and Kugou; Atom must reuse those implementations rather than fork or duplicate them. Everything else remains subject to upstream inspection and may be reduced or omitted.
+
+### Diretta Source Direct invariants
+
+Diretta is not merely another SPlayer output backend. It is an Atom product-quality **Source Direct** path and may bypass upstream audio processing where that processing would alter source audio.
+
+- Preserve the source sample rate, channel count, effective PCM bit depth/sample values, and native DSD payload whenever the selected Diretta Target supports them.
+- Do not route strict Diretta playback through SPlayer's normal `f32` player resampler/DSP path. No resampling, remixing, EQ, normalization, software volume, fade, tempo, pitch, or re-encoding is allowed in Source Direct mode.
+- Lossless codec decoding (for example FLAC/ALAC to the exact original PCM samples) is decoding, not transcoding. Padding into a wider integer transport slot is allowed only when sample bits remain unchanged. Native DSD must remain native DSD and must not be converted to PCM.
+- If the Target cannot accept the exact direct format, do not silently fall back to processed audio. Fail the strict direct path or require an explicit non-direct mode outside the Source Direct claim.
+- While Source Direct is active, any operation that would alter samples must be explicitly rejected rather than silently applied or used to leave Direct mode. This includes software volume below unity, normalization/ReplayGain, EQ/preamp, fade processing, tempo, and pitch. The caller must receive a clear Direct-mode error instructing the user to exit Source Direct first.
+- The output hot path must avoid redundant sample copies. Prefer FFmpeg/Diretta-owned buffer borrowing or ref-counted frame ownership, with no heap allocation, mutex, logging, discovery, format negotiation, or business logic in the SDK real-time callback.
+- `tinyLMS` is evidence, not the fidelity reference implementation. Reuse its proven Diretta protocol/lifecycle lessons, but reject its PCM normalization/resampling, whole-track RAM architecture, or unsafe buffer-lifetime assumptions when they conflict with these invariants.
+
+Before merging architecture-affecting work, ask: could upstream do this directly; did we abstract before a real need; did we create a second source of truth; did we modify more upstream than necessary; can any new Atom layer be deleted without losing required behavior? For Diretta also ask: did any sample value, rate, channel layout, or DSD bitstream change between source decode and Target? If unnecessary structure or audio processing is found, simplify before continuing.
+
+## Upstream repository guidance
+
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Project Overview

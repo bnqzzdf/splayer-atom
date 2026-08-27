@@ -19,6 +19,8 @@
 
 ---
 
+> **SPlayer Atom downstream:** This repository is a downstream distribution of SPlayer-Next. SPlayer-Next remains the upstream project and its original copyright and AGPL-3.0 license notices are preserved. Atom-specific changes are maintained as the smallest possible downstream delta.
+
 ## Features
 
 - 🎵 **Broad format support** — MP3, FLAC, WAV, AAC, OGG, APE, and more, decoded via FFmpeg

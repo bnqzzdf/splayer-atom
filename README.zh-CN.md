@@ -19,6 +19,8 @@
 
 ---
 
+> **SPlayer Atom 下游说明：** 本仓库是 SPlayer-Next 的下游发行版。SPlayer-Next 仍是上游项目，原有版权与 AGPL-3.0 许可声明保持不变；Atom 仅维护尽可能小的下游差异。
+
 ## 功能特性
 
 - 🎵 **广泛的格式支持** —— MP3、FLAC、WAV、AAC、OGG、APE 等，基于 FFmpeg 解码
