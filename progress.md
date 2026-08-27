@@ -2,6 +2,8 @@
 
 ## 2026-08-27 — Local safety checkpoint and recovery investigation resumed
 
+- Ran the single authorized post-release check in a fresh Node process with a 35-second external bound. DX5 II discovery/selection passed at about 0.38 seconds; silent PCM `load(false)` returned the bridge's explicit connection timeout at about 10.76 seconds. Node exited naturally with status 1, no outer kill was needed, and no second hardware attempt was made. Hardware work is paused for user discussion.
+- The user confirmed DX5 II was released from the other program and authorized exactly one bounded fresh-process connection/load/stop/natural-exit check, with any failure stopping the hardware sequence for discussion rather than triggering an automatic retry.
 - User clarified that DX5 II was most likely occupied by another program during the failed connection attempts. The earlier stale/orphaned-session interpretation was not proven. Future ambiguous hardware failures stop immediately for user confirmation of exclusive Target availability before any retry, recovery conclusion or reset request.
 - Created the two ownership-oriented safety commits: `e809887` for Atom-owned/downstream implementation and `c3cf146` for SPlayer integration seams. The working tree was clean immediately afterward.
 - Re-ran the full committed baseline successfully: Node 71/71, Web 54/54, typecheck, ESLint, production build, no-SDK audio-engine 100/100, SDK 149 audio-engine 95/95, SDK-enabled release build/addon load, required Direct exports, no TEXTREL, no dynamic libstdc++, 31-business + 2-generated touch audit, and committed diff whitespace checks.
