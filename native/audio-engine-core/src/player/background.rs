@@ -94,6 +94,53 @@ impl InnerPlayer {
         let stop_flag = Arc::new(AtomicBool::new(false));
         self.position_timer_stop = Some(Arc::clone(&stop_flag));
 
+        #[cfg(any(atom_diretta, test))]
+        if let Some((monitor, seek_base, initial_transition_count)) = self.direct_monitor() {
+            let cb = match &self.event_callback {
+                Some(cb) => Arc::clone(cb),
+                None => return,
+            };
+            let handle = thread::spawn(move || {
+                let mut last_transition_count = initial_transition_count;
+                while !stop_flag.load(Ordering::Relaxed) {
+                    let transition_count = monitor.transition_count();
+                    if transition_count != last_transition_count {
+                        for _ in last_transition_count..transition_count {
+                            cb(PlayerEvent::DirectTrackBoundary {
+                                duration: monitor.duration(),
+                                generation: monitor.boundary_generation(),
+                            });
+                        }
+                        last_transition_count = transition_count;
+                    }
+                    let position = if transition_count == initial_transition_count {
+                        seek_base + monitor.consumed_position()
+                    } else {
+                        monitor.consumed_position()
+                    };
+                    let duration = monitor.duration();
+                    cb(PlayerEvent::Position { position, duration });
+                    if monitor.failed() {
+                        cb(PlayerEvent::SourceError);
+                        cb(PlayerEvent::StateChanged {
+                            state: PlayerState::Stopped,
+                        });
+                        break;
+                    }
+                    if monitor.finished() {
+                        cb(PlayerEvent::Ended);
+                        cb(PlayerEvent::StateChanged {
+                            state: PlayerState::Stopped,
+                        });
+                        break;
+                    }
+                    sleep_unless_stopped(&stop_flag, Duration::from_millis(200));
+                }
+            });
+            self.position_timer_handle = Some(handle);
+            return;
+        }
+
         let shared = match &self.shared {
             Some(s) => Arc::clone(s),
             None => return,
@@ -162,6 +209,9 @@ impl InnerPlayer {
     #[cfg(feature = "fft")]
     pub(super) fn start_fft_timer(&mut self) {
         self.stop_fft_timer();
+        if self.direct_active() {
+            return;
+        }
         if !self.fft_enabled() {
             return;
         }

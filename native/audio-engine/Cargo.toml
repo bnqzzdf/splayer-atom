@@ -21,6 +21,11 @@ tokio = { version = "1", features = ["rt"] }
 
 [build-dependencies]
 napi-build = "2.4.1"
+cc = "1.2.58"
+
+[dev-dependencies]
+base64 = "0.22.1"
+httpmock = "0.8.3"
 
 [lints]
 workspace = true

@@ -74,6 +74,18 @@ const api = {
     stop: () => ipcRenderer.invoke("player:stop"),
     // 跳转到指定位置（毫秒）
     seek: (position: number) => ipcRenderer.invoke("player:seek", position),
+    // 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源
+    stageDirectNext: (source: string, durationMs: number, generation: number) =>
+      ipcRenderer.invoke("player:stageDirectNext", source, durationMs, generation),
+    // 作废尚未进入 Direct ring 的 staged 下一音源
+    cancelDirectNext: () => ipcRenderer.invoke("player:cancelDirectNext"),
+    // Direct 无缝边界发生后同步当前 source 与权威歌曲元数据
+    commitDirectGaplessBoundary: (
+      source: string,
+      durationMs: number,
+      meta?: LoadOptions["meta"],
+      context?: LoadOptions["context"],
+    ) => ipcRenderer.invoke("player:commitDirectGaplessBoundary", source, durationMs, meta, context),
     // 设置音量（0.0 ~ 1.0）
     setVolume: (volume: number) => ipcRenderer.invoke("player:setVolume", volume),
     // 设置输出设备切换时暂停播放
@@ -112,6 +124,11 @@ const api = {
     reinit: () => ipcRenderer.invoke("player:reinit"),
     // 获取所有音频输出设备
     getOutputDevices: () => ipcRenderer.invoke("player:getOutputDevices"),
+    // 异步扫描 Diretta Target
+    scanDirettaDevices: () => ipcRenderer.invoke("player:scanDirettaDevices"),
+    // 将在线音源物化为 Source Direct 可 seek 的本地临时文件
+    materializeDirectInput: (source: string) =>
+      ipcRenderer.invoke("player:materializeDirectInput", source),
     // 获取系统默认输出设备名称
     getDefaultDeviceName: () => ipcRenderer.invoke("player:getDefaultDeviceName"),
     // 切换输出设备（传设备 ID，null 使用系统默认）

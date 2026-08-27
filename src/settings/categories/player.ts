@@ -1,6 +1,8 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
 import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
+import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue";
+import { isDirectOutputSelected } from "@/core/player/directMode";
 import IconLucidePlay from "~icons/lucide/play";
 
 /** 当前是否为流体背景 */
@@ -13,6 +15,14 @@ const playerCategory: SettingCategory = {
     {
       id: "playControl",
       items: [
+        {
+          key: "directModeNotice",
+          type: "custom",
+          component: DirectModeNotice,
+          fullWidth: true,
+          searchable: false,
+          visible: isDirectOutputSelected,
+        },
         {
           key: "autoPlay",
           type: "switch",
@@ -36,6 +46,7 @@ const playerCategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "system.player.fadeEnabled" },
           defaultValue: true,
+          disabled: isDirectOutputSelected,
           children: [
             {
               key: "fadeDuration",
@@ -46,6 +57,7 @@ const playerCategory: SettingCategory = {
               step: 100,
               defaultValue: 200,
               marks: { 100: "100", 200: "200", 600: "600" },
+              disabled: isDirectOutputSelected,
             },
           ],
         },
@@ -54,6 +66,7 @@ const playerCategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "system.player.loudnessNormalization" },
           defaultValue: false,
+          disabled: isDirectOutputSelected,
           tag: { text: "Beta" },
         },
       ],

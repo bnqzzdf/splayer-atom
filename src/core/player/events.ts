@@ -7,7 +7,9 @@ import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
 import * as playStats from "./stats";
+import { consumeDirectGaplessBoundary } from "@/services/nextTrackPreloader";
 import {
+  commitDirectGaplessTrack,
   hasReachedSeekTarget,
   insertManyToQueue,
   isSeeking,
@@ -19,9 +21,11 @@ import {
   prevTrack,
   recoverFromSourceFailure,
   refreshDevices,
+  reloadCurrentQueueTrack,
   seek,
   setRepeatMode,
   setShuffleMode,
+  stop,
 } from "./index";
 
 /** 防止 ended 事件重入 */
@@ -107,6 +111,36 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     case "ended": {
       await finishCurrentTrack();
+      break;
+    }
+    case "directTrackBoundary": {
+      const preloaded = consumeDirectGaplessBoundary(event.data.generation);
+      if (!preloaded) {
+        // native 已经跨过边界但 renderer 上下文已变化：显式重建当前应播放的队列语义。
+        const stopByTimer = autoClose.onTrackEnded();
+        const repeatOne = status.repeatMode === "one" && !status.fmMode;
+        playStats.onTrackEnded(repeatOne && !stopByTimer);
+        await stop();
+        if (stopByTimer) break;
+        if (repeatOne) {
+          await reloadCurrentQueueTrack();
+        } else {
+          await nextTrack();
+        }
+        break;
+      }
+
+      const stopByTimer = autoClose.onTrackEnded();
+      playStats.onTrackEnded(false);
+      if (stopByTimer) {
+        await stop();
+        break;
+      }
+
+      if (!(await commitDirectGaplessTrack(preloaded))) {
+        await stop();
+        await nextTrack();
+      }
       break;
     }
     case "sourceError":

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useStatusStore } from "@/stores/status";
 import * as player from "@/core/player";
+import { useDirectModeState } from "@/core/player/directMode";
+import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue";
 
 defineProps<{ open: boolean }>();
 
@@ -8,6 +10,7 @@ const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 const { t } = useI18n();
 const status = useStatusStore();
+const { sampleControlsUnavailable: directLocked } = useDirectModeState();
 
 const SPEED_MIN = 0.5;
 const SPEED_MAX = 2.0;
@@ -41,28 +44,35 @@ const formatPitch = (n: number): string => {
 const isPresetActive = (v: number): boolean => Math.abs(localSpeed.value - v) < 1e-3;
 
 const onSpeedChange = (v: number): void => {
+  if (directLocked.value) return;
   localSpeed.value = v;
 };
 const onSpeedCommit = (v: number): void => {
+  if (directLocked.value) return;
   player.setSpeed(v).catch(() => {});
 };
 const onPresetClick = (v: number): void => {
+  if (directLocked.value) return;
   localSpeed.value = v;
   player.setSpeed(v).catch(() => {});
 };
 
 const onPitchChange = (v: number): void => {
+  if (directLocked.value) return;
   localPitch.value = v;
 };
 const onPitchCommit = (v: number): void => {
+  if (directLocked.value) return;
   player.setPitch(v).catch(() => {});
 };
 
 const onSyncToggle = (v: boolean): void => {
+  if (directLocked.value) return;
   player.setPitchSync(v).catch(() => {});
 };
 
 const handleReset = (): void => {
+  if (directLocked.value) return;
   player.setSpeed(1.0).catch(() => {});
   player.setPitch(0).catch(() => {});
   player.setPitchSync(true).catch(() => {});
@@ -77,6 +87,7 @@ const handleReset = (): void => {
     @update:open="emit('update:open', $event)"
   >
     <div class="flex flex-col gap-5">
+      <DirectModeNotice />
       <!-- 速度 -->
       <div class="flex flex-col gap-2.5">
         <div class="flex items-baseline justify-between">
@@ -92,6 +103,7 @@ const handleReset = (): void => {
             :variant="isPresetActive(preset) ? 'secondary' : 'ghost'"
             size="small"
             class="flex-1 min-w-12 tabular-nums"
+            :disabled="directLocked"
             @click="onPresetClick(preset)"
           >
             {{ formatPresetSpeed(preset) }}
@@ -102,6 +114,7 @@ const handleReset = (): void => {
           :min="SPEED_MIN"
           :max="SPEED_MAX"
           :step="SPEED_STEP"
+          :disabled="directLocked"
           @change="onSpeedChange"
           @drag-end="onSpeedCommit"
         >
@@ -115,7 +128,11 @@ const handleReset = (): void => {
           <span class="text-sm text-on-surface">{{ t("speed.pitchSync") }}</span>
           <span class="text-xs text-on-surface-variant/70">{{ t("speed.pitchSyncTip") }}</span>
         </div>
-        <SSwitch :model-value="status.pitchSync" @update:model-value="onSyncToggle" />
+        <SSwitch
+          :model-value="status.pitchSync"
+          :disabled="directLocked"
+          @update:model-value="onSyncToggle"
+        />
       </div>
 
       <!-- 音调（同步关闭时禁用，不隐藏） -->
@@ -132,7 +149,7 @@ const handleReset = (): void => {
           :min="PITCH_MIN"
           :max="PITCH_MAX"
           :step="PITCH_STEP"
-          :disabled="!status.pitchSync"
+          :disabled="directLocked || !status.pitchSync"
           center-fill
           @change="onPitchChange"
           @drag-end="onPitchCommit"
@@ -143,7 +160,9 @@ const handleReset = (): void => {
     </div>
 
     <template #footer>
-      <SButton variant="secondary" @click="handleReset">{{ t("common.reset") }}</SButton>
+      <SButton variant="secondary" :disabled="directLocked" @click="handleReset">
+        {{ t("common.reset") }}
+      </SButton>
     </template>
   </SDialog>
 </template>

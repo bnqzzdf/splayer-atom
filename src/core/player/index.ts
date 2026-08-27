@@ -1,4 +1,5 @@
 import type { PlaybackContext, Track } from "@shared/types/player";
+import { ErrorCode } from "@shared/types/errors";
 import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type { PersonalFmOptions } from "@/types/netease";
 import { handleEvent } from "./events";
@@ -12,17 +13,27 @@ import { useHistoryStore } from "@/stores/history";
 import { useLibraryStore } from "@/stores/library";
 import * as queue from "@/stores/queue";
 import * as fm from "./fm";
+import {
+  getCurrentDirectEntryBlockers,
+  isDirettaOutput,
+  isDirectOutputSelected,
+} from "./directMode";
 import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
-import { resolveTrackSource, type ResolvedTrackSource } from "@/services/audioSource";
+import {
+  prepareDirectTrackSource,
+  resolveTrackSource,
+  type ResolvedTrackSource,
+} from "@/services/audioSource";
 import {
   consumePreloadedTrack,
   disposeNextTrackPreload,
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
+  type NextTrackPreloadResult,
 } from "@/services/nextTrackPreloader";
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
@@ -249,8 +260,24 @@ const loadTrackSourceWithFallback = async (
     firstTry = null;
     if (!shouldContinue()) return { status: "cancelled" };
     if (!resolved) return { status: "unresolved" };
-    const result = await load(resolved.source, autoPlay, track, {
-      suppressErrorToast: usingInitial || shouldSuppressLoadError(resolved),
+    const prepared = await prepareDirectTrackSource(track, resolved);
+    if (!shouldContinue()) return { status: "cancelled" };
+    if (!prepared) {
+      if (
+        usingInitial &&
+        resolved.provider !== "local" &&
+        resolved.provider !== "cache"
+      ) {
+        continue;
+      }
+      return {
+        status: "loaded",
+        result: { ok: false, error: ErrorCode.NETWORK_ERROR },
+        resolved,
+      };
+    }
+    const result = await load(prepared.source, autoPlay, track, {
+      suppressErrorToast: usingInitial || shouldSuppressLoadError(prepared),
       context,
     });
     if (!shouldContinue()) return { status: "cancelled" };
@@ -263,12 +290,16 @@ const loadTrackSourceWithFallback = async (
     ) {
       continue;
     }
+    const strictOnlineDirect =
+      useSettingsStore().player.outputDevice?.startsWith("diretta:") === true &&
+      (track.source === "qobuz" || track.source === "tidal");
     const canRetry =
+      !strictOnlineDirect &&
       !result.ok &&
       (retryOnAnyFailure || Boolean(result.error && isSkippableError(result.error))) &&
       markRetryableSourceFailure(resolved, retry);
     if (canRetry) continue;
-    return { status: "loaded", result, resolved };
+    return { status: "loaded", result, resolved: prepared };
   }
 };
 
@@ -340,6 +371,59 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
     }
   }
   if (shouldSkip) await skipOnFailure(myToken, () => trackToken);
+};
+
+/**
+ * Diretta 已在同一 connection 上跨过 track boundary 后，只提交 SPlayer 应用状态。
+ * 这里绝不能再次调用 load/stop，否则会破坏已经成立的 sample-contiguous handoff。
+ */
+export const commitDirectGaplessTrack = async (
+  preloaded: NextTrackPreloadResult,
+): Promise<boolean> => {
+  const source = preloaded.source?.source;
+  if (!source || preloaded.directGeneration === null) return false;
+
+  const duration = preloaded.track.duration ?? 0;
+  const committed = await window.api.player.commitDirectGaplessBoundary(
+    source,
+    duration,
+    preloaded.track,
+    preloaded.context,
+  );
+  if (!committed.success) return false;
+
+  ++trackToken;
+  consecutiveFailures = 0;
+  sourceRecoveryCount = 0;
+  sourceRecoveryTrackId = null;
+  seekTarget = null;
+  playback.setSeeking(false);
+  abLoop.reset();
+  cacheScheduler.cancel();
+
+  const status = useStatusStore();
+  const media = useMediaStore();
+  status.playIndex = preloaded.queueIndex;
+  media.setTrack(preloaded.track, preloaded.directDetail);
+  media.setPlaybackContext(preloaded.context);
+  status.trackLoading = false;
+  status.position = 0;
+  status.duration = duration;
+  status.state = "playing";
+  status.currentSource = source;
+  playback.setCurrentTime(0, { force: true });
+  playback.setDuration(duration);
+  playback.setPlaying(true);
+
+  void lyricLoader.loadForTrack(preloaded.directDetail ?? null);
+  extractColorFromUrl(preloaded.track.cover ?? preloaded.track.coverOriginal ?? null);
+  void coverLoader.loadCoverForTrack(preloaded.track);
+  void useHistoryStore().record(preloaded.track);
+  if (preloaded.source?.cacheRequest) {
+    cacheScheduler.schedule(preloaded.track.id, preloaded.source.cacheRequest);
+  }
+  scheduleNextTrackPreload();
+  return true;
 };
 
 /**
@@ -537,6 +621,7 @@ export const markSeek = (posMs: number): void => {
  * @param vol - 音量值（0.0 ~ 1.0）
  */
 export const setVolume = async (vol: number): Promise<void> => {
+  if (isDirectOutputSelected()) return;
   const result = await window.api.player.setVolume(vol);
   if (result.success) {
     useStatusStore().volume = vol;
@@ -548,6 +633,7 @@ export const setVolume = async (vol: number): Promise<void> => {
  * @param v - 速度（0.5 ~ 2.0）
  */
 export const setSpeed = async (v: number): Promise<void> => {
+  if (isDirectOutputSelected()) return;
   const safe = Number.isFinite(v) ? Math.max(0.5, Math.min(2.0, v)) : 1.0;
   const result = await window.api.player.setSpeed(safe);
   if (result.success) {
@@ -561,6 +647,7 @@ export const setSpeed = async (v: number): Promise<void> => {
  * 设置音调偏移（半音 -12 ~ 12）
  */
 export const setPitch = async (n: number): Promise<void> => {
+  if (isDirectOutputSelected()) return;
   const safe = Number.isFinite(n) ? Math.max(-12, Math.min(12, Math.round(n))) : 0;
   const result = await window.api.player.setPitch(safe);
   if (result.success) useStatusStore().pitch = safe;
@@ -571,14 +658,22 @@ export const setPitch = async (n: number): Promise<void> => {
  * @param on - true = 变速保音调，false = 变速变调
  */
 export const setPitchSync = async (on: boolean): Promise<void> => {
+  if (isDirectOutputSelected()) return;
   const result = await window.api.player.setPitchSync(on);
   if (result.success) useStatusStore().pitchSync = on;
 };
 
 /** 刷新音频输出设备列表 */
 export const refreshDevices = async (): Promise<void> => {
-  const result = await window.api.player.getOutputDevices();
-  if (result.success && result.data) useStatusStore().outputDevices = result.data;
+  const [systemResult, direttaResult] = await Promise.all([
+    window.api.player.getOutputDevices(),
+    window.api.player.scanDirettaDevices(),
+  ]);
+  if (!systemResult.success || !systemResult.data) return;
+  useStatusStore().outputDevices = [
+    ...systemResult.data,
+    ...(direttaResult.success && direttaResult.data ? direttaResult.data : []),
+  ];
 };
 
 /**
@@ -587,10 +682,65 @@ export const refreshDevices = async (): Promise<void> => {
  */
 export const switchDevice = async (deviceId: string | null): Promise<void> => {
   const settings = useSettingsStore();
-  const pauseBeforeSwitch =
-    settings.player.pauseOnDeviceSwitch && useStatusStore().state === "playing";
+  const status = useStatusStore();
+  if (isDirettaOutput(deviceId) && getCurrentDirectEntryBlockers().length > 0) {
+    toast.error(i18n.global.t("directMode.entryBlocked"));
+    return;
+  }
+  const media = useMediaStore();
+  const enteringDiretta =
+    deviceId?.startsWith("diretta:") === true &&
+    settings.player.outputDevice?.startsWith("diretta:") !== true;
+  const track = media.track;
+  const currentSource = status.currentSource;
+
+  if (
+    enteringDiretta &&
+    track &&
+    (track.source === "qobuz" || track.source === "tidal") &&
+    currentSource &&
+    /^https?:\/\//i.test(currentSource)
+  ) {
+    const prepared = await prepareDirectTrackSource(
+      track,
+      { source: currentSource, fromCache: false, provider: "official" },
+      deviceId,
+    );
+    if (!prepared) {
+      handleError(ErrorCode.NETWORK_ERROR);
+      return;
+    }
+    if (media.track?.id !== track.id || status.currentSource !== currentSource) return;
+
+    const resumePosition = Math.round(playback.getCurrentTime());
+    const shouldPlay = status.isPlaying;
+    const context = media.playbackContext;
+    await window.api.player.stop();
+    const switched = await window.api.player.setOutputDevice(deviceId, false);
+    if (!switched.success) {
+      const restored = await load(currentSource, false, track, { context });
+      if (restored.ok && resumePosition > 0) await seek(resumePosition);
+      if (restored.ok && shouldPlay) await play();
+      if (switched.error) handleError(switched.error);
+      return;
+    }
+
+    settings.player.outputDevice = deviceId;
+    const loaded = await load(prepared.source, false, track, { context });
+    if (!loaded.ok) {
+      status.currentSource = null;
+      return;
+    }
+    if (resumePosition > 0) await seek(resumePosition);
+    if (shouldPlay) await play();
+    scheduleNextTrackPreload();
+    return;
+  }
+
+  const pauseBeforeSwitch = settings.player.pauseOnDeviceSwitch && status.state === "playing";
   const result = await window.api.player.setOutputDevice(deviceId, pauseBeforeSwitch);
   if (result.success) settings.player.outputDevice = deviceId;
+  else if (result.error) handleError(result.error);
 };
 
 /**
@@ -738,6 +888,11 @@ export const dislikeFmTrack = async (): Promise<void> => {
 /**
  * 播放下一首
  */
+export const reloadCurrentQueueTrack = async (): Promise<void> => {
+  const status = useStatusStore();
+  await loadTrack(status.currentTrack, status.currentPlaybackContext);
+};
+
 export const nextTrack = async (): Promise<void> => {
   const status = useStatusStore();
   // 私人 FM
@@ -1041,7 +1196,13 @@ export const initPlayer = async (): Promise<void> => {
       (device) => device.name === settings.player.outputDevice,
     );
     if (legacy) settings.player.outputDevice = legacy.id;
-    await window.api.player.setOutputDevice(settings.player.outputDevice);
+    // 不自动修改用户的音量/DSP 设置来满足 Direct。旧状态若不兼容则回到系统默认，由用户修正后重新选择 Target。
+    if (isDirettaOutput(settings.player.outputDevice) && getCurrentDirectEntryBlockers().length > 0) {
+      settings.player.outputDevice = null;
+      toast.error(i18n.global.t("directMode.entryBlocked"));
+    } else {
+      await window.api.player.setOutputDevice(settings.player.outputDevice);
+    }
   }
   // 先订阅事件，确保 load 触发播放后 position 事件能被接收
   if (unsubscribe) unsubscribe();

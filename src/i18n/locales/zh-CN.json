@@ -150,6 +150,11 @@
     "pitch": "音调",
     "semitone": "{n} 半音"
   },
+  "directMode": {
+    "title": "Source Direct",
+    "entryBlocked": "进入 Diretta Source Direct 前，请将软件音量恢复为 100%，关闭音量均衡和 EQ，并恢复 1.0x 原速、0 半音。现有设置不会被自动修改。",
+    "processingUnavailable": "Diretta Source Direct 会保持原始音频数据。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调控制在 Direct 模式下不可用；普通输出的原设置会保留。"
+  },
   "autoClose": {
     "title": "定时关闭",
     "duration": "时长",

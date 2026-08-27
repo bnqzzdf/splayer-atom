@@ -50,6 +50,20 @@ export declare class AudioPlayer {
    * seek 失败时 fallback 到完整 load
    */
   seek(position: number): Promise<void>
+  /**
+   * 只读取音源 metadata，不启动 normal playback/resampler/DSP。
+   * Direct gapless staging 用它提前保留本地歌词/封面 detail。
+   */
+  probeMetadata(source: string): Promise<JsMusicMetadata>
+  /**
+   * 为当前 Diretta Source Direct 播放预备一个同 wire-format 的本地下一音源。
+   * 返回 false 表示当前不是 Direct runtime；格式不兼容等 staging 错误会明确返回。
+   */
+  stageDirectNext(source: string, durationSecs: number, generation: number): Promise<boolean>
+  /** 作废尚未进入音频 ring 的 Direct staged 下一音源。 */
+  cancelDirectNext(): void
+  /** renderer 在 directTrackBoundary 后确认其 queue/media 已推进到实际正在播放的下一首。 */
+  commitDirectGaplessBoundary(source: string, durationSecs: number): void
   /** 设置音量（0.0 ~ 1.0） */
   setVolume(volume: number): void
   /** 获取当前音量（0.0 ~ 1.0） */
@@ -93,6 +107,8 @@ export declare class AudioPlayer {
   getCoverRaw(): Buffer | null
   /** 获取所有音频输出设备列表 */
   getOutputDevices(): Array<JsAudioDevice>
+  /** 异步扫描 Diretta Target，避免网络发现阻塞同步 CPAL 枚举或 Node 主线程。 */
+  scanDirettaDevices(): Promise<Array<JsAudioDevice>>
   /** 获取系统默认输出设备名称 */
   getDefaultDeviceName(): string | null
   /** 切换输出设备（传设备 ID，None/undefined 使用系统默认） */
@@ -185,14 +201,16 @@ export interface JsMusicMetadata {
 
 /** 播放器事件，推送给 JS 侧 */
 export interface JsPlayerEvent {
-  /** 事件类型："stateChanged" | "ended" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed" */
+  /** 事件类型："stateChanged" | "ended" | "directTrackBoundary" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed" */
   type: string
   /** 状态（仅 stateChanged 时有值） */
   state?: string
   /** 位置（秒，仅 position 时有值） */
   position?: number
-  /** 时长（秒，仅 position 时有值） */
+  /** 时长（秒，仅 position/directTrackBoundary 时有值） */
   duration?: number
+  /** renderer 提供的 Direct staged generation（仅 directTrackBoundary 时有值） */
+  generation?: number
   /** FFT 频谱数据（仅 fftData 时有值，128 个频段，值域 0.0 ~ 1.0） */
   fftData?: JsFftData
 }

@@ -14,7 +14,7 @@ import { ErrorCode } from "@shared/types/errors";
 import { handleError } from "@/utils/errors";
 
 /** 在线平台 source → 插件 source key */
-const PLATFORM_TO_PLUGIN_SOURCE: Record<Platform, string> = {
+const PLATFORM_TO_PLUGIN_SOURCE: Partial<Record<Platform, string>> = {
   netease: "wy",
   qqmusic: "tx",
   kugou: "kg",
@@ -73,6 +73,7 @@ export type OnlineResolveResult =
       isTrial: boolean;
       provider: "official" | "plugin" | "trial";
       pluginId?: string;
+      cacheable?: boolean;
     }
   | { ok: false; errorCode: ErrorCode };
 
@@ -262,6 +263,43 @@ export interface ResolvedTrackSource {
 }
 
 /**
+ * 为 Qobuz/TIDAL 的 Diretta 播放准备本地 seekable 输入。
+ * @param track - 当前 Track
+ * @param resolved - 常规 audioSource 解析结果
+ * @param outputDevice - 可选目标设备；切换设备时用于尚未持久化的新 Diretta selector
+ * @returns Direct 可直接加载的本地结果；下载失败返回 null
+ */
+export const prepareDirectTrackSource = async (
+  track: Track,
+  resolved: ResolvedTrackSource,
+  outputDevice?: string | null,
+): Promise<ResolvedTrackSource | null> => {
+  const settings = useSettingsStore();
+  const selectedOutput = outputDevice === undefined ? settings.player.outputDevice : outputDevice;
+  const isDiretta = selectedOutput?.startsWith("diretta:") === true;
+  const isSupportedOnline = track.source === "qobuz" || track.source === "tidal";
+  if (!isDiretta || !isSupportedOnline || !/^https?:\/\//i.test(resolved.source)) return resolved;
+
+  const cacheKey = cacheKeyForTrack(track, settings.player.songLevel);
+  const cacheEnabled = settings.system.cache?.songCache?.enabled === true && cacheKey !== null;
+  if (cacheEnabled && resolved.provider !== "trial") {
+    const cached = await window.api.cache.song.fetch(cacheKey, track.source, resolved.source);
+    if (cached) {
+      return { ...resolved, source: cached, fromCache: true, cacheRequest: undefined };
+    }
+  }
+
+  const materialized = await window.api.player.materializeDirectInput(resolved.source);
+  if (!materialized.success || !materialized.data) return null;
+  return {
+    ...resolved,
+    source: materialized.data,
+    fromCache: false,
+    cacheRequest: undefined,
+  };
+};
+
+/**
  * 记录解析错误，支持静默模式抑制
  * @param err - 错误信息或错误码
  * @param silent - 是否开启静默模式
@@ -325,7 +363,7 @@ export const resolveTrackSource = async (
       return null;
     }
   }
-  // 在线源（netease / qqmusic / kugou）
+  // 在线源
   if (isOnlinePlatform(track.source)) {
     try {
       const resolved = await resolveOnlineUrl(track, songLevel, options);
@@ -340,7 +378,7 @@ export const resolveTrackSource = async (
         provider: resolved.provider,
         pluginId: resolved.pluginId,
       };
-      if (cacheEnabled && !resolved.isTrial) {
+      if (cacheEnabled && !resolved.isTrial && resolved.cacheable !== false) {
         result.cacheRequest = async () => {
           void window.api.cache.song.fetch(cacheKey, track.source, url);
         };

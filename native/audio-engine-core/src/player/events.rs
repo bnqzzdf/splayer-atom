@@ -9,6 +9,8 @@ pub enum PlayerEvent {
     StateChanged { state: PlayerState },
     /// 播放结束
     Ended,
+    /// Source Direct 已在同一 Diretta connection 上无缝切入 staged 下一首
+    DirectTrackBoundary { duration: f64, generation: u64 },
     /// 音源失效（网络中断 / URL 过期）
     SourceError,
     /// 位置更新（秒）—— 由内部定时器推送

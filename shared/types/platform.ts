@@ -38,7 +38,7 @@ export const ALL_SEARCH_PLATFORMS: SearchPlatform[] = [
 
 const PLATFORM_SET = new Set<string>(ALL_PLATFORMS);
 
-/** 判断给定 source 是否为在线平台（netease / qqmusic / kugou），同时类型收窄 */
+/** 判断给定 source 是否为在线平台，同时类型收窄 */
 export const isPlatform = (source: string | undefined): source is Platform =>
   source !== undefined && PLATFORM_SET.has(source);
 

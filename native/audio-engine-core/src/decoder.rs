@@ -97,6 +97,11 @@ impl PreparedDecoder {
     pub fn original_sample_rate(&self) -> u32 {
         self.metadata.original_sample_rate
     }
+
+    /// 仅消费元数据探测结果，不启动播放器重采样/DSP 解码链。
+    pub fn into_metadata(self) -> AudioMetadata {
+        self.metadata
+    }
 }
 
 /// 统一结束解码线程；panic 属于源错误，但仍需结束 source 迭代
@@ -147,6 +152,14 @@ impl DecoderData {
 ///
 /// 线程结束时返回 `DecoderData`，调用方可通过 `handle.join()` 回收并复用于后续 seek，
 /// 避免重建 ffmpeg_audio 上下文。
+pub fn probe_metadata(
+    source: &str,
+    cover_cache_dir: Option<&str>,
+    cancel_handle: HttpCancelHandle,
+) -> Result<AudioMetadata> {
+    Ok(prepare_decode(source, cover_cache_dir, cancel_handle)?.into_metadata())
+}
+
 pub fn prepare_decode(
     source: &str,
     cover_cache_dir: Option<&str>,

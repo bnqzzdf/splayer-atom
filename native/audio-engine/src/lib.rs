@@ -5,6 +5,17 @@
 //! 保持逐字一致，便于后续同步。
 
 mod bindings;
+#[cfg(any(atom_diretta, test))]
+#[cfg_attr(not(test), allow(dead_code))]
+mod direct_dsd;
+#[cfg(any(atom_diretta, test))]
+#[cfg_attr(not(test), allow(dead_code))]
+mod direct_pcm;
+#[cfg(any(atom_diretta, test))]
+#[cfg_attr(not(test), allow(dead_code))]
+mod direct_runtime;
+#[cfg_attr(not(test), allow(dead_code))]
+mod diretta;
 
 pub use audio_engine_core::audio_output;
 pub use audio_engine_core::decoder;

@@ -29,12 +29,17 @@ const activeTab = ref<TabKey>("songs");
 /** 当前生效的关键词 */
 const keyword = ref("");
 
-const tabs = computed(() => [
-  { key: "songs", label: t("search.tabs.songs") },
-  { key: "albums", label: t("search.tabs.albums") },
-  { key: "artists", label: t("search.tabs.artists") },
-  { key: "playlists", label: t("search.tabs.playlists") },
-]);
+const tabs = computed(() => {
+  const items = [
+    { key: "songs", label: t("search.tabs.songs") },
+    { key: "albums", label: t("search.tabs.albums") },
+    { key: "artists", label: t("search.tabs.artists") },
+    { key: "playlists", label: t("search.tabs.playlists") },
+  ];
+  return status.searchPlatform === "qobuz" || status.searchPlatform === "tidal"
+    ? items.slice(0, 1)
+    : items;
+});
 
 const platformTabs = ALL_PLATFORMS.map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
 
@@ -133,10 +138,15 @@ let lastLoadedPlatform = status.searchPlatform;
 const syncFromRoute = (): void => {
   if (route.name !== "search") return;
   const q = typeof route.query.q === "string" ? route.query.q.trim() : "";
-  const tab =
+  const requestedTab =
     typeof route.query.tab === "string" && (TAB_KEYS as readonly string[]).includes(route.query.tab)
       ? (route.query.tab as TabKey)
       : "songs";
+  const tab: TabKey =
+    status.searchPlatform === "qobuz" || status.searchPlatform === "tidal"
+      ? "songs"
+      : requestedTab;
+  if (tab !== requestedTab) void router.replace({ query: { ...route.query, tab } });
 
   activeTab.value = tab;
   keyword.value = q;

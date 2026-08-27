@@ -12,6 +12,8 @@ import { NeteaseRequestError } from "@main/apis/netease/core/request";
 import { cookieToJson } from "@main/apis/netease/core/cookie";
 import { callQQMusic, clearQQMusicCookies, mergeQQMusicCookies } from "@main/apis/qqmusic";
 import { callKugou, clearKugouSession, mergeKugouSession } from "@main/apis/kugou";
+import { callQobuz } from "@main/apis/qobuz";
+import { callTidal } from "@main/apis/tidal";
 import { openNeteaseLoginWindow, openQQMusicLoginWindow } from "@main/window/login";
 import { coreLog } from "@main/utils/logger";
 import type { ApiPlatform } from "@shared/types/apis";
@@ -33,6 +35,14 @@ const dispatch = async (
     }
     case "kugou": {
       const data = await callKugou(name, params);
+      return { data };
+    }
+    case "qobuz": {
+      const data = await callQobuz(name, params);
+      return { data };
+    }
+    case "tidal": {
+      const data = await callTidal(name, params);
       return { data };
     }
     default:
@@ -62,10 +72,12 @@ export const registerApisIpc = (): void => {
     },
   );
 
-  ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) => {
+  ipcMain.handle("apis:clearSession", async (_evt, platform: ApiPlatform) => {
     if (platform === "netease") clearNeteaseCookies();
     if (platform === "qqmusic") clearQQMusicCookies();
     if (platform === "kugou") clearKugouSession();
+    if (platform === "qobuz") await callQobuz("auth_logout");
+    if (platform === "tidal") await callTidal("auth_logout");
   });
 
   // 打开官方网页登录，成功后把 cookies 合并写入 session

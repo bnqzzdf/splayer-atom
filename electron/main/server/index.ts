@@ -11,6 +11,7 @@ import { store } from "@main/store";
 import { serverLog } from "@main/utils/logger";
 import { broadcast } from "@main/utils/broadcast";
 import type { ExternalApiStatus } from "@shared/types/settings";
+import { buildAtomCompatRoutes } from "@main/atom/compat/routes";
 import { externalControlGate, wsGate } from "./gate";
 import { buildRoutes } from "./routes";
 import { wsHandlers } from "./ws";
@@ -72,6 +73,7 @@ export const startServer = (): Promise<ExternalApiStatus> => {
     const app = new Hono();
     app.use("/api/*", externalControlGate);
     app.route("/api", buildRoutes());
+    app.route("/api", buildAtomCompatRoutes());
     app.get(
       "/ws",
       externalControlGate,

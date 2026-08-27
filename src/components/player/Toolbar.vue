@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
+import { useDirectModeState } from "@/core/player/directMode";
 import IconLucideSliders from "~icons/lucide/sliders-horizontal";
 import IconLucideGauge from "~icons/lucide/gauge";
 import IconLucideMoreVertical from "~icons/lucide/more-vertical";
@@ -22,6 +23,7 @@ const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
 const { isDesktopLyricOpen } = storeToRefs(settings);
+const { sampleControlsUnavailable: directLocked } = useDirectModeState();
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
@@ -36,12 +38,14 @@ const volumePercent = computed(() => Math.round(status.volume * 100));
 const lastVolume = ref(status.volume || 0.7);
 
 const onVolumeWheel = (e: WheelEvent): void => {
+  if (directLocked.value) return;
   const delta = e.deltaY < 0 ? 0.05 : -0.05;
   const next = Math.max(0, Math.min(1, status.volume + delta));
   player.setVolume(next);
 };
 
 const toggleMute = (): void => {
+  if (directLocked.value) return;
   if (status.volume > 0) {
     lastVolume.value = status.volume;
     player.setVolume(0);
@@ -87,6 +91,8 @@ const onMoreMenuSelect = (key: string): void => {
           circle
           size="large"
           :class="mutedClass"
+          :disabled="directLocked"
+          :title="directLocked ? t('directMode.processingUnavailable') : undefined"
           @click="toggleMute"
           @wheel.prevent="onVolumeWheel"
         >
@@ -107,6 +113,7 @@ const onMoreMenuSelect = (key: string): void => {
             :thumb-size="15"
             :track-height="5"
             :cover="cover"
+            :disabled="directLocked"
             vertical
             @change="player.setVolume($event)"
           />

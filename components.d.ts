@@ -54,6 +54,7 @@ declare module 'vue' {
     DialogRoot: typeof import('reka-ui')['DialogRoot']
     DialogTitle: typeof import('reka-ui')['DialogTitle']
     DialogTrigger: typeof import('reka-ui')['DialogTrigger']
+    DirectModeNotice: typeof import('./src/components/settings/custom/DirectModeNotice.vue')['default']
     DirettaCastPopover: typeof import('./src/components/player/DirettaCastPopover.vue')['default']
     DownloadDirConfig: typeof import('./src/components/settings/custom/DownloadDirConfig.vue')['default']
     DownloadList: typeof import('./src/components/list/DownloadList.vue')['default']

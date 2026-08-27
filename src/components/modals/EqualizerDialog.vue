@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { EqualizerPreset } from "@shared/types/settings";
 import { useSettingsStore } from "@/stores/settings";
+import { useDirectModeState } from "@/core/player/directMode";
+import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue";
 
 const EQ_PRESETS: Record<Exclude<EqualizerPreset, "custom">, number[]> = {
   flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -42,6 +44,7 @@ const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 const { t } = useI18n();
 const settings = useSettingsStore();
+const { sampleControlsUnavailable: directLocked } = useDirectModeState();
 
 const presetOptions = computed(() =>
   EQ_PRESET_ORDER.map((key) => ({
@@ -70,7 +73,10 @@ watchEffect(() => {
 
 const enabled = computed({
   get: () => settings.system.player.equalizer?.enabled ?? false,
-  set: (value: boolean) => settings.setSystem("player.equalizer.enabled", value),
+  set: (value: boolean) => {
+    if (directLocked.value) return;
+    void settings.setSystem("player.equalizer.enabled", value);
+  },
 });
 
 const currentPreset = computed(
@@ -78,7 +84,7 @@ const currentPreset = computed(
 );
 
 const applyPreset = (key: EqualizerPreset): void => {
-  if (!enabled.value) return;
+  if (directLocked.value || !enabled.value) return;
   if (key === "custom") {
     settings.setSystem("player.equalizer.preset", "custom");
     return;
@@ -90,10 +96,12 @@ const applyPreset = (key: EqualizerPreset): void => {
 };
 
 const onBandChange = (index: number, value: number): void => {
+  if (directLocked.value) return;
   localBands.value[index] = value;
 };
 
 const onBandCommit = (): void => {
+  if (directLocked.value) return;
   const bands = [...localBands.value];
   const matched = matchPreset(bands);
   settings.setSystem("player.equalizer.bands", bands);
@@ -101,16 +109,19 @@ const onBandCommit = (): void => {
 };
 
 const onPreampChange = (value: number): void => {
+  if (directLocked.value) return;
   localPreamp.value = value;
 };
 
 const onPreampCommit = (): void => {
+  if (directLocked.value) return;
   settings.setSystem("player.equalizer.preamp", localPreamp.value);
 };
 
 const formatDb = (value: number): string => `${value > 0 ? "+" : ""}${value}dB`;
 
 const handleReset = (): void => {
+  if (directLocked.value) return;
   applyPreset("flat");
   localPreamp.value = 0;
   settings.setSystem("player.equalizer.preamp", 0);
@@ -125,6 +136,7 @@ const handleReset = (): void => {
     @update:open="emit('update:open', $event)"
   >
     <div class="flex flex-col gap-3">
+      <DirectModeNotice />
       <div class="flex items-center gap-3">
         <span class="text-sm text-on-surface-variant">
           {{ t("equalizer.preset.label") }}
@@ -133,16 +145,20 @@ const handleReset = (): void => {
           <SSelect
             :model-value="currentPreset"
             :options="presetOptions"
-            :disabled="!enabled"
+            :disabled="directLocked || !enabled"
             @update:model-value="applyPreset($event as EqualizerPreset)"
           />
         </div>
         <div class="flex-1" />
-        <SSwitch :model-value="enabled" @update:model-value="enabled = $event" />
+        <SSwitch
+          :model-value="enabled"
+          :disabled="directLocked"
+          @update:model-value="enabled = $event"
+        />
       </div>
       <SCard
         class="flex items-stretch gap-1 transition-opacity"
-        :class="enabled ? '' : 'opacity-50 pointer-events-none'"
+        :class="enabled && !directLocked ? '' : 'opacity-50 pointer-events-none'"
       >
         <div class="flex-1 flex flex-col items-center gap-2 min-w-0">
           <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
@@ -155,6 +171,7 @@ const handleReset = (): void => {
               :max="PREAMP_MAX"
               :step="1"
               :show-popover="false"
+              :disabled="directLocked || !enabled"
               vertical
               center-fill
               :thumb-size="16"
@@ -185,6 +202,7 @@ const handleReset = (): void => {
               :max="BAND_MAX"
               :step="1"
               :show-popover="false"
+              :disabled="directLocked || !enabled"
               vertical
               center-fill
               :thumb-size="16"
@@ -201,7 +219,7 @@ const handleReset = (): void => {
     </div>
 
     <template #footer="{ close }">
-      <SButton variant="secondary" :disabled="!enabled" @click="handleReset">
+      <SButton variant="secondary" :disabled="directLocked || !enabled" @click="handleReset">
         {{ t("common.reset") }}
       </SButton>
       <SButton type="primary" @click="close">{{ t("common.close") }}</SButton>

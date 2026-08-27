@@ -280,7 +280,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "audio-engine-core",
+ "base64",
+ "cc",
  "ffmpeg_audio",
+ "httpmock",
  "napi",
  "napi-build",
  "napi-derive",

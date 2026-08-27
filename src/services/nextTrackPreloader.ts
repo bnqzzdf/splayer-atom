@@ -2,9 +2,9 @@
  * 下一首歌曲预载服务
  */
 
-import type { Track } from "@shared/types/player";
+import type { PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import type { ResolvedTrackSource } from "@/services/audioSource";
-import { resolveTrackSource } from "@/services/audioSource";
+import { prepareDirectTrackSource, resolveTrackSource } from "@/services/audioSource";
 import { getNextTrackCandidate } from "@/core/player/candidate";
 import { invalidatePreloadedLyric, preloadLyricForTrack } from "@/services/lyric/preload";
 import { useStatusStore } from "@/stores/status";
@@ -17,8 +17,13 @@ import * as queue from "@/stores/queue";
 /** 预载结果 */
 export interface NextTrackPreloadResult {
   trackId: string;
+  track: Track;
+  queueIndex: number;
+  context?: PlaybackContext;
   source: ResolvedTrackSource | null;
   contextKey: string;
+  directGeneration: number | null;
+  directDetail?: TrackDetail;
 }
 
 let currentToken = 0;
@@ -26,12 +31,15 @@ let cachedResult: NextTrackPreloadResult | null = null;
 let currentContextKey: string | null = null;
 let pendingCover: HTMLImageElement | null = null;
 let stopContextWatch: (() => void) | null = null;
+let nextDirectGeneration = 0;
+let activeDirectGeneration: number | null = null;
 
 /**
  * 拼装上下文指纹，用于去重与作废
  */
 const buildContextKey = (track: Track): string => {
   const settings = useSettingsStore();
+  const status = useStatusStore();
   const streaming = useStreamingStore();
   const plugins = usePluginsStore();
 
@@ -45,6 +53,10 @@ const buildContextKey = (track: Track): string => {
     settings.player.songLevel,
     settings.player.allowTrialPlay,
     settings.preset.fuckDjMode,
+    settings.player.outputDevice ?? "",
+    status.repeatMode,
+    status.autoClose.enable,
+    status.autoClose.waitSongEnd,
     streaming.activeServerId ?? "",
     plugins.list
       .map((plugin) =>
@@ -87,6 +99,10 @@ export const invalidateNextTrackPreload = (): void => {
   currentToken++;
   cachedResult = null;
   currentContextKey = null;
+  if (activeDirectGeneration !== null) {
+    activeDirectGeneration = null;
+    void window.api.player.cancelDirectNext();
+  }
   if (pendingCover) {
     pendingCover.src = "";
     pendingCover = null;
@@ -100,10 +116,6 @@ export const invalidateNextTrackPreload = (): void => {
  * @returns 匹配的预载结果，未命中或已作废则返回 null
  */
 export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | null => {
-  if (!useSettingsStore().player.preloadNextTrack) {
-    invalidateNextTrackPreload();
-    return null;
-  }
   const currentKey = buildContextKey(track);
   if (!cachedResult) {
     if (currentContextKey === currentKey) {
@@ -128,6 +140,47 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
   currentToken++;
   cachedResult = null;
   currentContextKey = null;
+  if (result.directGeneration !== null) {
+    activeDirectGeneration = null;
+    void window.api.player.cancelDirectNext();
+  }
+  return result;
+};
+
+/**
+ * 消费已经由 native 在同一 Diretta connection 上切入的 staged 下一首。
+ * generation 由 renderer 在 staging 前生成，避免边界事件与 IPC Promise 返回次序产生竞态。
+ */
+export const consumeDirectGaplessBoundary = (
+  generation: number,
+): NextTrackPreloadResult | null => {
+  const result = cachedResult;
+  if (!result || result.directGeneration !== generation) {
+    invalidateNextTrackPreload();
+    return null;
+  }
+  const settings = useSettingsStore();
+  const status = useStatusStore();
+  const candidate = getNextTrackCandidate({
+    playIndex: status.playIndex,
+    queue: queue.queue.value,
+    fmMode: status.fmMode,
+    fuckDjMode: settings.preset.fuckDjMode,
+    shuffleMode: status.shuffleMode,
+  });
+  if (
+    !candidate ||
+    candidate.index !== result.queueIndex ||
+    candidate.track.id !== result.trackId ||
+    buildContextKey(candidate.track) !== result.contextKey
+  ) {
+    invalidateNextTrackPreload();
+    return null;
+  }
+  currentToken++;
+  cachedResult = null;
+  currentContextKey = null;
+  activeDirectGeneration = null;
   return result;
 };
 
@@ -175,6 +228,11 @@ export const scheduleNextTrackPreload = (): void => {
     return;
   }
 
+  if (activeDirectGeneration !== null) {
+    activeDirectGeneration = null;
+    void window.api.player.cancelDirectNext();
+  }
+
   const token = ++currentToken;
   currentContextKey = contextKey;
   cachedResult = null;
@@ -185,15 +243,57 @@ export const scheduleNextTrackPreload = (): void => {
         void preloadCover(candidateTrack.cover);
       }
       // 音源预拉取
-      const source = await resolveTrackSource(candidateTrack, {
+      let source = await resolveTrackSource(candidateTrack, {
         silent: true,
         streamingPlaySessionId: crypto.randomUUID(),
       });
       if (token !== currentToken) return;
+
+      const directOutput = settings.player.outputDevice?.startsWith("diretta:") === true;
+      if (directOutput && source) {
+        source = await prepareDirectTrackSource(candidateTrack, source);
+        if (token !== currentToken) return;
+      }
+
+      const candidateContext = queue.getQueueItem(candidateResult.index)?.context;
+      let directGeneration: number | null = null;
+      let directDetail: TrackDetail | undefined;
+      const directTransitionAllowed =
+        status.repeatMode !== "one" &&
+        !(status.autoClose.enable && status.autoClose.waitSongEnd);
+      const directSeekableSource =
+        source !== null &&
+        !/^https?:\/\//i.test(source.source) &&
+        candidateTrack.cueStartMs == null &&
+        candidateTrack.cueEndMs == null;
+      if (directOutput && directTransitionAllowed && directSeekableSource && source) {
+        nextDirectGeneration = (nextDirectGeneration % 0xffff_ffff) + 1;
+        const generation = nextDirectGeneration;
+        const staged = await window.api.player.stageDirectNext(
+          source.source,
+          candidateTrack.duration ?? 0,
+          generation,
+        );
+        if (token !== currentToken) {
+          if (staged.success && staged.data?.staged) void window.api.player.cancelDirectNext();
+          return;
+        }
+        if (staged.success && staged.data?.staged) {
+          directGeneration = generation;
+          directDetail = staged.data.detail;
+          activeDirectGeneration = generation;
+        }
+      }
+
       cachedResult = {
         trackId: candidateTrack.id,
+        track: candidateTrack,
+        queueIndex: candidateResult.index,
+        context: candidateContext,
         source,
         contextKey,
+        directGeneration,
+        directDetail,
       };
     } catch (err) {
       console.warn("[nextPreload] Preload task failed silently:", err);
@@ -220,6 +320,9 @@ export const installNextTrackPreloadWatchers = (): void => {
       status.playIndex,
       status.fmMode,
       status.shuffleMode,
+      status.repeatMode,
+      status.autoClose.enable,
+      status.autoClose.waitSongEnd,
       queue.queue.value,
       streaming.activeServerId,
       settings.lyric.lyricSourcePreference,

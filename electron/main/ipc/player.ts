@@ -32,6 +32,12 @@ import { appName, getSongCacheDir } from "@main/utils/config";
 import * as songCache from "@main/services/songCache";
 import { parseArtists, parseAlbum, formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
+import {
+  cleanupDirectInputs,
+  discardDirectInput,
+  materializeDirectInput,
+  pruneDirectInputs,
+} from "@main/atom/directInput";
 import { ErrorCode } from "@shared/types/errors";
 import type { LoadOptions, RepeatMode, ShuffleMode, PlayerState } from "@shared/types/player";
 import type { MediaEvent } from "@main/services/media";
@@ -153,6 +159,18 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         setTaskbarProgress(-1);
         break;
       }
+      case "directTrackBoundary": {
+        const duration = toMs(event.duration ?? 0);
+        const generation = event.generation ?? 0;
+        const boundaryEvent = { type: "directTrackBoundary", data: { duration, generation } };
+        sendToMain("player:event", boundaryEvent);
+        wsBroadcast(boundaryEvent);
+        // 音频未停止；这里只结算上一首，下一首元数据由 renderer 随即 commit。
+        lastfm.onEnded();
+        neteaseScrobble.onEnded();
+        mediaService.setTimeline({ currentMs: 0, totalMs: duration });
+        break;
+      }
       case "sourceError": {
         // 音源失效（网络中断 / URL 过期）
         sendToMain("player:event", { type: "sourceError" });
@@ -272,6 +290,7 @@ export const registerPlayerIpc = (): void => {
         applyDisplay(source.split(/[/\\]/).pop() || source, "", "", undefined, 0);
       }
       const meta = await inst.load(source, cueRange ? false : autoPlay);
+      void pruneDirectInputs(source);
       if (cueRange) {
         await inst.seek(cueRange.startMs / 1000);
         if (autoPlay) await inst.play();
@@ -342,8 +361,9 @@ export const registerPlayerIpc = (): void => {
       if (seq === loadSeq) activeCueRange = null;
       const code = classifyLoadError(error, source);
       // 解码失败的源指向歌曲缓存目录 → 文件已损坏，把这条缓存项作废
-      if (code === ErrorCode.FILE_DECODE_ERROR && source.startsWith(getSongCacheDir())) {
-        void songCache.invalidate(source);
+      if (code === ErrorCode.FILE_DECODE_ERROR) {
+        if (source.startsWith(getSongCacheDir())) void songCache.invalidate(source);
+        void discardDirectInput(source);
       }
       return fail(code, error);
     }
@@ -397,6 +417,113 @@ export const registerPlayerIpc = (): void => {
       return fail(ErrorCode.UNKNOWN, error);
     }
   });
+
+  // 为 Diretta Source Direct 预备同 wire-format 的下一本地音源。
+  // staging 不兼容是正常降级条件：保持当前播放，renderer 在边界走普通 load。
+  ipcMain.handle(
+    "player:stageDirectNext",
+    async (_event, source: string, durationMs: number, generation: number) => {
+      try {
+        const safeGeneration = Math.max(0, Math.min(0xffff_ffff, Math.trunc(generation)));
+        const inst = getPlayer();
+        const staged = await inst.stageDirectNext(
+          source,
+          Math.max(0, durationMs) / 1000,
+          safeGeneration,
+        );
+        if (!staged) return { success: true, data: { staged: false } };
+
+        try {
+          const meta = await inst.probeMetadata(source);
+          const quality = {
+            sampleRate: meta.originalSampleRate,
+            channels: meta.channels,
+            bitsPerSample: meta.bitsPerSample,
+            bitRate: meta.bitRate,
+            codec: meta.codec,
+          };
+          return {
+            success: true,
+            data: {
+              staged: true,
+              detail: {
+                quality,
+                embeddedLyric: meta.embeddedLyric,
+                externalLyrics: meta.externalLyrics,
+              },
+            },
+          };
+        } catch (error) {
+          // metadata 是旁路体验增强；音频 staging 已成功时绝不能因此撤销 generation。
+          playerLog.debug(`Direct staging metadata probe 未命中: ${String(error)}`);
+          return { success: true, data: { staged: true } };
+        }
+      } catch (error) {
+        playerLog.debug(`Direct gapless staging 未命中: ${String(error)}`);
+        return { success: true, data: { staged: false } };
+      }
+    },
+  );
+
+  ipcMain.handle("player:cancelDirectNext", () => {
+    try {
+      getPlayer().cancelDirectNext();
+      return { success: true };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  ipcMain.handle(
+    "player:commitDirectGaplessBoundary",
+    async (
+      _event,
+      source: string,
+      durationMs: number,
+      authoritative?: LoadOptions["meta"],
+      context?: LoadOptions["context"],
+    ) => {
+      try {
+        getPlayer().commitDirectGaplessBoundary(source, Math.max(0, durationMs) / 1000);
+        void pruneDirectInputs(source);
+        activeCueRange = null;
+        const seq = ++loadSeq;
+        if (authoritative) {
+          const title = authoritative.title || source.split(/[/\\]/).pop() || source;
+          const artist = formatArtists(authoritative.artists ?? []);
+          const album = authoritative.album?.name ?? "";
+          const coverCandidate = authoritative.coverOriginal ?? authoritative.cover;
+          const coverUrl =
+            coverCandidate && /^https?:\/\//i.test(coverCandidate) ? coverCandidate : undefined;
+          const header = artist ? `${title} - ${artist}` : title || appName;
+          mediaService.setMetadata({ title, artist, album, coverUrl, durationMs });
+          mediaService.setPlayState({ status: "Playing" });
+          getMainWindow()?.setTitle(header);
+          setTraySongName(header);
+          setTrayPlayState("playing");
+          const primaryArtist = authoritative.artists?.[0]?.name ?? artist;
+          lastfm.onTrackLoaded({
+            title,
+            artist: primaryArtist,
+            album,
+            durationMs,
+            autoPlay: true,
+          });
+          neteaseScrobble.onTrackLoaded(authoritative, context, durationMs, true);
+          if (coverUrl) {
+            void fetchBytes(coverUrl).then((buf) => {
+              if (!buf || seq !== loadSeq) return;
+              mediaService.setMetadata({ title, artist, album, coverData: buf, coverUrl, durationMs });
+              setTaskbarThumbnailCover(buf);
+            });
+          }
+        }
+        return { success: true };
+      } catch (error) {
+        return fail(ErrorCode.UNKNOWN, error);
+      }
+    },
+  );
 
   // 设置音量（0.0 ~ 1.0）
   ipcMain.handle("player:setVolume", (_event, volume: number) => {
@@ -600,6 +727,24 @@ export const registerPlayerIpc = (): void => {
     }
   });
 
+  // 异步扫描 Diretta Target
+  ipcMain.handle("player:scanDirettaDevices", async () => {
+    try {
+      return { success: true, data: await getPlayer().scanDirettaDevices() };
+    } catch (error) {
+      return fail(ErrorCode.UNKNOWN, error);
+    }
+  });
+
+  // 将在线音源按原始响应字节物化为 Direct 可 seek 的进程级临时文件
+  ipcMain.handle("player:materializeDirectInput", async (_event, source: string) => {
+    try {
+      return { success: true, data: await materializeDirectInput(source) };
+    } catch (error) {
+      return fail(ErrorCode.NETWORK_ERROR, error);
+    }
+  });
+
   // 获取系统默认输出设备名称
   ipcMain.handle("player:getDefaultDeviceName", () => {
     try {
@@ -760,6 +905,9 @@ export const registerPlayerIpc = (): void => {
     wsBroadcast(stoppedEvent);
   };
   powerMonitor.on("resume", resumeHandler);
-  // 退出前停止设备监听
+  // 退出前停止设备监听并清理进程级 Direct 输入
   app.on("before-quit", stopDeviceMonitoring);
+  app.on("before-quit", () => {
+    void cleanupDirectInputs();
+  });
 };
