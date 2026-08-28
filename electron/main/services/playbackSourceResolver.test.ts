@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ErrorCode } from "../../../shared/types/errors";
+import { shouldSkipDjTrack } from "../../../shared/utils/djMode";
 import {
   isSkippablePlaybackError,
   nextPlaybackPreloadIndex,
@@ -80,5 +81,27 @@ describe("nextPlaybackPreloadIndex", () => {
     assert.equal(nextPlaybackPreloadIndex(0, 3, "one", "off"), null);
     assert.equal(nextPlaybackPreloadIndex(0, 1, "list", "off"), null);
     assert.equal(nextPlaybackPreloadIndex(2, 3, "list", "on"), null);
+  });
+
+  it("skips Core-policy filtered tracks before staging the next input", () => {
+    const skipped = new Set([1, 2]);
+    assert.equal(
+      nextPlaybackPreloadIndex(0, 4, "list", "off", (index) => skipped.has(index)),
+      3,
+    );
+    assert.equal(
+      nextPlaybackPreloadIndex(0, 3, "list", "off", (index) => index !== 0),
+      null,
+    );
+  });
+});
+
+describe("shouldSkipDjTrack", () => {
+  it("uses one shared predicate for Core and legacy renderer compatibility", () => {
+    assert.equal(shouldSkipDjTrack({ title: "车载 DJ 热歌", artists: [] }), true);
+    assert.equal(
+      shouldSkipDjTrack({ title: "Piano Sonata", artists: [{ id: "a", name: "Artist" }] }),
+      false,
+    );
   });
 });

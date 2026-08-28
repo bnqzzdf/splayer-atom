@@ -76,7 +76,6 @@ export const useSettingsStore = defineStore(
 
     /** 强迫症设置 */
     const preset = reactive<PresetSettings>({
-      fuckDjMode: false,
       uncensorProfanity: false,
       hideVipTag: false,
       hideQualityTag: false,

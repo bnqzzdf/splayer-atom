@@ -68,7 +68,7 @@ const otherCategory: SettingCategory = {
         {
           key: "fuckDjMode",
           type: "switch",
-          binding: { store: "settings", path: "preset.fuckDjMode" },
+          binding: { store: "settings", path: "system.player.fuckDjMode" },
           defaultValue: false,
         },
         {

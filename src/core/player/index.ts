@@ -333,7 +333,7 @@ const loadTrack = async (track: Track | null, context?: PlaybackContext): Promis
   if (!track) return;
   // Fuck DJ Mode
   const settings = useSettingsStore();
-  if (settings.preset.fuckDjMode && shouldSkipDjTrack(track)) {
+  if (settings.system.player.fuckDjMode && shouldSkipDjTrack(track)) {
     await nextTrack();
     return;
   }

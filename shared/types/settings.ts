@@ -56,6 +56,8 @@ export interface PlayerSettings {
   allowTrialPlay: boolean;
   /** Core 是否提前解析下一首播放输入 */
   preloadNextTrack: boolean;
+  /** 是否跳过带 DJ/车载/热歌等关键词的曲目 */
+  fuckDjMode: boolean;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
   /** 均衡器配置 */

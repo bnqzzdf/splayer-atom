@@ -229,8 +229,6 @@ export interface AppearanceSettings {
 
 /** 强迫症设置 */
 export interface PresetSettings {
-  /** Fuck DJ Mode */
-  fuckDjMode: boolean;
   /** Fuck ** Mode */
   uncensorProfanity: boolean;
   /** 隐藏歌曲列表的 VIP 标签 */

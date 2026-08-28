@@ -35,6 +35,7 @@ import { store } from "@main/store";
 import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { playerLog } from "@main/utils/logger";
 import { ErrorCode } from "@shared/types/errors";
+import { shouldSkipDjTrack } from "@shared/utils/djMode";
 
 let queue: PlaybackQueueItem[] = [];
 let originalQueue: PlaybackQueueItem[] | null = null;
@@ -125,7 +126,9 @@ const scheduleNextPlaybackPreload = (): void => {
     invalidatePlaybackPreload();
     return;
   }
-  const targetIndex = nextPlaybackPreloadIndex(index, queue.length, repeat, shuffle);
+  const targetIndex = nextPlaybackPreloadIndex(index, queue.length, repeat, shuffle, (candidate) =>
+    store.get("player.fuckDjMode") === true ? shouldSkipDjTrack(queue[candidate].track) : false,
+  );
   if (targetIndex === null) {
     invalidatePlaybackPreload();
     return;
@@ -194,6 +197,13 @@ const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promis
   let candidateIndex = targetIndex;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (store.get("player.fuckDjMode") === true && shouldSkipDjTrack(queue[candidateIndex].track)) {
+      playerLog.info(`[session] Fuck DJ Mode skipped: ${queue[candidateIndex].track.title}`);
+      if (attempt + 1 >= maxAttempts) break;
+      invalidatePlaybackPreload();
+      candidateIndex = candidateIndex + 1 >= queue.length ? 0 : candidateIndex + 1;
+      continue;
+    }
     try {
       await loadIndex(candidateIndex, autoPlay);
       return true;

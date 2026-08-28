@@ -53,7 +53,7 @@ const buildContextKey = (track: Track): string => {
     track.cueAudioPath ?? "",
     settings.system.player.songLevel,
     settings.system.player.allowTrialPlay,
-    settings.preset.fuckDjMode,
+    settings.system.player.fuckDjMode,
     settings.player.outputDevice ?? "",
     status.repeatMode,
     status.autoClose.enable,
@@ -164,7 +164,7 @@ export const consumeDirectGaplessBoundary = (generation: number): NextTrackPrelo
     playIndex: status.playIndex,
     queue: queue.queue.value,
     fmMode: status.fmMode,
-    fuckDjMode: settings.preset.fuckDjMode,
+    fuckDjMode: settings.system.player.fuckDjMode,
     shuffleMode: status.shuffleMode,
   });
   if (
@@ -203,7 +203,7 @@ export const scheduleNextTrackPreload = (): void => {
     playIndex: status.playIndex,
     queue: queue.queue.value,
     fmMode: status.fmMode,
-    fuckDjMode: settings.preset.fuckDjMode,
+    fuckDjMode: settings.system.player.fuckDjMode,
     shuffleMode: status.shuffleMode,
   });
 
@@ -322,7 +322,7 @@ export const installNextTrackPreloadWatchers = (): void => {
       settings.system.player.preloadNextTrack,
       settings.system.player.songLevel,
       settings.system.player.allowTrialPlay,
-      settings.preset.fuckDjMode,
+      settings.system.player.fuckDjMode,
       status.playIndex,
       status.fmMode,
       status.shuffleMode,
