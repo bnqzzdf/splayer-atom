@@ -11,11 +11,15 @@ import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import { isWebRemote } from "@/runtime";
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
+const webRemote = isWebRemote();
+const webSearchPlatforms = new Set<Platform>(["netease", "qqmusic", "kugou"]);
+if (webRemote && !webSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 
 type TabKey = "songs" | "albums" | "artists" | "playlists";
 
@@ -41,7 +45,10 @@ const tabs = computed(() => {
     : items;
 });
 
-const platformTabs = ALL_PLATFORMS.map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+const platformTabs = (webRemote
+  ? ALL_PLATFORMS.filter((key) => webSearchPlatforms.has(key))
+  : ALL_PLATFORMS
+).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
 
 interface TabState<T> {
   items: T[];
@@ -69,6 +76,8 @@ const states = reactive({
 });
 
 const error = ref("");
+/** 关键词或平台切换时递增，丢弃仍在途中的旧平台搜索结果。 */
+let searchGeneration = 0;
 
 /** 派发到 apis 层的统一调用 */
 const fetchers = {
@@ -94,14 +103,24 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
     state.loading = true;
   }
   error.value = "";
+  const generation = searchGeneration;
+  const requestPlatform = status.searchPlatform;
+  const requestKeyword = keyword.value;
   try {
     const offset = append ? state.items.length : 0;
     const result = await (fetchers[tab] as typeof searchSongs)(
-      status.searchPlatform,
-      keyword.value,
+      requestPlatform,
+      requestKeyword,
       offset,
       PAGE_SIZE,
     );
+    if (
+      generation !== searchGeneration ||
+      requestPlatform !== status.searchPlatform ||
+      requestKeyword !== keyword.value
+    ) {
+      return;
+    }
     const items = result.items.map((item) => markRaw(item));
     if (append) {
       (state.items as Track[]).push(...(items as Track[]));
@@ -112,14 +131,19 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
     state.hasMore = result.hasMore;
     state.loaded = true;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err);
+    if (generation === searchGeneration) {
+      error.value = err instanceof Error ? err.message : String(err);
+    }
   } finally {
-    state.loading = false;
-    state.loadingMore = false;
+    if (generation === searchGeneration) {
+      state.loading = false;
+      state.loadingMore = false;
+    }
   }
 };
 
 const resetStates = (): void => {
+  searchGeneration++;
   (Object.keys(states) as TabKey[]).forEach((tab) => {
     states[tab].items = [];
     states[tab].total = 0;
@@ -193,6 +217,12 @@ const isInitialLoading = computed(() => {
   return state.loading && !state.loaded;
 });
 
+/** 当前 tab 已加载且为空 */
+const isEmptyResult = computed(() => {
+  const state = states[activeTab.value];
+  return state.loaded && state.items.length === 0;
+});
+
 const isAuthError = computed(() => {
   if (!error.value) return false;
   const lower = error.value.toLowerCase();
@@ -243,7 +273,7 @@ const onLoginDialogClose = (open: boolean): void => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0 w-80 max-w-full">
+        <div class="shrink-0" :class="webRemote ? 'w-48' : 'w-80 max-w-full'">
           <STabs
             :model-value="status.searchPlatform"
             :tabs="platformTabs"

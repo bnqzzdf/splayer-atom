@@ -1,3 +1,4 @@
+import type { ApiCallResponse, ApiPlatform } from "@shared/types/apis";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi, AlbumSummary, ArtistSummary } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
@@ -29,6 +30,7 @@ interface WebEvent {
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 const noopSubscription = (): (() => void) => () => {};
+const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
 
 const asIpc = async <T>(loader: () => Promise<T>): Promise<IpcResponse<T>> => {
   try {
@@ -732,13 +734,40 @@ export const installWebApi = async (): Promise<void> => {
       failResolution: async () => {},
     },
     apis: {
-      call: async (_platform: string, name: string) =>
-        name === "login_status"
-          ? { ok: true as const, status: 200, body: { code: 200, data: { account: null, profile: null } } }
-          : { ok: false as const, error: "WEB_PROVIDER_UNSUPPORTED" },
-      clearSession: async () => {},
+      call: async (platform: ApiPlatform, name: string, params?: Record<string, unknown>) => {
+        if (!WEB_PROVIDER_PLATFORMS.has(platform)) {
+          return { ok: false as const, error: "WEB_PROVIDER_UNSUPPORTED" };
+        }
+        try {
+          return await request<ApiCallResponse>("/providers/call", {
+            method: "POST",
+            body: JSON.stringify({ platform, name, params }),
+          });
+        } catch (error) {
+          return { ok: false as const, error: errorText(error) };
+        }
+      },
+      clearSession: async (platform: ApiPlatform) => {
+        if (!WEB_PROVIDER_PLATFORMS.has(platform)) return;
+        await request("/providers/clear-session", {
+          method: "POST",
+          body: JSON.stringify({ platform }),
+        });
+      },
       openLoginWeb: async () => ({ ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" }),
-      setCookie: async () => ({ ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" }),
+      setCookie: async (platform: ApiPlatform, cookie: string) => {
+        if (!WEB_PROVIDER_PLATFORMS.has(platform)) {
+          return { ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" };
+        }
+        try {
+          return await request<{ ok: true } | { ok: false; error: string }>("/providers/set-cookie", {
+            method: "POST",
+            body: JSON.stringify({ platform, cookie }),
+          });
+        } catch (error) {
+          return { ok: false as const, error: errorText(error) };
+        }
+      },
     },
   };
   window.api = api as unknown as Window["api"];

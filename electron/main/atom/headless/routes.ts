@@ -1,6 +1,7 @@
 import { extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { Hono, type Context } from "hono";
+import type { ApiPlatform } from "@shared/types/apis";
 import type {
   LoadOptions,
   PlaybackQueueItem,
@@ -10,6 +11,11 @@ import type {
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { loadPlayerSource } from "@main/services/playerLoad";
+import {
+  callProviderApi,
+  clearProviderSession,
+  setProviderCookie,
+} from "@main/services/providerApi";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { matchLocalTTML } from "@main/services/localLyricRepo";
 import { store } from "@main/store";
@@ -55,6 +61,9 @@ import { toMs } from "@main/utils/time";
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
+const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
+const isWebProviderPlatform = (value: unknown): value is ApiPlatform =>
+  typeof value === "string" && WEB_PROVIDER_PLATFORMS.has(value as ApiPlatform);
 const boundedInt = (value: string | undefined, fallback: number, min: number, max: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.trunc(parsed))) : fallback;
@@ -93,6 +102,43 @@ export const buildHeadlessRoutes = (): Hono => {
     }
     store.set(body.keyPath, body.value);
     return c.json({ ok: true });
+  });
+
+  api.post("/providers/call", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as
+      | { platform?: unknown; name?: unknown; params?: unknown }
+      | null;
+    if (!isWebProviderPlatform(body?.platform)) {
+      return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    }
+    if (typeof body?.name !== "string" || !body.name) {
+      return c.json({ ok: false, error: "provider_name_required" }, 400);
+    }
+    const params =
+      body.params && typeof body.params === "object" && !Array.isArray(body.params)
+        ? (body.params as Record<string, unknown>)
+        : {};
+    return c.json(await callProviderApi(body.platform, body.name, params));
+  });
+
+  api.post("/providers/clear-session", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { platform?: unknown } | null;
+    if (!isWebProviderPlatform(body?.platform)) {
+      return c.json({ error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    }
+    await clearProviderSession(body.platform);
+    return c.json({ ok: true });
+  });
+
+  api.post("/providers/set-cookie", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as
+      | { platform?: unknown; cookie?: unknown }
+      | null;
+    if (!isWebProviderPlatform(body?.platform)) {
+      return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    }
+    if (typeof body.cookie !== "string") return c.json({ ok: false, error: "cookie_required" }, 400);
+    return c.json(setProviderCookie(body.platform, body.cookie));
   });
 
   api.get("/stats/summary", (c) => c.json(getStatsSummary()));

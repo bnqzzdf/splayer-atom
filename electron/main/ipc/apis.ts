@@ -7,78 +7,27 @@
  */
 
 import { ipcMain } from "electron";
-import { callNetease, clearNeteaseCookies, mergeNeteaseCookies } from "@main/apis/netease";
-import { NeteaseRequestError } from "@main/apis/netease/core/request";
-import { cookieToJson } from "@main/apis/netease/core/cookie";
-import { callQQMusic, clearQQMusicCookies, mergeQQMusicCookies } from "@main/apis/qqmusic";
-import { callKugou, clearKugouSession, mergeKugouSession } from "@main/apis/kugou";
-import { callQobuz } from "@main/apis/qobuz";
-import { callTidal } from "@main/apis/tidal";
+import { mergeNeteaseCookies } from "@main/apis/netease";
+import { mergeQQMusicCookies } from "@main/apis/qqmusic";
 import { openNeteaseLoginWindow, openQQMusicLoginWindow } from "@main/window/login";
 import { coreLog } from "@main/utils/logger";
+import {
+  callProviderApi,
+  clearProviderSession,
+  setProviderCookie,
+} from "@main/services/providerApi";
 import type { ApiPlatform } from "@shared/types/apis";
-
-/** 各平台的调用器：统一返回 `{ status?, body?, data? }` 由前端按需取 */
-const dispatch = async (
-  platform: ApiPlatform,
-  name: string,
-  params: Record<string, unknown>,
-): Promise<Record<string, unknown>> => {
-  switch (platform) {
-    case "netease": {
-      const res = await callNetease(name, params);
-      return { status: res.status, body: res.body };
-    }
-    case "qqmusic": {
-      const data = await callQQMusic(name, params);
-      return { data };
-    }
-    case "kugou": {
-      const data = await callKugou(name, params);
-      return { data };
-    }
-    case "qobuz": {
-      const data = await callQobuz(name, params);
-      return { data };
-    }
-    case "tidal": {
-      const data = await callTidal(name, params);
-      return { data };
-    }
-    default:
-      throw new Error(`unknown platform: ${platform}`);
-  }
-};
 
 export const registerApisIpc = (): void => {
   ipcMain.handle(
     "apis:call",
-    async (_evt, platform: ApiPlatform, name: string, params?: Record<string, unknown>) => {
-      try {
-        const result = await dispatch(platform, name, params ?? {});
-        return { ok: true, ...result };
-      } catch (err) {
-        coreLog.warn(`[apis] ${platform}.${name} failed:`, err);
-        if (platform === "netease" && err instanceof NeteaseRequestError) {
-          return {
-            ok: false,
-            error: err.message,
-            status: err.response.status,
-            body: err.response.body,
-          };
-        }
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
-      }
-    },
+    (_evt, platform: ApiPlatform, name: string, params?: Record<string, unknown>) =>
+      callProviderApi(platform, name, params),
   );
 
-  ipcMain.handle("apis:clearSession", async (_evt, platform: ApiPlatform) => {
-    if (platform === "netease") clearNeteaseCookies();
-    if (platform === "qqmusic") clearQQMusicCookies();
-    if (platform === "kugou") clearKugouSession();
-    if (platform === "qobuz") await callQobuz("auth_logout");
-    if (platform === "tidal") await callTidal("auth_logout");
-  });
+  ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) =>
+    clearProviderSession(platform),
+  );
 
   // 打开官方网页登录，成功后把 cookies 合并写入 session
   ipcMain.handle("apis:openLoginWeb", async (_evt, platform: ApiPlatform) => {
@@ -103,33 +52,7 @@ export const registerApisIpc = (): void => {
   });
 
   // 手动写入 cookie 登录
-  ipcMain.handle("apis:setCookie", (_evt, platform: ApiPlatform, raw: string) => {
-    const parsed = cookieToJson(raw);
-    if (platform === "netease") {
-      if (!parsed.MUSIC_U) return { ok: false, error: "missing MUSIC_U" };
-      mergeNeteaseCookies(parsed);
-      return { ok: true };
-    }
-    if (platform === "qqmusic") {
-      if (
-        !parsed.uin &&
-        !parsed.wxuin &&
-        !parsed.p_uin &&
-        !parsed.qm_keyst &&
-        !parsed.qqmusic_key
-      ) {
-        return { ok: false, error: "missing uin or key" };
-      }
-      mergeQQMusicCookies(parsed);
-      return { ok: true };
-    }
-    if (platform === "kugou") {
-      if (!parsed.token || !parsed.userid) {
-        return { ok: false, error: "missing token or userid" };
-      }
-      mergeKugouSession(parsed);
-      return { ok: true };
-    }
-    return { ok: false, error: "unsupported platform" };
-  });
+  ipcMain.handle("apis:setCookie", (_evt, platform: ApiPlatform, raw: string) =>
+    setProviderCookie(platform, raw),
+  );
 };
