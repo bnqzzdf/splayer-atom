@@ -29,12 +29,17 @@ import {
   schedulePlaybackPreload,
 } from "@main/services/playbackPreloader";
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
-import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
+import {
+  clearActiveCueRange,
+  toDisplayPositionMs,
+  toEnginePositionMs,
+} from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
 import { store } from "@main/store";
 import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { playerLog } from "@main/utils/logger";
+import { toMs } from "@main/utils/time";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@shared/utils/djMode";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
@@ -500,9 +505,36 @@ export const play = async (): Promise<void> => {
 };
 
 export const pause = (): void => getPlayer().pause();
-export const stop = (): void => getPlayer().stop();
+export const stop = (): void => {
+  clearActiveCueRange();
+  getPlayer().stop();
+};
 export const seek = (positionMs: number): Promise<void> =>
   getPlayer().seek(toEnginePositionMs(Math.max(0, positionMs)) / 1000);
+
+/**
+ * 重新解析并热替换当前 canonical Track。
+ * 用于音质/凭据策略变化等必须 fresh source 的场景；不进入普通 skip loop，避免把旧进度套到下一首。
+ */
+export const reloadCurrent = async (forcePlay?: boolean): Promise<boolean> => {
+  if (!ownsPlayback() || index < 0 || index >= queue.length) return false;
+  const player = getPlayer();
+  const state = player.getStatus().state;
+  const shouldPlay = forcePlay ?? state === "playing";
+  const resumePositionMs = toDisplayPositionMs(toMs(player.getPosition()));
+  invalidatePlaybackPreload();
+  try {
+    await loadIndex(index, false);
+    if (resumePositionMs > 0) await seek(resumePositionMs);
+    if (shouldPlay) await play();
+    return true;
+  } catch (error) {
+    const code = error instanceof CorePlaybackLoadError ? error.code : ErrorCode.UNKNOWN;
+    publishPlaybackError(code);
+    playerLog.warn(`[session] reload current failed code=${code}: ${String(error)}`);
+    return false;
+  }
+};
 
 export const startPersonalFm = async (
   options?: PersonalFmOptions,

@@ -184,6 +184,16 @@ const playerApi: PlayerApi = {
   seek: (positionMs) =>
     asCommand(() => request("/seek", { method: "POST", body: JSON.stringify({ positionMs }) })),
   getSession: () => sessionResponse(() => request<PlaybackSessionSnapshot>("/session")),
+  reloadSessionCurrent: (forcePlay) =>
+    asIpc(
+      async () =>
+        (
+          await request<{ reloaded: boolean }>("/session/reload", {
+            method: "POST",
+            body: JSON.stringify({ forcePlay }),
+          })
+        ).reloaded,
+    ),
   migrateLegacySessionQueue: () =>
     sessionResponse(() => request<PlaybackSessionSnapshot>("/session")),
   replaceSessionQueue: (items, startIndex = 0, autoPlay = true, loadCurrent = true) =>

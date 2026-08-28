@@ -12,12 +12,7 @@ import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
 import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
 import { loadPlayerSource } from "@main/services/playerLoad";
-import {
-  clearActiveCueRange,
-  toDisplayDurationMs,
-  toDisplayPositionMs,
-  toEnginePositionMs,
-} from "@main/services/playerTimeline";
+import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
 import {
   cancelPendingReinit,
   setPauseOnDeviceSwitch,
@@ -192,10 +187,10 @@ export const registerPlayerIpc = (): void => {
     return loadPlayerSource(source, options);
   });
 
-  // 恢复播放
+  // 恢复播放；实际 load/reload 决策由 Core PlaybackSession 持有。
   ipcMain.handle("player:play", async () => {
     try {
-      await getPlayer().play();
+      await playbackSession.play();
       return { success: true };
     } catch (error) {
       return fail(ErrorCode.DEVICE_NOT_FOUND, error);
@@ -205,7 +200,7 @@ export const registerPlayerIpc = (): void => {
   // 暂停播放
   ipcMain.handle("player:pause", () => {
     try {
-      getPlayer().pause();
+      playbackSession.pause();
       return { success: true };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
@@ -216,8 +211,7 @@ export const registerPlayerIpc = (): void => {
   ipcMain.handle("player:stop", () => {
     try {
       cancelPendingReinit();
-      clearActiveCueRange();
-      getPlayer().stop();
+      playbackSession.stop();
       return { success: true };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
@@ -227,9 +221,7 @@ export const registerPlayerIpc = (): void => {
   // 跳转到指定播放位置
   ipcMain.handle("player:seek", async (_event, positionMs: number) => {
     try {
-      const enginePositionMs = toEnginePositionMs(positionMs);
-      const positionSecs = enginePositionMs / 1000;
-      await getPlayer().seek(positionSecs);
+      await playbackSession.seek(positionMs);
       mediaService.setTimeline({
         currentMs: positionMs,
         totalMs: toDisplayDurationMs(toMs(getPlayer().getDuration())),
@@ -244,6 +236,11 @@ export const registerPlayerIpc = (): void => {
   ipcMain.handle("player:getSession", () => ({
     success: true,
     data: playbackSession.getPlaybackSession(),
+  }));
+
+  ipcMain.handle("player:reloadSessionCurrent", async (_event, forcePlay?: boolean) => ({
+    success: true,
+    data: await playbackSession.reloadCurrent(forcePlay),
   }));
 
   ipcMain.handle(

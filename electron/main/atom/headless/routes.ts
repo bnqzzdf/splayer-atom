@@ -38,6 +38,7 @@ import {
   removeServerTracks,
   replaceQueue,
   refreshPlaybackPreload,
+  reloadCurrent,
   scanDirettaDevices,
   seek,
   selectIndex,
@@ -418,6 +419,10 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.get("/session", (c) => c.json(getPlaybackSession()));
+  api.post("/session/reload", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { forcePlay?: boolean } | null;
+    return c.json({ reloaded: await reloadCurrent(body?.forcePlay) });
+  });
   api.post("/session/queue", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       items?: PlaybackQueueItem[];

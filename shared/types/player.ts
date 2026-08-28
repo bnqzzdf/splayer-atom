@@ -294,6 +294,8 @@ export interface PlayerApi {
   seek: (positionMs: number) => Promise<IpcResponse>;
   /** 获取主进程权威播放会话 */
   getSession: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** fresh resolve 并热替换当前 canonical Track，保留 Core 捕获的进度/播放态 */
+  reloadSessionCurrent: (forcePlay?: boolean) => Promise<IpcResponse<boolean>>;
   /** 一次性迁移旧 renderer IndexedDB 队列 */
   migrateLegacySessionQueue: (
     items: PlaybackQueueItem[],

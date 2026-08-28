@@ -29,13 +29,8 @@ import * as coverLoader from "@/services/coverLoader";
 import * as abLoop from "@/services/abLoop";
 import * as autoClose from "@/services/autoClose";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import { prepareDirectTrackSource } from "@/services/audioSource";
 import {
-  prepareDirectTrackSource,
-  resolveTrackSource,
-  type ResolvedTrackSource,
-} from "@/services/audioSource";
-import {
-  consumePreloadedTrack,
   disposeNextTrackPreload,
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
@@ -44,9 +39,7 @@ import {
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { extractColorFromUrl } from "@/utils/color";
-import { handleError, isSkippableError } from "@/utils/errors";
-import { ErrorCode } from "@shared/types/errors";
-import { shouldSkipDjTrack } from "@/utils/preset/djMode";
+import { handleError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
@@ -78,60 +71,11 @@ interface LoadRuntimeOptions {
   context?: PlaybackContext;
 }
 
-/** 单次音源兜底过程的重试状态 */
-interface SourceRetryState {
-  /** 是否已放弃官方在线接口，后续仅尝试插件 */
-  skipOfficialOnline: boolean;
-  /** 已尝试且需跳过的插件 ID */
-  skippedPluginIds: Set<string>;
-}
-
-/**
- * 单次解析并加载音源的结果
- * - loaded: 已拿到解析结果，并完成一次 load（成功或失败都算）
- * - unresolved: 当前重试策略下没有可用音源
- * - cancelled: 加载期间被新的切歌/重载请求接管
- */
-type LoadSourceResult =
-  | { status: "loaded"; result: LoadOutcome; resolved: ResolvedTrackSource }
-  | { status: "unresolved" }
-  | { status: "cancelled" };
-
-/** 引擎 load 竞态 token */
+/** 引擎 load 竞态 token；仅保留给仍在迁移的 Desktop output/tag compatibility path。 */
 let loadToken = 0;
-/** loadTrack 竞态 token */
+/** Desktop output/tag compatibility path 的竞态 token。 */
 let trackToken = 0;
-/** 连续加载失败计数，成功时重置 */
-let consecutiveFailures = 0;
-/** 连续失败硬上限 */
-const MAX_CONSECUTIVE_FAILURES = 5;
-/** 失败后跳下一首的节流延迟（毫秒） */
-const SKIP_ON_ERROR_DELAY_MS = 1000;
 
-/**
- * 单曲级失败兜底
- * 达到连续失败上限 / 队列长度则交 onQueueEnded 停下
- * @param myToken - 调用方进入失败路径时的 token 快照
- * @param getCurrentToken - 取该 token 的最新值，setTimeout 触发时再次比对
- */
-const skipOnFailure = async (myToken: number, getCurrentToken: () => number): Promise<void> => {
-  consecutiveFailures++;
-  if (
-    consecutiveFailures >= MAX_CONSECUTIVE_FAILURES ||
-    consecutiveFailures >= queue.queueLength.value
-  ) {
-    const reachedMax = consecutiveFailures >= MAX_CONSECUTIVE_FAILURES;
-    consecutiveFailures = 0;
-    await onQueueEnded();
-    if (reachedMax) {
-      handleError(ErrorCode.MAX_CONSECUTIVE_FAILURES);
-    }
-    return;
-  }
-  setTimeout(() => {
-    if (myToken === getCurrentToken()) nextTrack();
-  }, SKIP_ON_ERROR_DELAY_MS);
-};
 
 /** load() 的结果；失败时附带错误码，跳曲决策交给调用方 */
 export type LoadOutcome = { ok: true; track: Track | null } | { ok: false; error?: string };
@@ -190,7 +134,6 @@ export const load = async (
     if (token !== loadToken) return { ok: false };
     if (result.success && result.data) {
       const { detail, mediaInfo } = result.data;
-      consecutiveFailures = 0;
       const media = useMediaStore();
       // 把引擎提取的 mediaInfo 与已有 Track 合并；身份字段保留
       media.enrichTrack(mediaInfo, detail);
@@ -218,183 +161,6 @@ export const load = async (
   }
 };
 
-/** 创建音源重试状态 */
-const createSourceRetryState = (): SourceRetryState => ({
-  skipOfficialOnline: false,
-  skippedPluginIds: new Set<string>(),
-});
-
-/**
- * 根据当前重试状态解析音源
- * @param track - 要解析的 Track
- * @param retry - 当前重试状态
- */
-const resolveTrackSourceWithRetry = (
-  track: Track,
-  retry: SourceRetryState,
-): Promise<ResolvedTrackSource | null> =>
-  resolveTrackSource(track, {
-    skipOfficialOnline: retry.skipOfficialOnline,
-    skipPluginIds: [...retry.skippedPluginIds],
-  });
-
-/**
- * 记录可继续兜底的音源失败
- * @param resolved - 本次加载使用的音源
- * @param retry - 当前重试状态
- * @returns 是否还有可尝试的后续音源
- */
-const markRetryableSourceFailure = (
-  resolved: ResolvedTrackSource,
-  retry: SourceRetryState,
-): boolean => {
-  if (resolved.provider === "official" && !retry.skipOfficialOnline) {
-    retry.skipOfficialOnline = true;
-    return true;
-  }
-  if (resolved.provider === "plugin" && resolved.pluginId) {
-    retry.skippedPluginIds.add(resolved.pluginId);
-    return true;
-  }
-  return false;
-};
-
-const shouldSuppressLoadError = (resolved: ResolvedTrackSource): boolean =>
-  resolved.provider === "official" || resolved.provider === "plugin";
-
-/**
- * 解析并加载 Track，遇到可兜底的音源失败时继续尝试下一个来源
- * @param track - 要加载的 Track
- * @param context - 本次播放的来源上下文
- * @param autoPlay - 是否自动播放
- * @param shouldContinue - 竞态检查，返回 false 时放弃本轮加载
- * @param retryOnAnyFailure - 是否对任意加载失败继续换源
- */
-const loadTrackSourceWithFallback = async (
-  track: Track,
-  context: PlaybackContext | undefined,
-  autoPlay: boolean,
-  shouldContinue: () => boolean,
-  retryOnAnyFailure = false,
-  initialResolved?: ResolvedTrackSource | null,
-): Promise<LoadSourceResult> => {
-  const retry = createSourceRetryState();
-  let firstTry = initialResolved ?? null;
-  while (true) {
-    const usingInitial = firstTry !== null;
-    const resolved = firstTry ?? (await resolveTrackSourceWithRetry(track, retry));
-    firstTry = null;
-    if (!shouldContinue()) return { status: "cancelled" };
-    if (!resolved) return { status: "unresolved" };
-    const prepared = await prepareDirectTrackSource(track, resolved);
-    if (!shouldContinue()) return { status: "cancelled" };
-    if (!prepared) {
-      if (usingInitial && resolved.provider !== "local" && resolved.provider !== "cache") {
-        continue;
-      }
-      return {
-        status: "loaded",
-        result: { ok: false, error: ErrorCode.NETWORK_ERROR },
-        resolved,
-      };
-    }
-    const result = await load(prepared.source, autoPlay, track, {
-      suppressErrorToast: usingInitial || shouldSuppressLoadError(prepared),
-      context,
-    });
-    if (!shouldContinue()) return { status: "cancelled" };
-    // 预载 URL 可能已经过期，非本地来源失败后重新解析一次最新地址
-    if (
-      usingInitial &&
-      !result.ok &&
-      resolved.provider !== "local" &&
-      resolved.provider !== "cache"
-    ) {
-      continue;
-    }
-    const strictOnlineDirect =
-      useSettingsStore().player.outputDevice?.startsWith("diretta:") === true &&
-      (track.source === "qobuz" || track.source === "tidal");
-    const canRetry =
-      !strictOnlineDirect &&
-      !result.ok &&
-      (retryOnAnyFailure || Boolean(result.error && isSkippableError(result.error))) &&
-      markRetryableSourceFailure(resolved, retry);
-    if (canRetry) continue;
-    return { status: "loaded", result, resolved: prepared };
-  }
-};
-
-/**
- * 加载指定 Track 到播放器
- * 乐观更新：立即显示歌曲信息，快速切歌时只有最后一次 load 生效
- * @param track - 要播放的 Track，为 null 时忽略
- * @param context - 本次播放的来源上下文
- */
-const loadTrack = async (track: Track | null, context?: PlaybackContext): Promise<void> => {
-  if (!track) return;
-  // Fuck DJ Mode
-  const settings = useSettingsStore();
-  if (settings.system.player.fuckDjMode && shouldSkipDjTrack(track)) {
-    await nextTrack();
-    return;
-  }
-  const myToken = ++trackToken;
-  // 消费预载结果
-  const preloaded = consumePreloadedTrack(track);
-  // 乐观更新
-  const media = useMediaStore();
-  media.setTrack(track);
-  media.setPlaybackContext(context);
-  lyricLoader.beginLoad();
-  resetForLoad(track.duration ?? 0);
-  void window.api.player.stop();
-  // 是否可跳曲
-  let shouldSkip = false;
-  try {
-    const loaded = await loadTrackSourceWithFallback(
-      track,
-      context,
-      true,
-      () => myToken === trackToken,
-      false,
-      preloaded?.source,
-    );
-    if (loaded.status === "cancelled") return;
-    if (loaded.status === "unresolved") {
-      const status = useStatusStore();
-      status.currentSource = null;
-      status.state = "idle";
-      void window.api.player.stop();
-      useMediaStore().setLyric(null, null);
-      shouldSkip = true;
-    } else {
-      const { result, resolved } = loaded;
-      if (!result.ok && result.error && isSkippableError(result.error)) {
-        handleError(result.error);
-        shouldSkip = true;
-      } else if (result.ok) {
-        // 用户主动触发的成功播放记入历史；initPlayer 的恢复路径走 load() 不经此处
-        void useHistoryStore().record(track);
-        if (resolved.cacheRequest) {
-          cacheScheduler.schedule(track.id, resolved.cacheRequest);
-        }
-        scheduleNextTrackPreload();
-      } else if (result.error) {
-        handleError(result.error);
-      }
-    }
-  } finally {
-    if (myToken === trackToken) {
-      const status = useStatusStore();
-      if (shouldSkip || status.state !== "playing") {
-        status.trackLoading = false;
-      }
-    }
-  }
-  if (shouldSkip) await skipOnFailure(myToken, () => trackToken);
-};
-
 /**
  * Diretta 已在同一 connection 上跨过 track boundary 后，只提交 SPlayer 应用状态。
  * 这里绝不能再次调用 load/stop，否则会破坏已经成立的 sample-contiguous handoff。
@@ -415,7 +181,6 @@ export const commitDirectGaplessTrack = async (
   if (!committed.success) return false;
 
   ++trackToken;
-  consecutiveFailures = 0;
   sourceRecoveryCount = 0;
   sourceRecoveryTrackId = null;
   seekTarget = null;
@@ -449,40 +214,18 @@ export const commitDirectGaplessTrack = async (
 };
 
 /**
- * 热替换当前播放
- * 切换在线音质、或在线 URL 过期时调用：重新解析 URL 并从当前进度续播
- * @param forcePlay - 重载后强制播放
- * @returns 是否完成（成功或被更新的加载接管）；解析/加载失败返回 false，调用方据此决定是否跳曲
+ * 热替换当前播放。
+ * canonical Track、fresh source、当前位置与播放态都由 Core PlaybackSession 持有；Control 只发 reload command。
  */
 export const reloadCurrentTrack = async (forcePlay?: boolean): Promise<boolean> => {
-  const media = useMediaStore();
-  const track = media.track;
-  if (!track || track.source === "local") return false;
   const status = useStatusStore();
-  const shouldPlay = forcePlay ?? status.isPlaying;
-  const resumePosition = Math.round(playback.getCurrentTime());
-  // 抢占加载令牌，与 loadTrack 互相取消
-  const myToken = ++trackToken;
-  // resolveTrackSource 联网解析较慢，先置加载态，让播放键立即给出反馈
+  if (!status.currentTrack) return false;
   status.trackLoading = true;
-  const loaded = await loadTrackSourceWithFallback(
-    track,
-    media.playbackContext,
-    false,
-    () => myToken === trackToken,
-    true,
-  );
-  // 被更新的加载接管：由它负责结果，不算本次失败
-  if (loaded.status === "cancelled") return true;
-  if (loaded.status === "unresolved") {
+  const result = await window.api.player.reloadSessionCurrent(forcePlay);
+  if (!result.success || result.data !== true) {
     status.trackLoading = false;
+    if (!result.success) handleError(result.error ?? "UNKNOWN");
     return false;
-  }
-  if (!loaded.result.ok) return false;
-  if (resumePosition > 0) await seek(resumePosition);
-  if (shouldPlay) await play();
-  if (loaded.resolved.cacheRequest) {
-    cacheScheduler.schedule(track.id, loaded.resolved.cacheRequest);
   }
   return true;
 };
@@ -526,10 +269,6 @@ export const recoverFromSourceFailure = async (): Promise<void> => {
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
   const status = useStatusStore();
-  if (status.state === "stopped" && status.currentTrack) {
-    await loadTrack(status.currentTrack, status.currentPlaybackContext);
-    return;
-  }
   const prev = status.state;
   status.state = "playing";
   playback.setPlaying(true);
@@ -913,8 +652,7 @@ export const dislikeFmTrack = async (): Promise<void> => {
  * 播放下一首
  */
 export const reloadCurrentQueueTrack = async (): Promise<void> => {
-  const status = useStatusStore();
-  await loadTrack(status.currentTrack, status.currentPlaybackContext);
+  await reloadCurrentTrack(true);
 };
 
 export const nextTrack = async (): Promise<void> => {
@@ -1326,20 +1064,13 @@ export const initPlayer = async (): Promise<void> => {
     media.setPlaybackContext(status.currentPlaybackContext);
     lyricLoader.beginLoad();
     if (!isServerActive) {
-      const loaded = await loadTrackSourceWithFallback(
-        lastTrack,
-        status.currentPlaybackContext,
-        settings.system.player.autoPlay,
-        () => true,
-      );
-      if (loaded.status === "loaded" && loaded.result.ok) {
+      const loaded = await window.api.player.reloadSessionCurrent(settings.system.player.autoPlay);
+      if (loaded.success && loaded.data === true) {
         if (settings.system.player.rememberLastTrack && lastPosition > 0) {
           await seek(lastPosition);
         }
-        if (loaded.resolved.cacheRequest) {
-          cacheScheduler.schedule(lastTrack.id, loaded.resolved.cacheRequest);
-        }
       } else {
+        status.trackLoading = false;
         status.state = "idle";
       }
     }

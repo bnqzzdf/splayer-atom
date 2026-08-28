@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const playerSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const audioSource = readFileSync(new URL("../../services/audioSource.ts", import.meta.url), "utf8");
 const preloaderSource = readFileSync(
   new URL("../../services/nextTrackPreloader.ts", import.meta.url),
   "utf8",
@@ -16,6 +15,10 @@ const corePreloaderSource = readFileSync(
   new URL("../../../electron/main/services/playbackPreloader.ts", import.meta.url),
   "utf8",
 );
+const coreSessionSource = readFileSync(
+  new URL("../../../electron/main/services/playbackSession.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -25,32 +28,15 @@ const between = (source: string, start: string, end: string): string => {
   return section;
 };
 
-test("remote Direct input becomes local before native load", () => {
-  const preparation = between(
-    audioSource,
-    "export const prepareDirectTrackSource = async (",
-    "/**\n * 记录解析错误",
-  );
-  assert.match(preparation, /track\.source === "local"/);
-  assert.doesNotMatch(preparation, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
-  assert.match(preparation, /outputDevice/);
-  assert.match(preparation, /cache\.song\.fetch/);
-  assert.match(preparation, /materializeDirectInput/);
-
+test("canonical source resolution is owned by Core before native load", () => {
+  assert.doesNotMatch(playerSource, /resolveTrackSource|loadTrackSourceWithFallback/);
   const loadFlow = between(
-    playerSource,
-    "const loadTrackSourceWithFallback = async (",
-    "/**\n * 加载指定 Track",
+    coreSessionSource,
+    "const loadIndex = async (",
+    "const loadIndexWithPolicy = async (",
   );
-  assert.match(loadFlow, /prepareDirectTrackSource\(track, resolved\)/);
-  assert.match(loadFlow, /load\(prepared\.source/);
-  assert.doesNotMatch(loadFlow, /load\(resolved\.source/);
-
-  const preparationFailure = between(loadFlow, "if (!prepared) {", "const result = await load(");
-  assert.match(preparationFailure, /ErrorCode\.NETWORK_ERROR/);
-  assert.doesNotMatch(preparationFailure, /markRetryableSourceFailure/);
-  assert.match(loadFlow, /strictOnlineDirect/);
-  assert.match(loadFlow, /!strictOnlineDirect/);
+  assert.match(loadFlow, /resolvePlaybackSource\(track\)/);
+  assert.match(loadFlow, /loadPlayerSource\(resolved\.source/);
 });
 
 test("main player load materializes every remote source before Diretta native load", () => {

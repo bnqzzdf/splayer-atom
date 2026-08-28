@@ -76,6 +76,9 @@ const api = {
     seek: (position: number) => ipcRenderer.invoke("player:seek", position),
     // 获取主进程权威播放会话
     getSession: () => ipcRenderer.invoke("player:getSession"),
+    // fresh resolve 并热替换当前 canonical Track
+    reloadSessionCurrent: (forcePlay?: boolean) =>
+      ipcRenderer.invoke("player:reloadSessionCurrent", forcePlay),
     // 一次性迁移旧 renderer IndexedDB 队列
     migrateLegacySessionQueue: (
       items: import("@shared/types/player").PlaybackQueueItem[],
