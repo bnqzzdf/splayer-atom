@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { playbackSourceCacheKey } from "./playbackSourcePolicy";
+import { playbackSourceCacheKey, shouldRetryPlaybackSource } from "./playbackSourcePolicy";
 
 const base = { id: "42" };
 
@@ -28,5 +28,17 @@ describe("playbackSourceCacheKey", () => {
   it("preserves inherited QQ/Kugou cache-key compatibility without claiming Core resolution", () => {
     assert.equal(playbackSourceCacheKey({ ...base, source: "qqmusic" }, "hq"), "o:qqmusic:42:");
     assert.equal(playbackSourceCacheKey({ ...base, source: "kugou" }, "hq"), "o:kugou:42:");
+  });
+});
+
+describe("shouldRetryPlaybackSource", () => {
+  it("allows exactly one fresh resolve for non-local playback", () => {
+    assert.equal(shouldRetryPlaybackSource({ source: "netease" }, 0), true);
+    assert.equal(shouldRetryPlaybackSource({ source: "streaming" }, 0), true);
+    assert.equal(shouldRetryPlaybackSource({ source: "qobuz" }, 1), false);
+  });
+
+  it("never retries local files through the provider resolver", () => {
+    assert.equal(shouldRetryPlaybackSource({ source: "local" }, 0), false);
   });
 });

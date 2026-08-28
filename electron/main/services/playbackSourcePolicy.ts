@@ -22,3 +22,9 @@ export const playbackSourceCacheKey = (
   }
   return null;
 };
+
+/** Native sourceError 只允许在线/流媒体输入对同一 canonical Track fresh resolve 一次。 */
+export const shouldRetryPlaybackSource = (
+  track: Pick<Track, "source">,
+  attempts: number,
+): boolean => track.source !== "local" && attempts < 1;

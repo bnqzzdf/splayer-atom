@@ -11,6 +11,7 @@ import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbac
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import { resolvePlaybackSource } from "@main/services/playbackSourceResolver";
+import { shouldRetryPlaybackSource } from "@main/services/playbackSourcePolicy";
 import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
@@ -26,6 +27,7 @@ let shuffle: ShuffleMode = "off";
 let active = false;
 let initialized = false;
 let loadGeneration = 0;
+let sourceRecoveryAttempts = 0;
 
 /** Linux headless Diretta Host requires root privileges in the supported deployment model. */
 const assertHeadlessDirettaPrivilege = (deviceId: string | null | undefined): void => {
@@ -60,8 +62,13 @@ const publish = (): void => {
   wsBroadcast({ type: "session", data });
 };
 
-const loadIndex = async (targetIndex: number, autoPlay = true): Promise<void> => {
+const loadIndex = async (
+  targetIndex: number,
+  autoPlay = true,
+  sourceRecovery = false,
+): Promise<void> => {
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
+  if (!sourceRecovery) sourceRecoveryAttempts = 0;
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
@@ -241,6 +248,7 @@ export const removeQueueIndex = async (
 
 export const clearQueue = async (stop = false): Promise<void> => {
   ++loadGeneration;
+  sourceRecoveryAttempts = 0;
   queue = [];
   originalQueue = null;
   index = -1;
@@ -399,10 +407,38 @@ export const onNativeEnded = (): boolean => {
   return true;
 };
 
-/** 无头模式下音源失败由主进程推进权威队列。 */
+/** sourceError 最多 fresh resolve 当前 canonical Track 一次；再次失败后跳过当前项。 */
 export const onNativeSourceError = (): boolean => {
   if (!isHeadlessMode() || !ownsPlayback()) return false;
-  void next().catch((error) => playerLog.error("[session] source-error next failed", error));
+  const track = queue[index]?.track;
+  if (!track) return false;
+
+  const advance = async (): Promise<void> => {
+    if (queue.length <= 1) {
+      ++loadGeneration;
+      getPlayer().stop();
+      active = false;
+      publish();
+      return;
+    }
+    await next();
+  };
+
+  if (shouldRetryPlaybackSource(track, sourceRecoveryAttempts)) {
+    sourceRecoveryAttempts++;
+    playerLog.warn(`[session] source error, fresh resolve once: ${track.title}`);
+    void loadIndex(index, true, true).catch(async (error) => {
+      playerLog.warn(`[session] source recovery failed, advancing: ${String(error)}`);
+      try {
+        await advance();
+      } catch (advanceError) {
+        playerLog.error("[session] source-error advance failed", advanceError);
+      }
+    });
+    return true;
+  }
+
+  void advance().catch((error) => playerLog.error("[session] source-error advance failed", error));
   return true;
 };
 
