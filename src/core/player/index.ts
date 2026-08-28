@@ -52,10 +52,8 @@ import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
-const toQueueItems = (
-  items: readonly Track[],
-  context?: PlaybackContext,
-): PlaybackQueueItem[] => items.map((track) => (context ? { track, context } : { track }));
+const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
+  items.map((track) => (context ? { track, context } : { track }));
 
 /** 应用主进程返回的权威会话快照。 */
 const applySessionResult = (
@@ -289,11 +287,7 @@ const loadTrackSourceWithFallback = async (
     const prepared = await prepareDirectTrackSource(track, resolved);
     if (!shouldContinue()) return { status: "cancelled" };
     if (!prepared) {
-      if (
-        usingInitial &&
-        resolved.provider !== "local" &&
-        resolved.provider !== "cache"
-      ) {
+      if (usingInitial && resolved.provider !== "local" && resolved.provider !== "cache") {
         continue;
       }
       return {
@@ -793,14 +787,15 @@ export const playFrom = async (
   const idx = Math.max(0, Math.min(startIndex, items.length - 1));
   const isSameTrack = media.track?.id === items[idx]?.id;
   const session = applySessionResult(
-    await window.api.player.replaceSessionQueue(toQueueItems(items, context), idx, false, false),
+    await window.api.player.replaceSessionQueue(
+      toQueueItems(items, context),
+      idx,
+      !isSameTrack,
+      !isSameTrack,
+    ),
   );
   if (!session) return;
-  if (isSameTrack) {
-    if (!status.isPlaying) play();
-  } else {
-    await loadTrack(status.currentTrack, status.currentPlaybackContext);
-  }
+  if (isSameTrack && !status.isPlaying) await play();
 };
 
 /** 标签写入后恢复当前曲：暂停态加载 → seek 回原进度 → 视情况恢复播放 */
@@ -873,7 +868,7 @@ export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => 
   if (tracks.length === 0) return;
   const status = useStatusStore();
   applySessionResult(
-    await window.api.player.replaceSessionQueue(toQueueItems(tracks), 0, false, false),
+    await window.api.player.replaceSessionQueue(toQueueItems(tracks), 0, true, true),
   );
   if (status.shuffleMode !== "off") {
     applySessionResult(await window.api.player.setSessionShuffle("off"));
@@ -882,7 +877,6 @@ export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => 
   // 心动 / FM 互斥
   status.fmMode = false;
   syncPlayMode();
-  await loadTrack(status.currentTrack, status.currentPlaybackContext);
 };
 
 /** 退出心动模式，保留当前队列继续播放 */
@@ -933,9 +927,7 @@ export const nextTrack = async (): Promise<void> => {
     return;
   }
   if (queue.queueLength.value === 0) return;
-  const session = applySessionResult(await window.api.player.nextSession(false));
-  if (!session) return;
-  await loadTrack(status.currentTrack, status.currentPlaybackContext);
+  applySessionResult(await window.api.player.nextSession(true));
 };
 
 /**
@@ -952,9 +944,7 @@ export const playAtIndex = async (index: number): Promise<void> => {
   }
   // 退出 FM
   status.fmMode = false;
-  const session = applySessionResult(await window.api.player.selectSessionIndex(index, false, true));
-  if (!session) return;
-  await loadTrack(status.currentTrack, status.currentPlaybackContext);
+  applySessionResult(await window.api.player.selectSessionIndex(index, true, true));
 };
 
 /** 播放上一首，首位时回绕到末尾 */
@@ -962,9 +952,7 @@ export const prevTrack = async (): Promise<void> => {
   const status = useStatusStore();
   if (status.fmMode) return;
   if (queue.queueLength.value === 0) return;
-  const session = applySessionResult(await window.api.player.prevSession(false));
-  if (!session) return;
-  await loadTrack(status.currentTrack, status.currentPlaybackContext);
+  applySessionResult(await window.api.player.prevSession(true));
 };
 
 /** 队列播放结束，通知主进程停止并更新状态 */
@@ -1047,15 +1035,12 @@ export const removeFromQueue = async (index: number): Promise<void> => {
   if (index < 0 || index >= queue.queueLength.value) return;
   const isCurrentPlaying = index === status.playIndex;
   const session = applySessionResult(
-    await window.api.player.removeSessionQueueIndex(index, false),
+    await window.api.player.removeSessionQueueIndex(index, isCurrentPlaying),
   );
   if (!session) return;
   if (session.queue.length === 0) {
     await onQueueEnded();
     return;
-  }
-  if (isCurrentPlaying) {
-    await loadTrack(status.currentTrack, status.currentPlaybackContext);
   }
 };
 
@@ -1160,7 +1145,7 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
   status.fmMode = false;
   const insertedIndex = await insertToQueue(item, undefined, context);
   if (insertedIndex < 0) return;
-  await loadTrack(item, context);
+  applySessionResult(await window.api.player.selectSessionIndex(insertedIndex, true, true));
 };
 
 /**
@@ -1286,7 +1271,10 @@ export const initPlayer = async (): Promise<void> => {
     );
     if (legacy) settings.player.outputDevice = legacy.id;
     // 不自动修改用户的音量/DSP 设置来满足 Direct。旧状态若不兼容则回到系统默认，由用户修正后重新选择 Target。
-    if (isDirettaOutput(settings.player.outputDevice) && getCurrentDirectEntryBlockers().length > 0) {
+    if (
+      isDirettaOutput(settings.player.outputDevice) &&
+      getCurrentDirectEntryBlockers().length > 0
+    ) {
       settings.player.outputDevice = null;
       toast.error(i18n.global.t("directMode.entryBlocked"));
     } else {
