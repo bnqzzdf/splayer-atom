@@ -10,6 +10,7 @@ import { getPlayer } from "@main/services/engine";
 import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
+import { resolvePlaybackSource } from "@main/services/playbackSourceResolver";
 import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
@@ -59,31 +60,29 @@ const publish = (): void => {
   wsBroadcast({ type: "session", data });
 };
 
-const requireLocalSource = (track: Track): string => {
-  if (track.source !== "local") {
-    throw new Error(`Headless phase-1 playback only accepts local tracks, got: ${track.source}`);
-  }
-  const source = track.cueAudioPath ?? track.path;
-  if (!source) throw new Error(`Local track has no playable path: ${track.id}`);
-  return source;
-};
-
 const loadIndex = async (targetIndex: number, autoPlay = true): Promise<void> => {
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  const source = requireLocalSource(track);
+  const resolved = await resolvePlaybackSource(track);
+  if (generation !== loadGeneration) return;
 
-  playerLog.info(`[session] load local track: ${track.title}`);
-  const result = await loadPlayerSource(source, {
+  playerLog.info(`[session] load ${track.source} track: ${track.title}`);
+  const result = await loadPlayerSource(resolved.source, {
     autoPlay,
     meta: track,
     context: item.context,
   });
   if (generation !== loadGeneration) return;
   if (!result.success || !result.data) {
-    throw new Error(`local session load failed: ${result.error ?? "UNKNOWN"}`);
+    throw new Error(`${track.source} session load failed: ${result.error ?? "UNKNOWN"}`);
+  }
+
+  if (resolved.cacheAfterLoad) {
+    void resolved
+      .cacheAfterLoad()
+      .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
   }
 
   index = targetIndex;
