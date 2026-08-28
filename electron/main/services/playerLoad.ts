@@ -1,6 +1,10 @@
 import { getMainWindow } from "@main/window";
 import { appName, getSongCacheDir } from "@main/utils/config";
-import { discardDirectInput, pruneDirectInputs } from "@main/atom/directInput";
+import {
+  discardDirectInput,
+  materializeDirectInput,
+  pruneDirectInputs,
+} from "@main/atom/directInput";
 import { ErrorCode } from "@shared/types/errors";
 import type { LyricFormat } from "@shared/types/lyrics";
 import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player";
@@ -68,6 +72,7 @@ export const loadPlayerSource = async (
   const cueRange = setActiveCueTrack(authoritative);
   const isRemote = authoritative != null && authoritative.source !== "local";
   const seq = nextPlayerLoadSeq();
+  let loadSource = source;
   try {
     const inst = getPlayer();
     const loadingEvent = {
@@ -119,8 +124,16 @@ export const loadPlayerSource = async (
       applyDisplay(source.split(/[/\\]/).pop() || source, "", "", undefined, 0);
     }
 
-    const meta = await inst.load(source, cueRange ? false : autoPlay);
-    void pruneDirectInputs(source);
+    if (
+      inst.getSelectedDeviceName()?.startsWith("diretta:") === true &&
+      /^https?:\/\//i.test(source)
+    ) {
+      // Diretta Source Direct 只接收本地 seekable 输入；远端字节在 main 原样落盘后再交给 native。
+      loadSource = await materializeDirectInput(source);
+    }
+
+    const meta = await inst.load(loadSource, cueRange ? false : autoPlay);
+    void pruneDirectInputs(loadSource);
     if (cueRange) {
       await inst.seek(cueRange.startMs / 1000);
       if (autoPlay) await inst.play();
@@ -203,8 +216,8 @@ export const loadPlayerSource = async (
     if (isCurrentPlayerLoadSeq(seq)) clearActiveCueRange();
     const code = classifyLoadError(error, source);
     if (code === ErrorCode.FILE_DECODE_ERROR) {
-      if (source.startsWith(getSongCacheDir())) void songCache.invalidate(source);
-      void discardDirectInput(source);
+      if (loadSource.startsWith(getSongCacheDir())) void songCache.invalidate(loadSource);
+      void discardDirectInput(loadSource);
     }
     playerLog.error(`${code}:`, error);
     return { success: false, error: code };

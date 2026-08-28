@@ -8,6 +8,10 @@ const preloaderSource = readFileSync(
   new URL("../../services/nextTrackPreloader.ts", import.meta.url),
   "utf8",
 );
+const mainPlayerLoadSource = readFileSync(
+  new URL("../../../electron/main/services/playerLoad.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -42,6 +46,19 @@ test("Qobuz/TIDAL Direct input becomes local before native load", () => {
   assert.doesNotMatch(preparationFailure, /markRetryableSourceFailure/);
   assert.match(loadFlow, /strictOnlineDirect/);
   assert.match(loadFlow, /!strictOnlineDirect/);
+});
+
+test("main player load materializes every remote source before Diretta native load", () => {
+  const loadFlow = between(
+    mainPlayerLoadSource,
+    "export const loadPlayerSource = async (",
+    "playerLog.debug(`加载成功: ${displayTitle}`)",
+  );
+  assert.match(loadFlow, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
+  assert.match(loadFlow, /\^https\?:\\\/\\\//i);
+  assert.match(loadFlow, /loadSource = await materializeDirectInput\(source\)/);
+  assert.match(loadFlow, /inst\.load\(loadSource/);
+  assert.doesNotMatch(loadFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
 });
 
 test("Diretta next-track staging prepares online input before native gapless staging", () => {

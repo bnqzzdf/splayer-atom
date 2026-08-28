@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
-import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
+import OutputDeviceSelector from "@/web/OutputDeviceSelector.vue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
@@ -114,7 +114,7 @@ const onMoreMenuSelect = (key: string): void => {
       </template>
       <div class="flex flex-col gap-2">
         <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
-        <DeviceSelector />
+        <OutputDeviceSelector />
         <div
           v-if="settings.player.outputDevice?.startsWith('diretta:')"
           class="text-xs text-on-surface-variant"

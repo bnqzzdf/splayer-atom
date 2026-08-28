@@ -8,6 +8,10 @@ const toolbarSource = readFileSync(
   new URL("../../components/player/Toolbar.vue", import.meta.url),
   "utf8",
 );
+const webOutputSelectorSource = readFileSync(
+  new URL("../../web/OutputDeviceSelector.vue", import.meta.url),
+  "utf8",
+);
 const equalizerSource = readFileSync(
   new URL("../../components/modals/EqualizerDialog.vue", import.meta.url),
   "utf8",
@@ -72,6 +76,14 @@ test("Existing sample-altering UI is visibly locked while Diretta is selected", 
     settingsSource,
     /key: "loudnessNormalization"[\s\S]*disabled: isDirectOutputSelected/,
   );
+});
+
+test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {
+  assert.match(toolbarSource, /OutputDeviceSelector/);
+  assert.match(webOutputSelectorSource, /startsWith\("diretta:"\)/);
+  assert.match(webOutputSelectorSource, /alsa:hw:CARD=/);
+  assert.match(webOutputSelectorSource, /ALSA ·/);
+  assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
 });
 
 test("Core volume and tempo controls cannot bypass the Direct UI lock", () => {
