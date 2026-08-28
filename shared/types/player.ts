@@ -178,6 +178,17 @@ export interface LoadOptions {
   context?: PlaybackContext;
 }
 
+/** 主进程权威播放会话快照 */
+export interface PlaybackSessionSnapshot {
+  active: boolean;
+  queue: PlaybackQueueItem[];
+  originalQueue: PlaybackQueueItem[] | null;
+  index: number;
+  current: Track | null;
+  repeat: RepeatMode;
+  shuffle: ShuffleMode;
+}
+
 /** 播放器状态快照 */
 export interface PlayerStatus {
   state: PlayerState;
@@ -216,7 +227,8 @@ export type PlayerEvent =
   | { type: "toggleLike" }
   | { type: "fftData"; data: FftData }
   | { type: "error"; error: string }
-  | { type: "deviceChanged"; data: { defaultDevice: string | null } };
+  | { type: "deviceChanged"; data: { defaultDevice: string | null } }
+  | { type: "session"; data: PlaybackSessionSnapshot };
 
 /** FFT 数据 */
 export interface FftData {
@@ -251,6 +263,71 @@ export interface PlayerApi {
   stop: () => Promise<IpcResponse>;
   /** 跳转到指定位置（毫秒） */
   seek: (positionMs: number) => Promise<IpcResponse>;
+  /** 获取主进程权威播放会话 */
+  getSession: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 一次性迁移旧 renderer IndexedDB 队列 */
+  migrateLegacySessionQueue: (
+    items: PlaybackQueueItem[],
+    originalItems: PlaybackQueueItem[] | null,
+    index: number,
+    repeat: RepeatMode,
+    shuffle: ShuffleMode,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 替换主进程权威队列 */
+  replaceSessionQueue: (
+    items: PlaybackQueueItem[],
+    startIndex?: number,
+    autoPlay?: boolean,
+    loadCurrent?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 向权威队列末尾追加 */
+  appendSessionQueue: (
+    items: PlaybackQueueItem[],
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 向权威队列指定位置插入 */
+  insertSessionQueue: (
+    items: PlaybackQueueItem[],
+    index: number,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移除权威队列指定位置 */
+  removeSessionQueueIndex: (
+    index: number,
+    loadCurrent?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 选择权威队列指定位置 */
+  selectSessionIndex: (
+    index: number,
+    loadCurrent?: boolean,
+    autoPlay?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 按权威会话规则推进下一首 */
+  nextSession: (loadCurrent?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 按权威会话规则返回上一首 */
+  prevSession: (loadCurrent?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 更新权威队列指定项目 */
+  updateSessionQueueItem: (
+    index: number,
+    item: PlaybackQueueItem,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移动权威队列项目 */
+  moveSessionQueue: (
+    fromIndex: number,
+    toIndex: number,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移除指定流媒体服务器的权威队列项目 */
+  removeSessionServerTracks: (
+    serverId: string,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 更新权威队列中的曲目元数据 */
+  updateSessionQueueTracks: (
+    tracks: Track[],
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 清空权威队列 */
+  clearSessionQueue: (stop?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 设置权威会话循环模式 */
+  setSessionRepeat: (mode: RepeatMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 设置权威会话随机模式 */
+  setSessionShuffle: (mode: ShuffleMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源 */
   stageDirectNext: (
     source: string,

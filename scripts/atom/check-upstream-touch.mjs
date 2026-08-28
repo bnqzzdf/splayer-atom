@@ -2,12 +2,11 @@
 import { execFileSync } from "node:child_process";
 
 const upstreamRef = process.env.UPSTREAM_REF || "origin/dev";
-// 8 provider integration touches + one stable external-server mount + four native
-// Source Direct build/module seams + twelve Direct Lifecycle/renderer integration seams
-// + six Direct UI transparency touches (Toolbar, EQ/speed dialogs, player settings, zh/en i18n).
-// Generated NAPI/Vue auto-import declarations are reported separately and do not count as business code.
-// Any further upstream business-code touch must be justified separately.
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 31);
+// 31 个既有 Atom 集成触点，加 6 个经本地 Web/Headless 阶段验证后不可删除的必要 seam：
+// Headless 主进程生命周期、Native DSD 扫描、Web 启动入口、main-session queue 投影、
+// queue 权威态测试，以及移除 renderer 对播放索引/模式的重复持久化。
+// NAPI/Vue 自动生成声明单独报告，不计入业务代码触点；后续新增触点仍必须单独论证。
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 37);
 const metadataPaths = new Set(["AGENTS.md", "README.md", "README.zh-CN.md"]);
 const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
 

@@ -4,14 +4,25 @@
 
 import type { Server } from "node:http";
 import os from "node:os";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { serve, upgradeWebSocket } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { WebSocketServer } from "ws";
 import { store } from "@main/store";
 import { serverLog } from "@main/utils/logger";
+import {
+  getArtistCacheDir,
+  getBackgroundsDir,
+  getCoverCacheDir,
+} from "@main/utils/config";
 import { broadcast } from "@main/utils/broadcast";
 import type { ExternalApiStatus } from "@shared/types/settings";
 import { buildAtomCompatRoutes } from "@main/atom/compat/routes";
+import { buildHeadlessRoutes } from "@main/atom/headless/routes";
+import { getHeadlessServerPort, isHeadlessMode } from "@main/runtime";
 import { externalControlGate, wsGate } from "./gate";
 import { buildRoutes } from "./routes";
 import { wsHandlers } from "./ws";
@@ -60,27 +71,64 @@ export const startServer = (): Promise<ExternalApiStatus> => {
       resolve(getServerStatus());
       return;
     }
-    // 功能关闭时不监听端口
-    if (!store.get("externalApi.enabled")) {
+    const headless = isHeadlessMode();
+    // Desktop keeps the existing opt-in behavior; headless always exposes its control plane on LAN.
+    if (!headless && !store.get("externalApi.enabled")) {
       resolve(getServerStatus());
       return;
     }
 
-    const port = store.get("externalApi.port");
-    // 默认仅本机可访问；服务自身无鉴权，开放局域网需用户显式开启
-    const hostname = store.get("externalApi.allowLan") ? "0.0.0.0" : "127.0.0.1";
+    const port = headless ? getHeadlessServerPort() : store.get("externalApi.port");
+    const hostname = headless || store.get("externalApi.allowLan") ? "0.0.0.0" : "127.0.0.1";
 
     const app = new Hono();
-    app.use("/api/*", externalControlGate);
-    app.route("/api", buildRoutes());
-    app.route("/api", buildAtomCompatRoutes());
-    app.get(
-      "/ws",
-      externalControlGate,
-      wsGate,
-      upgradeWebSocket(() => wsHandlers),
-    );
-    app.get("/", (c) => c.text("SPlayer Next external API"));
+    if (headless) {
+      if (process.env.ELECTRON_RENDERER_URL) app.use("/api/*", cors());
+      app.route("/api", buildHeadlessRoutes());
+      app.route("/api", buildAtomCompatRoutes());
+      app.get("/ws", upgradeWebSocket(() => wsHandlers));
+    } else {
+      app.use("/api/*", externalControlGate);
+      app.route("/api", buildRoutes());
+      app.route("/api", buildAtomCompatRoutes());
+      app.get(
+        "/ws",
+        externalControlGate,
+        wsGate,
+        upgradeWebSocket(() => wsHandlers),
+      );
+    }
+    if (headless) {
+      const cacheRoute = (prefix: string, root: string) =>
+        serveStatic({
+          root,
+          rewriteRequestPath: (requestPath) => requestPath.slice(prefix.length) || "/",
+        });
+      // 只暴露 UI 需要的图像缓存；歌曲缓存绝不作为静态目录对局域网开放。
+      const imageCaches = [
+        ["/cache/covers", getCoverCacheDir()],
+        ["/cache/artists", getArtistCacheDir()],
+        ["/cache/backgrounds", getBackgroundsDir()],
+      ] as const;
+      for (const [prefix, root] of imageCaches) {
+        if (existsSync(root)) app.use(`${prefix}/*`, cacheRoute(prefix, root));
+      }
+    }
+    if (headless && !process.env.ELECTRON_RENDERER_URL) {
+      // Production headless serves the same built Vue renderer; no second web service is started.
+      const rendererRoot = join(__dirname, "../renderer");
+      app.get("/", serveStatic({ root: rendererRoot, path: "index.html" }));
+      app.get("/debug", serveStatic({ root: rendererRoot, path: "index.html" }));
+      app.use("/*", serveStatic({ root: rendererRoot }));
+    } else {
+      app.get("/", (c) =>
+        c.text(
+          headless
+            ? "Atom headless API (development UI is served by electron-vite)"
+            : "SPlayer Next external API",
+        ),
+      );
+    }
 
     const wss = new WebSocketServer({ noServer: true });
     let settled = false;

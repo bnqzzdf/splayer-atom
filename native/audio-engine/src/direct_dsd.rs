@@ -79,6 +79,23 @@ impl DirectDsdReader {
         self.max_output_len
     }
 
+    /// 返回文件内声明的 Native DSD 时长，单位秒。
+    pub fn duration_secs(&self) -> f64 {
+        let bits_per_channel = match &self.layout {
+            DirectDsdLayout::Dsf {
+                total_per_channel, ..
+            } => (*total_per_channel as u64).saturating_mul(8),
+            DirectDsdLayout::Dff { data_size, .. } => {
+                let channels = u64::from(self.format.channels).max(1);
+                (u64::try_from(*data_size)
+                    .unwrap_or(u64::MAX)
+                    .saturating_mul(8))
+                    / channels
+            }
+        };
+        bits_per_channel as f64 / f64::from(self.format.bit_rate)
+    }
+
     pub fn seek_seconds(&mut self, position_secs: f64) -> Result<f64> {
         ensure!(
             position_secs.is_finite() && position_secs >= 0.0,
@@ -266,14 +283,11 @@ impl DirectDsdReader {
             block_size > 0 && block_size % 4 == 0,
             "DSF block size 必须为 4 字节倍数"
         );
-        let bytes_per_channel = sample_count
-            .checked_add(7)
-            .context("DSF sample count 溢出")?
-            / 8;
         ensure!(
-            bytes_per_channel % 4 == 0,
+            sample_count % 32 == 0,
             "DSF sample count 无法无损对齐 Diretta DSD_SIZ_32"
         );
+        let bytes_per_channel = sample_count / 8;
 
         let (data_offset, data_size) = find_dsf_data_chunk(&mut file, file_len)?;
         let blocks = bytes_per_channel
@@ -520,6 +534,19 @@ fn repack_dff_l4r4(input: &[u8], output: &mut [u8], channels: usize) -> Result<(
     Ok(())
 }
 
+fn adapt_dsd_bit_order(
+    payload: &mut [u8],
+    source_bit_order: DirectDsdBitOrder,
+    wire_bit_order: DirectDsdBitOrder,
+) {
+    if source_bit_order == wire_bit_order {
+        return;
+    }
+    for byte in payload {
+        *byte = byte.reverse_bits();
+    }
+}
+
 const DIRECT_DSD_RING_DEPTH: usize = 8;
 const SLOT_FREE: u8 = 0;
 const SLOT_FILLING: u8 = 1;
@@ -557,6 +584,11 @@ impl DirectDsdSlot {
 unsafe impl Sync for DirectDsdSlot {}
 
 enum DirectDsdCommand {
+    SetWireBitOrder {
+        bit_order: DirectDsdBitOrder,
+        position_secs: f64,
+        response: mpsc::SyncSender<Result<f64>>,
+    },
     Seek {
         position_secs: f64,
         response: mpsc::SyncSender<Result<f64>>,
@@ -567,7 +599,6 @@ enum DirectDsdCommand {
     },
     StageLocal {
         path: PathBuf,
-        duration_micros: u64,
         generation: u64,
         response: mpsc::SyncSender<Result<()>>,
     },
@@ -700,6 +731,7 @@ fn seek_dsd_ring(
     reader: &mut DirectDsdReader,
     ring: &DirectDsdRing,
     expected_format: DirectDsdFormat,
+    wire_bit_order: DirectDsdBitOrder,
     position_secs: f64,
 ) -> Result<f64> {
     ring.reset_for_transition();
@@ -708,14 +740,13 @@ fn seek_dsd_ring(
         reader.format() == expected_format,
         "Native DSD seek 后音频格式发生变化"
     );
-    fill_slot(reader, &ring.slots[0])?.context("Native DSD seek 后没有可播放 payload")?;
+    fill_slot(reader, &ring.slots[0], wire_bit_order)?
+        .context("Native DSD seek 后没有可播放 payload")?;
     Ok(actual_position)
 }
 
 fn same_dsd_transport(left: DirectDsdFormat, right: DirectDsdFormat) -> bool {
-    left.bit_rate == right.bit_rate
-        && left.channels == right.channels
-        && left.bit_order == right.bit_order
+    left.bit_rate == right.bit_rate && left.channels == right.channels
 }
 
 struct StagedDsdSource {
@@ -728,11 +759,13 @@ struct StagedDsdSource {
 fn prepare_staged_dsd_source(
     path: &Path,
     current_format: DirectDsdFormat,
-    duration_micros: u64,
     generation: u64,
 ) -> Result<StagedDsdSource> {
     let reader = DirectDsdReader::open_local(path)?;
     let format = reader.format();
+    let duration_micros = (reader.duration_secs() * 1_000_000.0)
+        .round()
+        .clamp(0.0, u64::MAX as f64) as u64;
     ensure!(
         same_dsd_transport(current_format, format),
         "[Direct] staged Native DSD wire format 与当前 Diretta connection 不一致"
@@ -748,13 +781,14 @@ fn prepare_staged_dsd_source(
 fn install_staged_dsd_slot(
     mut staged: StagedDsdSource,
     slot: &DirectDsdSlot,
+    wire_bit_order: DirectDsdBitOrder,
 ) -> Result<(DirectDsdReader, DirectDsdFormat)> {
     let required = staged.reader.max_output_len();
     let buffer = unsafe { &mut *slot.buffer.get() };
     if buffer.len() < required {
         *buffer = vec![0_u8; required].into_boxed_slice();
     }
-    fill_claimed_slot(&mut staged.reader, slot)?
+    fill_claimed_slot(&mut staged.reader, slot, wire_bit_order)?
         .context("Native DSD staged 音源没有可播放 payload")?;
     slot.boundary_duration_micros
         .store(staged.duration_micros, Ordering::Relaxed);
@@ -768,6 +802,7 @@ fn replace_dsd_ring(
     path: &Path,
     ring: &DirectDsdRing,
     current_format: DirectDsdFormat,
+    wire_bit_order: DirectDsdBitOrder,
 ) -> Result<(DirectDsdReader, DirectDsdFormat)> {
     let mut reader = DirectDsdReader::open_local(path)?;
     let new_format = reader.format();
@@ -775,9 +810,14 @@ fn replace_dsd_ring(
         same_dsd_transport(current_format, new_format),
         "[Direct] 新音源 Native DSD wire format 与当前 Diretta connection 不一致"
     );
+    let duration_micros = (reader.duration_secs() * 1_000_000.0)
+        .round()
+        .clamp(0.0, u64::MAX as f64) as u64;
     ring.reset_for_transition();
+    ring.duration_micros.store(duration_micros, Ordering::Release);
     ring.ensure_capacity(reader.max_output_len());
-    fill_slot(&mut reader, &ring.slots[0])?.context("Native DSD handoff 后没有可播放 payload")?;
+    fill_slot(&mut reader, &ring.slots[0], wire_bit_order)?
+        .context("Native DSD handoff 后没有可播放 payload")?;
     Ok((reader, new_format))
 }
 
@@ -828,19 +868,11 @@ pub struct DirectDsdStageHandle {
 }
 
 impl DirectDsdStageHandle {
-    pub fn stage_local(&self, path: &Path, duration_secs: f64, generation: u64) -> Result<()> {
-        ensure!(
-            duration_secs.is_finite() && duration_secs >= 0.0,
-            "Native DSD staged duration 无效"
-        );
-        let duration_micros = (duration_secs * 1_000_000.0)
-            .round()
-            .clamp(0.0, u64::MAX as f64) as u64;
+    pub fn stage_local(&self, path: &Path, _duration_secs: f64, generation: u64) -> Result<()> {
         let (response_tx, response_rx) = mpsc::sync_channel(0);
         self.control_tx
             .send(DirectDsdCommand::StageLocal {
                 path: path.to_owned(),
-                duration_micros,
                 generation,
                 response: response_tx,
             })
@@ -870,6 +902,9 @@ impl DirectDsdSource {
 
     pub fn open_local_at(path: &Path, position_secs: f64) -> Result<(Self, f64)> {
         let mut reader = DirectDsdReader::open_local(path)?;
+        let duration_micros = (reader.duration_secs() * 1_000_000.0)
+            .round()
+            .clamp(0.0, u64::MAX as f64) as u64;
         let actual_position = if position_secs > 0.0 {
             reader.seek_seconds(position_secs)?
         } else {
@@ -877,7 +912,9 @@ impl DirectDsdSource {
         };
         let format = reader.format();
         let ring = Arc::new(DirectDsdRing::new(reader.max_output_len()));
-        fill_slot(&mut reader, &ring.slots[0])?.context("Native DSD 音源没有可播放 payload")?;
+        ring.duration_micros.store(duration_micros, Ordering::Release);
+        fill_slot(&mut reader, &ring.slots[0], format.bit_order)?
+            .context("Native DSD 音源没有可播放 payload")?;
 
         let (control_tx, control_rx) = mpsc::channel();
         let producer_ring = Arc::clone(&ring);
@@ -885,10 +922,31 @@ impl DirectDsdSource {
             .name("diretta-direct-dsd".into())
             .spawn(move || {
                 let mut active_format = format;
+                let mut wire_bit_order = format.bit_order;
                 let mut staged: Option<StagedDsdSource> = None;
                 let mut next_slot = 1 % producer_ring.slots.len();
                 while !producer_ring.stopped.load(Ordering::Acquire) {
                     match control_rx.try_recv() {
+                        Ok(DirectDsdCommand::SetWireBitOrder {
+                            bit_order,
+                            position_secs,
+                            response,
+                        }) => {
+                            wire_bit_order = bit_order;
+                            let result = seek_dsd_ring(
+                                &mut reader,
+                                &producer_ring,
+                                active_format,
+                                wire_bit_order,
+                                position_secs,
+                            );
+                            if result.is_err() {
+                                producer_ring.failed.store(true, Ordering::Release);
+                            }
+                            let _ = response.send(result);
+                            next_slot = 1 % producer_ring.slots.len();
+                            continue;
+                        }
                         Ok(DirectDsdCommand::Seek {
                             position_secs,
                             response,
@@ -897,6 +955,7 @@ impl DirectDsdSource {
                                 &mut reader,
                                 &producer_ring,
                                 active_format,
+                                wire_bit_order,
                                 position_secs,
                             );
                             if result.is_err() {
@@ -907,7 +966,12 @@ impl DirectDsdSource {
                             continue;
                         }
                         Ok(DirectDsdCommand::ReplaceLocal { path, response }) => {
-                            let result = replace_dsd_ring(&path, &producer_ring, active_format);
+                            let result = replace_dsd_ring(
+                                &path,
+                                &producer_ring,
+                                active_format,
+                                wire_bit_order,
+                            );
                             match result {
                                 Ok((new_reader, new_format)) => {
                                     reader = new_reader;
@@ -924,16 +988,10 @@ impl DirectDsdSource {
                         }
                         Ok(DirectDsdCommand::StageLocal {
                             path,
-                            duration_micros,
                             generation,
                             response,
                         }) => {
-                            match prepare_staged_dsd_source(
-                                &path,
-                                active_format,
-                                duration_micros,
-                                generation,
-                            ) {
+                            match prepare_staged_dsd_source(&path, active_format, generation) {
                                 Ok(candidate) => {
                                     staged = Some(candidate);
                                     let _ = response.send(Ok(()));
@@ -975,7 +1033,7 @@ impl DirectDsdSource {
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         }
-                        match install_staged_dsd_slot(candidate, slot) {
+                        match install_staged_dsd_slot(candidate, slot, wire_bit_order) {
                             Ok((new_reader, new_format)) => {
                                 reader = new_reader;
                                 active_format = new_format;
@@ -1003,11 +1061,11 @@ impl DirectDsdSource {
                         thread::sleep(Duration::from_millis(1));
                         continue;
                     }
-                    match fill_claimed_slot(&mut reader, slot) {
+                    match fill_claimed_slot(&mut reader, slot, wire_bit_order) {
                         Ok(Some(())) => next_slot = (next_slot + 1) % producer_ring.slots.len(),
                         Ok(None) => {
                             if let Some(candidate) = staged.take() {
-                                match install_staged_dsd_slot(candidate, slot) {
+                                match install_staged_dsd_slot(candidate, slot, wire_bit_order) {
                                     Ok((new_reader, new_format)) => {
                                         reader = new_reader;
                                         active_format = new_format;
@@ -1065,13 +1123,6 @@ impl DirectDsdSource {
         }
     }
 
-    pub fn set_duration(&self, duration_secs: f64) {
-        let micros = (duration_secs.max(0.0) * 1_000_000.0)
-            .round()
-            .clamp(0.0, u64::MAX as f64) as u64;
-        self.ring.duration_micros.store(micros, Ordering::Release);
-    }
-
     pub fn failed(&self) -> bool {
         self.monitor().failed()
     }
@@ -1082,6 +1133,24 @@ impl DirectDsdSource {
 
     pub fn consumed_position(&self) -> f64 {
         self.monitor().consumed_position()
+    }
+
+    pub fn set_wire_bit_order_while_paused(
+        &mut self,
+        bit_order: DirectDsdBitOrder,
+        position_secs: f64,
+    ) -> Result<f64> {
+        let (response_tx, response_rx) = mpsc::sync_channel(0);
+        self.control_tx
+            .send(DirectDsdCommand::SetWireBitOrder {
+                bit_order,
+                position_secs,
+                response: response_tx,
+            })
+            .context("提交 Native DSD wire bit-order 适配失败")?;
+        response_rx
+            .recv()
+            .context("等待 Native DSD wire bit-order 适配结果失败")?
     }
 
     pub fn seek_while_paused(&mut self, position_secs: f64) -> Result<f64> {
@@ -1113,14 +1182,18 @@ impl DirectDsdSource {
     }
 }
 
-fn fill_slot(reader: &mut DirectDsdReader, slot: &DirectDsdSlot) -> Result<Option<()>> {
+fn fill_slot(
+    reader: &mut DirectDsdReader,
+    slot: &DirectDsdSlot,
+    wire_bit_order: DirectDsdBitOrder,
+) -> Result<Option<()>> {
     ensure!(
         slot.state
             .compare_exchange(SLOT_FREE, SLOT_FILLING, Ordering::AcqRel, Ordering::Acquire)
             .is_ok(),
         "Native DSD slot 状态无效"
     );
-    match fill_claimed_slot(reader, slot) {
+    match fill_claimed_slot(reader, slot, wire_bit_order) {
         Ok(value) => Ok(value),
         Err(error) => {
             slot.state.store(SLOT_FREE, Ordering::Release);
@@ -1129,11 +1202,17 @@ fn fill_slot(reader: &mut DirectDsdReader, slot: &DirectDsdSlot) -> Result<Optio
     }
 }
 
-fn fill_claimed_slot(reader: &mut DirectDsdReader, slot: &DirectDsdSlot) -> Result<Option<()>> {
+fn fill_claimed_slot(
+    reader: &mut DirectDsdReader,
+    slot: &DirectDsdSlot,
+    wire_bit_order: DirectDsdBitOrder,
+) -> Result<Option<()>> {
     let buffer = unsafe { &mut *slot.buffer.get() };
+    let source_bit_order = reader.format().bit_order;
     let Some(len) = reader.read_block(buffer)? else {
         return Ok(None);
     };
+    adapt_dsd_bit_order(&mut buffer[..len], source_bit_order, wire_bit_order);
     slot.payload_ptr
         .store(buffer.as_mut_ptr(), Ordering::Relaxed);
     slot.payload_len.store(len, Ordering::Relaxed);
@@ -1278,6 +1357,20 @@ mod tests {
         }
     }
 
+    fn logical_dsd_bits(bytes: &[u8], bit_order: DirectDsdBitOrder) -> Vec<u8> {
+        let mut bits = Vec::with_capacity(bytes.len() * 8);
+        for byte in bytes {
+            for index in 0..8 {
+                let shift = match bit_order {
+                    DirectDsdBitOrder::LsbFirst => index,
+                    DirectDsdBitOrder::MsbFirst => 7 - index,
+                };
+                bits.push((byte >> shift) & 1);
+            }
+        }
+        bits
+    }
+
     fn dff_fixture() -> (Vec<u8>, Vec<u8>) {
         let left = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
         let right = [0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10];
@@ -1336,6 +1429,21 @@ mod tests {
     }
 
     #[test]
+    fn native_dsd_duration_uses_one_bit_rate_semantics() {
+        let (dsf, _) = dsf_fixture(64);
+        let dsf_fixture = TempDsdFile::new("dsf", &dsf);
+        let dsf_reader = DirectDsdReader::open_local(&dsf_fixture.path).unwrap();
+        assert_eq!(dsf_reader.format().bit_rate, 2_822_400);
+        assert!((dsf_reader.duration_secs() - 64.0 / 2_822_400.0).abs() < f64::EPSILON);
+
+        let (dff, _) = dff_fixture();
+        let dff_fixture = TempDsdFile::new("dff", &dff);
+        let dff_reader = DirectDsdReader::open_local(&dff_fixture.path).unwrap();
+        assert_eq!(dff_reader.format().bit_rate, 2_822_400);
+        assert!((dff_reader.duration_secs() - 64.0 / 2_822_400.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn dsf_lsb_payload_keeps_every_native_bit_and_only_repacks_l4r4() {
         let (bytes, expected) = dsf_fixture(64);
         let fixture = TempDsdFile::new("dsf", &bytes);
@@ -1353,6 +1461,31 @@ mod tests {
         let len = reader.read_block(&mut output).unwrap().unwrap();
         assert_eq!(&output[..len], expected);
         assert!(reader.read_block(&mut output).unwrap().is_none());
+    }
+
+    #[test]
+    fn dsf_lsb_adapts_to_msb_wire_without_changing_the_logical_dsd_sequence() {
+        let (bytes, source_expected) = dsf_fixture(64);
+        let fixture = TempDsdFile::new("dsf", &bytes);
+        let mut source = DirectDsdSource::open_local(&fixture.path).unwrap();
+        source
+            .set_wire_bit_order_while_paused(DirectDsdBitOrder::MsbFirst, 0.0)
+            .unwrap();
+
+        let mut data = ptr::null();
+        let mut len = 0_usize;
+        assert!(unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) });
+        let actual = unsafe { std::slice::from_raw_parts(data, len) };
+        let wire_expected: Vec<u8> = source_expected
+            .iter()
+            .map(|byte| byte.reverse_bits())
+            .collect();
+        assert_eq!(actual, wire_expected);
+        assert_eq!(
+            logical_dsd_bits(&source_expected, DirectDsdBitOrder::LsbFirst),
+            logical_dsd_bits(actual, DirectDsdBitOrder::MsbFirst)
+        );
+        unsafe { direct_dsd_release_block(source.callback_context()) };
     }
 
     #[test]
@@ -1488,25 +1621,38 @@ mod tests {
     }
 
     #[test]
-    fn incompatible_dsd_bit_order_handoff_fails_before_replacing_the_ring() {
+    fn same_rate_dsf_to_dff_handoff_adapts_to_the_existing_wire_bit_order() {
         let (dsf_bytes, _) = dsf_fixture(64);
-        let (dff_bytes, _) = dff_fixture();
+        let (dff_bytes, dff_expected) = dff_fixture();
         let dsf = TempDsdFile::new("dsf", &dsf_bytes);
         let dff = TempDsdFile::new("dff", &dff_bytes);
         let mut source = DirectDsdSource::open_local(&dsf.path).unwrap();
         let context = source.callback_context();
-        let format = source.format();
 
-        let error = source.replace_local_while_paused(&dff.path).unwrap_err();
-        assert!(error.to_string().contains("wire format"));
+        let format = source.replace_local_while_paused(&dff.path).unwrap();
         assert_eq!(source.callback_context(), context);
-        assert_eq!(source.format(), format);
+        assert_eq!(format.bit_order, DirectDsdBitOrder::MsbFirst);
         assert!(!source.failed());
+
+        let mut data = ptr::null();
+        let mut len = 0_usize;
+        assert!(unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) });
+        let actual = unsafe { std::slice::from_raw_parts(data, len) };
+        let wire_expected: Vec<u8> = dff_expected
+            .iter()
+            .map(|byte| byte.reverse_bits())
+            .collect();
+        assert_eq!(actual, wire_expected);
+        assert_eq!(
+            logical_dsd_bits(&dff_expected, DirectDsdBitOrder::MsbFirst),
+            logical_dsd_bits(actual, DirectDsdBitOrder::LsbFirst)
+        );
+        unsafe { direct_dsd_release_block(source.callback_context()) };
     }
 
     #[test]
     fn dsf_unaligned_tail_fails_instead_of_padding_or_dropping_bits() {
-        let (bytes, _) = dsf_fixture(40);
+        let (bytes, _) = dsf_fixture(31);
         let fixture = TempDsdFile::new("dsf", &bytes);
         let error = match DirectDsdReader::open_local(&fixture.path) {
             Ok(_) => panic!("未对齐 DSF 不应通过 Source Direct parser"),
@@ -1527,7 +1673,6 @@ mod tests {
         let first = TempDsdFile::new("dsf", &first_bytes);
         let second = TempDsdFile::new("dsf", &second_bytes);
         let source = DirectDsdSource::open_local(&first.path).unwrap();
-        source.set_duration(1.0);
         let monitor = source.monitor();
         source
             .stage_handle()
@@ -1555,7 +1700,7 @@ mod tests {
         assert_eq!(collected, expected);
         assert_eq!(monitor.transition_count(), 1);
         assert_eq!(monitor.boundary_generation(), 9);
-        assert_eq!(monitor.duration(), 2.0);
+        assert!((monitor.duration() - 64.0 / 2_822_400.0).abs() < 0.000_001);
     }
 
     #[test]

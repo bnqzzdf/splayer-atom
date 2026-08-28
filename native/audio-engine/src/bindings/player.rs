@@ -383,7 +383,10 @@ impl AudioPlayer {
     /// 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用
     #[napi(ts_args_type = "callback: (event: JsPlayerEvent) => void")]
     pub fn on_event(&self, callback: Function<JsPlayerEvent, ()>) -> Result<()> {
-        let tsfn = callback.build_threadsafe_function().build()?;
+        let tsfn = callback
+            .build_threadsafe_function()
+            .weak::<true>()
+            .build()?;
 
         // 用闭包包裹 tsfn，在内部做 PlayerEvent → JsPlayerEvent 转换
         let emitter: player::EventEmitter = Arc::new(move |event: PlayerEvent| {
@@ -576,6 +579,7 @@ impl AudioPlayer {
                         metadata.bits_per_sample = 1;
                     }
                 }
+                metadata.duration_secs = playback.duration();
                 if load_token_for_direct.load(std::sync::atomic::Ordering::Acquire) != token {
                     anyhow::bail!(LOAD_SUPERSEDED_REASON);
                 }

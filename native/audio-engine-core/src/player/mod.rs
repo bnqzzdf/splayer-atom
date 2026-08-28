@@ -911,6 +911,20 @@ mod tests {
     }
 
     #[test]
+    fn napi_event_callback_does_not_hold_the_node_event_loop_open() {
+        let bindings = include_str!("../bindings/player.rs");
+        let on_event = bindings
+            .split("pub fn on_event")
+            .nth(1)
+            .and_then(|tail| tail.split("pub fn supports_device_watcher").next())
+            .expect("on_event binding should exist");
+        assert!(
+            on_event.contains(".weak::<true>()"),
+            "persistent player events must not keep the Node event loop alive"
+        );
+    }
+
+    #[test]
     fn direct_napi_load_and_seek_never_invoke_the_normal_audio_pipeline() {
         let bindings = include_str!("../bindings/player.rs");
         let direct_load = bindings

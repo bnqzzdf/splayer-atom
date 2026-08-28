@@ -1,15 +1,34 @@
 import { Hono } from "hono";
 import {
+  deleteTracksByDir,
   getAlbumList,
   getAlbumTracks,
   getAllTracks,
   getArtistList,
   getArtistTracks,
+  getRandomTrack,
   getRandomTracks,
   getTrackCount,
   getTracksByIds,
   searchTracks,
 } from "@main/database";
+import {
+  addPlaylistTracks,
+  clearPlaylists,
+  createPlaylist,
+  deletePlaylist,
+  getPlaylist,
+  getPlaylists,
+  importLegacyPlaylists,
+  removePlaylistTracks,
+  updatePlaylist,
+} from "@main/database/playlists";
+import { fetchArtistAvatar, prefetchArtistAvatars } from "@main/apis/musicbrainz";
+import type {
+  LegacyPlaylistRecord,
+  PlaylistCreateInput,
+  PlaylistUpdateInput,
+} from "@shared/types/playlist";
 import { getPlayer } from "@main/services/engine";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { cancelScan, isScanning, startScan } from "@main/services/scanner";
@@ -139,7 +158,59 @@ export const buildAtomCompatRoutes = (): Hono => {
     }
   });
 
+  api.get("/library/random-one", (c) => {
+    try {
+      return c.json({ data: getRandomTrack() });
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 500);
+    }
+  });
+
+  api.get("/library/count", (c) => {
+    try {
+      return c.json({ data: getTrackCount() });
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 500);
+    }
+  });
+
   api.get("/library/scan-dirs", (c) => c.json({ data: store.get("library.scanDirs") }));
+
+  api.post("/library/scan-dirs", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dirs?: unknown } | null;
+    if (!Array.isArray(body?.dirs) || !body.dirs.every((dir) => typeof dir === "string")) {
+      return c.json({ success: false, error: "dirs_string_array_required" }, 400);
+    }
+    const dirs = body.dirs.map((dir) => dir.trim()).filter(Boolean);
+    store.set("library.scanDirs", [...new Set(dirs)]);
+    return c.json({ success: true, data: store.get("library.scanDirs") });
+  });
+
+  api.post("/library/scan-dirs/add", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dir?: unknown } | null;
+    const dir = typeof body?.dir === "string" ? body.dir.trim() : "";
+    if (!dir) return c.json({ success: false, error: "dir_required" }, 400);
+    const dirs = store.get("library.scanDirs") as string[];
+    if (dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_EXISTS" }, 409);
+    store.set("library.scanDirs", [...dirs, dir]);
+    return c.json({ success: true, data: dir });
+  });
+
+  api.delete("/library/scan-dirs", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dir?: unknown } | null;
+    const dir = typeof body?.dir === "string" ? body.dir.trim() : "";
+    if (!dir) return c.json({ success: false, error: "dir_required" }, 400);
+    const dirs = store.get("library.scanDirs") as string[];
+    if (!dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_NOT_FOUND" }, 404);
+    if (isScanning()) cancelScan();
+    store.set(
+      "library.scanDirs",
+      dirs.filter((item) => item !== dir),
+    );
+    deleteTracksByDir(dir);
+    return c.json({ success: true });
+  });
+
   api.get("/library/is-scanning", (c) => c.json({ data: isScanning() }));
 
   api.post("/library/scan", async (c) => {
@@ -161,6 +232,61 @@ export const buildAtomCompatRoutes = (): Hono => {
     } catch (error) {
       return c.json({ success: false, error: errorMessage(error) }, 500);
     }
+  });
+
+  api.get("/library/artists/:artistName/avatar", async (c) => {
+    try {
+      return c.json({ success: true, data: await fetchArtistAvatar(c.req.param("artistName")) });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 500);
+    }
+  });
+
+  api.post("/library/artists/avatars", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { names?: unknown } | null;
+    if (!Array.isArray(body?.names) || !body.names.every((name) => typeof name === "string")) {
+      return c.json({ success: false, error: "names_string_array_required" }, 400);
+    }
+    try {
+      return c.json({ success: true, data: await prefetchArtistAvatars(body.names) });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 500);
+    }
+  });
+
+  api.get("/playlists", (c) => c.json(getPlaylists()));
+  api.get("/playlists/:id", (c) => c.json(getPlaylist(c.req.param("id"))));
+  api.post("/playlists", async (c) =>
+    c.json(createPlaylist((await c.req.json()) as PlaylistCreateInput)),
+  );
+  api.patch("/playlists/:id", async (c) =>
+    c.json(updatePlaylist(c.req.param("id"), (await c.req.json()) as PlaylistUpdateInput)),
+  );
+  api.delete("/playlists/:id", (c) => {
+    deletePlaylist(c.req.param("id"));
+    return c.json({ ok: true });
+  });
+  api.post("/playlists/:id/tracks", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { trackIds?: unknown } | null;
+    if (!Array.isArray(body?.trackIds) || !body.trackIds.every((id) => typeof id === "string")) {
+      return c.json({ error: "trackIds_string_array_required" }, 400);
+    }
+    return c.json({ count: addPlaylistTracks(c.req.param("id"), body.trackIds) });
+  });
+  api.delete("/playlists/:id/tracks", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { trackIds?: unknown } | null;
+    if (!Array.isArray(body?.trackIds) || !body.trackIds.every((id) => typeof id === "string")) {
+      return c.json({ error: "trackIds_string_array_required" }, 400);
+    }
+    return c.json({ count: removePlaylistTracks(c.req.param("id"), body.trackIds) });
+  });
+  api.post("/playlists/import-legacy", async (c) => {
+    importLegacyPlaylists((await c.req.json()) as LegacyPlaylistRecord[]);
+    return c.json({ ok: true });
+  });
+  api.delete("/playlists", (c) => {
+    clearPlaylists();
+    return c.json({ ok: true });
   });
 
   api.get("/output/scan", (c) => {

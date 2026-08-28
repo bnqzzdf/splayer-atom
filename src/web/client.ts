@@ -1,0 +1,170 @@
+import type {
+  AudioDevice,
+  PlaybackQueueItem,
+  PlaybackSessionSnapshot,
+  PlayerStatus,
+  RepeatMode,
+  ShuffleMode,
+  Track,
+} from "@shared/types/player";
+
+export type HeadlessSession = PlaybackSessionSnapshot;
+
+export interface OutputSnapshot {
+  selected: string | null;
+  data: AudioDevice[];
+}
+
+const host = window.location.hostname || "127.0.0.1";
+const dev = import.meta.env.DEV;
+export const apiOrigin = dev ? `${window.location.protocol}//${host}:14559` : window.location.origin;
+export const wsOrigin = dev
+  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14559`
+  : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+
+export const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(`${apiOrigin}/api${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
+  if (!response.ok) {
+    const message = data && typeof data === "object" && "error" in data ? data.error : null;
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+  return data as T;
+};
+
+export const connectWebEvents = (
+  onEvent: (event: { type: string; data?: unknown }) => void,
+): (() => void) => {
+  let disposed = false;
+  let ws: WebSocket | null = null;
+  let reconnectTimer: number | null = null;
+
+  const sendVisibility = (): void => {
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ op: "visibility", visible: document.visibilityState === "visible" }));
+  };
+
+  const syncSnapshots = async (): Promise<void> => {
+    try {
+      const [session, status] = await Promise.all([
+        request<PlaybackSessionSnapshot>("/session"),
+        request<PlayerStatus>("/status"),
+      ]);
+      if (disposed || ws?.readyState !== WebSocket.OPEN) return;
+      onEvent({ type: "session", data: session });
+      onEvent({ type: "status", data: status });
+      onEvent({ type: "deviceChanged" });
+    } catch {
+      // 连接建立后服务仍可能处于启动窗口，后续实时事件会继续恢复状态。
+    }
+  };
+
+  const connect = (): void => {
+    if (disposed) return;
+    ws = new WebSocket(`${wsOrigin}/ws`);
+    ws.onopen = () => {
+      sendVisibility();
+      void syncSnapshots();
+    };
+    ws.onmessage = (message) => {
+      try {
+        const payload = JSON.parse(String(message.data)) as {
+          kind?: string;
+          type?: string;
+          data?: unknown;
+        };
+        if (payload.kind === "event" && payload.type) {
+          onEvent({ type: payload.type, data: payload.data });
+        }
+      } catch {
+        // HTTP snapshots remain authoritative if a malformed external message is received.
+      }
+    };
+    ws.onclose = () => {
+      if (disposed || reconnectTimer !== null) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, 1000);
+    };
+  };
+
+  document.addEventListener("visibilitychange", sendVisibility);
+  connect();
+  return () => {
+    disposed = true;
+    document.removeEventListener("visibilitychange", sendVisibility);
+    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    ws?.close();
+    ws = null;
+  };
+};
+
+/** 将 Electron cache:// 图像 URL 映射到同一 Headless HTTP 服务。 */
+export const webAssetUrl = (value: string | undefined): string | undefined => {
+  if (!value?.startsWith("cache://")) return value;
+  const rest = value.slice("cache://".length);
+  return `${apiOrigin}/cache/${rest}`;
+};
+
+export const headlessClient = {
+  tracks: (): Promise<{ data: Track[]; total: number }> => request("/library/tracks"),
+  scanDirs: (): Promise<{ data: string[] }> => request("/library/scan-dirs"),
+  setScanDirs: (dirs: string[]): Promise<{ success: boolean; data: string[] }> =>
+    request("/library/scan-dirs", { method: "POST", body: JSON.stringify({ dirs }) }),
+  scanLibrary: (incremental = true): Promise<{ success: boolean; error?: string }> =>
+    request("/library/scan", { method: "POST", body: JSON.stringify({ incremental }) }),
+  isScanning: (): Promise<{ data: boolean }> => request("/library/is-scanning"),
+  session: (): Promise<HeadlessSession> => request("/session"),
+  status: (): Promise<PlayerStatus> => request("/status"),
+  nowPlaying: (): Promise<{ track: Track | null }> => request("/now-playing"),
+  playTrack: (track: Track): Promise<HeadlessSession> =>
+    request("/session/play-track", { method: "POST", body: JSON.stringify({ track }) }),
+  replaceQueue: (items: PlaybackQueueItem[], startIndex = 0): Promise<HeadlessSession> =>
+    request("/session/queue", {
+      method: "POST",
+      body: JSON.stringify({ items, startIndex, autoPlay: true }),
+    }),
+  appendQueue: (items: PlaybackQueueItem[]): Promise<HeadlessSession> =>
+    request("/session/queue/append", { method: "POST", body: JSON.stringify({ items }) }),
+  insertQueue: (items: PlaybackQueueItem[], index: number): Promise<HeadlessSession> =>
+    request("/session/queue/insert", {
+      method: "POST",
+      body: JSON.stringify({ items, index }),
+    }),
+  moveQueue: (fromIndex: number, toIndex: number): Promise<HeadlessSession> =>
+    request("/session/queue/move", {
+      method: "POST",
+      body: JSON.stringify({ fromIndex, toIndex }),
+    }),
+  selectQueueIndex: (index: number, autoPlay = true): Promise<HeadlessSession> =>
+    request("/session/queue/select", {
+      method: "POST",
+      body: JSON.stringify({ index, autoPlay }),
+    }),
+  removeQueueIndex: (index: number): Promise<HeadlessSession> =>
+    request(`/session/queue/${index}`, { method: "DELETE" }),
+  clearQueue: (): Promise<HeadlessSession> => request("/session/queue", { method: "DELETE" }),
+  setRepeat: (mode: RepeatMode): Promise<HeadlessSession> =>
+    request("/session/repeat", { method: "POST", body: JSON.stringify({ mode }) }),
+  setShuffle: (mode: ShuffleMode): Promise<HeadlessSession> =>
+    request("/session/shuffle", { method: "POST", body: JSON.stringify({ mode }) }),
+  play: (): Promise<{ ok: boolean }> => request("/play", { method: "POST" }),
+  pause: (): Promise<{ ok: boolean }> => request("/pause", { method: "POST" }),
+  stop: (): Promise<{ ok: boolean }> => request("/stop", { method: "POST" }),
+  next: (): Promise<{ ok: boolean }> => request("/next", { method: "POST" }),
+  prev: (): Promise<{ ok: boolean }> => request("/prev", { method: "POST" }),
+  seek: (positionMs: number): Promise<{ ok: boolean }> =>
+    request("/seek", { method: "POST", body: JSON.stringify({ positionMs }) }),
+  outputs: (): Promise<OutputSnapshot> => request("/output/devices"),
+  selectOutput: (deviceId: string | null): Promise<{ ok: boolean; selected: string | null }> =>
+    request("/output/select", { method: "POST", body: JSON.stringify({ deviceId }) }),
+  connectEvents: connectWebEvents,
+};

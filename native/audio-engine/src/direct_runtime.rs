@@ -110,13 +110,13 @@ impl DirectStageHandle {
             .to_ascii_lowercase();
         match self {
             Self::Pcm(value) => {
-                if matches!(extension.as_str(), "dsf" | "dff") {
+                if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
                 value.stage_local(path, duration_secs, generation)
             }
             Self::Dsd(value) => {
-                if !matches!(extension.as_str(), "dsf" | "dff") {
+                if !matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
                 value.stage_local(path, duration_secs, generation)
@@ -209,20 +209,24 @@ impl DirectPlayback {
             .unwrap_or_default()
             .to_ascii_lowercase();
 
-        let (transport, seek_base) = if matches!(extension.as_str(), "dsf" | "dff") {
-            let (connection, actual_position) =
-                DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?;
-            (DirectTransport::Dsd(connection), actual_position)
-        } else {
+        let (transport, seek_base) =
+            if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+                let (connection, actual_position) =
+                    DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?;
+                (DirectTransport::Dsd(connection), actual_position)
+            } else {
             let (connection, actual_position) =
                 DirettaDirectConnection::open_local_at(selector, path, position_secs)?;
             (DirectTransport::Pcm(connection), actual_position)
         };
 
-        match &transport {
-            DirectTransport::Pcm(value) => value.set_duration(duration),
-            DirectTransport::Dsd(value) => value.set_duration(duration),
-        }
+        let duration = match &transport {
+            DirectTransport::Pcm(value) => {
+                value.set_duration(duration);
+                duration
+            }
+            DirectTransport::Dsd(value) => value.monitor().duration(),
+        };
         let mut playback = Self {
             duration,
             seek_base,
@@ -251,7 +255,7 @@ impl DirectPlayback {
             .to_ascii_lowercase();
         let format = match &mut self.transport {
             DirectTransport::Pcm(value) => {
-                if matches!(extension.as_str(), "dsf" | "dff") {
+                if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
                 let format = value.replace_local_source_while_paused(path)?;
@@ -259,16 +263,18 @@ impl DirectPlayback {
                 DirectFormat::Pcm(format)
             }
             DirectTransport::Dsd(value) => {
-                if !matches!(extension.as_str(), "dsf" | "dff") {
+                if !matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
                 let format = value.replace_local_source_while_paused(path)?;
-                value.set_duration(duration);
                 DirectFormat::Dsd(format)
             }
         };
         self.source = source.to_owned();
-        self.duration = duration;
+        self.duration = match &self.transport {
+            DirectTransport::Pcm(_) => duration,
+            DirectTransport::Dsd(value) => value.monitor().duration(),
+        };
         self.seek_base = 0.0;
         self.seek_transition_count = self.monitor().transition_count();
         Ok(format)

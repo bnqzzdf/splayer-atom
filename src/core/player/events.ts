@@ -1,7 +1,9 @@
 import type { PlayerEvent } from "@shared/types/player";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
+import * as queue from "@/stores/queue";
 import { useFavorite } from "@/composables/useFavorite";
+import { isWebRemote } from "@/runtime";
 import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
@@ -110,7 +112,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       playback.setFftFrame(event.data.ldata, event.data.rdata);
       break;
     case "ended": {
-      await finishCurrentTrack();
+      // Headless main session 已经消费自然结束；远程 Web 只等待 session 快照更新。
+      if (!isWebRemote()) await finishCurrentTrack();
       break;
     }
     case "directTrackBoundary": {
@@ -144,8 +147,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     }
     case "sourceError":
-      // 音源失效（网络中断 / URL 过期）
-      await recoverFromSourceFailure();
+      // Headless main session 会在音源失败时自行推进权威队列。
+      if (!isWebRemote()) await recoverFromSourceFailure();
       break;
     case "play":
       await play();
@@ -176,6 +179,24 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     case "deviceChanged": {
       refreshDevices();
+      break;
+    }
+    case "session": {
+      const previousTrackId = useMediaStore().track?.id;
+      queue.applySession(event.data);
+      const status = useStatusStore();
+      status.playIndex = event.data.index;
+      status.repeatMode = event.data.repeat;
+      status.shuffleMode = event.data.shuffle;
+      if (isWebRemote() && event.data.current?.id !== previousTrackId) {
+        const media = useMediaStore();
+        if (event.data.current) {
+          media.setTrack(event.data.current);
+          media.setPlaybackContext(queue.getQueueItem(event.data.index)?.context);
+        } else {
+          media.clear();
+        }
+      }
       break;
     }
   }

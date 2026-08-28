@@ -128,7 +128,7 @@ impl DsdPlaybackStrategy {
 /// 检查路径是否为支持的 DSD 音频文件
 pub fn is_dsd_path(path: &str) -> bool {
     let lower = path.to_lowercase();
-    lower.ends_with(".dsf") || lower.ends_with(".dff")
+    lower.ends_with(".dsf") || lower.ends_with(".dff") || lower.ends_with(".dsdiff")
 }
 
 /// 8 位比特反转查找表 (LSB <-> MSB 翻转)

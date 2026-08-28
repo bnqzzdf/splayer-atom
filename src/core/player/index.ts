@@ -1,4 +1,10 @@
-import type { PlaybackContext, Track } from "@shared/types/player";
+import type {
+  IpcResponse,
+  PlaybackContext,
+  PlaybackQueueItem,
+  PlaybackSessionSnapshot,
+  Track,
+} from "@shared/types/player";
 import { ErrorCode } from "@shared/types/errors";
 import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type { PersonalFmOptions } from "@/types/netease";
@@ -42,7 +48,27 @@ import { handleError, isSkippableError } from "@/utils/errors";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@/utils/preset/djMode";
 import { toast } from "@/composables/useToast";
+import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
+
+/** 将 upstream Track 列表包装成共享队列项。 */
+const toQueueItems = (
+  items: readonly Track[],
+  context?: PlaybackContext,
+): PlaybackQueueItem[] => items.map((track) => (context ? { track, context } : { track }));
+
+/** 应用主进程返回的权威会话快照。 */
+const applySessionResult = (
+  result: IpcResponse<PlaybackSessionSnapshot>,
+): PlaybackSessionSnapshot | null => {
+  if (!result.success || !result.data) return null;
+  queue.applySession(result.data);
+  const status = useStatusStore();
+  status.playIndex = result.data.index;
+  status.repeatMode = result.data.repeat;
+  status.shuffleMode = result.data.shuffle;
+  return result.data;
+};
 
 /** 加载运行时选项 */
 interface LoadRuntimeOptions {
@@ -762,12 +788,10 @@ export const playFrom = async (
   status.fmMode = false;
   const idx = Math.max(0, Math.min(startIndex, items.length - 1));
   const isSameTrack = media.track?.id === items[idx]?.id;
-  queue.setQueue(items, context);
-  status.playIndex = idx;
-  if (status.shuffleMode === "on") {
-    queue.shuffleQueue(status.playIndex);
-    status.playIndex = 0;
-  }
+  const session = applySessionResult(
+    await window.api.player.replaceSessionQueue(toQueueItems(items, context), idx, false, false),
+  );
+  if (!session) return;
   if (isSameTrack) {
     if (!status.isPlaying) play();
   } else {
@@ -827,7 +851,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     .map((outcome) => outcome.track!);
   if (updated.length > 0) {
     useLibraryStore().applyTrackUpdates(updated);
-    queue.updateQueueTracks(updated);
+    applySessionResult(await window.api.player.updateSessionQueueTracks(updated));
   }
 
   if (touchesCurrent && current) {
@@ -844,9 +868,12 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
 export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => {
   if (tracks.length === 0) return;
   const status = useStatusStore();
-  queue.setQueue(tracks);
-  status.playIndex = 0;
-  status.shuffleMode = "off";
+  applySessionResult(
+    await window.api.player.replaceSessionQueue(toQueueItems(tracks), 0, false, false),
+  );
+  if (status.shuffleMode !== "off") {
+    applySessionResult(await window.api.player.setSessionShuffle("off"));
+  }
   status.heartMode = true;
   // 心动 / FM 互斥
   status.fmMode = false;
@@ -902,18 +929,8 @@ export const nextTrack = async (): Promise<void> => {
     return;
   }
   if (queue.queueLength.value === 0) return;
-  // 到末尾了
-  if (status.playIndex >= queue.queueLength.value - 1) {
-    if (status.shuffleMode === "on" && queue.queueLength.value > 1) {
-      // 重新洗牌产生新顺序，当前歌在 index 0，从 1 开始避免重复
-      queue.shuffleQueue(status.playIndex);
-      status.playIndex = 1;
-    } else {
-      status.playIndex = 0;
-    }
-  } else {
-    status.playIndex++;
-  }
+  const session = applySessionResult(await window.api.player.nextSession(false));
+  if (!session) return;
   await loadTrack(status.currentTrack, status.currentPlaybackContext);
 };
 
@@ -931,7 +948,8 @@ export const playAtIndex = async (index: number): Promise<void> => {
   }
   // 退出 FM
   status.fmMode = false;
-  status.playIndex = index;
+  const session = applySessionResult(await window.api.player.selectSessionIndex(index, false, true));
+  if (!session) return;
   await loadTrack(status.currentTrack, status.currentPlaybackContext);
 };
 
@@ -940,7 +958,8 @@ export const prevTrack = async (): Promise<void> => {
   const status = useStatusStore();
   if (status.fmMode) return;
   if (queue.queueLength.value === 0) return;
-  status.playIndex = status.playIndex > 0 ? status.playIndex - 1 : queue.queueLength.value - 1;
+  const session = applySessionResult(await window.api.player.prevSession(false));
+  if (!session) return;
   await loadTrack(status.currentTrack, status.currentPlaybackContext);
 };
 
@@ -969,9 +988,11 @@ const syncPlayMode = (): void => {
 export const setRepeatMode = (mode: RepeatMode): void => {
   const status = useStatusStore();
   if (status.repeatMode === mode) return;
-  status.repeatMode = mode;
-  syncPlayMode();
-  toast.info(i18n.global.t(`player.repeatMode.${mode}`), { icon: false });
+  void window.api.player.setSessionRepeat(mode).then((result) => {
+    if (!applySessionResult(result)) return;
+    syncPlayMode();
+    toast.info(i18n.global.t(`player.repeatMode.${mode}`), { icon: false });
+  });
 };
 
 /** 循环切换循环模式：list → one → list */
@@ -995,24 +1016,22 @@ export const toggleShuffleMode = (): void => {
 export const setShuffleMode = (mode: ShuffleMode): void => {
   const status = useStatusStore();
   // 心动模式下忽略
-  if (status.heartMode) return;
-  if (status.shuffleMode === mode) return;
-  status.shuffleMode = mode;
-  if (mode === "on") {
-    // 洗牌，当前歌置顶
-    queue.shuffleQueue(status.playIndex);
-    status.playIndex = 0;
-  } else {
-    // 恢复原始顺序，定位到当前歌在原始队列中的位置
-    const track = status.currentTrack;
-    if (track) {
-      status.playIndex = queue.unshuffleQueue(track.id);
-    } else {
-      queue.unshuffleQueue("");
-    }
-  }
-  syncPlayMode();
-  toast.info(i18n.global.t(`player.shuffleMode.${mode}`), { icon: false });
+  if (status.heartMode || status.shuffleMode === mode) return;
+  void window.api.player.setSessionShuffle(mode).then((result) => {
+    if (!applySessionResult(result)) return;
+    syncPlayMode();
+    toast.info(i18n.global.t(`player.shuffleMode.${mode}`), { icon: false });
+  });
+};
+
+/** 清空权威播放队列并停止当前播放。 */
+export const clearQueue = async (): Promise<void> => {
+  const session = applySessionResult(await window.api.player.clearSessionQueue(true));
+  if (!session) return;
+  const status = useStatusStore();
+  status.state = "stopped";
+  status.position = 0;
+  playback.reset();
 };
 
 /**
@@ -1023,19 +1042,15 @@ export const removeFromQueue = async (index: number): Promise<void> => {
   const status = useStatusStore();
   if (index < 0 || index >= queue.queueLength.value) return;
   const isCurrentPlaying = index === status.playIndex;
-  queue.removeFromQueue(index);
-  if (index < status.playIndex) {
-    // 移除的在当前歌之前，索引前移
-    status.playIndex--;
-  } else if (isCurrentPlaying) {
-    // 移除的就是当前歌
-    if (queue.queueLength.value === 0) {
-      status.playIndex = -1;
-      await onQueueEnded();
-      return;
-    }
-    // 索引越界则回到首位
-    if (status.playIndex >= queue.queueLength.value) status.playIndex = 0;
+  const session = applySessionResult(
+    await window.api.player.removeSessionQueueIndex(index, false),
+  );
+  if (!session) return;
+  if (session.queue.length === 0) {
+    await onQueueEnded();
+    return;
+  }
+  if (isCurrentPlaying) {
     await loadTrack(status.currentTrack, status.currentPlaybackContext);
   }
 };
@@ -1066,27 +1081,31 @@ export const purgeDeletedTracks = async (ids: readonly string[]): Promise<void> 
  * @param context - 播放来源上下文
  * @returns 歌曲在队列中的实际索引
  */
-export const insertToQueue = (
+export const insertToQueue = async (
   item: Track,
   afterIndex?: number,
   context?: PlaybackContext,
-): number => {
+): Promise<number> => {
   const status = useStatusStore();
   const len = queue.queue.value.length;
   const raw = afterIndex ?? status.playIndex + 1;
   const existingIdx = queue.findTrackIndex(item.id);
+  const entry = toQueueItems([item], context)[0];
   if (existingIdx !== -1) {
-    queue.updateQueueItem(existingIdx, item, context);
-    // 移动：目标需 clamp 到 length-1
+    if (!applySessionResult(await window.api.player.updateSessionQueueItem(existingIdx, entry))) {
+      return existingIdx;
+    }
     const safeAt = Math.max(0, Math.min(raw, len - 1));
     if (existingIdx === safeAt) return existingIdx;
-    moveInQueue(existingIdx, safeAt);
+    if (!applySessionResult(await window.api.player.moveSessionQueue(existingIdx, safeAt))) {
+      return existingIdx;
+    }
     return safeAt;
   }
-  // 插入：可以追加到末尾，clamp 到 length
   const safeAt = Math.max(0, Math.min(raw, len));
-  queue.insertToQueue(item, safeAt, context);
-  if (safeAt <= status.playIndex) status.playIndex++;
+  if (!applySessionResult(await window.api.player.insertSessionQueue([entry], safeAt))) {
+    return -1;
+  }
   return safeAt;
 };
 
@@ -1114,7 +1133,10 @@ export const insertManyToQueue = (
   }
   if (fresh.length === 0) return 0;
   const insertAt = position === "end" ? queue.queue.value.length : status.playIndex + 1;
-  queue.insertManyToQueue(fresh, insertAt, context);
+  void window.api.player
+    .insertSessionQueue(toQueueItems(fresh, context), insertAt)
+    .then((result) => applySessionResult(result))
+    .catch((error) => console.error("[player] 批量插入权威队列失败:", error));
   return fresh.length;
 };
 
@@ -1132,7 +1154,8 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
   }
   // 退出 FM
   status.fmMode = false;
-  status.playIndex = insertToQueue(item, undefined, context);
+  const insertedIndex = await insertToQueue(item, undefined, context);
+  if (insertedIndex < 0) return;
   await loadTrack(item, context);
 };
 
@@ -1141,17 +1164,8 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
  * @param fromIndex - 原位置
  * @param toIndex - 目标位置
  */
-export const moveInQueue = (fromIndex: number, toIndex: number): void => {
-  const status = useStatusStore();
-  queue.moveInQueue(fromIndex, toIndex);
-  // 根据移动方向调整 playIndex
-  if (status.playIndex === fromIndex) {
-    status.playIndex = toIndex;
-  } else if (fromIndex < status.playIndex && toIndex >= status.playIndex) {
-    status.playIndex--;
-  } else if (fromIndex > status.playIndex && toIndex <= status.playIndex) {
-    status.playIndex++;
-  }
+export const moveInQueue = async (fromIndex: number, toIndex: number): Promise<void> => {
+  applySessionResult(await window.api.player.moveSessionQueue(fromIndex, toIndex));
 };
 
 let unsubscribe: (() => void) | null = null;
@@ -1164,15 +1178,79 @@ export const initPlayer = async (): Promise<void> => {
   console.log("[player] init");
   // 先从主进程同步后端配置，确保 system 设置可用
   const settings = useSettingsStore();
+  const webRemote = isWebRemote();
   await settings.syncSystem();
-  // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
-  await useStreamingStore().init();
-  // 插件 store 同理：在线歌曲 URL 兜底走插件，列表必须在 loadTrack 前就绪
-  void usePluginsStore().load();
-  await queue.restoreQueue();
+  if (!webRemote) {
+    // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
+    await useStreamingStore().init();
+    // 插件 store 同理：在线歌曲 URL 兜底走插件，列表必须在 loadTrack 前就绪
+    void usePluginsStore().load();
+  }
   const status = useStatusStore();
-  // 兼容移除“不循环”前持久化的旧状态
-  if ((status.repeatMode as string) === "off") status.repeatMode = "list";
+  let legacyIndex = status.playIndex;
+  let legacyRepeat: RepeatMode = status.repeatMode;
+  let legacyShuffle: ShuffleMode = status.shuffleMode;
+  let legacyStatus: Record<string, unknown> | null = null;
+  try {
+    const raw = localStorage.getItem("status");
+    if (raw) {
+      legacyStatus = JSON.parse(raw) as Record<string, unknown>;
+      if (Number.isInteger(legacyStatus.playIndex)) legacyIndex = Number(legacyStatus.playIndex);
+      if (legacyStatus.repeatMode === "one" || legacyStatus.repeatMode === "list") {
+        legacyRepeat = legacyStatus.repeatMode;
+      }
+      if (legacyStatus.shuffleMode === "on" || legacyStatus.shuffleMode === "off") {
+        legacyShuffle = legacyStatus.shuffleMode;
+      }
+    }
+  } catch {}
+  const session = await queue.restoreQueue({
+    index: legacyIndex,
+    repeat: legacyRepeat,
+    shuffle: legacyShuffle,
+  });
+  if (session) {
+    status.playIndex = session.index;
+    status.repeatMode = session.repeat;
+    status.shuffleMode = session.shuffle;
+    if (!webRemote && legacyStatus) {
+      delete legacyStatus.playIndex;
+      delete legacyStatus.repeatMode;
+      delete legacyStatus.shuffleMode;
+      localStorage.setItem("status", JSON.stringify(legacyStatus));
+    }
+  }
+
+  if (webRemote) {
+    await refreshDevices();
+    const selectedOutput = await window.api.player.getSelectedDeviceName();
+    if (selectedOutput.success) settings.player.outputDevice = selectedOutput.data ?? null;
+    if (unsubscribe) unsubscribe();
+    unsubscribe = window.api.player.onEvent(handleEvent);
+    const media = useMediaStore();
+    const current = status.currentTrack;
+    if (current) {
+      media.setTrack(current);
+      media.setPlaybackContext(status.currentPlaybackContext);
+    }
+    const currentStatus = await window.api.player.getStatus();
+    if (currentStatus.success && currentStatus.data) {
+      status.state =
+        current && currentStatus.data.state === "idle" ? "stopped" : currentStatus.data.state;
+      status.position = currentStatus.data.position;
+      status.duration = currentStatus.data.duration;
+      status.volume = currentStatus.data.volume;
+      status.speed = currentStatus.data.speed;
+      playback.setCurrentTime(currentStatus.data.position);
+      playback.setDuration(currentStatus.data.duration);
+      playback.setSpeed(currentStatus.data.speed);
+      playback.setPlaying(currentStatus.data.state === "playing");
+    }
+    installNextTrackPreloadWatchers();
+    scheduleNextTrackPreload();
+    return;
+  }
+
   // 恢复上次的音量和播放模式到主进程
   await window.api.player.setVolume(status.volume);
   syncPlayMode();

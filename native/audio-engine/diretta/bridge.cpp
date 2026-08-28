@@ -133,10 +133,12 @@ void* open_direct_with_format(
   std::uint32_t sample_rate,
   std::uint16_t channels,
   DIRETTA::FormatID format_id,
+  DIRETTA::FormatID alternate_format_id,
   void* source_context,
   AtomDirettaNextBlock next_block,
   AtomDirettaReleaseBlock release_block,
-  const char* format_name) {
+  const char* format_name,
+  bool* used_alternate_format) {
   try {
     auto connection = std::make_unique<DirettaConnection>();
 
@@ -194,13 +196,22 @@ void* open_direct_with_format(
     }
 
     DIRETTA::FormatConfigure format;
-    if (!format.setSpeed(sample_rate) || !format.setChannel(channels) ||
-        !format.setFormat(format_id)) {
-      set_error(std::string("Diretta SDK rejected exact Source Direct ") + format_name + " format");
+    if (!format.setSpeed(sample_rate) || !format.setChannel(channels)) {
+      set_error(std::string("Diretta SDK rejected exact Source Direct ") + format_name + " rate/channels");
       return nullptr;
     }
-    if (!connection->sync->checkSinkSupport(format)) {
-      set_error(std::string("Diretta target does not support exact Source Direct ") + format_name + " format");
+    if (used_alternate_format != nullptr) {
+      *used_alternate_format = false;
+    }
+    bool supported = format.setFormat(format_id) && connection->sync->checkSinkSupport(format);
+    if (!supported && alternate_format_id != DIRETTA::FormatID::NONE) {
+      supported = format.setFormat(alternate_format_id) && connection->sync->checkSinkSupport(format);
+      if (supported && used_alternate_format != nullptr) {
+        *used_alternate_format = true;
+      }
+    }
+    if (!supported) {
+      set_error(std::string("Diretta target does not support Source Direct ") + format_name + " format");
       return nullptr;
     }
     if (!connection->sync->setSinkConfigure(format)) {
@@ -311,17 +322,20 @@ void* atom_diretta_open_direct(
     sample_rate,
     channels,
     format_id,
+    DIRETTA::FormatID::NONE,
     source_context,
     next_block,
     release_block,
-    "PCM");
+    "PCM",
+    nullptr);
 }
 
 void* atom_diretta_open_dsd_direct(
   const char* target_id,
   std::uint32_t bit_rate,
   std::uint16_t channels,
-  bool lsb_first,
+  bool source_lsb_first,
+  bool* wire_lsb_first,
   void* source_context,
   AtomDirettaNextBlock next_block,
   AtomDirettaReleaseBlock release_block) {
@@ -330,28 +344,35 @@ void* atom_diretta_open_dsd_direct(
     set_error("Diretta target id is required");
     return nullptr;
   }
-  if (bit_rate == 0 || channels == 0 || source_context == nullptr ||
-      next_block == nullptr || release_block == nullptr) {
+  if (bit_rate == 0 || channels == 0 || wire_lsb_first == nullptr ||
+      source_context == nullptr || next_block == nullptr || release_block == nullptr) {
     set_error("invalid Diretta Native DSD configuration");
     return nullptr;
   }
 
-  auto format_id = DIRETTA::FormatID::FMT_DSD1 |
-                   DIRETTA::FormatID::FMT_DSD_SIZ_32 |
-                   DIRETTA::FormatID::FMT_DSD_BIG;
-  format_id |= lsb_first
-    ? DIRETTA::FormatID::FMT_DSD_LSB
-    : DIRETTA::FormatID::FMT_DSD_MSB;
-
-  return open_direct_with_format(
+  const auto base_format_id = DIRETTA::FormatID::FMT_DSD1 |
+                              DIRETTA::FormatID::FMT_DSD_SIZ_32 |
+                              DIRETTA::FormatID::FMT_DSD_BIG;
+  const auto source_format_id = base_format_id |
+    (source_lsb_first ? DIRETTA::FormatID::FMT_DSD_LSB : DIRETTA::FormatID::FMT_DSD_MSB);
+  const auto alternate_format_id = base_format_id |
+    (source_lsb_first ? DIRETTA::FormatID::FMT_DSD_MSB : DIRETTA::FormatID::FMT_DSD_LSB);
+  bool used_alternate_format = false;
+  auto* connection = open_direct_with_format(
     target_id,
     bit_rate,
     channels,
-    format_id,
+    source_format_id,
+    alternate_format_id,
     source_context,
     next_block,
     release_block,
-    lsb_first ? "Native DSD LSB" : "Native DSD MSB");
+    "Native DSD",
+    &used_alternate_format);
+  if (connection != nullptr) {
+    *wire_lsb_first = used_alternate_format ? !source_lsb_first : source_lsb_first;
+  }
+  return connection;
 }
 
 bool atom_diretta_play(void* opaque) {

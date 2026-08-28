@@ -3,7 +3,6 @@ import { app, ipcMain, powerMonitor } from "electron";
 import { sendToMain } from "@main/utils/broadcast";
 import { readFileAutoEncoding } from "@main/utils/encoding";
 import { wsBroadcast } from "@main/server/broadcast";
-import { toCacheUrl } from "@main/utils/protocol";
 import { toMs } from "@main/utils/time";
 import * as mediaService from "@main/services/media";
 import * as nowPlaying from "@main/services/nowPlaying";
@@ -11,6 +10,18 @@ import * as lastfm from "@main/services/lastfm";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import { fetchBytes } from "@main/utils/fetchBytes";
 import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
+import * as playbackSession from "@main/services/playbackSession";
+import {
+  isCurrentPlayerLoadSeq,
+  loadPlayerSource,
+  nextPlayerLoadSeq,
+} from "@main/services/playerLoad";
+import {
+  clearActiveCueRange,
+  toDisplayDurationMs,
+  toDisplayPositionMs,
+  toEnginePositionMs,
+} from "@main/services/playerTimeline";
 import {
   cancelPendingReinit,
   setPauseOnDeviceSwitch,
@@ -28,52 +39,27 @@ import {
 import { setTaskbarThumbnailCover } from "@main/services/thumbnail";
 import { getMainWindow, setTaskbarProgress } from "@main/window";
 import { store } from "@main/store";
-import { appName, getSongCacheDir } from "@main/utils/config";
-import * as songCache from "@main/services/songCache";
-import { parseArtists, parseAlbum, formatArtists } from "@main/utils/metadata";
+import { appName } from "@main/utils/config";
+import { formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
 import {
   cleanupDirectInputs,
-  discardDirectInput,
   materializeDirectInput,
   pruneDirectInputs,
 } from "@main/atom/directInput";
 import { ErrorCode } from "@shared/types/errors";
-import type { LoadOptions, RepeatMode, ShuffleMode, PlayerState } from "@shared/types/player";
+import type {
+  LoadOptions,
+  PlaybackQueueItem,
+  PlayerState,
+  RepeatMode,
+  ShuffleMode,
+  Track,
+} from "@shared/types/player";
 import type { MediaEvent } from "@main/services/media";
 import { JsPlayerEvent } from "@splayer/audio-engine";
 
 type AudioEngineModule = typeof import("@splayer/audio-engine");
-
-interface CueRange {
-  startMs: number;
-  durationMs: number;
-}
-
-/** 当前加载的 CUE 分轨范围 */
-let activeCueRange: CueRange | null = null;
-
-/** 从 Track 元数据提取 CUE 分轨范围 */
-const cueRangeFromTrack = (track: LoadOptions["meta"] | null | undefined): CueRange | null => {
-  const start = track?.cueStartMs;
-  const end = track?.cueEndMs;
-  if (start == null || end == null || end <= start) return null;
-  return { startMs: start, durationMs: end - start };
-};
-
-/** 引擎绝对时间转换为当前曲目展示时间 */
-const toDisplayPositionMs = (positionMs: number): number => {
-  if (!activeCueRange) return positionMs;
-  return Math.max(0, Math.min(activeCueRange.durationMs, positionMs - activeCueRange.startMs));
-};
-
-/** 当前曲目展示时长 */
-const toDisplayDurationMs = (durationMs: number): number =>
-  activeCueRange?.durationMs ?? durationMs;
-
-/** 展示时间转换为引擎绝对时间 */
-const toEnginePositionMs = (positionMs: number): number =>
-  activeCueRange ? activeCueRange.startMs + positionMs : positionMs;
 
 /** 返回失败响应，附带日志 */
 const fail = (code: ErrorCode, error?: unknown) => {
@@ -83,30 +69,6 @@ const fail = (code: ErrorCode, error?: unknown) => {
 
 /** 判断原生错误是否为设备错误 */
 const isNativeDeviceError = (error: unknown): boolean => String(error).includes("[Device]");
-const isNativeSourceNotFoundError = (error: unknown): boolean =>
-  String(error).includes("[SourceNotFound]");
-const isNativeNetworkError = (error: unknown): boolean =>
-  String(error).includes("[NetworkUnreachable]");
-const isNativeCancelledError = (error: unknown): boolean => String(error).includes("[Cancelled]");
-
-/** 根据原生错误特征和音源类型，将异常分类为标准 ErrorCode */
-const classifyLoadError = (error: unknown, source: string): ErrorCode => {
-  const msg = error instanceof Error ? error.message : String(error);
-  if (isNativeCancelledError(error)) {
-    return ErrorCode.LOAD_SUPERSEDED;
-  }
-  if (isNativeDeviceError(error) || /output device|NoDevice|DeviceNotAvailable/i.test(msg)) {
-    return ErrorCode.DEVICE_NOT_FOUND;
-  }
-  if (isNativeSourceNotFoundError(error)) {
-    return ErrorCode.FILE_NOT_FOUND;
-  }
-  if (isNativeNetworkError(error) || /^https?:\/\//i.test(source)) {
-    return ErrorCode.NETWORK_ERROR;
-  }
-  return ErrorCode.FILE_DECODE_ERROR;
-};
-
 /**
  * 播放器原生事件回调
  * @param inst 播放器实例
@@ -151,8 +113,9 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "ended": {
-        sendToMain("player:event", { type: "ended" });
-        wsBroadcast({ type: "ended" });
+        const consumedBySession = playbackSession.onNativeEnded();
+        if (!consumedBySession) sendToMain("player:event", { type: "ended" });
+        wsBroadcast({ type: "ended", data: { consumedBySession } });
         mediaService.setPlayState({ status: "Paused" });
         lastfm.onEnded();
         neteaseScrobble.onEnded();
@@ -173,7 +136,8 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
       }
       case "sourceError": {
         // 音源失效（网络中断 / URL 过期）
-        sendToMain("player:event", { type: "sourceError" });
+        const consumedBySession = playbackSession.onNativeSourceError();
+        if (!consumedBySession) sendToMain("player:event", { type: "sourceError" });
         mediaService.setPlayState({ status: "Paused" });
         neteaseScrobble.onState(false);
         setTaskbarProgress(-1);
@@ -218,9 +182,6 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
   });
 };
 
-/** 每次 player:load 自增 */
-let loadSeq = 0;
-
 /** 播放器相关 IPC */
 export const registerPlayerIpc = (): void => {
   // 注册实例创建/重建时的回调
@@ -228,145 +189,7 @@ export const registerPlayerIpc = (): void => {
   onPlayerCreated(startDeviceMonitoring);
   // 加载音频文件
   ipcMain.handle("player:load", async (_event, source: string, options: LoadOptions = {}) => {
-    cancelPendingReinit();
-    const autoPlay = options.autoPlay ?? true;
-    const authoritative = options.meta ?? null;
-    const cueRange = cueRangeFromTrack(authoritative);
-    activeCueRange = cueRange;
-    // 非本地音源
-    const isRemote = authoritative != null && authoritative.source !== "local";
-    const seq = ++loadSeq;
-    try {
-      const inst = getPlayer();
-      const loadingEvent = {
-        type: "status",
-        data: {
-          state: "loading",
-          position: 0,
-          duration: 0,
-          volume: inst.getVolume(),
-          speed: inst.getSpeed(),
-          isFinished: false,
-        },
-      };
-      sendToMain("player:event", loadingEvent);
-      wsBroadcast(loadingEvent);
-      // 在线封面原图 URL
-      const remoteCover =
-        authoritative && authoritative.source !== "local"
-          ? (authoritative.coverOriginal ?? authoritative.cover)
-          : undefined;
-      const coverFetchUrl =
-        remoteCover && /^(https?|streaming-cover):\/\//i.test(remoteCover)
-          ? remoteCover
-          : undefined;
-      const coverUrl =
-        coverFetchUrl && /^https?:\/\//i.test(coverFetchUrl) ? coverFetchUrl : undefined;
-      // 写一次 SMTC/托盘/标题
-      const applyDisplay = (
-        title: string,
-        artist: string,
-        album: string,
-        coverData: Buffer | undefined,
-        durationMs: number,
-      ): void => {
-        const header = artist ? `${title} - ${artist}` : title || appName;
-        mediaService.setMetadata({ title, artist, album, coverData, coverUrl, durationMs });
-        mediaService.setPlayState({ status: autoPlay ? "Playing" : "Paused" });
-        getMainWindow()?.setTitle(header);
-        setTraySongName(header);
-        setTrayPlayState(autoPlay ? "playing" : "paused");
-      };
-      // 流媒体乐观更新
-      if (authoritative) {
-        applyDisplay(
-          authoritative.title || source.split(/[/\\]/).pop() || source,
-          formatArtists(authoritative.artists ?? []),
-          authoritative.album?.name ?? "",
-          undefined,
-          authoritative.duration ?? 0,
-        );
-      } else {
-        applyDisplay(source.split(/[/\\]/).pop() || source, "", "", undefined, 0);
-      }
-      const meta = await inst.load(source, cueRange ? false : autoPlay);
-      void pruneDirectInputs(source);
-      if (cueRange) {
-        await inst.seek(cueRange.startMs / 1000);
-        if (autoPlay) await inst.play();
-      }
-      const nativeDurationMs = toMs(meta.duration);
-      const durationMs = toDisplayDurationMs(nativeDurationMs);
-      const fallbackTitle = meta.title || source.split(/[/\\]/).pop() || source;
-      const displayTitle = authoritative?.title ?? fallbackTitle;
-      const displayArtist = authoritative
-        ? formatArtists(authoritative.artists ?? [])
-        : formatArtists(parseArtists(meta.artist ?? ""));
-      const displayAlbum = authoritative?.album?.name ?? parseAlbum(meta.album ?? "")?.name ?? "";
-      // 本地封面
-      const localCover = isRemote ? null : (inst.getCoverRaw() ?? null);
-      applyDisplay(displayTitle, displayArtist, displayAlbum, localCover ?? undefined, durationMs);
-      if (!isRemote) setTaskbarThumbnailCover(meta.cover);
-      // Last.fm
-      const primaryArtist =
-        authoritative?.artists?.[0]?.name ??
-        parseArtists(meta.artist ?? "")[0]?.name ??
-        displayArtist;
-      lastfm.onTrackLoaded({
-        title: displayTitle,
-        artist: primaryArtist,
-        album: displayAlbum,
-        durationMs,
-        autoPlay,
-      });
-      neteaseScrobble.onTrackLoaded(authoritative, options.context, durationMs, autoPlay);
-      // 远端高清封面
-      if (coverFetchUrl) {
-        void fetchBytes(coverFetchUrl).then((buf) => {
-          if (!buf) return;
-          if (seq !== loadSeq) return;
-          mediaService.setMetadata({
-            title: displayTitle,
-            artist: displayArtist,
-            album: displayAlbum,
-            coverData: buf,
-            coverUrl,
-            durationMs,
-          });
-          setTaskbarThumbnailCover(buf);
-        });
-      }
-      const quality = {
-        sampleRate: meta.originalSampleRate,
-        channels: meta.channels,
-        bitsPerSample: meta.bitsPerSample,
-        bitRate: meta.bitRate,
-        codec: meta.codec,
-      };
-      const data = {
-        detail: {
-          quality,
-          embeddedLyric: meta.embeddedLyric,
-          externalLyrics: meta.externalLyrics,
-        },
-        mediaInfo: {
-          duration: durationMs,
-          cover: isRemote ? undefined : toCacheUrl(meta.cover),
-          quality,
-        },
-      };
-      playerLog.debug(`加载成功: ${displayTitle}`);
-      return { success: true, data };
-    } catch (error) {
-      if (seq === loadSeq) activeCueRange = null;
-      const code = classifyLoadError(error, source);
-      // 解码失败的源指向歌曲缓存目录 → 文件已损坏，把这条缓存项作废
-      if (code === ErrorCode.FILE_DECODE_ERROR) {
-        if (source.startsWith(getSongCacheDir())) void songCache.invalidate(source);
-        void discardDirectInput(source);
-      }
-      return fail(code, error);
-    }
+    return loadPlayerSource(source, options);
   });
 
   // 恢复播放
@@ -393,7 +216,7 @@ export const registerPlayerIpc = (): void => {
   ipcMain.handle("player:stop", () => {
     try {
       cancelPendingReinit();
-      activeCueRange = null;
+      clearActiveCueRange();
       getPlayer().stop();
       return { success: true };
     } catch (error) {
@@ -417,6 +240,126 @@ export const registerPlayerIpc = (): void => {
       return fail(ErrorCode.UNKNOWN, error);
     }
   });
+
+  ipcMain.handle("player:getSession", () => ({
+    success: true,
+    data: playbackSession.getPlaybackSession(),
+  }));
+
+  ipcMain.handle(
+    "player:migrateLegacySessionQueue",
+    (
+      _event,
+      items: PlaybackQueueItem[],
+      originalItems: PlaybackQueueItem[] | null,
+      legacyIndex: number,
+      legacyRepeat: RepeatMode,
+      legacyShuffle: ShuffleMode,
+    ) => ({
+      success: true,
+      data: playbackSession.migrateLegacyQueue(
+        items,
+        originalItems,
+        legacyIndex,
+        legacyRepeat,
+        legacyShuffle,
+      ),
+    }),
+  );
+
+  ipcMain.handle(
+    "player:replaceSessionQueue",
+    async (
+      _event,
+      items: PlaybackQueueItem[],
+      startIndex = 0,
+      autoPlay = true,
+      loadCurrent = true,
+    ) => ({
+      success: true,
+      data: await playbackSession.replaceQueue(items, startIndex, autoPlay, loadCurrent),
+    }),
+  );
+
+  ipcMain.handle("player:appendSessionQueue", (_event, items: PlaybackQueueItem[]) => ({
+    success: true,
+    data: playbackSession.appendQueue(items),
+  }));
+
+  ipcMain.handle(
+    "player:insertSessionQueue",
+    (_event, items: PlaybackQueueItem[], insertIndex: number) => ({
+      success: true,
+      data: playbackSession.insertQueue(items, insertIndex),
+    }),
+  );
+
+  ipcMain.handle(
+    "player:removeSessionQueueIndex",
+    async (_event, removeIndex: number, loadCurrent = true) => ({
+      success: true,
+      data: await playbackSession.removeQueueIndex(removeIndex, loadCurrent),
+    }),
+  );
+
+  ipcMain.handle(
+    "player:selectSessionIndex",
+    async (_event, targetIndex: number, loadCurrent = true, autoPlay = true) => ({
+      success: true,
+      data: await playbackSession.selectIndex(targetIndex, loadCurrent, autoPlay),
+    }),
+  );
+
+  ipcMain.handle("player:nextSession", async (_event, loadCurrent = true) => {
+    await playbackSession.next(loadCurrent);
+    return { success: true, data: playbackSession.getPlaybackSession() };
+  });
+
+  ipcMain.handle("player:prevSession", async (_event, loadCurrent = true) => {
+    await playbackSession.prev(loadCurrent);
+    return { success: true, data: playbackSession.getPlaybackSession() };
+  });
+
+  ipcMain.handle(
+    "player:updateSessionQueueItem",
+    (_event, itemIndex: number, item: PlaybackQueueItem) => ({
+      success: true,
+      data: playbackSession.updateQueueItem(itemIndex, item),
+    }),
+  );
+
+  ipcMain.handle(
+    "player:moveSessionQueue",
+    (_event, fromIndex: number, toIndex: number) => ({
+      success: true,
+      data: playbackSession.moveQueue(fromIndex, toIndex),
+    }),
+  );
+
+  ipcMain.handle("player:removeSessionServerTracks", (_event, serverId: string) => ({
+    success: true,
+    data: playbackSession.removeServerTracks(serverId),
+  }));
+
+  ipcMain.handle("player:updateSessionQueueTracks", (_event, tracks: Track[]) => ({
+    success: true,
+    data: playbackSession.updateQueueTracks(tracks),
+  }));
+
+  ipcMain.handle("player:clearSessionQueue", async (_event, stop = false) => {
+    await playbackSession.clearQueue(stop);
+    return { success: true, data: playbackSession.getPlaybackSession() };
+  });
+
+  ipcMain.handle("player:setSessionRepeat", (_event, mode: RepeatMode) => ({
+    success: true,
+    data: playbackSession.setRepeat(mode),
+  }));
+
+  ipcMain.handle("player:setSessionShuffle", (_event, mode: ShuffleMode) => ({
+    success: true,
+    data: playbackSession.setShuffle(mode),
+  }));
 
   // 为 Diretta Source Direct 预备同 wire-format 的下一本地音源。
   // staging 不兼容是正常降级条件：保持当前播放，renderer 在边界走普通 load。
@@ -486,8 +429,8 @@ export const registerPlayerIpc = (): void => {
       try {
         getPlayer().commitDirectGaplessBoundary(source, Math.max(0, durationMs) / 1000);
         void pruneDirectInputs(source);
-        activeCueRange = null;
-        const seq = ++loadSeq;
+        clearActiveCueRange();
+        const seq = nextPlayerLoadSeq();
         if (authoritative) {
           const title = authoritative.title || source.split(/[/\\]/).pop() || source;
           const artist = formatArtists(authoritative.artists ?? []);
@@ -512,7 +455,7 @@ export const registerPlayerIpc = (): void => {
           neteaseScrobble.onTrackLoaded(authoritative, context, durationMs, true);
           if (coverUrl) {
             void fetchBytes(coverUrl).then((buf) => {
-              if (!buf || seq !== loadSeq) return;
+              if (!buf || !isCurrentPlayerLoadSeq(seq)) return;
               mediaService.setMetadata({ title, artist, album, coverData: buf, coverUrl, durationMs });
               setTaskbarThumbnailCover(buf);
             });

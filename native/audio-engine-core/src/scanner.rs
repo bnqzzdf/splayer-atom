@@ -17,7 +17,8 @@ use walkdir::WalkDir;
 use crate::metadata;
 
 const AUDIO_EXTENSIONS: &[&str] = &[
-    "mp3", "flac", "wav", "ogg", "aac", "m4a", "wma", "opus", "ape", "dsf", "dff", "iso", "cue",
+    "mp3", "flac", "wav", "ogg", "aac", "m4a", "wma", "opus", "ape", "dsf", "dff", "dsdiff",
+    "iso", "cue",
 ];
 
 /// 每批回调的文件数
@@ -194,7 +195,7 @@ pub fn probe_fast(path: &str, cover_cache_dir: Option<&str>) -> Option<ScannedTr
                     ctime: 0,
                 });
             }
-        } else if path.to_lowercase().ends_with(".dff") {
+        } else if path.to_lowercase().ends_with(".dff") || path.to_lowercase().ends_with(".dsdiff") {
             if let Ok(dff) = crate::dsd::DffReader::open(path) {
                 return Some(ScannedTrack {
                     path: path.to_string(),
@@ -557,6 +558,13 @@ pub fn probe_sacd_tracks(iso_path: &str) -> Vec<ScannedTrack> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_dsd_extensions_are_part_of_the_local_library_surface() {
+        assert!(is_audio_file(Path::new("album/track.dsf")));
+        assert!(is_audio_file(Path::new("album/track.DFF")));
+        assert!(is_audio_file(Path::new("album/track.dsdiff")));
+    }
 
     #[test]
     fn traversal_error_suppresses_removals_for_the_whole_root() {

@@ -4,6 +4,7 @@ import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
 import { useDirectModeState } from "@/core/player/directMode";
+import { isWebRemote } from "@/runtime";
 import IconLucideSliders from "~icons/lucide/sliders-horizontal";
 import IconLucideGauge from "~icons/lucide/gauge";
 import IconLucideMoreVertical from "~icons/lucide/more-vertical";
@@ -24,6 +25,7 @@ const status = useStatusStore();
 const settings = useSettingsStore();
 const { isDesktopLyricOpen } = storeToRefs(settings);
 const { sampleControlsUnavailable: directLocked } = useDirectModeState();
+const webRemote = isWebRemote();
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
@@ -124,6 +126,7 @@ const onMoreMenuSelect = (key: string): void => {
     <!-- 音频输出与 Diretta 投送快捷入口 -->
     <DirettaCastPopover :cover="cover" />
     <SButton
+      v-if="!webRemote"
       :type="lyricButtonType"
       :variant="isDesktopLyricOpen ? 'tertiary' : 'ghost'"
       circle

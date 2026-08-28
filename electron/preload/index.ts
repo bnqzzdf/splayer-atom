@@ -74,6 +74,69 @@ const api = {
     stop: () => ipcRenderer.invoke("player:stop"),
     // 跳转到指定位置（毫秒）
     seek: (position: number) => ipcRenderer.invoke("player:seek", position),
+    // 获取主进程权威播放会话
+    getSession: () => ipcRenderer.invoke("player:getSession"),
+    // 一次性迁移旧 renderer IndexedDB 队列
+    migrateLegacySessionQueue: (
+      items: import("@shared/types/player").PlaybackQueueItem[],
+      originalItems: import("@shared/types/player").PlaybackQueueItem[] | null,
+      index: number,
+      repeat: import("@shared/types/player").RepeatMode,
+      shuffle: import("@shared/types/player").ShuffleMode,
+    ) =>
+      ipcRenderer.invoke(
+        "player:migrateLegacySessionQueue",
+        items,
+        originalItems,
+        index,
+        repeat,
+        shuffle,
+      ),
+    // 替换主进程权威队列
+    replaceSessionQueue: (
+      items: import("@shared/types/player").PlaybackQueueItem[],
+      startIndex = 0,
+      autoPlay = true,
+      loadCurrent = true,
+    ) => ipcRenderer.invoke("player:replaceSessionQueue", items, startIndex, autoPlay, loadCurrent),
+    // 向权威队列末尾追加
+    appendSessionQueue: (items: import("@shared/types/player").PlaybackQueueItem[]) =>
+      ipcRenderer.invoke("player:appendSessionQueue", items),
+    // 向权威队列指定位置插入
+    insertSessionQueue: (items: import("@shared/types/player").PlaybackQueueItem[], index: number) =>
+      ipcRenderer.invoke("player:insertSessionQueue", items, index),
+    // 移除权威队列指定位置
+    removeSessionQueueIndex: (index: number, loadCurrent = true) =>
+      ipcRenderer.invoke("player:removeSessionQueueIndex", index, loadCurrent),
+    // 选择权威队列指定位置
+    selectSessionIndex: (index: number, loadCurrent = true, autoPlay = true) =>
+      ipcRenderer.invoke("player:selectSessionIndex", index, loadCurrent, autoPlay),
+    // 按权威会话规则推进下一首
+    nextSession: (loadCurrent = true) => ipcRenderer.invoke("player:nextSession", loadCurrent),
+    // 按权威会话规则返回上一首
+    prevSession: (loadCurrent = true) => ipcRenderer.invoke("player:prevSession", loadCurrent),
+    // 更新权威队列指定项目
+    updateSessionQueueItem: (
+      index: number,
+      item: import("@shared/types/player").PlaybackQueueItem,
+    ) => ipcRenderer.invoke("player:updateSessionQueueItem", index, item),
+    // 移动权威队列项目
+    moveSessionQueue: (fromIndex: number, toIndex: number) =>
+      ipcRenderer.invoke("player:moveSessionQueue", fromIndex, toIndex),
+    // 移除指定流媒体服务器的权威队列项目
+    removeSessionServerTracks: (serverId: string) =>
+      ipcRenderer.invoke("player:removeSessionServerTracks", serverId),
+    // 更新权威队列曲目元数据
+    updateSessionQueueTracks: (tracks: import("@shared/types/player").Track[]) =>
+      ipcRenderer.invoke("player:updateSessionQueueTracks", tracks),
+    // 清空权威队列
+    clearSessionQueue: (stop = false) => ipcRenderer.invoke("player:clearSessionQueue", stop),
+    // 设置权威会话循环模式
+    setSessionRepeat: (mode: import("@shared/types/player").RepeatMode) =>
+      ipcRenderer.invoke("player:setSessionRepeat", mode),
+    // 设置权威会话随机模式
+    setSessionShuffle: (mode: import("@shared/types/player").ShuffleMode) =>
+      ipcRenderer.invoke("player:setSessionShuffle", mode),
     // 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源
     stageDirectNext: (source: string, durationMs: number, generation: number) =>
       ipcRenderer.invoke("player:stageDirectNext", source, durationMs, generation),

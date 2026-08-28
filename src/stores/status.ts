@@ -155,9 +155,6 @@ export const useStatusStore = defineStore(
     persist: {
       storage: localStorage,
       pick: [
-        "playIndex",
-        "repeatMode",
-        "shuffleMode",
         "heartMode",
         "volume",
         "position",

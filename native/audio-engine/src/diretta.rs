@@ -82,7 +82,8 @@ mod imp {
             target_id: *const c_char,
             bit_rate: u32,
             channels: u16,
-            lsb_first: bool,
+            source_lsb_first: bool,
+            wire_lsb_first: *mut bool,
             source_context: *mut c_void,
             next_block: NextBlockCallback,
             release_block: ReleaseBlockCallback,
@@ -273,14 +274,18 @@ mod imp {
             let target = selector_target(selector)
                 .ok_or_else(|| anyhow!("invalid Diretta output selector"))?;
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
-            let (source, actual_position) = DirectDsdSource::open_local_at(path, position_secs)?;
+            let (mut source, actual_position) =
+                DirectDsdSource::open_local_at(path, position_secs)?;
             let format = source.format();
+            let source_lsb_first = format.bit_order == DirectDsdBitOrder::LsbFirst;
+            let mut wire_lsb_first = source_lsb_first;
             let raw = unsafe {
                 atom_diretta_open_dsd_direct(
                     target.as_ptr(),
                     format.bit_rate,
                     format.channels,
-                    format.bit_order == DirectDsdBitOrder::LsbFirst,
+                    source_lsb_first,
+                    &mut wire_lsb_first,
                     source.callback_context(),
                     direct_dsd_next_block,
                     direct_dsd_release_block,
@@ -288,6 +293,21 @@ mod imp {
             };
             let raw = NonNull::new(raw)
                 .ok_or_else(|| last_error("failed to open Diretta Native DSD target"))?;
+            let wire_bit_order = if wire_lsb_first {
+                DirectDsdBitOrder::LsbFirst
+            } else {
+                DirectDsdBitOrder::MsbFirst
+            };
+            if wire_bit_order != format.bit_order {
+                if let Err(error) =
+                    source.set_wire_bit_order_while_paused(wire_bit_order, actual_position)
+                {
+                    unsafe { atom_diretta_close(raw.as_ptr()) };
+                    return Err(anyhow!(
+                        "failed to adapt Native DSD wire bit order: {error}"
+                    ));
+                }
+            }
             Ok((Self { raw, source }, actual_position))
         }
 
@@ -340,10 +360,6 @@ mod imp {
 
         pub fn stage_handle(&self) -> DirectDsdStageHandle {
             self.source.stage_handle()
-        }
-
-        pub fn set_duration(&self, duration_secs: f64) {
-            self.source.set_duration(duration_secs);
         }
     }
 
@@ -463,7 +479,7 @@ mod tests {
     }
 
     #[test]
-    fn native_dsd_bridge_keeps_source_bit_order_and_has_no_compatibility_fallback() {
+    fn native_dsd_bridge_selects_a_supported_native_wire_bit_order_only() {
         let bridge = include_str!("../diretta/bridge.cpp");
         let dsd_open = bridge
             .split("void* atom_diretta_open_dsd_direct(")
@@ -475,13 +491,13 @@ mod tests {
         assert!(dsd_open.contains("FMT_DSD_BIG"));
         assert!(dsd_open.contains("FMT_DSD_LSB"));
         assert!(dsd_open.contains("FMT_DSD_MSB"));
-        assert!(dsd_open.contains("lsb_first"));
-        for forbidden in ["fallback", "bit_reverse", "DSD2PCM", "DoP"] {
+        assert!(dsd_open.contains("source_lsb_first"));
+        assert!(dsd_open.contains("wire_lsb_first"));
+        assert!(dsd_open.contains("alternate_format_id"));
+        for forbidden in ["DSD2PCM", "DoP", "memcpy", "reverse_bits"] {
             assert!(
-                !dsd_open
-                    .to_ascii_lowercase()
-                    .contains(&forbidden.to_ascii_lowercase()),
-                "Native DSD bridge must not contain compatibility path {forbidden}"
+                !dsd_open.contains(forbidden),
+                "Native DSD bridge must not perform sample-domain conversion {forbidden}"
             );
         }
     }

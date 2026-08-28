@@ -25,6 +25,7 @@ import {
 } from "@main/plugins/playbackBridge";
 import { registerCacheScheme, handleCacheProtocol } from "@main/utils/protocol";
 import { startServer, stopServer } from "@main/server";
+import { initPlaybackSession } from "@main/services/playbackSession";
 import { startMcpServer, stopMcpServer } from "@main/services/mcp/http";
 import { initUpdater, disposeUpdater } from "@main/services/updater";
 import { coreLog, initLogger } from "@main/utils/logger";
@@ -40,6 +41,12 @@ import {
 const configureMemoryOptimizations = (): void => {
   // 禁止预热备用渲染进程
   app.commandLine.appendSwitch("disable-features", "SpareRendererForSitePerProcess");
+  if (isHeadless()) {
+    // 真正的无窗口运行不应依赖 X11/Wayland，也不需要 GPU 辅助进程。
+    app.commandLine.appendSwitch("headless");
+    app.commandLine.appendSwitch("disable-gpu");
+    app.disableHardwareAcceleration();
+  }
 };
 
 /** 内存指标采样间隔 */
@@ -83,7 +90,7 @@ export const initApp = (): void => {
     return;
   }
   app.on("second-instance", (_event, commandLine) => {
-    focusMainWindow();
+    if (!isHeadless()) focusMainWindow();
     const url = extractOrpheusUrl(commandLine);
     if (url) captureOrpheusUrl(url);
   });
@@ -95,7 +102,8 @@ export const initApp = (): void => {
   // 注册缓存协议方案
   registerCacheScheme();
   // 其他初始化
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    const headless = isHeadless();
     electronApp.setAppUserModelId("top.imsyy.splayer-next");
     // 注册 cache:// 协议处理
     handleCacheProtocol();
@@ -108,37 +116,37 @@ export const initApp = (): void => {
     initDatabase();
     // 启动歌曲缓存
     void initSongCache();
-    // 启动下载服务
-    void initDownload();
-    initMedia();
-    // 初始化 Last.fm 集成
-    initLastfm();
+    // 下载器是同进程服务；第一阶段 headless 不主动启动它。
+    if (!headless) void initDownload();
+    if (!headless) {
+      initMedia();
+      initLastfm();
+    }
     // 初始化插件系统
     pluginRegistry.init();
     // 初始化播放事件桥（需在 pluginRegistry.init 之后，读 hasEnabledControlPlugin）
     initPlaybackBridge();
-    // 注册 orpheus 协议并处理冷启动唤起
-    initOrpheusRegistration();
-    const coldOrpheusUrl = extractOrpheusUrl(process.argv);
-    if (coldOrpheusUrl) captureOrpheusUrl(coldOrpheusUrl);
-    // 仅在非无头模式创建主窗口
-    if (!isHeadless()) {
+    if (!headless) {
+      // Desktop-only shell. Headless keeps the same core but creates no renderer/window services.
+      initOrpheusRegistration();
+      const coldOrpheusUrl = extractOrpheusUrl(process.argv);
+      if (coldOrpheusUrl) captureOrpheusUrl(coldOrpheusUrl);
       createMainWindow();
-      // 恢复歌词相关窗口
       restoreLyricWindows();
-      // 注册全局快捷键
       initGlobalHotkey();
     }
-    // 启动外部 API 服务（无论是否无头均启动）
-    void startServer();
-    // 启动 AI 集成 MCP 服务
-    void startMcpServer();
-    // 初始化自动更新
-    initUpdater();
+    // 主进程播放 session 在服务端启动前就绪，保证浏览器不是状态所有者。
+    await initPlaybackSession();
+    await startServer();
+    if (!headless) {
+      void startMcpServer();
+      initUpdater();
+    }
     // 周期记录各进程内存
     setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
     setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
     app.on("activate", () => {
+      if (headless) return;
       if (isMac) {
         if (getMainWindow()) focusMainWindow();
         else createMainWindow();
@@ -146,13 +154,12 @@ export const initApp = (): void => {
       }
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
     });
-    coreLog.info("应用初始化完成");
+    coreLog.info(headless ? "应用初始化完成 (headless)" : "应用初始化完成");
   });
   // 所有窗口关闭时退出应用
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      app.quit();
-    }
+    if (isHeadless()) return;
+    if (process.platform !== "darwin") app.quit();
   });
   // 退出前清理
   app.on("before-quit", () => {

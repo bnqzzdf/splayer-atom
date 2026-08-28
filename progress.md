@@ -1,5 +1,16 @@
 # SPlayer Atom — Progress
 
+## 2026-08-28 — Headless local Web phase completed
+
+- Resumed from `docs/handoff-2026-08-28.md`, fixed the Atom-owned Hono Context type blocker, and restored Node/Web typecheck.
+- Consolidated browser differences into the Atom-owned `src/web/api.ts` facade instead of scattering `isWebRemote()` branches through upstream SPlayer components. Library, navigation, layout, settings, menu and lyric callers were restored to upstream behavior where the facade can satisfy the contract safely.
+- Preserved the main process as the sole playback-session/queue authority. Renderer queue helpers now forward clear/server-removal commands and apply returned main snapshots; batch insertion keeps the upstream synchronous caller shape without locally mutating queue state.
+- Added a real Headless server-track removal route so the Web facade no longer returns fake success for `removeSessionServerTracks`.
+- Reduced upstream business-code touches from 51 to 37. The six touches above the former 31 baseline are retained only for Headless lifecycle, Native DSD scan discovery, Web bootstrap, main-session queue projection, its authority tests and removal of duplicate renderer session persistence. The audit now enforces 37/37.
+- Full gates pass: typecheck, ESLint, Node 72/72, Web 48/48, no-SDK native 105/105, SDK 149 native 100/100, SDK release native build, production Electron/Vite build and `git diff --check`.
+- Rebuilt and restarted the root production Headless service. Formal Chrome UI smoke passed on the new build: 379 tracks, 52 artists, 27 albums, 33 folder nodes, Native DSD256 and PCM FLAC playback progress, pause/resume, seek, next/prev, repeat/shuffle, queue move/remove/rebuild, scan-dir prompt add/remove and temporary local-playlist CRUD. Test scan dir and playlist were removed afterward.
+- The complete local-music Web phase is closed. Next product work can move to settings/online-provider UI and user-driven account validation without changing the single-runtime/single-authority architecture.
+
 ## 2026-08-27 — Local safety checkpoint and recovery investigation resumed
 
 - User added three more proven local connection oracles beside tinyLMS: tinylms-next, slim2Diretta and DirettaRendererUPnP. Starting a read-only four-way SDK connection/lifecycle matrix; no Target access or implementation change occurs until the shared successful contract is identified.
@@ -217,3 +228,33 @@
 - root 完整生命周期实测通过：5 秒 PCM16/44.1 kHz/stereo 静音源 load-paused 成功，play 后位置 0.743 s，pause 保持 0.836 s，resume 后推进到 1.579 s，stop 后进程自然退出 0。
 - 比例项目门禁全部通过：Node 72/72、Web 54/54、typecheck、ESLint、跳过重复 Native 编译的 production build、touch audit（31 business + 2 generated）与 `git diff --check`。
 - 已删除一次性 Node 生命周期脚本和 5 秒静音测试文件；Target 由成功测试正常 stop/release，未执行 SSH 或重启。
+### 2026-08-27：Diretta 下一轮硬件验收准备
+
+- 用户已更新规则：不再逐次询问 Target 是否空闲；只在连接失败、占用状态可疑或测试无法继续时停止并沟通。开始执行下一轮 root 硬件验收。
+- 第一次同步三份规划文件的 patch 因 hunk 格式错误未应用；已修正 patch 结构，没有重复无效内容或影响代码。
+- 已恢复上一轮上下文：连接时序修复与证据已提交为 `81cb8fd`，工作区干净。
+- 用户要求继续下一轮；先离线拆分 seek、同格式 gapless、PCM/DSD 格式切换、断连恢复与长稳测试，按风险由低到高准备一次性 root harness。
+- 新的 Direct load 仍必须先取得用户对 Target 当前空闲状态的明确确认；“继续工作”本身不作为占用状态确认。
+- 已离线生成第一轮临时 seek fixture/harness：单次 PCM load 内验证 paused seek 到 2.0 s、播放推进、playing seek 到 3.0 s 后自动恢复推进、stop 与自然退出。尚未运行或接触 Target。
+- 已离线生成同 wire-format gapless 的两段 2 秒 PCM16 fixture/harness；它只用现有 `stageDirectNext`、`directTrackBoundary`、`commitDirectGaplessBoundary`，核对 generation 与跨边界后的第二轨位置推进。尚未运行。
+- 两份 Node harness 语法检查通过；一次把三个文件同时传给单输入 `ffprobe` 的校验命令失败，改为逐文件探测，不重复该调用方式。该错误未访问 Target。
+- root PCM seek 实测 PASS：paused seek 2.000 s；播放推进 2.557 s；playing seek 后推进 3.557 s；stop/自然退出 0。
+- root gapless 音频与状态语义 PASS：stage=true、boundary generation=77、第二轨推进 0.464 s、stop 已调用。
+- gapless 进程自然退出 FAIL：注册 `onEvent` 的 harness 在 stop 后仍存活，外层 45 秒 timeout 返回 124。已停止新的硬件 load，转入离线 NAPI callback 生命周期诊断；不重复相同 harness。
+- 离线最小 Node 复现确认问题与 Diretta 无关：仅 `new AudioPlayer(); onEvent(() => {})` 即会让现有 addon 在 3 秒 timeout 后返回 124。检查 napi-rs 3.12.1 源码确认默认 ThreadsafeFunction 是强 event-loop 引用，`weak::<true>()` 才不会阻止退出；当前修复目标收敛为只把持久 `on_event` TSFN 改为 weak，并加自动回归，暂不触碰 Diretta bridge/teardown。
+- 已完成 weak TSFN 修复与回归：硬件外最小复现 124→0；no-SDK 102/102、SDK 149 97/97；SDK release addon 复现同样自然退出 0。随后同一 root gapless harness 完整复测通过，generation 77 boundary、第二轨推进 0.464 s、stop 后自然退出 0。当前暂停点解除，继续 exact PCM format-change acceptance。
+- exact PCM format-change root 验收 PASS：同一 DX5 II Direct 选择下 paused 加载 44.1k/16-bit/stereo FLAC，再 paused 加载 88.2k/24-bit/stereo FLAC；两次 metadata 都保持精确源 rate/channels/bit depth，第二次仍 paused/position 0，stop 后自然退出 0。该场景未调用 play；继续 Native DSD load/play。
+- Native DSD root 验收在第一项 DSF/DSD64 LSB 即得到严格格式拒绝：DX5 II 正常唯一发现，但 `load(false)` 返回 `Diretta target does not support exact Source Direct Native DSD LSB format`；finally stop 执行，未触发外层 timeout，退出 1。未调用 play，未做 PCM/DoP、bit-order 或其它格式 fallback，也未第二次 load。按 Source Direct 规则停止后续硬件验收，转入离线确认该失败边界与当前 Target capability。
+- 离线 bridge 核对确认该拒绝发生于 `checkSinkSupport(format)`，早于 `setSinkConfigure` 和 `connectPrepare/connect/connectWait`，因此没有建立 Direct 会话，不是连接/占用失败。尝试沿用已授权的只读 Target 配置诊断时，当前 DevSpace 的非交互 SSH 凭据被 `192.168.1.44` 拒绝（permission denied）；未读取或修改 Target，也不重复同一失败 SSH 调用。
+- SDK 149 头文件确认 DSD LSB/MSB 是两个独立 Target capability 位，因此单独执行 DFF/MSB exact-source 验收是合理的能力测试而非 DSF fallback。root DFF/DSD64 10 ms fixture `load(false)` 成功，metadata 为 2.8224 MHz / 2ch / 1-bit / `dsd_msbf`；`play()` 后收到 ended，position=0.01、isFinished=true，随后 stop 正常结束。当前真实能力边界：DX5 II exact DSD MSB PASS，exact DSD LSB UNSUPPORTED；Atom 未改变源 bit order。
+- PCM↔DSD(MSB) root 重连 PASS：同一进程 paused 依次加载 44.1k/16 PCM → DFF DSD64 MSB → 88.2k/24 PCM，三次 metadata/paused position 0 均正确，最终 stop 正常结束。
+- 受控异常恢复的原 PASS 结论已撤销：外层 `timeout --signal=KILL` 只终止了 `sudo`，真正的 root Node 子进程仍带活动 timer 存活超过 8 分钟。后续 fresh reconnect 与长稳尝试都被该残留会话污染，不能作为异常恢复/长稳证据。已 TERM 清理该由测试创建的 PID 599495，并确认宿主无 root Node/harness 残留；Target 当前占用/会话状态需重新明确后才能继续硬件 load。正确 harness 必须让 timeout 直接包住 root shell 内的 Node，或显式定位并杀实际 Node PID，再用 `ps/pgrep` 证明无逃逸子进程。
+- 第一次 180 秒长稳样本 `empty-seektable.flac` 也不合格：虽然 metadata 是 88.2k/24-bit、离线音量约 -91 dB，但 `ffprobe` 报 `invalid residual / decode_frame() failed`，`ffmpeg -xerror` 返回 183；Direct decoder 对该错误会把 ring 标记 failed。该轮 position=0/低网络流量不能归因于 S32 transport，结果作废。后续长稳应改用已实播通过的 44.1k/16 静音 FLAC，通过 same-wire-format staged gapless 循环延长时长。
+- weak TSFN 修复的完整仓库回归已收口：Node 72/72、Web 54/54、no-SDK audio-engine 102/102、SDK 149 audio-engine 97/97、typecheck、ESLint、`SKIP_NATIVE_BUILD=true pnpm build`、SDK release addon、ELF（无 TEXTREL/动态 libstdc++）、upstream touch 31 business + 2 generated、`git diff --check` 全 PASS。当前代码改动仅 `on_event` weak TSFN + 一条回归 guard；其余未引入新架构面。
+- 用户再次明确确认 DX5 II 空闲后，使用 root `timeout` 直接包住真实 Node 的纠正 harness 完成受控硬终止：PCM load/play 成功，4 秒后真实 root Node 被 KILL，`timeout_rc=124`，前后无 root Node 残留。1 秒后只运行一次 fresh reconnect，唯一 DX5 II 约 380 ms 发现、同一 44.1k/16-bit PCM paused load 约 380 ms 成功，随后 stop/自然退出 0；异常 Source hard-kill recovery 现正式 PASS。
+- 长稳验收正式 PASS：同一 Direct 连接循环 stage/commit 已验证的 3.684717 秒 44.1k/16-bit 静音 FLAC，连续 50 个 boundary、总计 184.371 秒，无 `sourceError`/`outputFailed`。RSS 56.36→57.92 MiB、external 1.78 MiB 不变、播放期 threads=15、FD 32 稳定；br0 约 TX 36.54 MB。最终 stop/自然退出 0，宿主无 root Node 残留。
+- 用户提供 `/media/extramusic` 的真实 DSD 库用于补充验收；当前枚举为 11 个 DSF、0 个 DFF/DSDIFF。真实 DSD64 DSF strict load 再次在 DX5 II exact LSB capability check 阶段明确拒绝，未 play、未转换、未 fallback，进程正常退出。该目录没有可用于 exact MSB 实播的 DFF，因此保留现有 10 ms DFF/MSB hardware PASS 作为受支持 Native DSD 证据。
+- 用户要求先解决“真实 DSD 不能播”再继续 Qobuz/TIDAL。对照 `slim2Diretta` 与 `DirettaRendererUPnP` 后确认根因是 Atom 把 DSF LSB container representation 错当成必须保持的 Target wire representation；两个 proven oracle 都会在 Native DSD 域内依据 Target capability 做可逆 LSB↔MSB per-byte bit reversal。最小修复在一次 SDK open/连接前选择受支持 Native DSD wire order，Rust producer 在非 RT 预分配 slot 内仅在必要时 `reverse_bits()`；RT callback 仍只借 pointer+size，无 PCM/DoP/分配/转换。逐 bit 测试证明逻辑 DSD 序列不变，同 rate/channels DSF↔DFF handoff 可复用同一 wire order。
+- 修复回归 PASS：no-SDK audio-engine 103/103、SDK 149 audio-engine 98/98，SDK release native build 完成。真实 DX5 II DSD64 DSF 以 2.8224 MHz / 2ch / 1-bit 加载，位置 0→1.509297→2.995374 s，pause 后稳定在 3.006984 s；真实 DSD256 DSF 以 11.2896 MHz / 2ch / 1-bit 加载，位置 0→1.213243→2.406168 s。两次均无 `sourceError/outputFailed`，stop 后无 root Node 残留。真实 DSF Native DSD 播放问题已修复，可继续 Qobuz/TIDAL 实机验收。
+- Qobuz/TIDAL 实机验收目前停在账户前提而非音频路径：环境变量无 Qobuz user token/TIDAL OAuth token，用户目录也无 `qobuz.json`/`tidal.json` 持久化登录态。Qobuz Web Player app credential discovery 已实时成功，确认 app id 可发现且有 4 个签名 secret 候选；未输出 secret。故 Qobuz 只缺用户 auth token，TIDAL 只缺用户 OAuth access token；在用户凭据可用前不伪造共享账户、不宣称 live search/stream PASS。
+- DSD 修复后的仓库级比例回归继续全绿：Node 72/72、Web 54/54、typecheck、ESLint、`git diff --check`、31 business + 2 generated touch audit、release ELF 无 TEXTREL/动态 libstdc++；最终宿主 root Node 审计为空。当前工作区保持未提交。
