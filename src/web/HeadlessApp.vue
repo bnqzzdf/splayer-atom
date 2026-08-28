@@ -8,6 +8,7 @@ const scanDir = ref("");
 const scanning = ref(false);
 const session = ref<HeadlessSession>({
   active: false,
+  mode: "queue",
   queue: [],
   originalQueue: null,
   index: -1,

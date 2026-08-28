@@ -39,11 +39,11 @@ test("queue replacement/removal and play-now no longer reload through renderer",
   assert.doesNotMatch(playNow, /loadTrack\(/);
 });
 
-test("normal next delegates loading to Core while FM stays an explicit special path", () => {
+test("next always delegates playback advancement to the Core session", () => {
   const next = between(
     "export const nextTrack = async (): Promise<void> => {",
     "/**\n * 跳到队列指定位置",
   );
   assert.match(next, /nextSession\(true\)/);
-  assert.match(next, /status\.fmMode/);
+  assert.doesNotMatch(next, /fm\.|fmMode|loadTrack\(/);
 });

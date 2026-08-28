@@ -2,6 +2,7 @@ import { extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { Hono, type Context } from "hono";
 import type { ApiPlatform } from "@shared/types/apis";
+import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type {
   LoadOptions,
   PlaybackQueueItem,
@@ -45,6 +46,8 @@ import {
   setShuffle,
   setAutoClose,
   cancelAutoClose,
+  startPersonalFm,
+  dislikePersonalFm,
   stop,
   updateQueueItem,
   updateQueueTracks,
@@ -542,6 +545,25 @@ export const buildHeadlessRoutes = (): Hono => {
     if (body?.mode !== "off" && body?.mode !== "on")
       return c.json({ error: "mode must be off or on" }, 400);
     return c.json(setShuffle(body.mode));
+  });
+  api.post("/session/personal-fm", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      options?: PersonalFmOptions;
+      autoPlay?: boolean;
+    } | null;
+    try {
+      return c.json(await startPersonalFm(body?.options, body?.autoPlay !== false));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/session/personal-fm/dislike", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { playedSec?: number } | null;
+    try {
+      return c.json(await dislikePersonalFm(body?.playedSec));
+    } catch (error) {
+      return commandError(c, error);
+    }
   });
   api.post("/session/auto-close", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {

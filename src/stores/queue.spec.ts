@@ -60,6 +60,7 @@ const session = (
   repeat: "list",
   shuffle: "off",
   ...options,
+  mode: options.mode ?? "queue",
 });
 
 const getSession = vi.fn();

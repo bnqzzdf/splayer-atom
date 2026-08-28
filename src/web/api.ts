@@ -290,6 +290,20 @@ const playerApi: PlayerApi = {
         body: JSON.stringify({ mode }),
       }),
     ),
+  startPersonalFm: (options, autoPlay = true) =>
+    sessionResponse(() =>
+      request<PlaybackSessionSnapshot>("/session/personal-fm", {
+        method: "POST",
+        body: JSON.stringify({ options, autoPlay }),
+      }),
+    ),
+  dislikePersonalFm: (playedSec) =>
+    sessionResponse(() =>
+      request<PlaybackSessionSnapshot>("/session/personal-fm/dislike", {
+        method: "POST",
+        body: JSON.stringify({ playedSec }),
+      }),
+    ),
   setSessionAutoClose: (durationMin, waitSongEnd) =>
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/auto-close", {

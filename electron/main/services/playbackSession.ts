@@ -2,6 +2,7 @@ import type {
   AudioDevice,
   MediaInfo,
   PlaybackQueueItem,
+  PlaybackSessionMode,
   PlaybackSessionSnapshot,
   RepeatMode,
   ShuffleMode,
@@ -36,6 +37,15 @@ import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { playerLog } from "@main/utils/logger";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@shared/utils/djMode";
+import type { PersonalFmOptions } from "@shared/types/personalFm";
+import {
+  advancePersonalFmPool,
+  alignPersonalFmPool,
+  dislikePersonalFmCurrent,
+  getPersonalFmOptions,
+  resetPersonalFmPool,
+  startPersonalFmPool,
+} from "@main/services/personalFm";
 
 let queue: PlaybackQueueItem[] = [];
 let originalQueue: PlaybackQueueItem[] | null = null;
@@ -43,6 +53,7 @@ let index = -1;
 let repeat: RepeatMode = "list";
 let shuffle: ShuffleMode = "off";
 let active = false;
+let mode: PlaybackSessionMode = "queue";
 let initialized = false;
 let loadGeneration = 0;
 let sourceRecoveryAttempts = 0;
@@ -92,6 +103,8 @@ const cloneQueue = (items: PlaybackQueueItem[]): PlaybackQueueItem[] =>
 
 const snapshot = (): PlaybackSessionSnapshot => ({
   active,
+  mode,
+  personalFmOptions: mode === "personalFm" ? getPersonalFmOptions() : undefined,
   queue: cloneQueue(queue),
   originalQueue: originalQueue ? cloneQueue(originalQueue) : null,
   index,
@@ -227,8 +240,14 @@ const loadIndex = async (
       .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
   }
 
-  index = targetIndex;
-  active = true;
+  if (mode === "personalFm") {
+    queue = alignPersonalFmPool(targetIndex).map((fmTrack) => ({ track: fmTrack }));
+    originalQueue = null;
+    index = queue.length > 0 ? 0 : -1;
+  } else {
+    index = targetIndex;
+  }
+  active = index >= 0;
   publish();
   const duration = Math.max(track.duration || 0, result.data.mediaInfo.duration);
   nowPlaying.update({ ...track, duration }, [], null);
@@ -286,6 +305,7 @@ export const initPlaybackSession = async (): Promise<void> => {
     index = persisted.index;
     repeat = persisted.repeat;
     shuffle = persisted.shuffle;
+    mode = "queue";
     active = queue.length > 0;
   }
   const player = getPlayer();
@@ -327,12 +347,28 @@ export const migrateLegacyQueue = (
   index = queue.length === 0 ? -1 : Math.max(0, Math.min(legacyIndex, queue.length - 1));
   repeat = legacyRepeat;
   shuffle = legacyShuffle;
+  mode = "queue";
   active = queue.length > 0;
   publish();
   return snapshot();
 };
 
 export const ownsPlayback = (): boolean => active && queue.length > 0;
+
+const leavePersonalFmMode = (): void => {
+  if (mode !== "personalFm") return;
+  mode = "queue";
+  resetPersonalFmPool();
+};
+
+const applyPersonalFmPool = (tracks: Track[]): boolean => {
+  queue = tracks.map((track) => ({ track: { ...track } }));
+  originalQueue = null;
+  index = queue.length > 0 ? 0 : -1;
+  active = index >= 0;
+  mode = active ? "personalFm" : "queue";
+  return active;
+};
 
 /** 保持当前曲在首位并随机其余队列；originalQueue 始终保留未随机顺序。 */
 const shuffleKeepingCurrent = (): void => {
@@ -358,6 +394,7 @@ export const replaceQueue = async (
   loadCurrent = true,
 ): Promise<PlaybackSessionSnapshot> => {
   invalidatePlaybackPreload();
+  leavePersonalFmMode();
   if (items.length === 0) {
     await clearQueue(loadCurrent);
     return snapshot();
@@ -379,6 +416,7 @@ export const playTrack = async (track: Track, autoPlay = true): Promise<Playback
   replaceQueue([{ track }], 0, autoPlay);
 
 export const appendQueue = (items: PlaybackQueueItem[]): PlaybackSessionSnapshot => {
+  leavePersonalFmMode();
   queue.push(...cloneQueue(items));
   if (originalQueue) originalQueue.push(...cloneQueue(items));
   if (queue.length > 0) active = true;
@@ -392,6 +430,7 @@ export const insertQueue = (
   insertIndex: number,
 ): PlaybackSessionSnapshot => {
   if (items.length === 0) return snapshot();
+  leavePersonalFmMode();
   const safeIndex = Math.max(0, Math.min(insertIndex, queue.length));
   const entries = cloneQueue(items);
   queue.splice(safeIndex, 0, ...entries);
@@ -409,6 +448,7 @@ export const removeQueueIndex = async (
 ): Promise<PlaybackSessionSnapshot> => {
   if (removeIndex < 0 || removeIndex >= queue.length) return snapshot();
   invalidatePlaybackPreload();
+  leavePersonalFmMode();
   const removingCurrent = removeIndex === index;
   const [removed] = queue.splice(removeIndex, 1);
   if (queue.length === 0) {
@@ -432,6 +472,7 @@ export const removeQueueIndex = async (
 
 export const clearQueue = async (stop = false): Promise<void> => {
   ++loadGeneration;
+  leavePersonalFmMode();
   sourceRecoveryAttempts = 0;
   invalidatePlaybackPreload();
   queue = [];
@@ -457,6 +498,52 @@ export const stop = (): void => getPlayer().stop();
 export const seek = (positionMs: number): Promise<void> =>
   getPlayer().seek(toEnginePositionMs(Math.max(0, positionMs)) / 1000);
 
+export const startPersonalFm = async (
+  options?: PersonalFmOptions,
+  autoPlay = true,
+): Promise<PlaybackSessionSnapshot> => {
+  invalidatePlaybackPreload();
+  const tracks = await startPersonalFmPool(options);
+  if (!applyPersonalFmPool(tracks)) {
+    publishPlaybackError(ErrorCode.NETEASE_UNAVAILABLE);
+    publish();
+    return snapshot();
+  }
+  publish();
+  await loadIndexWithPolicy(0, autoPlay);
+  return snapshot();
+};
+
+const advancePersonalFm = async (loadCurrent = true): Promise<boolean> => {
+  invalidatePlaybackPreload();
+  const tracks = await advancePersonalFmPool();
+  if (!applyPersonalFmPool(tracks)) {
+    getPlayer().stop();
+    nowPlaying.onPlayStateChange("stopped");
+    publish();
+    return false;
+  }
+  publish();
+  if (loadCurrent) await loadIndexWithPolicy(0, true);
+  else scheduleNextPlaybackPreload();
+  return true;
+};
+
+export const dislikePersonalFm = async (playedSec?: number): Promise<PlaybackSessionSnapshot> => {
+  if (mode !== "personalFm") return snapshot();
+  invalidatePlaybackPreload();
+  const tracks = await dislikePersonalFmCurrent(playedSec);
+  if (!applyPersonalFmPool(tracks)) {
+    getPlayer().stop();
+    nowPlaying.onPlayStateChange("stopped");
+    publish();
+    return snapshot();
+  }
+  publish();
+  await loadIndexWithPolicy(0, true);
+  return snapshot();
+};
+
 export const selectIndex = async (
   targetIndex: number,
   loadCurrent = true,
@@ -473,6 +560,7 @@ export const selectIndex = async (
 
 export const next = async (loadCurrent = true): Promise<boolean> => {
   if (!ownsPlayback()) return false;
+  if (mode === "personalFm") return advancePersonalFm(loadCurrent);
   if (shuffle === "on" && index >= queue.length - 1 && queue.length > 1) {
     shuffleKeepingCurrent();
     publish();
@@ -485,7 +573,7 @@ export const next = async (loadCurrent = true): Promise<boolean> => {
 };
 
 export const prev = async (loadCurrent = true): Promise<boolean> => {
-  if (!ownsPlayback()) return false;
+  if (!ownsPlayback() || mode === "personalFm") return false;
   const target = index - 1 < 0 ? queue.length - 1 : index - 1;
   await selectIndex(target, loadCurrent, true);
   return true;
@@ -518,6 +606,7 @@ export const moveQueue = (fromIndex: number, toIndex: number): PlaybackSessionSn
   ) {
     return snapshot();
   }
+  leavePersonalFmMode();
   const [item] = queue.splice(fromIndex, 1);
   queue.splice(toIndex, 0, item);
   if (index === fromIndex) index = toIndex;

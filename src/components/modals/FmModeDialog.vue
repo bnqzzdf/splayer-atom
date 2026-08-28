@@ -5,7 +5,6 @@
 
 import type { PersonalFmMode, PersonalFmSubMode } from "@/types/netease";
 import * as player from "@/core/player";
-import * as fm from "@/core/player/fm";
 import { toast } from "@/composables/useToast";
 
 const props = defineProps<{
@@ -128,11 +127,11 @@ watch(
   () => props.open,
   (isOpen) => {
     if (!isOpen) return;
-    const currentOpt = fm.getOptions();
-    activeMode.value = currentOpt?.mode ?? "DEFAULT";
-    if (currentOpt?.submode) {
-      activeSubMode.value = currentOpt.submode;
-    }
+    void window.api.player.getSession().then((result) => {
+      const currentOpt = result.data?.personalFmOptions;
+      activeMode.value = currentOpt?.mode ?? "DEFAULT";
+      if (currentOpt?.submode) activeSubMode.value = currentOpt.submode;
+    });
   },
   { immediate: true },
 );

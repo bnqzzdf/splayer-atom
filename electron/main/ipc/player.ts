@@ -46,6 +46,7 @@ import type {
   Track,
 } from "@shared/types/player";
 import type { MediaEvent } from "@main/services/media";
+import type { PersonalFmOptions } from "@shared/types/personalFm";
 import { JsPlayerEvent } from "@splayer/audio-engine";
 
 type AudioEngineModule = typeof import("@splayer/audio-engine");
@@ -347,6 +348,19 @@ export const registerPlayerIpc = (): void => {
   ipcMain.handle("player:setSessionShuffle", (_event, mode: ShuffleMode) => ({
     success: true,
     data: playbackSession.setShuffle(mode),
+  }));
+
+  ipcMain.handle(
+    "player:startPersonalFm",
+    async (_event, options?: PersonalFmOptions, autoPlay = true) => ({
+      success: true,
+      data: await playbackSession.startPersonalFm(options, autoPlay),
+    }),
+  );
+
+  ipcMain.handle("player:dislikePersonalFm", async (_event, playedSec?: number) => ({
+    success: true,
+    data: await playbackSession.dislikePersonalFm(playedSec),
   }));
 
   ipcMain.handle(

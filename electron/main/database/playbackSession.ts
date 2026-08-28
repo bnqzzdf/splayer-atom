@@ -53,13 +53,15 @@ export const loadPlaybackSession = (): PlaybackSessionSnapshot | null => {
   if (!row) return null;
   const queue = parseQueue(row.queue_json) ?? [];
   const originalQueue = parseQueue(row.original_queue_json);
-  const index = queue.length === 0 ? -1 : Math.max(0, Math.min(row.current_index, queue.length - 1));
+  const index =
+    queue.length === 0 ? -1 : Math.max(0, Math.min(row.current_index, queue.length - 1));
   return {
     active: queue.length > 0,
+    mode: "queue",
     queue,
     originalQueue,
     index,
-    current: index >= 0 ? queue[index]?.track ?? null : null,
+    current: index >= 0 ? (queue[index]?.track ?? null) : null,
     repeat: parseRepeat(row.repeat_mode),
     shuffle: parseShuffle(row.shuffle_mode),
   };

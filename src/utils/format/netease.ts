@@ -1,4 +1,9 @@
-import type { Album, Artist, AudioQuality, Playlist, Track } from "@shared/types/player";
+import type { Album, Artist, Playlist } from "@shared/types/player";
+import {
+  neteaseSongToTrack,
+  neteaseSongsToTracks,
+  withNeteasePicSize,
+} from "@shared/utils/neteaseTrack";
 import type { UserSubcount } from "@/types/user";
 import type { NeteaseSong } from "@/types/netease";
 
@@ -20,88 +25,11 @@ export const ensureOk = <T>(body: T): T => {
   return body;
 };
 
-/**
- * 给封面 URL 拼尺寸
- * @param url - 封面原始 URL
- * @param size - 期望像素边长，默认 300
- */
-export const withPicSize = (url: string | undefined, size = 300): string | undefined => {
-  if (!url) return undefined;
-  if (url.includes("?param=")) return url;
-  return `${url}?param=${size}y${size}`;
-};
-
-/**
- * 根据 song 对象选择最佳音质
- * @param song - 原始 song 对象
- * @returns 最佳音质
- */
-const pickQuality = (song: NeteaseSong): AudioQuality | undefined => {
-  if (song.hr) {
-    return {
-      codec: "flac",
-      sampleRate: Math.max(song.hr.sr ?? 0, 96000),
-      bitsPerSample: 24,
-      bitRate: song.hr.br,
-      channels: 2,
-    };
-  }
-  if (song.sq) {
-    return {
-      codec: "flac",
-      sampleRate: song.sq.sr,
-      bitsPerSample: 16,
-      bitRate: song.sq.br,
-      channels: 2,
-    };
-  }
-  const mp3 = song.h ?? song.m ?? song.l;
-  if (mp3) {
-    return {
-      codec: "mp3",
-      sampleRate: mp3.sr,
-      bitsPerSample: 16,
-      bitRate: mp3.br,
-      channels: 2,
-    };
-  }
-  return undefined;
-};
-
-/**
- *  song → 应用层 Track
- * @param song - 原始 song 对象
- */
-export const songToTrack = (song: NeteaseSong): Track => {
-  // 兼容旧字段
-  const album = song.al ?? song.album;
-  const ar = song.ar ?? song.artists ?? [];
-  const aliasList = song.alia ?? song.alias;
-  const cover = withPicSize(album?.picUrl);
-  const coverOriginal = withPicSize(album?.picUrl, 1024);
-  const comment = aliasList?.find((s) => s?.trim()) ?? undefined;
-  return {
-    id: String(song.id),
-    source: "netease",
-    title: song.name,
-    comment,
-    artists: ar.map((artist) => ({ id: String(artist.id), name: artist.name })),
-    album: album ? { id: String(album.id), name: album.name, cover } : undefined,
-    duration: song.dt ?? song.duration ?? 0,
-    cover,
-    coverOriginal,
-    quality: pickQuality(song),
-    fee: song.fee,
-    cloud: song.pc != null ? true : undefined,
-  };
-};
-
-/**
- *  songs 列表 → Track 列表，空/缺省安全
- * @param songs - 接口返回的 songs 数组
- */
-export const songsToTracks = (songs: NeteaseSong[] | undefined | null): Track[] =>
-  songs?.map(songToTrack) ?? [];
+/** renderer compatibility exports；实际映射实现由 shared/Core 共用。 */
+export const withPicSize = withNeteasePicSize;
+export const songToTrack = (song: NeteaseSong) => neteaseSongToTrack(song);
+export const songsToTracks = (songs: NeteaseSong[] | undefined | null) =>
+  neteaseSongsToTracks(songs);
 
 /**
  * 歌单条目 → 应用层 Playlist

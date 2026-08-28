@@ -1,5 +1,6 @@
 import type { LyricFormat } from "./lyrics";
 import type { Platform } from "./platform";
+import type { PersonalFmOptions } from "./personalFm";
 
 /** 播放器状态 */
 export type PlayerState = "idle" | "loading" | "playing" | "paused" | "stopped";
@@ -187,9 +188,15 @@ export interface PlaybackAutoCloseSnapshot {
   pendingStopOnEnd: boolean;
 }
 
+/** Core 播放会话模式；FM 只改变 canonical Track 的产生方式，不改变 Output 链路。 */
+export type PlaybackSessionMode = "queue" | "personalFm";
+
 /** 主进程权威播放会话快照 */
 export interface PlaybackSessionSnapshot {
   active: boolean;
+  mode: PlaybackSessionMode;
+  /** FM 模式的 Core-owned 推荐参数；普通 queue 模式为空。 */
+  personalFmOptions?: PersonalFmOptions;
   queue: PlaybackQueueItem[];
   originalQueue: PlaybackQueueItem[] | null;
   index: number;
@@ -344,6 +351,13 @@ export interface PlayerApi {
   setSessionRepeat: (mode: RepeatMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 设置权威会话随机模式 */
   setSessionShuffle: (mode: ShuffleMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 进入 Core-owned 私人 FM；推荐池转为 authoritative canonical queue。 */
+  startPersonalFm: (
+    options?: PersonalFmOptions,
+    autoPlay?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 私人 FM 减少推荐并由 Core 直接推进。 */
+  dislikePersonalFm: (playedSec?: number) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 启动或更新 Core 定时关闭 */
   setSessionAutoClose: (
     durationMin: number,

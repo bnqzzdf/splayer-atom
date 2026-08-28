@@ -139,6 +139,14 @@ const api = {
     // 设置权威会话随机模式
     setSessionShuffle: (mode: import("@shared/types/player").ShuffleMode) =>
       ipcRenderer.invoke("player:setSessionShuffle", mode),
+    // 进入 Core-owned 私人 FM
+    startPersonalFm: (
+      options?: import("@shared/types/personalFm").PersonalFmOptions,
+      autoPlay = true,
+    ) => ipcRenderer.invoke("player:startPersonalFm", options, autoPlay),
+    // 私人 FM 减少推荐并由 Core 推进
+    dislikePersonalFm: (playedSec?: number) =>
+      ipcRenderer.invoke("player:dislikePersonalFm", playedSec),
     // 启动或更新 Core 定时关闭
     setSessionAutoClose: (durationMin: number, waitSongEnd: boolean) =>
       ipcRenderer.invoke("player:setSessionAutoClose", durationMin, waitSongEnd),

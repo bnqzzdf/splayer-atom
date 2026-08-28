@@ -18,7 +18,6 @@ import { usePluginsStore } from "@/stores/plugins";
 import { useHistoryStore } from "@/stores/history";
 import { useLibraryStore } from "@/stores/library";
 import * as queue from "@/stores/queue";
-import * as fm from "./fm";
 import {
   getCurrentDirectEntryBlockers,
   isDirettaOutput,
@@ -66,6 +65,7 @@ const applySessionResult = (
   status.playIndex = result.data.index;
   status.repeatMode = result.data.repeat;
   status.shuffleMode = result.data.shuffle;
+  status.fmMode = result.data.mode === "personalFm";
   autoClose.applySnapshot(result.data.autoClose);
   return result.data;
 };
@@ -893,12 +893,10 @@ export const exitHeartMode = (): void => {
  */
 export const playPersonalFm = async (options?: PersonalFmOptions): Promise<boolean> => {
   const status = useStatusStore();
-  const track = await fm.start(options);
-  if (!track) return false;
-  status.fmMode = true;
-  // 心动 / FM 互斥
+  const session = applySessionResult(await window.api.player.startPersonalFm(options, true));
+  if (!session?.current || session.mode !== "personalFm") return false;
+  // 心动 / FM 互斥；FM authority 由 Core session.mode 投影。
   status.heartMode = false;
-  await loadTrack(track);
   return true;
 };
 
@@ -908,8 +906,7 @@ export const playPersonalFm = async (options?: PersonalFmOptions): Promise<boole
 export const dislikeFmTrack = async (): Promise<void> => {
   if (!useStatusStore().fmMode) return;
   const playedSec = Math.max(0, Math.round(playback.getCurrentTime() / 1000));
-  const next = await fm.dislikeCurrent(playedSec);
-  if (next) await loadTrack(next);
+  applySessionResult(await window.api.player.dislikePersonalFm(playedSec));
 };
 
 /**
@@ -921,13 +918,6 @@ export const reloadCurrentQueueTrack = async (): Promise<void> => {
 };
 
 export const nextTrack = async (): Promise<void> => {
-  const status = useStatusStore();
-  // 私人 FM
-  if (status.fmMode) {
-    const next = await fm.next();
-    if (next) await loadTrack(next);
-    return;
-  }
   if (queue.queueLength.value === 0) return;
   applySessionResult(await window.api.player.nextSession(true));
 };
@@ -1204,6 +1194,7 @@ export const initPlayer = async (): Promise<void> => {
     status.playIndex = session.index;
     status.repeatMode = session.repeat;
     status.shuffleMode = session.shuffle;
+    status.fmMode = session.mode === "personalFm";
     autoClose.applySnapshot(session.autoClose);
     if (!webRemote && legacyStatus) {
       delete legacyStatus.playIndex;
