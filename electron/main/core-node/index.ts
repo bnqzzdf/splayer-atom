@@ -9,19 +9,28 @@ process.env.ATOM_RENDERER_DIR ??= path.join(process.cwd(), "out", "renderer");
 let shuttingDown = false;
 
 const start = async (): Promise<void> => {
-  const [{ initLogger, coreLog }, database, songCache, playbackSession, server, { store }] =
-    await Promise.all([
-      import("@main/utils/logger"),
-      import("@main/database"),
-      import("@main/services/songCache"),
-      import("@main/services/playbackSession"),
-      import("@main/server"),
-      import("@main/store"),
-    ]);
+  const [
+    { initLogger, coreLog },
+    database,
+    songCache,
+    playbackSession,
+    corePlayerEvents,
+    server,
+    { store },
+  ] = await Promise.all([
+    import("@main/utils/logger"),
+    import("@main/database"),
+    import("@main/services/songCache"),
+    import("@main/services/playbackSession"),
+    import("@main/services/corePlayerEvents"),
+    import("@main/server"),
+    import("@main/store"),
+  ]);
 
   initLogger();
   database.initDatabase();
   await songCache.init();
+  corePlayerEvents.registerCorePlayerEvents();
   await playbackSession.initPlaybackSession();
 
   const status = await server.startServer();
