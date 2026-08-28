@@ -117,12 +117,20 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
       case "directTrackBoundary": {
         const duration = toMs(event.duration ?? 0);
         const generation = event.generation ?? 0;
-        const boundaryEvent = { type: "directTrackBoundary", data: { duration, generation } };
-        sendToMain("player:event", boundaryEvent);
-        wsBroadcast(boundaryEvent);
-        // 音频未停止；这里只结算上一首，下一首元数据由 renderer 随即 commit。
+        // 先结算上一首，再由 Core 提交已跨过的 staged 下一首。
         lastfm.onEnded();
         neteaseScrobble.onEnded();
+        const consumedBySession = playbackSession.onNativeDirectTrackBoundary(generation, duration);
+        if (!consumedBySession) {
+          sendToMain("player:event", {
+            type: "directTrackBoundary",
+            data: { duration, generation },
+          });
+        }
+        wsBroadcast({
+          type: "directTrackBoundary",
+          data: { duration, generation, consumedBySession },
+        });
         mediaService.setTimeline({ currentMs: 0, totalMs: duration });
         break;
       }

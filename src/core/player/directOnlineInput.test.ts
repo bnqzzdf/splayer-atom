@@ -12,6 +12,10 @@ const mainPlayerLoadSource = readFileSync(
   new URL("../../../electron/main/services/playerLoad.ts", import.meta.url),
   "utf8",
 );
+const corePreloaderSource = readFileSync(
+  new URL("../../../electron/main/services/playbackPreloader.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -62,16 +66,26 @@ test("main player load materializes every remote source before Diretta native lo
   assert.doesNotMatch(loadFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
 });
 
-test("Diretta next-track staging prepares online input before native gapless staging", () => {
-  const schedule = between(
+test("Diretta next-track staging is owned by Core rather than renderer Control", () => {
+  const rendererSchedule = between(
     preloaderSource,
     "export const scheduleNextTrackPreload = (): void => {",
     "/** 安装预载上下文监听 */",
   );
-  const prepareIndex = schedule.indexOf("prepareDirectTrackSource(candidateTrack, source)");
-  const stageIndex = schedule.indexOf("stageDirectNext(");
-  assert.ok(prepareIndex >= 0);
-  assert.ok(stageIndex > prepareIndex);
+  assert.doesNotMatch(
+    rendererSchedule,
+    /resolveTrackSource|prepareDirectTrackSource|stageDirectNext/,
+  );
+  assert.match(rendererSchedule, /preloadLyricForTrack/);
+
+  const coreSchedule = between(
+    corePreloaderSource,
+    "export const schedulePlaybackPreload = (",
+    "/** 仅当队列位置、canonical Track 与 Core playback policy 全部一致时消费普通预载。 */",
+  );
+  assert.match(coreSchedule, /resolvePlaybackSource/);
+  assert.match(coreSchedule, /prepareDirectSource/);
+  assert.match(coreSchedule, /stageDirectSource/);
 });
 
 test("switching any remote HTTP track into Diretta prepares local input first", () => {

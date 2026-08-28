@@ -4,7 +4,6 @@
 
 import type { PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import type { ResolvedTrackSource } from "@/services/audioSource";
-import { prepareDirectTrackSource, resolveTrackSource } from "@/services/audioSource";
 import { getNextTrackCandidate } from "@/core/player/candidate";
 import { invalidatePreloadedLyric, preloadLyricForTrack } from "@/services/lyric/preload";
 import { useStatusStore } from "@/stores/status";
@@ -13,7 +12,6 @@ import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useMediaStore } from "@/stores/media";
 import * as queue from "@/stores/queue";
-import { isWebRemote } from "@/runtime";
 
 /** 预载结果 */
 export interface NextTrackPreloadResult {
@@ -27,12 +25,10 @@ export interface NextTrackPreloadResult {
   directDetail?: TrackDetail;
 }
 
-let currentToken = 0;
 let cachedResult: NextTrackPreloadResult | null = null;
 let currentContextKey: string | null = null;
 let pendingCover: HTMLImageElement | null = null;
 let stopContextWatch: (() => void) | null = null;
-let nextDirectGeneration = 0;
 let activeDirectGeneration: number | null = null;
 
 /**
@@ -97,7 +93,6 @@ const preloadCover = async (url: string): Promise<void> => {
  * 作废当前的预载缓存
  */
 export const invalidateNextTrackPreload = (): void => {
-  currentToken++;
   cachedResult = null;
   currentContextKey = null;
   if (activeDirectGeneration !== null) {
@@ -120,8 +115,7 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
   const currentKey = buildContextKey(track);
   if (!cachedResult) {
     if (currentContextKey === currentKey) {
-      // 音源尚未解析完成，阻止迟到结果写回；同曲歌词和封面仍可继续使用
-      currentToken++;
+      // renderer 已不再解析播放输入；仅清理旧迁移期上下文。
       currentContextKey = null;
     } else if (currentContextKey) {
       invalidateNextTrackPreload();
@@ -138,7 +132,6 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
     return null;
   }
   const result = cachedResult;
-  currentToken++;
   cachedResult = null;
   currentContextKey = null;
   if (result.directGeneration !== null) {
@@ -176,7 +169,6 @@ export const consumeDirectGaplessBoundary = (generation: number): NextTrackPrelo
     invalidateNextTrackPreload();
     return null;
   }
-  currentToken++;
   cachedResult = null;
   currentContextKey = null;
   activeDirectGeneration = null;
@@ -213,101 +205,15 @@ export const scheduleNextTrackPreload = (): void => {
   }
 
   const candidateTrack = candidateResult.track;
-  const contextKey = buildContextKey(candidateTrack);
-  // 歌词使用独立上下文去重，歌词偏好变化不需要重新解析音源
-  preloadLyricForTrack(candidateTrack);
-  if (isWebRemote()) {
-    // 远程 Web 只做 UI 预热；播放输入与 Direct staging 由 Core 唯一持有。
-    currentToken++;
-    cachedResult = null;
-    currentContextKey = null;
-    if (candidateTrack.cover) void preloadCover(candidateTrack.cover);
-    return;
-  }
-
-  // 上下文指纹一致且已有缓存，避免重复触发
-  if (cachedResult && cachedResult.contextKey === contextKey) {
-    return;
-  }
-
-  // 避免在异步生成过程中重复调度同一 contextKey
-  if (currentContextKey === contextKey && !cachedResult) {
-    return;
-  }
-
+  // Control 只预热展示资源；播放输入解析、缓存与 Direct staging 由 Core 唯一持有。
+  cachedResult = null;
+  currentContextKey = null;
   if (activeDirectGeneration !== null) {
     activeDirectGeneration = null;
     void window.api.player.cancelDirectNext();
   }
-
-  const token = ++currentToken;
-  currentContextKey = contextKey;
-  cachedResult = null;
-
-  void (async () => {
-    try {
-      if (candidateTrack.cover) {
-        void preloadCover(candidateTrack.cover);
-      }
-      // 音源预拉取
-      let source = await resolveTrackSource(candidateTrack, {
-        silent: true,
-        streamingPlaySessionId: crypto.randomUUID(),
-      });
-      if (token !== currentToken) return;
-
-      const directOutput = settings.player.outputDevice?.startsWith("diretta:") === true;
-      if (directOutput && source) {
-        source = await prepareDirectTrackSource(candidateTrack, source);
-        if (token !== currentToken) return;
-      }
-
-      const candidateContext = queue.getQueueItem(candidateResult.index)?.context;
-      let directGeneration: number | null = null;
-      let directDetail: TrackDetail | undefined;
-      const directTransitionAllowed =
-        status.repeatMode !== "one" && !(status.autoClose.enable && status.autoClose.waitSongEnd);
-      const directSeekableSource =
-        source !== null &&
-        !/^https?:\/\//i.test(source.source) &&
-        candidateTrack.cueStartMs == null &&
-        candidateTrack.cueEndMs == null;
-      if (directOutput && directTransitionAllowed && directSeekableSource && source) {
-        nextDirectGeneration = (nextDirectGeneration % 0xffff_ffff) + 1;
-        const generation = nextDirectGeneration;
-        const staged = await window.api.player.stageDirectNext(
-          source.source,
-          candidateTrack.duration ?? 0,
-          generation,
-        );
-        if (token !== currentToken) {
-          if (staged.success && staged.data?.staged) void window.api.player.cancelDirectNext();
-          return;
-        }
-        if (staged.success && staged.data?.staged) {
-          directGeneration = generation;
-          directDetail = staged.data.detail;
-          activeDirectGeneration = generation;
-        }
-      }
-
-      cachedResult = {
-        trackId: candidateTrack.id,
-        track: candidateTrack,
-        queueIndex: candidateResult.index,
-        context: candidateContext,
-        source,
-        contextKey,
-        directGeneration,
-        directDetail,
-      };
-    } catch (err) {
-      console.warn("[nextPreload] Preload task failed silently:", err);
-      if (token === currentToken) {
-        invalidateNextTrackPreload();
-      }
-    }
-  })();
+  preloadLyricForTrack(candidateTrack);
+  if (candidateTrack.cover) void preloadCover(candidateTrack.cover);
 };
 
 /** 安装预载上下文监听 */

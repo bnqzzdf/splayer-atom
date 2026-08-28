@@ -16,6 +16,14 @@ const directGaplessServiceSource = readFileSync(
   new URL("../../../electron/main/services/directGapless.ts", import.meta.url),
   "utf8",
 );
+const corePreloaderSource = readFileSync(
+  new URL("../../../electron/main/services/playbackPreloader.ts", import.meta.url),
+  "utf8",
+);
+const sessionSource = readFileSync(
+  new URL("../../../electron/main/services/playbackSession.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -42,12 +50,13 @@ test("Direct gapless boundary commits application state without reloading audio"
   assert.doesNotMatch(commit, /window\.api\.player\.stop/);
 });
 
-test("Direct staging respects playback semantics before handing audio to native", () => {
-  assert.match(preloaderSource, /outputDevice\?\.startsWith\("diretta:"\)/);
-  assert.match(preloaderSource, /status\.repeatMode !== "one"/);
-  assert.match(preloaderSource, /status\.autoClose\.waitSongEnd/);
-  assert.match(preloaderSource, /stageDirectNext/);
-  assert.match(preloaderSource, /directGeneration/);
+test("Direct staging respects Core playback semantics before handing audio to native", () => {
+  assert.doesNotMatch(preloaderSource, /stageDirectNext|outputDevice\?\.startsWith\("diretta:"\)/);
+  assert.match(corePreloaderSource, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
+  assert.match(corePreloaderSource, /track\.cueStartMs != null \|\| track\.cueEndMs != null/);
+  assert.match(corePreloaderSource, /stageDirectPlaybackNext/);
+  assert.match(sessionSource, /autoClose\.enabled && autoClose\.waitSongEnd/);
+  assert.match(sessionSource, /nextPlaybackPreloadIndex/);
 });
 
 test("Direct gapless boundary prunes superseded temporary online inputs", () => {

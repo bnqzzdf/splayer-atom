@@ -182,12 +182,18 @@ const publishTrackLoaded = (
 };
 
 const scheduleNextPlaybackPreload = (): void => {
-  if (!isHeadlessMode() || !active || (autoClose.enabled && autoClose.waitSongEnd)) {
+  if (!active || (autoClose.enabled && autoClose.waitSongEnd)) {
     invalidatePlaybackPreload();
     return;
   }
-  const targetIndex = nextPlaybackPreloadIndex(index, queue.length, repeat, shuffle, (candidate) =>
-    store.get("player.fuckDjMode") === true ? shouldSkipDjTrack(queue[candidate].track) : false,
+  const effectiveRepeat = mode === "personalFm" ? "list" : repeat;
+  const targetIndex = nextPlaybackPreloadIndex(
+    index,
+    queue.length,
+    effectiveRepeat,
+    shuffle,
+    (candidate) =>
+      store.get("player.fuckDjMode") === true ? shouldSkipDjTrack(queue[candidate].track) : false,
   );
   if (targetIndex === null) {
     invalidatePlaybackPreload();
@@ -714,12 +720,12 @@ export const onNativeDirectTrackBoundary = (
   generation: number,
   eventDurationMs: number,
 ): boolean => {
-  if (!isHeadlessMode() || !ownsPlayback()) return false;
+  if (!ownsPlayback()) return false;
 
   const recoverAuthoritativeQueue = async (): Promise<void> => {
     getPlayer().stop();
     if (!ownsPlayback()) return;
-    if (repeat === "one") {
+    if (mode !== "personalFm" && repeat === "one") {
       await selectIndex(index, true, true);
       return;
     }
@@ -741,8 +747,14 @@ export const onNativeDirectTrackBoundary = (
     const track = prepared.item.track;
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
     commitDirectPlaybackBoundary(prepared.directSource, duration, track, prepared.item.context);
-    index = prepared.queueIndex;
-    active = true;
+    if (mode === "personalFm") {
+      queue = alignPersonalFmPool(prepared.queueIndex).map((fmTrack) => ({ track: fmTrack }));
+      originalQueue = null;
+      index = queue.length > 0 ? 0 : -1;
+    } else {
+      index = prepared.queueIndex;
+    }
+    active = index >= 0;
     sourceRecoveryAttempts = 0;
     nowPlaying.update({ ...track, duration }, [], null);
     nowPlaying.onPosition(0, true);
@@ -771,22 +783,29 @@ const consumeAutoCloseOnEnded = (): boolean => {
   return true;
 };
 
-/** Native ended 仅在无头模式由主进程消费；桌面模式继续交给 upstream renderer 结算。 */
+/** Native ended 由唯一 Core session 消费；Control 不再拥有 auto-next。 */
 export const onNativeEnded = (): boolean => {
-  if (!isHeadlessMode() || !ownsPlayback()) return false;
+  if (!ownsPlayback()) return false;
   if (consumeAutoCloseOnEnded()) return true;
-  const advance = repeat === "one" ? selectIndex(index, true, true).then(() => true) : next();
+  const advance =
+    mode !== "personalFm" && repeat === "one"
+      ? selectIndex(index, true, true).then(() => true)
+      : next();
   void advance.catch((error) => playerLog.error("[session] automatic next failed", error));
   return true;
 };
 
 /** sourceError 最多 fresh resolve 当前 canonical Track 一次；再次失败后跳过当前项。 */
 export const onNativeSourceError = (): boolean => {
-  if (!isHeadlessMode() || !ownsPlayback()) return false;
+  if (!ownsPlayback()) return false;
   const track = queue[index]?.track;
   if (!track) return false;
 
   const advance = async (): Promise<void> => {
+    if (mode === "personalFm") {
+      await next();
+      return;
+    }
     if (queue.length <= 1) {
       ++loadGeneration;
       getPlayer().stop();

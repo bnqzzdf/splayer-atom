@@ -2,7 +2,6 @@ import type { DirectStageResult, PlaybackQueueItem } from "@shared/types/player"
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import { cancelDirectPlaybackNext, stageDirectPlaybackNext } from "@main/services/directGapless";
 import { getPlayer } from "@main/services/engine";
-import { isHeadlessMode } from "@main/runtime";
 import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
 import {
@@ -142,7 +141,7 @@ const stageDirectSource = async (
  * 失败只丢弃预载结果，真正切歌时仍会走正常 fresh resolve/load。
  */
 export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueItem): void => {
-  if (!isHeadlessMode() || store.get("player.preloadNextTrack") !== true) {
+  if (store.get("player.preloadNextTrack") !== true) {
     invalidatePlaybackPreload();
     return;
   }
@@ -206,7 +205,7 @@ export const consumePlaybackPreload = (
   queueIndex: number,
   item: PlaybackQueueItem,
 ): ResolvedPlaybackSource | null => {
-  if (!isHeadlessMode() || store.get("player.preloadNextTrack") !== true) {
+  if (store.get("player.preloadNextTrack") !== true) {
     invalidatePlaybackPreload();
     return null;
   }
