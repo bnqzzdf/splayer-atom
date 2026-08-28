@@ -143,65 +143,123 @@ PR 只包含可独立贡献给 SPlayer 的最小改动，不从 Atom `dev` 直�
 
 ## 4. Desktop / Headless 构建 Flavor
 
-当前 `ATOM_HEADLESS=1` / `--headless` 主要是运行时模式；production build 仍会构建大量 Desktop renderer、desktop-only main imports 和 Linux 上不必要的 native 模块。
+当前 `ATOM_HEADLESS=1` / `--headless` 主要是运行时模式。它虽然不创建 Desktop 窗口，但仍运行在完整 Electron runtime 上，无法真正消除 Chromium、Electron lifecycle 与桌面运行栈依赖。
 
-### Phase A：Headless Electron Build Flavor
+### 已确定的最终方向
 
-- [ ] 引入明确的产品构建 flavor，例如：
-  - `desktop`
-  - `headless`
-- [ ] 增加独立构建入口，例如：
-  - `build:linux:desktop`
-  - `build:linux:headless`
-- [ ] Headless flavor 只构建正式 Web renderer，不构建：
-  - desktop lyric renderer；
-  - dynamic island renderer；
-  - taskbar lyric renderer；
-  - 其他仅桌面窗口使用的 bundle。
-- [ ] Headless main composition 尽量避免静态引入 desktop-only 模块：
-  - BrowserWindow / window shell；
-  - global hotkey；
-  - desktop updater；
-  - protocol registration；
-  - desktop media integration；
-  - 其他经 import graph 证明 Headless 不需要的服务。
-- [ ] `build:native` 支持 flavor，仅构建 Headless 实际需要的 native addon。
-- [ ] Linux Headless 包不再默认携带 `audio-capture`、`media-ctrl` 等未启用功能的 native 模块。
-- [ ] 为 `audio-engine` 规划 Cargo feature / capability 拆分，避免 Headless 天然携带不需要的 PipeWire / PulseAudio 能力。
-- [ ] Headless Diretta release 在要求包含 Diretta 时，缺失 Diretta SDK 应明确构建失败，不允许静默生成无 Diretta 能力的发布包。
-
-### Phase B：Slim Headless Runtime 可行性
-
-- [ ] 评估把 shared main runtime 从 Electron shell 中进一步解耦。
-- [ ] 目标形态：
+不建设、也不发布一个长期存在的“Electron Headless”中间产品。考虑到项目不以尽快发布中间版本为目标，直接向最终 Headless 架构演进：
 
 ```text
-Desktop Electron shell ─┐
-                        ├─→ same main services / same player authority
-Headless Node shell ────┘
+                         shared application runtime
+                        /                          \
+Desktop flavor: Electron shell          Headless flavor: Node shell
+         ↓                                        ↓
+ Electron IPC + Desktop UI                    HTTP / WebSocket + Web UI
+                        \                          /
+                         same main services
+                                ↓
+                  library / queue / player / provider
+                                ↓
+                      ALSA hardware / Diretta
 ```
 
-- [ ] 评估替代或抽象 Electron-only 依赖：
-  - `app.getPath()`；
-  - `safeStorage`；
-  - Electron lifecycle；
-  - protocol；
-  - updater；
-  - BrowserWindow。
-- [ ] 只有在确认不会产生“第二套服务端实现”后，才进入 Slim Headless 实现阶段。
+Build flavor 决定的是**产品 shell 和构建图**，不是简单裁剪同一个 Electron artifact：
+
+- `desktop` → Electron shell；
+- `headless` → Node Linux shell。
+
+当前已验证的 Electron Headless 运行模式在迁移期间保留，作为行为 oracle 和回归参照；当 Node Headless 完整通过同一套功能与硬件验收后，它不再作为正式产品架构的一部分。
+
+### Shared Runtime 边界
+
+以下能力必须保持同一套实现，不因 Desktop / Headless shell 分叉：
+
+- database / settings domain；
+- library / scanner；
+- playback session / queue authority；
+- player / `playerLoad`；
+- audio source resolution；
+- provider services；
+- song cache；
+- lyrics / now playing / play stats；
+- output-device service；
+- Diretta input materialization。
+
+不得因为引入 Node Headless shell 而复制这些业务逻辑。
+
+Electron-only capability 应留在 Desktop shell，例如：
+
+- BrowserWindow / lyric windows；
+- IPC / preload；
+- global hotkey；
+- desktop updater；
+- protocol registration；
+- tray / desktop media integration；
+- taskbar / dynamic-island 等桌面 UI。
+
+两边都需要、但实现依赖 runtime 的能力应通过窄 adapter 提供，例如：
+
+- `RuntimePaths`；
+- `SecretStore`；
+- `ApplicationLifecycle`；
+- 必要时的 logging adapter。
+
+### Headless Node Runtime
+
+- [ ] 建立独立 Node Headless entry，直接启动 shared runtime 与现有 HTTP / WebSocket server。
+- [ ] Headless 不依赖 Electron、Chromium、BrowserWindow 或 GTK 桌面运行栈。
+- [ ] 正式 Headless 发行包自带项目固定版本的 Node runtime，不依赖用户系统预装的任意 Node 版本。
+- [ ] 初期不以 Node SEA 为目标；先使用可审计、可调试的 bundled Node runtime + JS bundle + native addon 结构，稳定后再评估单文件发行。
+- [ ] `audio-engine.node` 分别验证 Node runtime 与 Electron runtime 的 N-API 加载兼容性。
+- [ ] `better-sqlite3` 分别为 Electron Desktop 与固定 Node Headless runtime 建立正确的 native build / ABI 产物。
+
+### Linux Headless 音频能力
+
+正式 Headless 默认只支持：
+
+```text
+ALSA hardware PCM
+Diretta Source Direct
+```
+
+- [ ] Headless native build 不默认携带 PipeWire / PulseAudio backend。
+- [ ] Headless 不构建未启用的 `audio-capture`、`media-ctrl` 等 Desktop native addon。
+- [ ] `audio-engine` 使用 Cargo features / capability 拆分，使 build flavor 决定实际 Linux audio backend。
+- [ ] Desktop Linux 可继续保留上游需要的 PipeWire / PulseAudio / ALSA 能力。
+- [ ] 要求 Diretta 的正式 Headless release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包。
+
+### 迁移里程碑
+
+这些里程碑只是内部重构检查点，不产生需要长期维护的 Electron Headless 发布产品：
+
+1. [ ] 识别并隔离 shared runtime 中所有 Electron-only import / capability。
+2. [ ] 提取 runtime-neutral shared bootstrap，同时保持 Desktop Electron 行为不变。
+3. [ ] Node Headless entry 可独立启动配置、数据库、媒体库与 HTTP / WS。
+4. [ ] Node Headless 完成本地 PCM / Native DSD 播放。
+5. [ ] Node Headless 完成 ALSA hardware / Diretta 输出与设备切换。
+6. [ ] provider/auth 使用 runtime-neutral path / secret adapters。
+7. [ ] 正式 Web UI 在 Node Headless 上完成与当前 Electron Headless 等价的完整回归。
+8. [ ] 建立自带固定 Node runtime 的 Linux Headless `.deb` / `tar.gz` 发行。
+9. [ ] 全部验收通过后，当前 Electron Headless 运行模式退出正式产品架构，仅在确有调试价值时保留兼容入口。
+
+### Headless Secret Storage 方向
+
+Desktop 可继续使用 Electron `safeStorage`。Headless 在当前单用户专用主机定位下，不强制引入桌面 keyring；优先采用 runtime-neutral `SecretStore`，其 Linux 实现可基于：
+
+- systemd credentials / 部署环境变量；或
+- 受限权限的本地 credential 文件（例如服务用户可读、`0600`）。
+
+provider 本身不得直接依赖 Electron `safeStorage`。
 
 ### 验收标准
 
-Phase A：
-
-- Headless artifact 不包含未使用的 Desktop renderer 和无关 native addon。
-- Desktop build 行为与上游 SPlayer 保持兼容。
-- 同一套 main services 同时服务 Desktop IPC 和 Headless HTTP/WS。
-
-Phase B：
-
-- 若实施，Headless 可以不依赖 Electron / Chromium / GTK 桌面运行栈。
-- 不复制播放器、provider、queue、library 或 settings 业务逻辑。
+- `desktop` 与 `headless` 是两个明确的 compile-time build flavor，而不是同一个 Electron artifact 的运行参数差异。
+- Desktop 继续使用 Electron，且行为与现有 SPlayer / Atom Desktop 保持兼容。
+- Headless 正式运行时不需要 Electron / Chromium / GTK / PipeWire / PulseAudio。
+- Headless 发行包自带并固定 Node runtime，用户不需要自行维护 Node 环境。
+- Headless 默认音频输出仅为真实 ALSA hardware 与 Diretta。
+- Desktop / Headless 共享相同的播放器、队列、媒体库、provider、settings 与 source-resolution 业务实现。
+- 当前 Electron Headless 在 Node Headless 完成前持续作为已验证行为 oracle；最终产品不需要维护两套 Headless runtime。
 
 ---
 
