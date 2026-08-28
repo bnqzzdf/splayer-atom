@@ -345,8 +345,9 @@ Core Local Output: audio-engine → ALSA / Diretta
 
 ### PlaybackSourceResolver
 
-- [ ] 建立 runtime-neutral 的 Core `PlaybackSourceResolver`，统一处理 local / streaming / NCM / QM / KG / Qobuz / TIDAL / plugin source。
+- [ ] 建立 runtime-neutral 的 Core `PlaybackSourceResolver`，统一处理 local / streaming / NCM / Qobuz / TIDAL，以及上游已存在的兼容 source。
 - [ ] Resolver 复用现有 main provider API、Qobuz/TIDAL API、plugin router、streaming adapter、song cache 和 Direct materializer，不新增第二套 provider framework。
+- [ ] QQ Music / 酷狗只保留上游继承所需的兼容 seam；Core 重构不得因此扩大 Atom 对 QM/KG provider、账号、权益或取流逻辑的所有权。
 - [ ] renderer 不再负责取得“最终可播放 URL/路径”后再交给 Core。
 - [ ] Queue / persisted session 只保存 canonical `Track` + `PlaybackContext`，不保存会过期的 CDN URL。
 - [ ] 每次需要播放或恢复时由 Core 根据 canonical Track 获取 fresh source。
@@ -428,7 +429,7 @@ Output 不拥有 playlist 或 provider 业务。概念上的 `PlaybackJob` 只�
 
 ### 验收标准
 
-- 本地、网易、QQ、酷狗、Qobuz、TIDAL、streaming Track 最终都通过同一个 Core playback entry，而不是 renderer-specific load path。
+- Atom 主动维护的本地、网易、Qobuz、TIDAL、streaming Track 最终都通过同一个 Core playback entry，而不是 renderer-specific load path；QQ/酷狗若由上游能力产生 Track，只要求不破坏现有兼容行为，不作为 Atom 专项验收目标。
 - 网易队列至少连续自然播放 3 首，期间关闭所有 Web / Desktop Control 仍继续播放。
 - provider URL 过期时可由 Core 对同一 Track 做有限 fresh resolve；失败后再按 policy 跳过。
 - next-track preload / Diretta staged next 在无 Control 存活时仍有效。
@@ -448,6 +449,8 @@ Output 不拥有 playlist 或 provider 业务。概念上的 `PlaybackJob` 只�
 ---
 
 # P2 — 在线平台与账户能力
+
+Atom 主动开发和验收的在线平台范围收敛为：**网易云音乐、Qobuz、TIDAL**。QQ Music / 酷狗音乐不列入 Atom provider 开发计划；它们只继承 SPlayer 上游已有能力，Atom 不建设独立账号、权益、官方取流或 Diretta 专项适配。
 
 ## 7. 网易云音乐
 
@@ -470,27 +473,49 @@ Output 不拥有 playlist 或 provider 业务。概念上的 `PlaybackJob` 只�
 
 ---
 
-## 8. QQ Music
+## 8. QQ Music（冻结 / 仅继承上游）
 
-- [x] Web provider transport 已接通。
-- [x] 搜索可返回结果。
-- [ ] 登录状态实际验收。
-- [ ] VIP / 数字专辑权限行为验收。
-- [ ] 实际音源解析与普通输出播放验收。
-- [ ] Diretta Source Direct 播放验收。
-- [ ] 歌单 / 收藏 / 自动下一首验收。
+### 产品决策
+
+QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为 SPlayer 上游兼容面，Atom 不继续扩展其账号、权益、官方取流、缓存策略、Diretta 专项逻辑或产品验收矩阵。
+
+### 后续任务
+
+- [ ] 从 Atom 正式在线搜索界面移除 QQ Music 搜索入口。
+- [ ] Atom 默认配置不启用 QQ Music provider / 搜索能力。
+- [ ] 保留上游已有实现所必需的兼容代码，不为“清理”而重写或删除上游业务。
+- [ ] 上游未来新增 / 修改 QQ Music 能力时，仅做 Atom Core / Control 架构兼容与回归，不主动补充 Atom-specific 功能。
+- [ ] 若某项 QQ Music 通用修复适合贡献给 SPlayer，则按 `vendor/splayer` → `contrib/*` 流程单独向上游提交 PR。
+
+### 非目标
+
+- Atom 不开发 QQ Music 登录 / session。
+- Atom 不开发 QQ Music VIP / 数字专辑权益解析。
+- Atom 不开发 QQ Music 官方播放 URL resolver。
+- Atom 不为 QQ Music 单独做 ALSA / Diretta 播放验收；只有上游通用播放链路发生回归时做兼容性检查。
 
 ---
 
-## 9. 酷狗音乐（KG / Kugou）
+## 9. 酷狗音乐（KG / Kugou，冻结 / 仅继承上游）
 
-- [x] Web provider transport 已接通。
-- [x] 搜索可返回结果。
-- [ ] 登录状态实际验收。
-- [ ] VIP 权益与实际音源解析验收。
-- [ ] 普通输出播放验收。
-- [ ] Diretta Source Direct 播放验收。
-- [ ] 歌单 / 收藏 / 自动下一首验收。
+### 产品决策
+
+酷狗音乐不作为 SPlayer Atom 的主动开发平台。现有搜索、元数据或插件兼容能力只作为 SPlayer 上游继承内容保留，Atom 不继续建设账号、VIP 权益、官方取流或 Diretta 专项能力。
+
+### 后续任务
+
+- [ ] 从 Atom 正式在线搜索界面移除酷狗搜索入口。
+- [ ] Atom 默认配置不启用酷狗 provider / 搜索能力。
+- [ ] 保留上游已有实现所必需的兼容代码，不主动形成 Atom-owned KG provider 分支。
+- [ ] 上游未来新增 / 修改酷狗能力时，仅做 Core / Control 架构兼容与必要回归。
+- [ ] 适合上游的通用修复继续通过纯净贡献分支提交，不把 Atom 私有能力带入 PR。
+
+### 非目标
+
+- Atom 不开发酷狗登录 / session。
+- Atom 不开发酷狗 VIP 权益解析。
+- Atom 不开发酷狗官方播放 URL resolver。
+- Atom 不为酷狗单独做 ALSA / Diretta 播放验收；只有上游通用链路变更时做兼容性检查。
 
 ---
 
@@ -667,14 +692,15 @@ docs/handoff-*            阶段 / 会话交接快照
 
 在当前本地播放与网易基本可用的基础上，建议接下来按以下顺序推进：
 
-1. **正式建立 upstream remote / baseline / sync 工作流。**
-2. **实现 Desktop / Linux Headless build flavor Phase A。**
-3. **补齐在线音乐 main-authority 自动下一首 / source error / 浏览器断开继续播放。**
-4. **实测 QQ Music 与酷狗的登录、权益、播放、Diretta。**
-5. **实现 Qobuz / TIDAL 账户设置 UI 并做真实账号验收。**
-6. **建立 Atom 独立 release identity 与正式 Headless systemd / artifact。**
-7. **完善扫描进度、Direct materialize loading 等 Web UX。**
-8. **Headless 安全增强保留为 P4；仅在产品网络边界发生变化时提前。**
+1. **正式建立 `origin` / `splayer` / `vendor/splayer` upstream sync 工作流。**
+2. **直接推进 Node Core + Desktop Control 架构与 compile-time build flavor，不建设可发布的 Electron Headless 中间产品。**
+3. **完成 Core-owned playback orchestration：source resolution、policy、recovery、cache、preload / gapless 与无 Control 连续播放。**
+4. **以网易作为 reference provider 完成完整 Core 播放闭环回归。**
+5. **冻结 QQ Music / 酷狗 Atom 开发：从正式搜索 UI 移除并默认关闭，仅继承和兼容上游能力。**
+6. **实现 Qobuz / TIDAL Core 账户能力、Control UI 与真实账号播放验收。**
+7. **建立 Atom 独立 release identity、固定 Node runtime 与正式 Core systemd / `.deb` / `tar.gz` artifact。**
+8. **完善扫描进度、Direct materialize loading 等 Web UX。**
+9. **Headless 安全增强保留为 P4；仅在产品网络边界发生变化时提前。**
 
 ---
 
