@@ -28,7 +28,8 @@ interface WebEvent {
   data?: unknown;
 }
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 const noopSubscription = (): (() => void) => () => {};
 const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
 
@@ -183,7 +184,8 @@ const playerApi: PlayerApi = {
   seek: (positionMs) =>
     asCommand(() => request("/seek", { method: "POST", body: JSON.stringify({ positionMs }) })),
   getSession: () => sessionResponse(() => request<PlaybackSessionSnapshot>("/session")),
-  migrateLegacySessionQueue: () => sessionResponse(() => request<PlaybackSessionSnapshot>("/session")),
+  migrateLegacySessionQueue: () =>
+    sessionResponse(() => request<PlaybackSessionSnapshot>("/session")),
   replaceSessionQueue: (items, startIndex = 0, autoPlay = true, loadCurrent = true) =>
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/queue", {
@@ -212,9 +214,12 @@ const playerApi: PlayerApi = {
     ),
   removeSessionQueueIndex: (index, loadCurrent = true) =>
     sessionResponse(() =>
-      request<PlaybackSessionSnapshot>(`/session/queue/${index}?loadCurrent=${loadCurrent ? "1" : "0"}`, {
-        method: "DELETE",
-      }),
+      request<PlaybackSessionSnapshot>(
+        `/session/queue/${index}?loadCurrent=${loadCurrent ? "1" : "0"}`,
+        {
+          method: "DELETE",
+        },
+      ),
     ),
   selectSessionIndex: (index, loadCurrent = true, autoPlay = true) =>
     sessionResponse(() =>
@@ -285,9 +290,23 @@ const playerApi: PlayerApi = {
         body: JSON.stringify({ mode }),
       }),
     ),
+  setSessionAutoClose: (durationMin, waitSongEnd) =>
+    sessionResponse(() =>
+      request<PlaybackSessionSnapshot>("/session/auto-close", {
+        method: "POST",
+        body: JSON.stringify({ durationMin, waitSongEnd }),
+      }),
+    ),
+  cancelSessionAutoClose: () =>
+    sessionResponse(() =>
+      request<PlaybackSessionSnapshot>("/session/auto-close", { method: "DELETE" }),
+    ),
   stageDirectNext: async () => ({ success: true, data: { staged: false } }),
   cancelDirectNext: async () => ({ success: true }),
-  commitDirectGaplessBoundary: async () => ({ success: false, error: "WEB_DIRECT_STAGING_DISABLED" }),
+  commitDirectGaplessBoundary: async () => ({
+    success: false,
+    error: "WEB_DIRECT_STAGING_DISABLED",
+  }),
   setVolume: (volume) =>
     asCommand(() => request("/volume", { method: "POST", body: JSON.stringify({ volume }) })),
   setPauseOnDeviceSwitch: async () => ({ success: true }),
@@ -295,19 +314,27 @@ const playerApi: PlayerApi = {
   getStatus: () => asIpc(() => request<PlayerStatus>("/status")),
   setFftEnabled: (enabled) =>
     asCommand(() => request("/player/fft", { method: "POST", body: JSON.stringify({ enabled }) })),
-  getFftData: () => asIpc(async () => (await request<{ data: { ldata: number[]; rdata: number[] } }>("/player/fft")).data),
+  getFftData: () =>
+    asIpc(
+      async () =>
+        (await request<{ data: { ldata: number[]; rdata: number[] } }>("/player/fft")).data,
+    ),
   setFadeDuration: (durationMs) =>
     asCommand(() =>
       request("/player/fade", { method: "POST", body: JSON.stringify({ durationMs }) }),
     ),
   getFadeDuration: () => asIpc(async () => (await request<{ data: number }>("/player/fade")).data),
-  getCoverRaw: () => asIpc(async () => (await request<{ data: string | null }>("/player/cover")).data),
+  getCoverRaw: () =>
+    asIpc(async () => (await request<{ data: string | null }>("/player/cover")).data),
   readLyricFile: (path) =>
-    asIpc(async () =>
-      (await request<{ data: string }>("/player/read-lyric", {
-        method: "POST",
-        body: JSON.stringify({ path }),
-      })).data,
+    asIpc(
+      async () =>
+        (
+          await request<{ data: string }>("/player/read-lyric", {
+            method: "POST",
+            body: JSON.stringify({ path }),
+          })
+        ).data,
     ),
   reinit: async () => ({ success: false, error: "WEB_REINIT_UNSUPPORTED" }),
   setNormalizationEnabled: (enabled) =>
@@ -345,18 +372,20 @@ const playerApi: PlayerApi = {
         .map((device) => ({ ...device, name: `${device.name} · Diretta` })),
     ),
   materializeDirectInput: (source) =>
-    asIpc(async () =>
-      (
-        await request<{ path: string }>("/player/direct-input/materialize", {
-          method: "POST",
-          body: JSON.stringify({ source }),
-        })
-      ).path,
+    asIpc(
+      async () =>
+        (
+          await request<{ path: string }>("/player/direct-input/materialize", {
+            method: "POST",
+            body: JSON.stringify({ source }),
+          })
+        ).path,
     ),
   getDefaultDeviceName: () =>
-    asIpc(async () =>
-      (await request<OutputSnapshot>("/output/devices")).data.find((device) => device.isDefault)?.name ??
-      null,
+    asIpc(
+      async () =>
+        (await request<OutputSnapshot>("/output/devices")).data.find((device) => device.isDefault)
+          ?.name ?? null,
     ),
   setOutputDevice: (deviceId) =>
     asCommand(() =>
@@ -390,20 +419,26 @@ const libraryApi: LibraryApi = {
   getTracks: () =>
     asIpc(async () => (await request<{ data: Track[] }>("/library/tracks")).data.map(mapTrack)),
   getAlbums: () =>
-    asIpc(async () => (await request<{ data: AlbumSummary[] }>("/library/albums")).data.map(mapAlbum)),
+    asIpc(async () =>
+      (await request<{ data: AlbumSummary[] }>("/library/albums")).data.map(mapAlbum),
+    ),
   getArtists: () =>
-    asIpc(async () => (await request<{ data: ArtistSummary[] }>("/library/artists")).data.map(mapArtist)),
+    asIpc(async () =>
+      (await request<{ data: ArtistSummary[] }>("/library/artists")).data.map(mapArtist),
+    ),
   getAlbumTracks: (albumName) =>
     asIpc(async () =>
-      (await request<{ data: Track[] }>(`/library/albums/${encodeURIComponent(albumName)}/tracks`)).data.map(
-        mapTrack,
-      ),
+      (
+        await request<{ data: Track[] }>(`/library/albums/${encodeURIComponent(albumName)}/tracks`)
+      ).data.map(mapTrack),
     ),
   getArtistTracks: (artistName) =>
     asIpc(async () =>
-      (await request<{ data: Track[] }>(`/library/artists/${encodeURIComponent(artistName)}/tracks`)).data.map(
-        mapTrack,
-      ),
+      (
+        await request<{ data: Track[] }>(
+          `/library/artists/${encodeURIComponent(artistName)}/tracks`,
+        )
+      ).data.map(mapTrack),
     ),
   getTracksByIds: (ids) =>
     asIpc(async () =>
@@ -431,7 +466,8 @@ const libraryApi: LibraryApi = {
     asIpc(async () =>
       (await request<{ data: Track[] }>(`/library/random?limit=${limit}`)).data.map(mapTrack),
     ),
-  isScanning: () => asIpc(async () => (await request<{ data: boolean }>("/library/is-scanning")).data),
+  isScanning: () =>
+    asIpc(async () => (await request<{ data: boolean }>("/library/is-scanning")).data),
   addScanDir: () => {
     const dir = window.prompt("请输入主机上的音乐目录路径", "/media/music")?.trim();
     if (!dir) return Promise.resolve({ success: false, error: "SCAN_DIR_NOT_SELECTED" });
@@ -568,8 +604,12 @@ const nowPlayingApi: NowPlayingApi = {
   },
   requestSnapshot: async () => {
     const [light, lyric] = await Promise.all([
-      request<Omit<NowPlayingSnapshot, "lyric" | "source"> & { track: Track | null }>("/now-playing"),
-      request<{ lyric: NowPlayingSnapshot["lyric"]; source: NowPlayingSnapshot["source"] }>("/lyrics"),
+      request<Omit<NowPlayingSnapshot, "lyric" | "source"> & { track: Track | null }>(
+        "/now-playing",
+      ),
+      request<{ lyric: NowPlayingSnapshot["lyric"]; source: NowPlayingSnapshot["source"] }>(
+        "/lyrics",
+      ),
     ]);
     return {
       ...light,
@@ -614,20 +654,26 @@ const statsApi: StatsApi = {
   },
   getStatsSummary: () => request("/stats/summary"),
   getTopTracks: async (limit) =>
-    (await request<Awaited<ReturnType<StatsApi["getTopTracks"]>>>(`/stats/top-tracks?limit=${limit}`)).map(
-      (item) => ({ ...item, track: mapTrack(item.track) }),
-    ),
+    (
+      await request<Awaited<ReturnType<StatsApi["getTopTracks"]>>>(
+        `/stats/top-tracks?limit=${limit}`,
+      )
+    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
   getLibraryStats: () => request("/stats/library"),
   getPlayHistoryDaily: (days) => request(`/stats/daily?days=${days}`),
   getPlayHistoryHourly: () => request("/stats/hourly"),
   getTopAlbums: async (limit) =>
-    (await request<Awaited<ReturnType<StatsApi["getTopAlbums"]>>>(`/stats/top-albums?limit=${limit}`)).map(
-      (item) => ({ ...item, track: mapTrack(item.track) }),
-    ),
+    (
+      await request<Awaited<ReturnType<StatsApi["getTopAlbums"]>>>(
+        `/stats/top-albums?limit=${limit}`,
+      )
+    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
   getTopArtists: async (limit) =>
-    (await request<Awaited<ReturnType<StatsApi["getTopArtists"]>>>(`/stats/top-artists?limit=${limit}`)).map(
-      (item) => ({ ...item, track: mapTrack(item.track) }),
-    ),
+    (
+      await request<Awaited<ReturnType<StatsApi["getTopArtists"]>>>(
+        `/stats/top-artists?limit=${limit}`,
+      )
+    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
 };
 
 /** 安装远程浏览器使用的最小 Electron API 兼容面。 */
@@ -768,10 +814,13 @@ export const installWebApi = async (): Promise<void> => {
           return { ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" };
         }
         try {
-          return await request<{ ok: true } | { ok: false; error: string }>("/providers/set-cookie", {
-            method: "POST",
-            body: JSON.stringify({ platform, cookie }),
-          });
+          return await request<{ ok: true } | { ok: false; error: string }>(
+            "/providers/set-cookie",
+            {
+              method: "POST",
+              body: JSON.stringify({ platform, cookie }),
+            },
+          );
         } catch (error) {
           return { ok: false as const, error: errorText(error) };
         }

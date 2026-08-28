@@ -43,6 +43,8 @@ import {
   setOutputDevice,
   setRepeat,
   setShuffle,
+  setAutoClose,
+  cancelAutoClose,
   stop,
   updateQueueItem,
   updateQueueTracks,
@@ -541,6 +543,16 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ error: "mode must be off or on" }, 400);
     return c.json(setShuffle(body.mode));
   });
+  api.post("/session/auto-close", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      durationMin?: number;
+      waitSongEnd?: boolean;
+    } | null;
+    const durationMin = Number(body?.durationMin);
+    if (!Number.isFinite(durationMin)) return c.json({ error: "durationMin required" }, 400);
+    return c.json(setAutoClose(durationMin, body?.waitSongEnd === true));
+  });
+  api.delete("/session/auto-close", (c) => c.json(cancelAutoClose()));
 
   api.get("/output/devices", async (c) => {
     try {

@@ -13,7 +13,7 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
 const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 37);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 13);
-const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 8);
+const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 9);
 const metadataPaths = new Set(["AGENTS.md", "README.md", "README.zh-CN.md"]);
 const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
 const runtimeNeutralSeamPaths = new Set([
@@ -37,6 +37,7 @@ const coreAuthoritySeamPaths = new Set([
   "src/components/player/QualityControl.vue",
   "src/settings/categories/other.ts",
   "src/settings/categories/player.ts",
+  "src/services/autoClose.ts",
   "src/stores/settings.ts",
   "src/types/settings.ts",
   "src/utils/preset/djMode.ts",

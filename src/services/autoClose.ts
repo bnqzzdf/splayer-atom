@@ -1,86 +1,83 @@
 /**
- * 定时关闭服务
+ * 定时关闭 Control 投影。
  *
- * 用户设定 N 分钟后停止播放。两种模式：
- * - 立即停：到点直接 pause()
- * - 等本曲结束：到点把 waitSongEnd 标记置位，下次 ended 事件触发时再 pause()
+ * Core 持有 deadline 与最终 pause/ended 决策；renderer 只刷新倒计时并发送高层 command。
  */
 
+import type { PlaybackAutoCloseSnapshot } from "@shared/types/player";
 import { useStatusStore } from "@/stores/status";
-import * as player from "@/core/player";
 
-/** 倒计时 setInterval 句柄 */
 let tickHandle: ReturnType<typeof setInterval> | null = null;
-/** "等本曲结束"模式下，时间到了但还没 pause —— 等 ended 事件触发 */
-let pendingPauseOnEnd = false;
 
 const stopTick = (): void => {
-  if (tickHandle !== null) {
-    clearInterval(tickHandle);
-    tickHandle = null;
-  }
+  if (tickHandle !== null) clearInterval(tickHandle);
+  tickHandle = null;
 };
 
-/** 倒计时 tick：每秒刷新 remainTime；归零后按模式触发 pause */
 const tick = (): void => {
-  const status = useStatusStore();
-  const { autoClose } = status;
+  const autoClose = useStatusStore().autoClose;
   if (!autoClose.enable) {
     stopTick();
     return;
   }
-  const remainMs = autoClose.endTime - Date.now();
-  autoClose.remainTime = Math.max(0, Math.ceil(remainMs / 1000));
-  if (remainMs <= 0) {
-    stopTick();
-    if (autoClose.waitSongEnd) {
-      // 等本曲播完再停；标记一下，由 onTrackEnded 钩子处理
-      pendingPauseOnEnd = true;
-    } else {
-      player.pause().catch(() => {});
-      cancel();
-    }
+  autoClose.remainTime = Math.max(0, Math.ceil((autoClose.endTime - Date.now()) / 1000));
+  if (autoClose.remainTime <= 0) stopTick();
+};
+
+const startTick = (): void => {
+  stopTick();
+  tick();
+  if (useStatusStore().autoClose.enable && useStatusStore().autoClose.remainTime > 0) {
+    tickHandle = setInterval(tick, 1000);
   }
 };
 
-/**
- * 启动定时关闭
- * @param durationMin 时长（分钟），>= 1
- * @param waitSongEnd true = 到点等本曲结束再停
- */
+/** 应用 Core session 中的 authoritative auto-close runtime snapshot。 */
+export const applySnapshot = (snapshot?: PlaybackAutoCloseSnapshot): void => {
+  const autoClose = useStatusStore().autoClose;
+  if (!snapshot) {
+    autoClose.enable = false;
+    autoClose.endTime = 0;
+    autoClose.remainTime = 0;
+    autoClose.waitSongEnd = false;
+    autoClose.pendingStopOnEnd = false;
+    stopTick();
+    return;
+  }
+  autoClose.enable = snapshot.enabled;
+  autoClose.duration = snapshot.duration;
+  autoClose.endTime = snapshot.endTime;
+  autoClose.waitSongEnd = snapshot.waitSongEnd;
+  autoClose.pendingStopOnEnd = snapshot.pendingStopOnEnd;
+  autoClose.remainTime = snapshot.enabled
+    ? Math.max(0, Math.ceil((snapshot.endTime - Date.now()) / 1000))
+    : 0;
+  if (snapshot.enabled) startTick();
+  else stopTick();
+};
+
+/** 启动或更新 Core 定时关闭。 */
 export const start = (durationMin: number, waitSongEnd: boolean): void => {
-  const status = useStatusStore();
-  const safe = Math.max(1, Math.round(durationMin));
-  status.autoClose.enable = true;
-  status.autoClose.duration = safe;
-  status.autoClose.endTime = Date.now() + safe * 60 * 1000;
-  status.autoClose.waitSongEnd = waitSongEnd;
-  status.autoClose.remainTime = safe * 60;
-  pendingPauseOnEnd = false;
-  stopTick();
-  tickHandle = setInterval(tick, 1000);
+  const duration = Math.max(1, Math.round(durationMin));
+  void window.api.player.setSessionAutoClose(duration, waitSongEnd).then((result) => {
+    if (result.success && result.data) applySnapshot(result.data.autoClose);
+  });
 };
 
-/** 取消定时关闭，重置状态 */
+/** 取消 Core 定时关闭。 */
 export const cancel = (): void => {
-  const status = useStatusStore();
-  status.autoClose.enable = false;
-  status.autoClose.endTime = 0;
-  status.autoClose.remainTime = 0;
-  pendingPauseOnEnd = false;
-  stopTick();
+  void window.api.player.cancelSessionAutoClose().then((result) => {
+    if (result.success && result.data) applySnapshot(result.data.autoClose);
+  });
 };
 
 /**
- * 在 ended 事件钩子里调用：如果开启了"等本曲结束"且时间到了，
- * 此刻把播放停掉并清状态。
- *
- * 返回 true 表示已处理 pause（调用方应跳过自动跳下一首）。
+ * Desktop 事件 ownership 迁移期间的 fallback：只有 Core 已标记 pending 时才阻止 renderer auto-next。
+ * Core 全面消费 ended 后该分支不会被调用。
  */
 export const onTrackEnded = (): boolean => {
-  if (!pendingPauseOnEnd) return false;
-  pendingPauseOnEnd = false;
-  player.pause().catch(() => {});
+  if (!useStatusStore().autoClose.pendingStopOnEnd) return false;
+  void window.api.player.pause().catch(() => {});
   cancel();
   return true;
 };

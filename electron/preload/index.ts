@@ -103,8 +103,10 @@ const api = {
     appendSessionQueue: (items: import("@shared/types/player").PlaybackQueueItem[]) =>
       ipcRenderer.invoke("player:appendSessionQueue", items),
     // 向权威队列指定位置插入
-    insertSessionQueue: (items: import("@shared/types/player").PlaybackQueueItem[], index: number) =>
-      ipcRenderer.invoke("player:insertSessionQueue", items, index),
+    insertSessionQueue: (
+      items: import("@shared/types/player").PlaybackQueueItem[],
+      index: number,
+    ) => ipcRenderer.invoke("player:insertSessionQueue", items, index),
     // 移除权威队列指定位置
     removeSessionQueueIndex: (index: number, loadCurrent = true) =>
       ipcRenderer.invoke("player:removeSessionQueueIndex", index, loadCurrent),
@@ -137,6 +139,11 @@ const api = {
     // 设置权威会话随机模式
     setSessionShuffle: (mode: import("@shared/types/player").ShuffleMode) =>
       ipcRenderer.invoke("player:setSessionShuffle", mode),
+    // 启动或更新 Core 定时关闭
+    setSessionAutoClose: (durationMin: number, waitSongEnd: boolean) =>
+      ipcRenderer.invoke("player:setSessionAutoClose", durationMin, waitSongEnd),
+    // 取消 Core 定时关闭
+    cancelSessionAutoClose: () => ipcRenderer.invoke("player:cancelSessionAutoClose"),
     // 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源
     stageDirectNext: (source: string, durationMs: number, generation: number) =>
       ipcRenderer.invoke("player:stageDirectNext", source, durationMs, generation),
@@ -148,7 +155,8 @@ const api = {
       durationMs: number,
       meta?: LoadOptions["meta"],
       context?: LoadOptions["context"],
-    ) => ipcRenderer.invoke("player:commitDirectGaplessBoundary", source, durationMs, meta, context),
+    ) =>
+      ipcRenderer.invoke("player:commitDirectGaplessBoundary", source, durationMs, meta, context),
     // 设置音量（0.0 ~ 1.0）
     setVolume: (volume: number) => ipcRenderer.invoke("player:setVolume", volume),
     // 设置输出设备切换时暂停播放

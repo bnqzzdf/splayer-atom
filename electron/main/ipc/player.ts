@@ -349,6 +349,19 @@ export const registerPlayerIpc = (): void => {
     data: playbackSession.setShuffle(mode),
   }));
 
+  ipcMain.handle(
+    "player:setSessionAutoClose",
+    (_event, durationMin: number, waitSongEnd: boolean) => ({
+      success: true,
+      data: playbackSession.setAutoClose(durationMin, waitSongEnd),
+    }),
+  );
+
+  ipcMain.handle("player:cancelSessionAutoClose", () => ({
+    success: true,
+    data: playbackSession.cancelAutoClose(),
+  }));
+
   // 为 Diretta Source Direct 预备同 wire-format 的下一本地音源。
   // staging 不兼容是正常降级条件：保持当前播放，renderer 在边界走普通 load。
   ipcMain.handle(

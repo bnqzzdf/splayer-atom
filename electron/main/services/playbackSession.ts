@@ -46,6 +46,14 @@ let active = false;
 let initialized = false;
 let loadGeneration = 0;
 let sourceRecoveryAttempts = 0;
+let autoClose = {
+  enabled: false,
+  duration: 30,
+  endTime: 0,
+  waitSongEnd: false,
+  pendingStopOnEnd: false,
+};
+let autoCloseTimer: NodeJS.Timeout | null = null;
 
 const MAX_CONSECUTIVE_LOAD_FAILURES = 5;
 
@@ -90,6 +98,7 @@ const snapshot = (): PlaybackSessionSnapshot => ({
   current: index >= 0 && index < queue.length ? { ...queue[index].track } : null,
   repeat,
   shuffle,
+  autoClose: { ...autoClose },
 });
 
 const publish = (): void => {
@@ -97,6 +106,44 @@ const publish = (): void => {
   savePlaybackSession(data);
   publishDesktopEvent("player:event", { type: "session", data });
   wsBroadcast({ type: "session", data });
+};
+
+const clearAutoCloseTimer = (): void => {
+  if (autoCloseTimer !== null) clearTimeout(autoCloseTimer);
+  autoCloseTimer = null;
+};
+
+const resetAutoClose = (): void => {
+  clearAutoCloseTimer();
+  autoClose = {
+    enabled: false,
+    duration: autoClose.duration,
+    endTime: 0,
+    waitSongEnd: false,
+    pendingStopOnEnd: false,
+  };
+};
+
+const onAutoCloseDeadline = (): void => {
+  autoCloseTimer = null;
+  if (!autoClose.enabled) return;
+  if (autoClose.waitSongEnd) {
+    autoClose.pendingStopOnEnd = true;
+    invalidatePlaybackPreload();
+    publish();
+    return;
+  }
+  getPlayer().pause();
+  resetAutoClose();
+  publish();
+  scheduleNextPlaybackPreload();
+};
+
+const scheduleAutoCloseDeadline = (): void => {
+  clearAutoCloseTimer();
+  if (!autoClose.enabled) return;
+  const delay = Math.max(0, autoClose.endTime - Date.now());
+  autoCloseTimer = setTimeout(onAutoCloseDeadline, delay);
 };
 
 const publishTrackLoaded = (
@@ -122,7 +169,7 @@ const publishTrackLoaded = (
 };
 
 const scheduleNextPlaybackPreload = (): void => {
-  if (!isHeadlessMode() || !active) {
+  if (!isHeadlessMode() || !active || (autoClose.enabled && autoClose.waitSongEnd)) {
     invalidatePlaybackPreload();
     return;
   }
@@ -545,6 +592,34 @@ export const setShuffle = (mode: ShuffleMode): PlaybackSessionSnapshot => {
   return snapshot();
 };
 
+/** 启动或更新 Core 定时关闭；deadline 到点后即使没有 Control 仍会执行。 */
+export const setAutoClose = (
+  durationMin: number,
+  waitSongEnd: boolean,
+): PlaybackSessionSnapshot => {
+  const duration = Math.max(1, Math.round(Number.isFinite(durationMin) ? durationMin : 1));
+  autoClose = {
+    enabled: true,
+    duration,
+    endTime: Date.now() + duration * 60_000,
+    waitSongEnd,
+    pendingStopOnEnd: false,
+  };
+  invalidatePlaybackPreload();
+  scheduleAutoCloseDeadline();
+  publish();
+  scheduleNextPlaybackPreload();
+  return snapshot();
+};
+
+/** 取消 Core 定时关闭并恢复正常 next-track preload。 */
+export const cancelAutoClose = (): PlaybackSessionSnapshot => {
+  resetAutoClose();
+  publish();
+  scheduleNextPlaybackPreload();
+  return snapshot();
+};
+
 /** Direct staged boundary 发生后由 Core 提交 queue/index/now-playing，不再经过 Control load。 */
 export const onNativeDirectTrackBoundary = (
   generation: number,
@@ -598,9 +673,19 @@ export const onNativeDirectTrackBoundary = (
   return true;
 };
 
+const consumeAutoCloseOnEnded = (): boolean => {
+  if (!autoClose.pendingStopOnEnd) return false;
+  getPlayer().pause();
+  resetAutoClose();
+  publish();
+  scheduleNextPlaybackPreload();
+  return true;
+};
+
 /** Native ended 仅在无头模式由主进程消费；桌面模式继续交给 upstream renderer 结算。 */
 export const onNativeEnded = (): boolean => {
   if (!isHeadlessMode() || !ownsPlayback()) return false;
+  if (consumeAutoCloseOnEnded()) return true;
   const advance = repeat === "one" ? selectIndex(index, true, true).then(() => true) : next();
   void advance.catch((error) => playerLog.error("[session] automatic next failed", error));
   return true;

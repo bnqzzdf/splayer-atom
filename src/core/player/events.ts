@@ -217,6 +217,7 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       status.playIndex = event.data.index;
       status.repeatMode = event.data.repeat;
       status.shuffleMode = event.data.shuffle;
+      autoClose.applySnapshot(event.data.autoClose);
       if (!event.data.current) useMediaStore().clear();
       break;
     }

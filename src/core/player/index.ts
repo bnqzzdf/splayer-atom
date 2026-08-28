@@ -28,6 +28,7 @@ import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import * as abLoop from "@/services/abLoop";
+import * as autoClose from "@/services/autoClose";
 import * as cacheScheduler from "@/services/cacheScheduler";
 import {
   prepareDirectTrackSource,
@@ -65,6 +66,7 @@ const applySessionResult = (
   status.playIndex = result.data.index;
   status.repeatMode = result.data.repeat;
   status.shuffleMode = result.data.shuffle;
+  autoClose.applySnapshot(result.data.autoClose);
   return result.data;
 };
 
@@ -1202,6 +1204,7 @@ export const initPlayer = async (): Promise<void> => {
     status.playIndex = session.index;
     status.repeatMode = session.repeat;
     status.shuffleMode = session.shuffle;
+    autoClose.applySnapshot(session.autoClose);
     if (!webRemote && legacyStatus) {
       delete legacyStatus.playIndex;
       delete legacyStatus.repeatMode;

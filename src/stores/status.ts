@@ -66,6 +66,7 @@ export const useStatusStore = defineStore(
       endTime: 0, // Unix ms
       waitSongEnd: false,
       remainTime: 0, // 秒
+      pendingStopOnEnd: false,
     });
     /** AB 循环 */
     const abLoop = reactive({

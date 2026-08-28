@@ -178,6 +178,15 @@ export interface LoadOptions {
   context?: PlaybackContext;
 }
 
+/** Core 持有的定时关闭运行时状态；不跨进程重启持久化。 */
+export interface PlaybackAutoCloseSnapshot {
+  enabled: boolean;
+  duration: number;
+  endTime: number;
+  waitSongEnd: boolean;
+  pendingStopOnEnd: boolean;
+}
+
 /** 主进程权威播放会话快照 */
 export interface PlaybackSessionSnapshot {
   active: boolean;
@@ -187,6 +196,8 @@ export interface PlaybackSessionSnapshot {
   current: Track | null;
   repeat: RepeatMode;
   shuffle: ShuffleMode;
+  /** 旧 Core/Control 兼容时可缺省；当前 Atom Core 始终返回。 */
+  autoClose?: PlaybackAutoCloseSnapshot;
 }
 
 /** 播放器状态快照 */
@@ -333,6 +344,13 @@ export interface PlayerApi {
   setSessionRepeat: (mode: RepeatMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 设置权威会话随机模式 */
   setSessionShuffle: (mode: ShuffleMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 启动或更新 Core 定时关闭 */
+  setSessionAutoClose: (
+    durationMin: number,
+    waitSongEnd: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 取消 Core 定时关闭 */
+  cancelSessionAutoClose: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源 */
   stageDirectNext: (
     source: string,
