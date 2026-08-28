@@ -19,6 +19,8 @@ export const defaultSystemConfig: SystemConfig = {
     fadeDuration: 200,
     outputDevice: null,
     volume: 1,
+    songLevel: "hq",
+    allowTrialPlay: false,
     loudnessNormalization: false,
     equalizer: {
       enabled: false,

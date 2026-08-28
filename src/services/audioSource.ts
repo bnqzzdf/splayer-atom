@@ -241,7 +241,7 @@ const resolveOnlineUrl = async (
   }
   const pluginResolved = await resolveByPlugin(track, songLevel, options.skipPluginIds ?? []);
   if (pluginResolved.ok) return pluginResolved;
-  if (trialUrl && settings.player.allowTrialPlay) {
+  if (trialUrl && settings.system.player.allowTrialPlay) {
     return { ok: true, url: trialUrl, isTrial: true, provider: "trial" };
   }
   if (trialUrl) return { ok: false, errorCode: ErrorCode.NETEASE_TRIAL_DISABLED };
@@ -277,9 +277,10 @@ export const prepareDirectTrackSource = async (
   const settings = useSettingsStore();
   const selectedOutput = outputDevice === undefined ? settings.player.outputDevice : outputDevice;
   const isDiretta = selectedOutput?.startsWith("diretta:") === true;
-  if (!isDiretta || track.source === "local" || !/^https?:\/\//i.test(resolved.source)) return resolved;
+  if (!isDiretta || track.source === "local" || !/^https?:\/\//i.test(resolved.source))
+    return resolved;
 
-  const cacheKey = cacheKeyForTrack(track, settings.player.songLevel);
+  const cacheKey = cacheKeyForTrack(track, settings.system.player.songLevel);
   const cacheEnabled = settings.system.cache?.songCache?.enabled === true && cacheKey !== null;
   if (cacheEnabled && resolved.provider !== "trial") {
     const cached = await window.api.cache.song.fetch(cacheKey, track.source, resolved.source);
@@ -321,7 +322,7 @@ export const resolveTrackSource = async (
     return localPath ? { source: localPath, fromCache: false, provider: "local" } : null;
   }
   const settings = useSettingsStore();
-  const songLevel = settings.player.songLevel;
+  const songLevel = settings.system.player.songLevel;
   const cacheKey = cacheKeyForTrack(track, songLevel);
   const cacheEnabled = settings.system.cache?.songCache?.enabled === true && cacheKey !== null;
   if (cacheEnabled) {

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { safeStorage } from "electron";
+import { runtimeSecretCodec } from "@main/atom/runtime/secrets";
 import { writeFileSync as atomicWriteSync } from "atomically";
 import { streamingLog } from "@main/utils/logger";
 import { configDir } from "@main/utils/paths";
@@ -51,6 +51,7 @@ const save = (): void => {
   const dir = path.dirname(STORAGE_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   atomicWriteSync(STORAGE_FILE, JSON.stringify(getState(), null, 2));
+  fs.chmodSync(STORAGE_FILE, 0o600);
 };
 
 /**
@@ -60,11 +61,10 @@ const save = (): void => {
  */
 const encryptPassword = (password: string): string => {
   if (!password) return "";
-  if (!safeStorage.isEncryptionAvailable()) {
-    streamingLog.warn("系统安全存储不可用，流媒体密码将以 base64 形式保存");
-    return Buffer.from(password, "utf-8").toString("base64");
+  if (!runtimeSecretCodec.protectedAtRest) {
+    streamingLog.warn("当前 Core secret codec 不提供静态加密，仅写入 0600 credential file");
   }
-  return safeStorage.encryptString(password).toString("base64");
+  return runtimeSecretCodec.encode(password);
 };
 
 /**
@@ -74,10 +74,11 @@ const encryptPassword = (password: string): string => {
  */
 const decryptPassword = (encrypted: string): string => {
   if (!encrypted) return "";
-  const buffer = Buffer.from(encrypted, "base64");
-  return safeStorage.isEncryptionAvailable()
-    ? safeStorage.decryptString(buffer)
-    : buffer.toString("utf-8");
+  try {
+    return runtimeSecretCodec.decode(encrypted);
+  } catch {
+    return "";
+  }
 };
 
 /**

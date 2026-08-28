@@ -77,7 +77,7 @@ const playerCategory: SettingCategory = {
         {
           key: "songLevel",
           type: "select",
-          binding: { store: "settings", path: "player.songLevel" },
+          binding: { store: "settings", path: "system.player.songLevel" },
           options: [
             { value: "lq", labelKey: "settings.songLevel.lq" },
             { value: "sq", labelKey: "settings.songLevel.sq" },
@@ -90,7 +90,7 @@ const playerCategory: SettingCategory = {
         {
           key: "allowTrialPlay",
           type: "switch",
-          binding: { store: "settings", path: "player.allowTrialPlay" },
+          binding: { store: "settings", path: "system.player.allowTrialPlay" },
           defaultValue: false,
         },
         {

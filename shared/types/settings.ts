@@ -50,6 +50,10 @@ export interface PlayerSettings {
   outputDevice: string | null;
   /** 默认音量（0.0 ~ 1.0） */
   volume: number;
+  /** 在线歌曲音质偏好；影响 Core 实际音源解析 */
+  songLevel: PluginQuality;
+  /** 完整音源不可用时是否允许 Core 使用试听片段 */
+  allowTrialPlay: boolean;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
   /** 均衡器配置 */

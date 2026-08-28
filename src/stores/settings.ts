@@ -67,8 +67,6 @@ export const useSettingsStore = defineStore(
       enableSpectrum: false,
       spectrumBarWidth: 4,
       reverseSpectrum: false,
-      songLevel: "hq",
-      allowTrialPlay: false,
       timeFormat: "current-total",
       showProgressTooltip: true,
       showProgressLyric: false,

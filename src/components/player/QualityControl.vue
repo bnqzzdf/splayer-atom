@@ -34,15 +34,16 @@ const chipBase =
 
 /** 切换音质 */
 const onQualityChange = (value: string | number | boolean): void => {
-  settings.player.songLevel = value as QualityLevel;
-  void player.reloadCurrentTrack();
+  void settings
+    .setSystem("player.songLevel", value as QualityLevel)
+    .then(() => player.reloadCurrentTrack());
 };
 </script>
 
 <template>
   <SPopselect
     v-if="canSwitchQuality && media.track"
-    :model-value="settings.player.songLevel"
+    :model-value="settings.system.player.songLevel"
     :options="qualityOptions"
     side="top"
     :side-offset="8"

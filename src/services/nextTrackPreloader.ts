@@ -50,8 +50,8 @@ const buildContextKey = (track: Track): string => {
     track.originalId ?? "",
     track.path ?? "",
     track.cueAudioPath ?? "",
-    settings.player.songLevel,
-    settings.player.allowTrialPlay,
+    settings.system.player.songLevel,
+    settings.system.player.allowTrialPlay,
     settings.preset.fuckDjMode,
     settings.player.outputDevice ?? "",
     status.repeatMode,
@@ -151,9 +151,7 @@ export const consumePreloadedTrack = (track: Track): NextTrackPreloadResult | nu
  * 消费已经由 native 在同一 Diretta connection 上切入的 staged 下一首。
  * generation 由 renderer 在 staging 前生成，避免边界事件与 IPC Promise 返回次序产生竞态。
  */
-export const consumeDirectGaplessBoundary = (
-  generation: number,
-): NextTrackPreloadResult | null => {
+export const consumeDirectGaplessBoundary = (generation: number): NextTrackPreloadResult | null => {
   const result = cachedResult;
   if (!result || result.directGeneration !== generation) {
     invalidateNextTrackPreload();
@@ -259,8 +257,7 @@ export const scheduleNextTrackPreload = (): void => {
       let directGeneration: number | null = null;
       let directDetail: TrackDetail | undefined;
       const directTransitionAllowed =
-        status.repeatMode !== "one" &&
-        !(status.autoClose.enable && status.autoClose.waitSongEnd);
+        status.repeatMode !== "one" && !(status.autoClose.enable && status.autoClose.waitSongEnd);
       const directSeekableSource =
         source !== null &&
         !/^https?:\/\//i.test(source.source) &&
@@ -314,8 +311,8 @@ export const installNextTrackPreloadWatchers = (): void => {
   stopContextWatch = watch(
     () => [
       settings.player.preloadNextTrack,
-      settings.player.songLevel,
-      settings.player.allowTrialPlay,
+      settings.system.player.songLevel,
+      settings.system.player.allowTrialPlay,
       settings.preset.fuckDjMode,
       status.playIndex,
       status.fmMode,
