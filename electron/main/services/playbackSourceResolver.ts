@@ -36,7 +36,7 @@ const TIDAL_QUALITY: Record<PluginQuality, string> = {
 export interface ResolvedPlaybackSource {
   source: string;
   provider: "local" | "cache" | "streaming" | "official" | "trial";
-  cacheAfterLoad?: () => Promise<void>;
+  cacheAfterLoad?: () => Promise<string | null>;
 }
 
 const cacheEnabled = (track: Track, cacheKey: string | null): boolean => {
@@ -58,12 +58,10 @@ const cacheAfterLoad = (
   track: Track,
   cacheKey: string | null,
   source: string,
-): (() => Promise<void>) | undefined => {
+): (() => Promise<string | null>) | undefined => {
   if (!cacheEnabled(track, cacheKey) || !cacheKey || !/^https?:\/\//i.test(source))
     return undefined;
-  return async () => {
-    await songCache.fetchAsync(cacheKey, track.source, source);
-  };
+  return () => songCache.fetchAsync(cacheKey, track.source, source);
 };
 
 const resolveStreaming = async (
@@ -84,7 +82,7 @@ const resolveStreaming = async (
             const cacheSource = await withStreamingAdapter(track.serverId!, (config, adapter) =>
               adapter.getStreamUrl(config, remoteId, crypto.randomUUID()),
             );
-            await songCache.fetchAsync(cacheKey, "streaming", cacheSource);
+            return songCache.fetchAsync(cacheKey, "streaming", cacheSource);
           }
         : undefined,
   };

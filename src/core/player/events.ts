@@ -118,6 +118,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     }
     case "directTrackBoundary": {
+      // Node Core 已消费 staged boundary；远程 Web 只等待 session 快照，不参与 gapless ownership。
+      if (isWebRemote()) break;
       const preloaded = consumeDirectGaplessBoundary(event.data.generation);
       if (!preloaded) {
         // native 已经跨过边界但 renderer 上下文已变化：显式重建当前应播放的队列语义。

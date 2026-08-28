@@ -16,10 +16,12 @@ import {
   shouldRetryPlaybackSource,
 } from "@main/services/playbackSourcePolicy";
 import {
+  consumeDirectPlaybackBoundary,
   consumePlaybackPreload,
   invalidatePlaybackPreload,
   schedulePlaybackPreload,
 } from "@main/services/playbackPreloader";
+import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
 import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
@@ -156,6 +158,9 @@ export const initPlaybackSession = async (): Promise<void> => {
 
 export const getPlaybackSession = (): PlaybackSessionSnapshot => snapshot();
 
+/** Core playback policy 改变后重算下一首预载；若不再满足条件会取消已有 Direct staging。 */
+export const refreshPlaybackPreload = (): void => scheduleNextPlaybackPreload();
+
 /** 一次性接收旧 renderer IndexedDB 队列；已有 main session 时绝不覆盖。 */
 export const migrateLegacyQueue = (
   items: PlaybackQueueItem[],
@@ -201,6 +206,7 @@ export const replaceQueue = async (
   autoPlay = true,
   loadCurrent = true,
 ): Promise<PlaybackSessionSnapshot> => {
+  invalidatePlaybackPreload();
   if (items.length === 0) {
     await clearQueue(loadCurrent);
     return snapshot();
@@ -226,6 +232,7 @@ export const appendQueue = (items: PlaybackQueueItem[]): PlaybackSessionSnapshot
   if (originalQueue) originalQueue.push(...cloneQueue(items));
   if (queue.length > 0) active = true;
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -241,6 +248,7 @@ export const insertQueue = (
   if (originalQueue) originalQueue.push(...cloneQueue(items));
   active = queue.length > 0;
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -249,6 +257,7 @@ export const removeQueueIndex = async (
   loadCurrent = true,
 ): Promise<PlaybackSessionSnapshot> => {
   if (removeIndex < 0 || removeIndex >= queue.length) return snapshot();
+  invalidatePlaybackPreload();
   const removingCurrent = removeIndex === index;
   const [removed] = queue.splice(removeIndex, 1);
   if (queue.length === 0) {
@@ -265,6 +274,7 @@ export const removeQueueIndex = async (
     if (loadCurrent) await loadIndex(index, true);
   } else {
     publish();
+    scheduleNextPlaybackPreload();
   }
   return snapshot();
 };
@@ -302,6 +312,7 @@ export const selectIndex = async (
   autoPlay = true,
 ): Promise<PlaybackSessionSnapshot> => {
   if (targetIndex < 0 || targetIndex >= queue.length) return snapshot();
+  invalidatePlaybackPreload();
   index = targetIndex;
   active = true;
   publish();
@@ -342,6 +353,7 @@ export const updateQueueItem = (
     );
   }
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -361,10 +373,12 @@ export const moveQueue = (fromIndex: number, toIndex: number): PlaybackSessionSn
   else if (fromIndex < index && toIndex >= index) index--;
   else if (fromIndex > index && toIndex <= index) index++;
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
 export const removeServerTracks = (serverId: string): PlaybackSessionSnapshot => {
+  invalidatePlaybackPreload();
   const currentId = index >= 0 && index < queue.length ? queue[index].track.id : null;
   const keep = (item: PlaybackQueueItem): boolean =>
     !(item.track.source === "streaming" && item.track.serverId === serverId);
@@ -382,6 +396,7 @@ export const removeServerTracks = (serverId: string): PlaybackSessionSnapshot =>
     index = Math.min(Math.max(index, 0), queue.length - 1);
   }
   publish();
+  if (currentId && queue[index]?.track.id === currentId) scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -393,6 +408,7 @@ export const updateQueueTracks = (updates: Track[]): PlaybackSessionSnapshot => 
   queue = replace(queue);
   if (originalQueue) originalQueue = replace(originalQueue);
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -423,6 +439,55 @@ export const setShuffle = (mode: ShuffleMode): PlaybackSessionSnapshot => {
   publish();
   scheduleNextPlaybackPreload();
   return snapshot();
+};
+
+/** Direct staged boundary 发生后由 Core 提交 queue/index/now-playing，不再经过 Control load。 */
+export const onNativeDirectTrackBoundary = (
+  generation: number,
+  eventDurationMs: number,
+): boolean => {
+  if (!isHeadlessMode() || !ownsPlayback()) return false;
+
+  const recoverAuthoritativeQueue = async (): Promise<void> => {
+    getPlayer().stop();
+    if (!ownsPlayback()) return;
+    if (repeat === "one") {
+      await selectIndex(index, true, true);
+      return;
+    }
+    await next();
+  };
+
+  const prepared = consumeDirectPlaybackBoundary(generation, queue);
+  if (!prepared) {
+    playerLog.warn(
+      `[session] stale Direct boundary generation=${generation}, restoring queue authority`,
+    );
+    void recoverAuthoritativeQueue().catch((error) =>
+      playerLog.error("[session] Direct boundary recovery failed", error),
+    );
+    return true;
+  }
+
+  try {
+    const track = prepared.item.track;
+    const duration = Math.max(track.duration || 0, eventDurationMs || 0);
+    commitDirectPlaybackBoundary(prepared.directSource, duration, track, prepared.item.context);
+    index = prepared.queueIndex;
+    active = true;
+    sourceRecoveryAttempts = 0;
+    nowPlaying.update({ ...track, duration }, [], null);
+    nowPlaying.onPosition(0, true);
+    nowPlaying.onPlayStateChange("playing");
+    publish();
+    scheduleNextPlaybackPreload();
+  } catch (error) {
+    playerLog.error(`[session] Direct boundary commit failed: ${String(error)}`);
+    void recoverAuthoritativeQueue().catch((recoveryError) =>
+      playerLog.error("[session] Direct boundary recovery failed", recoveryError),
+    );
+  }
+  return true;
 };
 
 /** Native ended 仅在无头模式由主进程消费；桌面模式继续交给 upstream renderer 结算。 */
@@ -473,12 +538,17 @@ export const scanDirettaDevices = (): Promise<AudioDevice[]> => getPlayer().scan
 
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertHeadlessDirettaPrivilege(deviceId);
-  await getPlayer().setOutputDevice(deviceId ?? undefined);
-  store.set("player.outputDevice", deviceId);
-  wsBroadcast({
-    type: "deviceChanged",
-    data: { defaultDevice: getPlayer().getDefaultDeviceName() ?? null },
-  });
+  invalidatePlaybackPreload();
+  try {
+    await getPlayer().setOutputDevice(deviceId ?? undefined);
+    store.set("player.outputDevice", deviceId);
+    wsBroadcast({
+      type: "deviceChanged",
+      data: { defaultDevice: getPlayer().getDefaultDeviceName() ?? null },
+    });
+  } finally {
+    scheduleNextPlaybackPreload();
+  }
 };
 
 /** 当前 Native 实际选择的输出设备，而不是仅返回持久化偏好。 */

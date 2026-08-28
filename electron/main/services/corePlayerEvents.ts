@@ -46,8 +46,11 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
       case "directTrackBoundary": {
         const duration = toMs(event.duration ?? 0);
         const generation = event.generation ?? 0;
-        wsBroadcast({ type: "directTrackBoundary", data: { duration, generation } });
         neteaseScrobble.onEnded();
+        const consumedBySession = playbackSession.onNativeDirectTrackBoundary(generation, duration);
+        if (!consumedBySession) {
+          wsBroadcast({ type: "directTrackBoundary", data: { duration, generation } });
+        }
         break;
       }
       case "sourceError": {

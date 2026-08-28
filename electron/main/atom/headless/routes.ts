@@ -36,6 +36,7 @@ import {
   removeQueueIndex,
   removeServerTracks,
   replaceQueue,
+  refreshPlaybackPreload,
   scanDirettaDevices,
   seek,
   selectIndex,
@@ -114,6 +115,13 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ error: "keyPath_required" }, 400);
     }
     store.set(body.keyPath, body.value);
+    if (
+      body.keyPath === "player.songLevel" ||
+      body.keyPath === "player.allowTrialPlay" ||
+      body.keyPath === "player.preloadNextTrack"
+    ) {
+      refreshPlaybackPreload();
+    }
     return c.json({ ok: true });
   });
 
