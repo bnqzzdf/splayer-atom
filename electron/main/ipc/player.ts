@@ -647,23 +647,19 @@ export const registerPlayerIpc = (): void => {
     }
   });
 
-  // 切换输出设备（传设备 ID，null 使用系统默认）
-  ipcMain.handle(
-    "player:setOutputDevice",
-    async (_event, deviceId: string | null, pauseBeforeSwitch = false) => {
-      try {
-        cancelPendingReinit();
-        if (pauseBeforeSwitch) getPlayer().pauseImmediately();
-        await getPlayer().setOutputDevice(deviceId ?? undefined);
-        return { success: true };
-      } catch (error) {
-        return fail(
-          isNativeDeviceError(error) ? ErrorCode.DEVICE_INIT_FAILED : ErrorCode.UNKNOWN,
-          error,
-        );
-      }
-    },
-  );
+  // 切换输出设备（传设备 ID，null 使用系统默认）；续播/Direct preparation/rollback 由 Core session 决定。
+  ipcMain.handle("player:setOutputDevice", async (_event, deviceId: string | null) => {
+    try {
+      cancelPendingReinit();
+      await playbackSession.setOutputDevice(deviceId);
+      return { success: true };
+    } catch (error) {
+      return fail(
+        isNativeDeviceError(error) ? ErrorCode.DEVICE_INIT_FAILED : ErrorCode.UNKNOWN,
+        error,
+      );
+    }
+  });
 
   // 获取当前选择的输出设备名称
   ipcMain.handle("player:getSelectedDeviceName", () => {

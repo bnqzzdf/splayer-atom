@@ -5,7 +5,6 @@ import type {
   PlaybackSessionSnapshot,
   Track,
 } from "@shared/types/player";
-import { ErrorCode } from "@shared/types/errors";
 import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type { PersonalFmOptions } from "@/types/netease";
 import { handleEvent } from "./events";
@@ -29,7 +28,6 @@ import * as coverLoader from "@/services/coverLoader";
 import * as abLoop from "@/services/abLoop";
 import * as autoClose from "@/services/autoClose";
 import * as cacheScheduler from "@/services/cacheScheduler";
-import { prepareDirectTrackSource } from "@/services/audioSource";
 import {
   disposeNextTrackPreload,
   installNextTrackPreloadWatchers,
@@ -435,10 +433,9 @@ export const refreshDevices = async (): Promise<void> => {
     ...systemResult.data,
     ...(direttaResult.success && direttaResult.data ? direttaResult.data : []),
   ];
-  if (isWebRemote()) {
-    const selected = await window.api.player.getSelectedDeviceName();
-    if (selected.success) useSettingsStore().player.outputDevice = selected.data ?? null;
-  }
+  const settings = useSettingsStore();
+  await settings.syncSystem();
+  settings.player.outputDevice = settings.system.player.outputDevice;
 };
 
 /**
@@ -446,67 +443,18 @@ export const refreshDevices = async (): Promise<void> => {
  * @param deviceId - 设备 ID，传 null 跟随系统默认
  */
 export const switchDevice = async (deviceId: string | null): Promise<void> => {
-  const settings = useSettingsStore();
-  const status = useStatusStore();
   if (isDirettaOutput(deviceId) && getCurrentDirectEntryBlockers().length > 0) {
     toast.error(i18n.global.t("directMode.entryBlocked"));
     return;
   }
-  const media = useMediaStore();
-  let selectedOutput = settings.player.outputDevice;
-  if (isWebRemote()) {
-    const selected = await window.api.player.getSelectedDeviceName();
-    if (selected.success) {
-      selectedOutput = selected.data ?? null;
-      settings.player.outputDevice = selectedOutput;
-    }
-  }
-  const enteringDiretta = isDirettaOutput(deviceId) && !isDirettaOutput(selectedOutput);
-  const track = media.track;
-  const currentSource = status.currentSource;
-
-  if (enteringDiretta && track && currentSource && /^https?:\/\//i.test(currentSource)) {
-    const prepared = await prepareDirectTrackSource(
-      track,
-      { source: currentSource, fromCache: false, provider: "official" },
-      deviceId,
-    );
-    if (!prepared) {
-      handleError(ErrorCode.NETWORK_ERROR);
-      return;
-    }
-    if (media.track?.id !== track.id || status.currentSource !== currentSource) return;
-
-    const resumePosition = Math.round(playback.getCurrentTime());
-    const shouldPlay = status.isPlaying;
-    const context = media.playbackContext;
-    await window.api.player.stop();
-    const switched = await window.api.player.setOutputDevice(deviceId, false);
-    if (!switched.success) {
-      const restored = await load(currentSource, false, track, { context });
-      if (restored.ok && resumePosition > 0) await seek(resumePosition);
-      if (restored.ok && shouldPlay) await play();
-      if (switched.error) handleError(switched.error);
-      return;
-    }
-
-    settings.player.outputDevice = deviceId;
-    const loaded = await load(prepared.source, false, track, { context });
-    if (!loaded.ok) {
-      status.currentSource = null;
-      return;
-    }
-    if (resumePosition > 0) await seek(resumePosition);
-    if (shouldPlay) await play();
-    scheduleNextTrackPreload();
+  const result = await window.api.player.setOutputDevice(deviceId);
+  if (!result.success) {
+    if (result.error) handleError(result.error);
     return;
   }
-
-  const pauseBeforeSwitch =
-    settings.system.player.pauseOnDeviceSwitch && status.state === "playing";
-  const result = await window.api.player.setOutputDevice(deviceId, pauseBeforeSwitch);
-  if (result.success) settings.player.outputDevice = deviceId;
-  else if (result.error) handleError(result.error);
+  const settings = useSettingsStore();
+  settings.system.player.outputDevice = deviceId;
+  settings.player.outputDevice = deviceId;
 };
 
 /**
@@ -900,6 +848,7 @@ export const initPlayer = async (): Promise<void> => {
   const settings = useSettingsStore();
   const webRemote = isWebRemote();
   await settings.syncSystem();
+  const legacyOutputPreference = webRemote ? null : settings.player.outputDevice;
   if (!webRemote) {
     // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
     await useStreamingStore().init();
@@ -945,8 +894,6 @@ export const initPlayer = async (): Promise<void> => {
 
   if (webRemote) {
     await refreshDevices();
-    const selectedOutput = await window.api.player.getSelectedDeviceName();
-    if (selectedOutput.success) settings.player.outputDevice = selectedOutput.data ?? null;
     if (unsubscribe) unsubscribe();
     unsubscribe = window.api.player.onEvent(handleEvent);
     const media = useMediaStore();
@@ -994,23 +941,18 @@ export const initPlayer = async (): Promise<void> => {
     await window.api.player.setPreampGain(equalizer.preamp);
     await window.api.player.setEqualizerEnabled(equalizer.enabled);
   }
-  // 刷新设备列表并恢复上次选择的输出设备
+  // Core 启动时已恢复自己的 output preference；renderer 本地旧值只允许做一次兼容迁移。
   await refreshDevices();
-  if (settings.player.outputDevice) {
-    // 1.0.0 及更早版本存的是显示名，就地换成稳定 ID；设备当前不在线时保留原值等下次启动
+  if (settings.system.player.outputDevice == null && legacyOutputPreference) {
     const legacy = useStatusStore().outputDevices.find(
-      (device) => device.name === settings.player.outputDevice,
+      (device) => device.name === legacyOutputPreference,
     );
-    if (legacy) settings.player.outputDevice = legacy.id;
-    // 不自动修改用户的音量/DSP 设置来满足 Direct。旧状态若不兼容则回到系统默认，由用户修正后重新选择 Target。
-    if (
-      isDirettaOutput(settings.player.outputDevice) &&
-      getCurrentDirectEntryBlockers().length > 0
-    ) {
+    const migratedOutput = legacy?.id ?? legacyOutputPreference;
+    if (isDirettaOutput(migratedOutput) && getCurrentDirectEntryBlockers().length > 0) {
       settings.player.outputDevice = null;
       toast.error(i18n.global.t("directMode.entryBlocked"));
     } else {
-      await window.api.player.setOutputDevice(settings.player.outputDevice);
+      await switchDevice(migratedOutput);
     }
   }
   // 先订阅事件，确保 load 触发播放后 position 事件能被接收

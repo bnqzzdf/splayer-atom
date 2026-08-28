@@ -43,18 +43,17 @@ test("Direct entry preflight mirrors native sample-processing requirements", () 
   assert.doesNotMatch(directModeSource, /fadeEnabled|fadeDuration/);
 });
 
-test("Direct device selection refuses incompatible state before stopping or materializing audio", () => {
+test("Direct device selection refuses incompatible state before sending the Core command", () => {
   const switchFlow = between(
     playerSource,
     "export const switchDevice = async (",
     "/**\n * 设置队列并从指定位置开始播放",
   );
   const preflightIndex = switchFlow.indexOf("getCurrentDirectEntryBlockers().length > 0");
-  const materializeIndex = switchFlow.indexOf("prepareDirectTrackSource(");
-  const stopIndex = switchFlow.indexOf("window.api.player.stop()");
+  const commandIndex = switchFlow.indexOf("window.api.player.setOutputDevice(deviceId)");
   assert.ok(preflightIndex >= 0);
-  assert.ok(materializeIndex > preflightIndex);
-  assert.ok(stopIndex > preflightIndex);
+  assert.ok(commandIndex > preflightIndex);
+  assert.doesNotMatch(switchFlow, /prepareDirectTrackSource|materializeDirectInput|player\.stop/);
   assert.match(switchFlow, /directMode\.entryBlocked/);
 });
 
@@ -88,14 +87,15 @@ test("Headless Web output selector only exposes real ALSA hardware and Diretta",
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
 });
 
-test("Headless Web refreshes the selected output from main authority", () => {
+test("Controls refresh output preference from Core config authority", () => {
   const refreshFlow = between(
     playerSource,
     "export const refreshDevices = async",
     "/**\n * 切换音频输出设备",
   );
-  assert.match(refreshFlow, /getSelectedDeviceName/);
-  assert.match(refreshFlow, /settingsStore|useSettingsStore/);
+  assert.match(refreshFlow, /await settings\.syncSystem\(\)/);
+  assert.match(refreshFlow, /settings\.system\.player\.outputDevice/);
+  assert.doesNotMatch(refreshFlow, /getSelectedDeviceName/);
 });
 
 test("Core volume and tempo controls cannot bypass the Direct UI lock", () => {

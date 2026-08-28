@@ -427,7 +427,7 @@ export interface PlayerApi {
   /** 获取系统默认输出设备名称 */
   getDefaultDeviceName: () => Promise<IpcResponse<string | null>>;
   /** 切换输出设备（传设备 ID，null 使用系统默认） */
-  setOutputDevice: (deviceId: string | null, pauseBeforeSwitch?: boolean) => Promise<IpcResponse>;
+  setOutputDevice: (deviceId: string | null) => Promise<IpcResponse>;
   /** 获取当前选择的输出设备 ID（None = 跟随系统默认） */
   getSelectedDeviceName: () => Promise<IpcResponse<string | null>>;
   /** 同步播放模式到托盘 */

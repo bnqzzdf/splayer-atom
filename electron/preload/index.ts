@@ -214,8 +214,8 @@ const api = {
     // 获取系统默认输出设备名称
     getDefaultDeviceName: () => ipcRenderer.invoke("player:getDefaultDeviceName"),
     // 切换输出设备（传设备 ID，null 使用系统默认）
-    setOutputDevice: (deviceId: string | null, pauseBeforeSwitch = false) =>
-      ipcRenderer.invoke("player:setOutputDevice", deviceId, pauseBeforeSwitch),
+    setOutputDevice: (deviceId: string | null) =>
+      ipcRenderer.invoke("player:setOutputDevice", deviceId),
     // 获取当前选择的输出设备 ID
     getSelectedDeviceName: () => ipcRenderer.invoke("player:getSelectedDeviceName"),
     // 获取当前歌曲的原始高清封面（base64 data URL）

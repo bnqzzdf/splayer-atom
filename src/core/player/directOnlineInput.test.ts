@@ -74,17 +74,21 @@ test("Diretta next-track staging is owned by Core rather than renderer Control",
   assert.match(coreSchedule, /stageDirectSource/);
 });
 
-test("switching any remote HTTP track into Diretta prepares local input first", () => {
-  const switchFlow = between(
+test("switching any remote HTTP track into Diretta prepares local input in Core", () => {
+  const controlSwitch = between(
     playerSource,
     "export const switchDevice = async (",
     "/**\n * 设置队列并从指定位置开始播放",
   );
-  assert.match(switchFlow, /prepareDirectTrackSource/);
-  assert.match(switchFlow, /\^https\?:\\\/\\\//i);
-  assert.doesNotMatch(switchFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
-  assert.match(switchFlow, /deviceId/);
-  assert.match(switchFlow, /window\.api\.player\.stop/);
-  assert.match(switchFlow, /setOutputDevice\(deviceId, false\)/);
-  assert.match(switchFlow, /load\(prepared\.source/);
+  assert.doesNotMatch(
+    controlSwitch,
+    /prepareDirectTrackSource|materializeDirectInput|player\.stop/,
+  );
+  assert.match(controlSwitch, /window\.api\.player\.setOutputDevice\(deviceId\)/);
+
+  const coreSwitch = coreSessionSource.split("export const setOutputDevice = async (")[1];
+  assert.ok(coreSwitch);
+  assert.match(coreSwitch, /resolvePlaybackSource\(item\.track\)/);
+  assert.match(coreSwitch, /materializeDirectInput\(previousResolved\.source\)/);
+  assert.match(coreSwitch, /await loadIndex\(index, false, false, targetResolved\)/);
 });

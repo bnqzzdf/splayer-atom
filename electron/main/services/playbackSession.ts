@@ -16,6 +16,7 @@ import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   playbackSourceErrorCode,
   resolvePlaybackSource,
+  type ResolvedPlaybackSource,
 } from "@main/services/playbackSourceResolver";
 import {
   isSkippablePlaybackError,
@@ -29,6 +30,7 @@ import {
   schedulePlaybackPreload,
 } from "@main/services/playbackPreloader";
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
+import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import {
   clearActiveCueRange,
   toDisplayPositionMs,
@@ -211,13 +213,14 @@ const loadIndex = async (
   targetIndex: number,
   autoPlay = true,
   sourceRecovery = false,
+  resolvedOverride?: ResolvedPlaybackSource,
 ): Promise<void> => {
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
   if (!sourceRecovery) sourceRecoveryAttempts = 0;
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  let resolved = consumePlaybackPreload(targetIndex, item);
+  let resolved = resolvedOverride ?? consumePlaybackPreload(targetIndex, item);
   if (!resolved) {
     try {
       resolved = await resolvePlaybackSource(track);
@@ -872,13 +875,87 @@ export const scanDirettaDevices = (): Promise<AudioDevice[]> => getPlayer().scan
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertHeadlessDirettaPrivilege(deviceId);
   invalidatePlaybackPreload();
+  const player = getPlayer();
+  const previousPreference = store.get("player.outputDevice");
+  const state = player.getStatus().state;
+  const shouldReloadCurrent =
+    ownsPlayback() &&
+    index >= 0 &&
+    index < queue.length &&
+    (state === "playing" || state === "paused");
+  const resumePositionMs = shouldReloadCurrent
+    ? toDisplayPositionMs(toMs(player.getPosition()))
+    : 0;
+  const playbackGeneration = loadGeneration;
+  const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
+  const shouldResumePlaying =
+    state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+
+  let previousResolved: ResolvedPlaybackSource | null = null;
+  let targetResolved: ResolvedPlaybackSource | null = null;
+  let managedDirectInput: string | null = null;
+
   try {
-    await getPlayer().setOutputDevice(deviceId ?? undefined);
+    if (shouldReloadCurrent) {
+      const item = queue[index];
+      previousResolved = await resolvePlaybackSource(item.track);
+      targetResolved = previousResolved;
+      if (
+        deviceId?.startsWith("diretta:") === true &&
+        /^https?:\/\//i.test(previousResolved.source)
+      ) {
+        const cached = previousResolved.cacheAfterLoad
+          ? await previousResolved.cacheAfterLoad()
+          : null;
+        const source = cached ?? (await materializeDirectInput(previousResolved.source));
+        if (!cached) managedDirectInput = source;
+        targetResolved = {
+          ...previousResolved,
+          source,
+          provider: cached ? "cache" : previousResolved.provider,
+          cacheAfterLoad: undefined,
+        };
+      }
+      if (loadGeneration !== playbackGeneration || queue[index]?.track.id !== currentTrackId) {
+        if (managedDirectInput) void discardDirectInput(managedDirectInput);
+        throw new Error("playback changed while preparing output switch");
+      }
+      player.stop();
+    }
+
+    try {
+      await player.setOutputDevice(deviceId ?? undefined);
+    } catch (switchError) {
+      if (managedDirectInput) void discardDirectInput(managedDirectInput);
+      try {
+        await player.setOutputDevice(previousPreference ?? undefined);
+        if (shouldReloadCurrent && previousResolved) {
+          await loadIndex(index, false, false, previousResolved);
+          if (resumePositionMs > 0) await seek(resumePositionMs);
+          if (state === "playing") await play();
+        }
+      } catch (rollbackError) {
+        playerLog.error(`[session] output rollback failed: ${String(rollbackError)}`);
+      }
+      throw switchError;
+    }
+
     store.set("player.outputDevice", deviceId);
     wsBroadcast({
       type: "deviceChanged",
-      data: { defaultDevice: getPlayer().getDefaultDeviceName() ?? null },
+      data: { defaultDevice: player.getDefaultDeviceName() ?? null },
     });
+
+    if (shouldReloadCurrent && targetResolved) {
+      try {
+        await loadIndex(index, false, false, targetResolved);
+        if (resumePositionMs > 0) await seek(resumePositionMs);
+        if (shouldResumePlaying) await play();
+      } catch (loadError) {
+        if (managedDirectInput) void discardDirectInput(managedDirectInput);
+        throw loadError;
+      }
+    }
   } finally {
     scheduleNextPlaybackPreload();
   }
