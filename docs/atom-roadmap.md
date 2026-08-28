@@ -50,37 +50,94 @@ SPlayer Atom 是基于 SPlayer Next 持续演进的下游版本。目标不是�
 
 ## 3. 正式建立上游同步机制
 
-当前 Atom 历史基于 SPlayer Next `dev` 持续叠加，下游维护方式需要正式化。
+当前 Atom 历史基于 SPlayer Next `dev` 持续叠加。长期维护采用“完整 Atom 源码仓库 + 纯净 SPlayer vendor 分支”的模式，而不是把 Atom 当作长期追踪 SPlayer `origin/dev` 的普通 fork。
+
+### 已确定的长期 Git 模型
+
+Atom 仓库本身保存可直接构建、调试、发布的完整最终源码：
+
+```text
+Atom repository
+= SPlayer upstream baseline
++ Atom delta
+```
+
+不采用 Git submodule，也不采用把 SPlayer 搬入子目录的 git subtree / overlay 模型。原因是 Atom 必须修改少量上游 player / queue / main / native seam；若使用 submodule 或 subtree 子目录，将额外引入第二套 Git 历史、patch overlay、路径映射或生成合并树，反而增加维护成本。
+
+远端与分支职责固定为：
+
+```text
+origin
+  └─ SPlayer Atom 自有仓库，Atom 日常开发 / push / release 的唯一默认远端
+
+splayer
+  └─ SPlayer-Dev/SPlayer-Next，仅用于 fetch 上游源码，不作为 Atom push / release 目标
+
+vendor/splayer
+  └─ 本仓库内的纯净 SPlayer 上游镜像分支，只允许对应官方 SPlayer commit
+
+dev / main
+  └─ 完整 Atom 产品源码
+```
+
+关键原则：**remote 只是获取上游源码的运输渠道，`vendor/splayer` 分支才是 Atom 仓库内可审计的上游基线。**
+
+`vendor/splayer` 不允许包含 Atom 代码，不允许 cherry-pick Atom commit，也不允许 merge Atom 分支。它只能 fast-forward 到官方 SPlayer commit，从而长期保持：
+
+```text
+vendor/splayer == 某个官方 SPlayer commit
+```
 
 ### 待开发
 
-- [ ] 建立清晰的双 remote 模型：
-  - `upstream` → `SPlayer-Dev/SPlayer-Next`
-  - `origin` → SPlayer Atom 自有仓库
-- [ ] Atom 开发分支跟踪自身 `origin`，不再把上游仓库同时作为默认 push 目标。
+- [ ] 把现有 remote 调整为：
+  - `origin` → SPlayer Atom 自有仓库；
+  - `splayer` → `SPlayer-Dev/SPlayer-Next`，fetch-only 用途。
+- [ ] 建立并维护纯净 `vendor/splayer` 分支；更新时只允许 fast-forward 到 `splayer/dev` 对应官方 commit。
+- [ ] Atom `dev` / `main` 只跟踪自身 `origin`，不直接跟踪 SPlayer remote。
+- [ ] 正式记录“Atom 已完成吸收与验收的 SPlayer baseline commit”，不要仅依赖移动的 `splayer/dev`。
 - [ ] 建立固定的 upstream integration 流程：
-  1. `git fetch upstream`
-  2. 创建独立 sync 分支或 worktree
-  3. merge `upstream/dev`
-  4. 解决冲突
-  5. 检查哪些 Atom patch 已被上游吸收，可直接删除
-  6. 跑自动门禁
-  7. 对播放器 / native / output 相关改动追加真实硬件 smoke
-  8. 合回 Atom 主开发分支
-- [ ] 正式记录“Atom 已吸收的上游基线 commit”，不要仅依赖移动的 `upstream/dev` / `origin/dev`。
-- [ ] upstream touch audit 改为比较稳定的 Atom upstream baseline，而不是每次 fetch 后立即改变统计语义。
+  1. `git fetch splayer`
+  2. fast-forward `vendor/splayer` 到目标 `splayer/dev`
+  3. 从 Atom `dev` 创建独立 `sync/splayer-YYYYMMDD` 分支或 worktree
+  4. merge `vendor/splayer`
+  5. 解决 Atom 与新上游之间的冲突
+  6. 检查上游是否已实现某些 Atom patch；若等价则删除下游重复实现
+  7. 跑完整自动门禁
+  8. 对 player / queue / native / output / main lifecycle 相关上游改动追加真实硬件 smoke
+  9. 验收通过后合回 Atom `dev`
+  10. 更新正式 Atom upstream baseline commit
+- [ ] upstream touch audit 改为比较稳定的 Atom upstream baseline，而不是直接比较移动的 remote ref，避免一次普通 fetch 改变统计语义。
 - [ ] 增加 upstream sync CI / 报告，至少能发现：
   - merge conflict；
   - typecheck / tests 回归；
   - touch budget 异常增长；
   - Atom-owned seam 被上游重构后失效。
 
+### 向 SPlayer 上游贡献的规则
+
+若 Atom 开发过程中发现通用 bug 或通用改进，且不依赖 Diretta / Headless / Qobuz / TIDAL / Atom branding 等下游能力，应从纯净 `vendor/splayer` 创建独立贡献分支，例如：
+
+```text
+vendor/splayer
+      ↓
+contrib/fix-xxx
+      ↓
+SPlayer upstream PR
+```
+
+PR 只包含可独立贡献给 SPlayer 的最小改动，不从 Atom `dev` 直接发 PR。上游合并后，后续更新 `vendor/splayer` 时自然重新吸收该修复，并删除 Atom 中已经冗余的 patch。
+
 ### 验收标准
 
-- 获取上游更新不需要重写 Atom 历史。
+- clone Atom 仓库后即可获得完整产品源码，不依赖 `git submodule update`、运行时下载 SPlayer 或构建时 apply patch 才形成最终工作树。
+- `origin` 与 Atom 产品身份绑定；SPlayer remote 不再是 Atom 默认 push / release 目标。
+- `vendor/splayer` 可被证明等于一个真实官方 SPlayer commit，且不包含 Atom delta。
+- 获取上游更新不需要重写已经发布的 Atom 历史。
 - 上游更新可以在独立 integration 分支完整验证后再进入 Atom 主分支。
-- 一次普通 `git fetch upstream` 不会让 touch audit 的基准无意漂移。
+- 普通 `git fetch splayer` 不会让 touch audit 的已验收 baseline 无意漂移。
 - 若上游已经提供同等能力，可以安全删除对应 Atom patch，而不是继续维护重复实现。
+- 可向 SPlayer 提交干净、独立、无 Atom 私有功能夹带的 PR。
 
 ---
 
