@@ -9,6 +9,9 @@ import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
 import * as cacheScheduler from "@/services/cacheScheduler";
+import * as lyricLoader from "@/services/lyric/loader";
+import * as coverLoader from "@/services/coverLoader";
+import { extractColorFromUrl } from "@/utils/color";
 import * as playStats from "./stats";
 import { consumeDirectGaplessBoundary } from "@/services/nextTrackPreloader";
 import {
@@ -66,6 +69,26 @@ const finishCurrentTrack = async (): Promise<void> => {
 export const handleEvent = async (event: PlayerEvent): Promise<void> => {
   const status = useStatusStore();
   switch (event.type) {
+    case "trackLoaded": {
+      const media = useMediaStore();
+      media.setTrack(event.data.track, event.data.detail);
+      media.setPlaybackContext(event.data.context);
+      if (event.data.mediaInfo) media.enrichTrack(event.data.mediaInfo, event.data.detail);
+      const projectedTrack = media.track ?? event.data.track;
+      status.currentSource = event.data.source;
+      status.duration = projectedTrack.duration || event.data.mediaInfo?.duration || 0;
+      status.state = event.data.autoPlay ? "playing" : "paused";
+      status.trackLoading = false;
+      playback.setCurrentTime(0, { force: true });
+      playback.setDuration(status.duration);
+      playback.setPlaying(event.data.autoPlay);
+      cacheScheduler.cancel();
+      void lyricLoader.loadForTrack(event.data.detail ?? null);
+      extractColorFromUrl(projectedTrack.cover ?? projectedTrack.coverOriginal ?? null);
+      void coverLoader.loadCoverForTrack(projectedTrack);
+      void useHistoryStore().record(projectedTrack);
+      break;
+    }
     case "status":
       // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡
       if (event.data.state === "loading" || status.trackLoading) break;
@@ -185,23 +208,12 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     }
     case "session": {
-      const previousTrackId = useMediaStore().track?.id;
       queue.applySession(event.data);
       const status = useStatusStore();
       status.playIndex = event.data.index;
       status.repeatMode = event.data.repeat;
       status.shuffleMode = event.data.shuffle;
-      if (isWebRemote() && event.data.current?.id !== previousTrackId) {
-        const media = useMediaStore();
-        if (event.data.current) {
-          media.setTrack(event.data.current);
-          media.setPlaybackContext(queue.getQueueItem(event.data.index)?.context);
-          // Headless 自动切歌由主进程驱动，Web 仍复用 upstream 播放历史 store 记录新曲。
-          void useHistoryStore().record(event.data.current);
-        } else {
-          media.clear();
-        }
-      }
+      if (!event.data.current) useMediaStore().clear();
       break;
     }
   }

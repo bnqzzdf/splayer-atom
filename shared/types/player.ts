@@ -211,6 +211,17 @@ export interface AudioDevice {
 /** 主进程推送给渲染进程的播放事件 */
 export type PlayerEvent =
   | { type: "status"; data: PlayerStatus }
+  | {
+      type: "trackLoaded";
+      data: {
+        track: Track;
+        context?: PlaybackContext;
+        source: string;
+        autoPlay: boolean;
+        detail?: TrackDetail;
+        mediaInfo?: MediaInfo;
+      };
+    }
   | { type: "position"; data: { position: number; duration: number } }
   | { type: "seek"; data: { position: number } }
   | { type: "ended" }
@@ -281,9 +292,7 @@ export interface PlayerApi {
     loadCurrent?: boolean,
   ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 向权威队列末尾追加 */
-  appendSessionQueue: (
-    items: PlaybackQueueItem[],
-  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  appendSessionQueue: (items: PlaybackQueueItem[]) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 向权威队列指定位置插入 */
   insertSessionQueue: (
     items: PlaybackQueueItem[],
@@ -315,13 +324,9 @@ export interface PlayerApi {
     toIndex: number,
   ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 移除指定流媒体服务器的权威队列项目 */
-  removeSessionServerTracks: (
-    serverId: string,
-  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  removeSessionServerTracks: (serverId: string) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 更新权威队列中的曲目元数据 */
-  updateSessionQueueTracks: (
-    tracks: Track[],
-  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  updateSessionQueueTracks: (tracks: Track[]) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 清空权威队列 */
   clearSessionQueue: (stop?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 设置权威会话循环模式 */

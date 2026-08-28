@@ -1,10 +1,12 @@
 import type {
   AudioDevice,
+  MediaInfo,
   PlaybackQueueItem,
   PlaybackSessionSnapshot,
   RepeatMode,
   ShuffleMode,
   Track,
+  TrackDetail,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
@@ -72,6 +74,28 @@ const publish = (): void => {
   wsBroadcast({ type: "session", data });
 };
 
+const publishTrackLoaded = (
+  item: PlaybackQueueItem,
+  source: string,
+  autoPlay: boolean,
+  detail?: TrackDetail,
+  mediaInfo?: MediaInfo,
+): void => {
+  const event = {
+    type: "trackLoaded" as const,
+    data: {
+      track: { ...item.track },
+      context: item.context,
+      source,
+      autoPlay,
+      detail,
+      mediaInfo,
+    },
+  };
+  publishDesktopEvent("player:event", event);
+  wsBroadcast(event);
+};
+
 const scheduleNextPlaybackPreload = (): void => {
   if (!isHeadlessMode() || !active) {
     invalidatePlaybackPreload();
@@ -122,6 +146,7 @@ const loadIndex = async (
   nowPlaying.update({ ...track, duration }, [], null);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
+  publishTrackLoaded(item, resolved.source, autoPlay, result.data.detail, result.data.mediaInfo);
   scheduleNextPlaybackPreload();
 };
 
@@ -480,6 +505,10 @@ export const onNativeDirectTrackBoundary = (
     nowPlaying.onPosition(0, true);
     nowPlaying.onPlayStateChange("playing");
     publish();
+    publishTrackLoaded(prepared.item, prepared.directSource, true, prepared.directDetail, {
+      duration,
+      quality: prepared.directDetail?.quality,
+    });
     scheduleNextPlaybackPreload();
   } catch (error) {
     playerLog.error(`[session] Direct boundary commit failed: ${String(error)}`);
