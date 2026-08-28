@@ -758,15 +758,105 @@ Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能�
 
 ---
 
-## 16. Web UX 完善
+## 16. 统一 Atom Control UI
 
-- [~] 本地曲库浏览 / 播放 / 搜索已基本可用。
+Web 与 Desktop 都是同等级的 Atom Control。长期目标不是维护“Desktop 完整版 + Web 精简版”，而是建立**同一个 Control UI 与同一个 Core Control Protocol**。除运行在 Control 所在机器上的 Host Capability 外，两者在所有 Core Domain 能力上必须对等。
+
+### 产品原则
+
+- Web 不在浏览器本机解码或输出音频，但拥有完整的 Core playback control。
+- Desktop 不因使用 Electron 而拥有额外的音乐业务权威；它只是统一 Control UI 加 Desktop Host Capability。
+- Web / Desktop 尽量共用同一套 Vue renderer、router、业务组件、Core state projection 与 action model。
+- Core Domain 功能不得通过 `isWeb` / `isElectron` 分叉成两套业务实现。
+- 若一个功能只有通过 Electron IPC 才能工作、而不能通过正式 Core Protocol 完成，应优先视为 Core / Control 边界尚未收敛，而不是把 Web 永久降级。
+
+### Core Domain 能力：Web / Desktop 必须对等
+
+包括但不限于：
+
+- 媒体库浏览、搜索、专辑、艺术家、歌单；
+- 网易 / Qobuz / TIDAL 等 Atom 主动维护 provider；
+- authoritative queue 浏览与编辑；
+- play / pause / seek / stop / next / prev；
+- repeat / shuffle；
+- now playing / lyrics / history / stats；
+- Core output 浏览、选择与 Diretta 控制；
+- library scan 与 Core library path 管理；
+- Core playback policy / 音质 / cache policy；
+- provider account / token / session 管理；
+- Core capability、版本与诊断信息。
+
+Control 本地 store 只保存 Core snapshot / projection，不成为 queue、playback、provider 或 settings domain 的第二事实来源。
+
+### Host Capability：允许按 Control 环境不同
+
+Desktop 可以拥有浏览器不具备的本机集成，例如：
+
+- BrowserWindow / native window control；
+- global hotkey；
+- tray / desktop notification；
+- desktop lyrics / dynamic island / taskbar integration；
+- protocol handler；
+- 未来 Desktop Output Agent；
+- 必要的 OS-native 文件 / shell integration。
+
+Web 可以使用浏览器自己的 notification、clipboard、download 等 Host Capability。Host 能力不同不能导致 Core 音乐业务能力不同。
+
+### Capability-driven UI
+
+- [ ] Core 正式声明可用 domain capability；Control Host 另外声明本地 Host Capability。
+- [ ] UI 根据合并后的 capability set 决定显示 / 禁用项目，不在业务组件中散布大量 `isWeb` / `isElectron` 判断。
+- [ ] 逐步删除依靠 no-op facade 假装支持的 Desktop-only 设置；不支持的 Host Capability 应隐藏或明确禁用。
+- [ ] Desktop 的音乐业务请求最终也通过与 Web 相同的 Core Protocol；Electron IPC 只服务 Desktop shell / Host Capability。
+
+### 统一 Action Model：右键 / 长按 / `...`
+
+右键菜单允许不同 presentation，但业务语义只能有一份。
+
+- [ ] 建立统一 Track / Album / Artist / Playlist 等 Action Model，包括 action id、label、enabled / visible、danger、required capability 与 Core command。
+- [ ] Desktop 与 Web 使用同一 Action Model，不分别复制“播放、下一首播放、加入队列、查看专辑/艺术家、收藏、删除”等业务判断。
+- [ ] 普通业务菜单优先复用 Vue 自定义菜单以保持 Web / Desktop 一致；只有确实需要 OS native 行为时追加 Desktop-only action。
+- [ ] Web 的右键不是唯一入口：触摸设备必须通过 long-press 或 `...` 菜单访问相同 Action Model。
+
+### Core 文件系统与 Control 本地文件系统
+
+Core-centric 架构下必须明确文件属于哪台机器：
+
+- [ ] “添加媒体库目录”浏览和保存的是 **Core 文件系统路径**，Web / Desktop 行为一致，不使用 Desktop 本机 file picker 冒充 Core path。
+- [ ] 若未来支持从 Control 本机导入文件，应作为独立的 Upload / Import 功能，由 Control 上传到 Core，而不是混入 Library Folder 设置。
+- [ ] “下载到 Core”与“下载到当前 Control 设备”在 UI 与 API 中明确区分。
+
+### Settings 分层
+
+统一设置页应明确区分：
+
+```text
+Core Settings
+  Library / Playback / Quality / Outputs / Diretta / Providers / Cache / Core Info
+
+This Control
+  Theme / Language / Host notifications / Core connection
+  Desktop-only: hotkey / tray / desktop lyrics / future local Output Agent
+```
+
+Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capability 展示。
+
+### 现有 UX 待完善
+
+- [~] Web 本地曲库浏览 / 播放控制 / 搜索已基本可用。
 - [x] Web 不显示桌面最小化 / 最大化 / 退出按钮。
 - [x] 输出列表已过滤大部分虚拟 / 无效 ALSA 项。
 - [ ] 扫描期间显示真实 `scanned / total` 进度，而不仅是最终完成状态。
 - [ ] Diretta 在线音源 materialize 时显示明确的“正在准备 Source Direct 音源”反馈。
-- [ ] Web Settings 逐步采用 capability-based 展示，减少依靠 no-op facade 的桌面-only 项。
 - [ ] 评估本地搜索扩展到专辑 / 艺术家结果，低于核心播放优先级。
+
+### 验收标准
+
+- 同一个 Core 连接下，Web 与 Desktop 对所有 Core Domain 操作具有等价能力与结果。
+- 打开多个 Web / Desktop Control 不会形成不同 queue / settings / provider / playback authority。
+- Desktop 退出后 Web 仍可完整管理 Core；Web 关闭后 Desktop 仍管理同一个 Core session。
+- 一项新的 Core Domain 功能原则上只需要实现一次 Core contract 与一次共享 Control UI，不需要分别开发 Desktop/Web 业务版本。
+- 右键、长按与 `...` 只是同一 Action Model 的不同交互入口。
 
 ---
 
@@ -818,7 +908,7 @@ docs/handoff-*            阶段 / 会话交接快照
 5. **冻结 QQ Music / 酷狗 Atom 开发：从正式搜索 UI 移除并默认关闭，仅继承和兼容上游能力。**
 6. **实现 Qobuz / TIDAL Core 账户能力、Control UI 与真实账号播放验收。**
 7. **建立 Atom 独立 release identity、Core Protocol、固定 Node runtime、安装目录数据模型与正式 Core systemd / `tar.gz` artifact。**
-8. **完善扫描进度、Direct materialize loading 等 Web UX。**
+8. **建立统一 Atom Control UI：Web / Desktop Core Domain 能力对等、capability-driven Settings、统一 Action Model，并完善扫描进度与 Direct materialize loading 等 UX。**
 9. **Headless 安全增强保留为 P4；仅在产品网络边界发生变化时提前。**
 
 ---
