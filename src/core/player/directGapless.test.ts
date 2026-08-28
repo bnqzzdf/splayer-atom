@@ -12,6 +12,10 @@ const mainPlayerSource = readFileSync(
   new URL("../../../electron/main/ipc/player.ts", import.meta.url),
   "utf8",
 );
+const directGaplessServiceSource = readFileSync(
+  new URL("../../../electron/main/services/directGapless.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -47,11 +51,8 @@ test("Direct staging respects playback semantics before handing audio to native"
 });
 
 test("Direct gapless boundary prunes superseded temporary online inputs", () => {
-  const commit = between(
-    mainPlayerSource,
-    '"player:commitDirectGaplessBoundary",',
-    "// 设置音量",
-  );
-  assert.match(commit, /commitDirectGaplessBoundary/);
-  assert.match(commit, /pruneDirectInputs\(source\)/);
+  const commit = between(mainPlayerSource, '"player:commitDirectGaplessBoundary",', "// 设置音量");
+  assert.match(commit, /commitDirectPlaybackBoundary/);
+  assert.match(directGaplessServiceSource, /commitDirectGaplessBoundary/);
+  assert.match(directGaplessServiceSource, /pruneDirectInputs\(source\)/);
 });

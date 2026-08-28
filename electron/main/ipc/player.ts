@@ -8,18 +8,10 @@ import * as mediaService from "@main/services/media";
 import * as nowPlaying from "@main/services/nowPlaying";
 import * as lastfm from "@main/services/lastfm";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
-import { fetchBytes } from "@main/utils/fetchBytes";
 import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
-import {
-  onHeadlessPlayerEnded,
-  onHeadlessPlayerState,
-} from "@main/services/headlessPlayStats";
-import {
-  isCurrentPlayerLoadSeq,
-  loadPlayerSource,
-  nextPlayerLoadSeq,
-} from "@main/services/playerLoad";
+import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
+import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   clearActiveCueRange,
   toDisplayDurationMs,
@@ -34,23 +26,16 @@ import {
   requestReinit,
 } from "@main/services/device";
 import { getThumbar } from "@main/services/thumbar";
-import {
-  setTraySongName,
-  setTrayPlayState,
-  setTrayPlayMode,
-  setTrayLikeState,
-} from "@main/services/tray";
-import { setTaskbarThumbnailCover } from "@main/services/thumbnail";
+import { setTrayPlayState, setTrayPlayMode, setTrayLikeState } from "@main/services/tray";
 import { getMainWindow, setTaskbarProgress } from "@main/window";
 import { store } from "@main/store";
-import { appName } from "@main/utils/config";
-import { formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
+import { cleanupDirectInputs, materializeDirectInput } from "@main/atom/directInput";
 import {
-  cleanupDirectInputs,
-  materializeDirectInput,
-  pruneDirectInputs,
-} from "@main/atom/directInput";
+  cancelDirectPlaybackNext,
+  commitDirectPlaybackBoundary,
+  stageDirectPlaybackNext,
+} from "@main/services/directGapless";
 import { ErrorCode } from "@shared/types/errors";
 import type {
   LoadOptions,
@@ -334,13 +319,10 @@ export const registerPlayerIpc = (): void => {
     }),
   );
 
-  ipcMain.handle(
-    "player:moveSessionQueue",
-    (_event, fromIndex: number, toIndex: number) => ({
-      success: true,
-      data: playbackSession.moveQueue(fromIndex, toIndex),
-    }),
-  );
+  ipcMain.handle("player:moveSessionQueue", (_event, fromIndex: number, toIndex: number) => ({
+    success: true,
+    data: playbackSession.moveQueue(fromIndex, toIndex),
+  }));
 
   ipcMain.handle("player:removeSessionServerTracks", (_event, serverId: string) => ({
     success: true,
@@ -371,52 +353,15 @@ export const registerPlayerIpc = (): void => {
   // staging 不兼容是正常降级条件：保持当前播放，renderer 在边界走普通 load。
   ipcMain.handle(
     "player:stageDirectNext",
-    async (_event, source: string, durationMs: number, generation: number) => {
-      try {
-        const safeGeneration = Math.max(0, Math.min(0xffff_ffff, Math.trunc(generation)));
-        const inst = getPlayer();
-        const staged = await inst.stageDirectNext(
-          source,
-          Math.max(0, durationMs) / 1000,
-          safeGeneration,
-        );
-        if (!staged) return { success: true, data: { staged: false } };
-
-        try {
-          const meta = await inst.probeMetadata(source);
-          const quality = {
-            sampleRate: meta.originalSampleRate,
-            channels: meta.channels,
-            bitsPerSample: meta.bitsPerSample,
-            bitRate: meta.bitRate,
-            codec: meta.codec,
-          };
-          return {
-            success: true,
-            data: {
-              staged: true,
-              detail: {
-                quality,
-                embeddedLyric: meta.embeddedLyric,
-                externalLyrics: meta.externalLyrics,
-              },
-            },
-          };
-        } catch (error) {
-          // metadata 是旁路体验增强；音频 staging 已成功时绝不能因此撤销 generation。
-          playerLog.debug(`Direct staging metadata probe 未命中: ${String(error)}`);
-          return { success: true, data: { staged: true } };
-        }
-      } catch (error) {
-        playerLog.debug(`Direct gapless staging 未命中: ${String(error)}`);
-        return { success: true, data: { staged: false } };
-      }
-    },
+    async (_event, source: string, durationMs: number, generation: number) => ({
+      success: true,
+      data: await stageDirectPlaybackNext(source, durationMs, generation),
+    }),
   );
 
   ipcMain.handle("player:cancelDirectNext", () => {
     try {
-      getPlayer().cancelDirectNext();
+      cancelDirectPlaybackNext();
       return { success: true };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
@@ -433,40 +378,7 @@ export const registerPlayerIpc = (): void => {
       context?: LoadOptions["context"],
     ) => {
       try {
-        getPlayer().commitDirectGaplessBoundary(source, Math.max(0, durationMs) / 1000);
-        void pruneDirectInputs(source);
-        clearActiveCueRange();
-        const seq = nextPlayerLoadSeq();
-        if (authoritative) {
-          const title = authoritative.title || source.split(/[/\\]/).pop() || source;
-          const artist = formatArtists(authoritative.artists ?? []);
-          const album = authoritative.album?.name ?? "";
-          const coverCandidate = authoritative.coverOriginal ?? authoritative.cover;
-          const coverUrl =
-            coverCandidate && /^https?:\/\//i.test(coverCandidate) ? coverCandidate : undefined;
-          const header = artist ? `${title} - ${artist}` : title || appName;
-          mediaService.setMetadata({ title, artist, album, coverUrl, durationMs });
-          mediaService.setPlayState({ status: "Playing" });
-          getMainWindow()?.setTitle(header);
-          setTraySongName(header);
-          setTrayPlayState("playing");
-          const primaryArtist = authoritative.artists?.[0]?.name ?? artist;
-          lastfm.onTrackLoaded({
-            title,
-            artist: primaryArtist,
-            album,
-            durationMs,
-            autoPlay: true,
-          });
-          neteaseScrobble.onTrackLoaded(authoritative, context, durationMs, true);
-          if (coverUrl) {
-            void fetchBytes(coverUrl).then((buf) => {
-              if (!buf || !isCurrentPlayerLoadSeq(seq)) return;
-              mediaService.setMetadata({ title, artist, album, coverData: buf, coverUrl, durationMs });
-              setTaskbarThumbnailCover(buf);
-            });
-          }
-        }
+        commitDirectPlaybackBoundary(source, durationMs, authoritative, context);
         return { success: true };
       } catch (error) {
         return fail(ErrorCode.UNKNOWN, error);
