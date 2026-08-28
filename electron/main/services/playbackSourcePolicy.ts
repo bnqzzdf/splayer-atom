@@ -1,5 +1,5 @@
 import type { PluginQuality } from "../../../shared/types/plugin";
-import type { Track } from "../../../shared/types/player";
+import type { RepeatMode, ShuffleMode, Track } from "../../../shared/types/player";
 
 export type PlaybackCacheKeyTrack = Pick<Track, "id" | "source" | "serverId" | "originalId">;
 
@@ -28,3 +28,15 @@ export const shouldRetryPlaybackSource = (
   track: Pick<Track, "source">,
   attempts: number,
 ): boolean => track.source !== "local" && attempts < 1;
+
+/** 返回当前权威队列中可稳定预解析的下一项；shuffle 轮末需等 next() 完成重排。 */
+export const nextPlaybackPreloadIndex = (
+  index: number,
+  queueLength: number,
+  repeat: RepeatMode,
+  shuffle: ShuffleMode,
+): number | null => {
+  if (index < 0 || queueLength <= 1 || repeat === "one") return null;
+  if (shuffle === "on" && index >= queueLength - 1) return null;
+  return index + 1 >= queueLength ? 0 : index + 1;
+};

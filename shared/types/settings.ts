@@ -54,6 +54,8 @@ export interface PlayerSettings {
   songLevel: PluginQuality;
   /** 完整音源不可用时是否允许 Core 使用试听片段 */
   allowTrialPlay: boolean;
+  /** Core 是否提前解析下一首播放输入 */
+  preloadNextTrack: boolean;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
   /** 均衡器配置 */

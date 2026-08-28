@@ -21,6 +21,7 @@ export const defaultSystemConfig: SystemConfig = {
     volume: 1,
     songLevel: "hq",
     allowTrialPlay: false,
+    preloadNextTrack: false,
     loudnessNormalization: false,
     equalizer: {
       enabled: false,

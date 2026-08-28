@@ -96,7 +96,7 @@ const playerCategory: SettingCategory = {
         {
           key: "preloadNextTrack",
           type: "switch",
-          binding: { store: "settings", path: "player.preloadNextTrack" },
+          binding: { store: "settings", path: "system.player.preloadNextTrack" },
           defaultValue: false,
         },
       ],

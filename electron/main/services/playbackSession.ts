@@ -11,7 +11,15 @@ import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbac
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import { resolvePlaybackSource } from "@main/services/playbackSourceResolver";
-import { shouldRetryPlaybackSource } from "@main/services/playbackSourcePolicy";
+import {
+  nextPlaybackPreloadIndex,
+  shouldRetryPlaybackSource,
+} from "@main/services/playbackSourcePolicy";
+import {
+  consumePlaybackPreload,
+  invalidatePlaybackPreload,
+  schedulePlaybackPreload,
+} from "@main/services/playbackPreloader";
 import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
@@ -62,6 +70,19 @@ const publish = (): void => {
   wsBroadcast({ type: "session", data });
 };
 
+const scheduleNextPlaybackPreload = (): void => {
+  if (!isHeadlessMode() || !active) {
+    invalidatePlaybackPreload();
+    return;
+  }
+  const targetIndex = nextPlaybackPreloadIndex(index, queue.length, repeat, shuffle);
+  if (targetIndex === null) {
+    invalidatePlaybackPreload();
+    return;
+  }
+  schedulePlaybackPreload(targetIndex, queue[targetIndex]);
+};
+
 const loadIndex = async (
   targetIndex: number,
   autoPlay = true,
@@ -72,7 +93,8 @@ const loadIndex = async (
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  const resolved = await resolvePlaybackSource(track);
+  const resolved =
+    consumePlaybackPreload(targetIndex, item) ?? (await resolvePlaybackSource(track));
   if (generation !== loadGeneration) return;
 
   playerLog.info(`[session] load ${track.source} track: ${track.title}`);
@@ -98,6 +120,7 @@ const loadIndex = async (
   nowPlaying.update({ ...track, duration }, [], null);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
+  scheduleNextPlaybackPreload();
 };
 
 export const initPlaybackSession = async (): Promise<void> => {
@@ -249,6 +272,7 @@ export const removeQueueIndex = async (
 export const clearQueue = async (stop = false): Promise<void> => {
   ++loadGeneration;
   sourceRecoveryAttempts = 0;
+  invalidatePlaybackPreload();
   queue = [];
   originalQueue = null;
   index = -1;
@@ -375,6 +399,7 @@ export const updateQueueTracks = (updates: Track[]): PlaybackSessionSnapshot => 
 export const setRepeat = (mode: RepeatMode): PlaybackSessionSnapshot => {
   repeat = mode;
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 
@@ -396,6 +421,7 @@ export const setShuffle = (mode: ShuffleMode): PlaybackSessionSnapshot => {
   }
   shuffle = mode;
   publish();
+  scheduleNextPlaybackPreload();
   return snapshot();
 };
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { playbackSourceCacheKey, shouldRetryPlaybackSource } from "./playbackSourcePolicy";
+import {
+  nextPlaybackPreloadIndex,
+  playbackSourceCacheKey,
+  shouldRetryPlaybackSource,
+} from "./playbackSourcePolicy";
 
 const base = { id: "42" };
 
@@ -40,5 +44,18 @@ describe("shouldRetryPlaybackSource", () => {
 
   it("never retries local files through the provider resolver", () => {
     assert.equal(shouldRetryPlaybackSource({ source: "local" }, 0), false);
+  });
+});
+
+describe("nextPlaybackPreloadIndex", () => {
+  it("preloads the next stable queue item and wraps list playback", () => {
+    assert.equal(nextPlaybackPreloadIndex(0, 3, "list", "off"), 1);
+    assert.equal(nextPlaybackPreloadIndex(2, 3, "list", "off"), 0);
+  });
+
+  it("does not pre-resolve repeat-one, one-item, or shuffle rollover candidates", () => {
+    assert.equal(nextPlaybackPreloadIndex(0, 3, "one", "off"), null);
+    assert.equal(nextPlaybackPreloadIndex(0, 1, "list", "off"), null);
+    assert.equal(nextPlaybackPreloadIndex(2, 3, "list", "on"), null);
   });
 });

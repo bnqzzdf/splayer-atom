@@ -13,6 +13,7 @@ import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useMediaStore } from "@/stores/media";
 import * as queue from "@/stores/queue";
+import { isWebRemote } from "@/runtime";
 
 /** 预载结果 */
 export interface NextTrackPreloadResult {
@@ -187,7 +188,7 @@ export const consumeDirectGaplessBoundary = (generation: number): NextTrackPrelo
  */
 export const scheduleNextTrackPreload = (): void => {
   const settings = useSettingsStore();
-  if (!settings.player.preloadNextTrack) {
+  if (!settings.system.player.preloadNextTrack) {
     invalidateNextTrackPreload();
     return;
   }
@@ -215,6 +216,14 @@ export const scheduleNextTrackPreload = (): void => {
   const contextKey = buildContextKey(candidateTrack);
   // 歌词使用独立上下文去重，歌词偏好变化不需要重新解析音源
   preloadLyricForTrack(candidateTrack);
+  if (isWebRemote()) {
+    // 远程 Web 只做 UI 预热；播放输入与 Direct staging 由 Core 唯一持有。
+    currentToken++;
+    cachedResult = null;
+    currentContextKey = null;
+    if (candidateTrack.cover) void preloadCover(candidateTrack.cover);
+    return;
+  }
 
   // 上下文指纹一致且已有缓存，避免重复触发
   if (cachedResult && cachedResult.contextKey === contextKey) {
@@ -310,7 +319,7 @@ export const installNextTrackPreloadWatchers = (): void => {
   const plugins = usePluginsStore();
   stopContextWatch = watch(
     () => [
-      settings.player.preloadNextTrack,
+      settings.system.player.preloadNextTrack,
       settings.system.player.songLevel,
       settings.system.player.allowTrialPlay,
       settings.preset.fuckDjMode,
