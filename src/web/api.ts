@@ -344,7 +344,15 @@ const playerApi: PlayerApi = {
         .filter((device) => device.id.startsWith("diretta:"))
         .map((device) => ({ ...device, name: `${device.name} · Diretta` })),
     ),
-  materializeDirectInput: async () => ({ success: false, error: "WEB_REMOTE_INPUT_UNSUPPORTED" }),
+  materializeDirectInput: (source) =>
+    asIpc(async () =>
+      (
+        await request<{ path: string }>("/player/direct-input/materialize", {
+          method: "POST",
+          body: JSON.stringify({ source }),
+        })
+      ).path,
+    ),
   getDefaultDeviceName: () =>
     asIpc(async () =>
       (await request<OutputSnapshot>("/output/devices")).data.find((device) => device.isDefault)?.name ??

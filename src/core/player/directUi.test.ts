@@ -83,7 +83,19 @@ test("Headless Web output selector only exposes real ALSA hardware and Diretta",
   assert.match(webOutputSelectorSource, /startsWith\("diretta:"\)/);
   assert.match(webOutputSelectorSource, /alsa:hw:CARD=/);
   assert.match(webOutputSelectorSource, /ALSA ·/);
+  assert.match(webOutputSelectorSource, /await switchDevice/);
+  assert.match(webOutputSelectorSource, /await refreshDevices/);
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
+});
+
+test("Headless Web refreshes the selected output from main authority", () => {
+  const refreshFlow = between(
+    playerSource,
+    "export const refreshDevices = async",
+    "/**\n * 切换音频输出设备",
+  );
+  assert.match(refreshFlow, /getSelectedDeviceName/);
+  assert.match(refreshFlow, /settingsStore|useSettingsStore/);
 });
 
 test("Core volume and tempo controls cannot bypass the Direct UI lock", () => {

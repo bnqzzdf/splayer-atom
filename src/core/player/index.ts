@@ -700,6 +700,10 @@ export const refreshDevices = async (): Promise<void> => {
     ...systemResult.data,
     ...(direttaResult.success && direttaResult.data ? direttaResult.data : []),
   ];
+  if (isWebRemote()) {
+    const selected = await window.api.player.getSelectedDeviceName();
+    if (selected.success) useSettingsStore().player.outputDevice = selected.data ?? null;
+  }
 };
 
 /**
@@ -714,19 +718,19 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
     return;
   }
   const media = useMediaStore();
-  const enteringDiretta =
-    deviceId?.startsWith("diretta:") === true &&
-    settings.player.outputDevice?.startsWith("diretta:") !== true;
+  let selectedOutput = settings.player.outputDevice;
+  if (isWebRemote()) {
+    const selected = await window.api.player.getSelectedDeviceName();
+    if (selected.success) {
+      selectedOutput = selected.data ?? null;
+      settings.player.outputDevice = selectedOutput;
+    }
+  }
+  const enteringDiretta = isDirettaOutput(deviceId) && !isDirettaOutput(selectedOutput);
   const track = media.track;
   const currentSource = status.currentSource;
 
-  if (
-    enteringDiretta &&
-    track &&
-    (track.source === "qobuz" || track.source === "tidal") &&
-    currentSource &&
-    /^https?:\/\//i.test(currentSource)
-  ) {
+  if (enteringDiretta && track && currentSource && /^https?:\/\//i.test(currentSource)) {
     const prepared = await prepareDirectTrackSource(
       track,
       { source: currentSource, fromCache: false, provider: "official" },

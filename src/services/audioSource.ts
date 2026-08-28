@@ -277,8 +277,7 @@ export const prepareDirectTrackSource = async (
   const settings = useSettingsStore();
   const selectedOutput = outputDevice === undefined ? settings.player.outputDevice : outputDevice;
   const isDiretta = selectedOutput?.startsWith("diretta:") === true;
-  const isSupportedOnline = track.source === "qobuz" || track.source === "tidal";
-  if (!isDiretta || !isSupportedOnline || !/^https?:\/\//i.test(resolved.source)) return resolved;
+  if (!isDiretta || track.source === "local" || !/^https?:\/\//i.test(resolved.source)) return resolved;
 
   const cacheKey = cacheKeyForTrack(track, settings.player.songLevel);
   const cacheEnabled = settings.system.cache?.songCache?.enabled === true && cacheKey !== null;

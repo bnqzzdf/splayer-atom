@@ -412,6 +412,10 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
   assertHeadlessDirettaPrivilege(deviceId);
   await getPlayer().setOutputDevice(deviceId ?? undefined);
   store.set("player.outputDevice", deviceId);
+  wsBroadcast({
+    type: "deviceChanged",
+    data: { defaultDevice: getPlayer().getDefaultDeviceName() ?? null },
+  });
 };
 
 /** 当前 Native 实际选择的输出设备，而不是仅返回持久化偏好。 */

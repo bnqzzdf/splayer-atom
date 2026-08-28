@@ -10,6 +10,7 @@ import type {
   Track,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
+import { materializeDirectInput } from "@main/atom/directInput";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   callProviderApi,
@@ -173,6 +174,17 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ success: false, error: "source_required" }, 400);
     }
     return c.json(await loadPlayerSource(body.source, body.options ?? {}));
+  });
+  api.post("/player/direct-input/materialize", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { source?: unknown } | null;
+    if (typeof body?.source !== "string" || !body.source) {
+      return c.json({ error: "source_required" }, 400);
+    }
+    try {
+      return c.json({ path: await materializeDirectInput(body.source) });
+    } catch (error) {
+      return c.json({ error: errorText(error) }, 500);
+    }
   });
 
   api.get("/volume", (c) => c.json({ volume: getPlayer().getVolume() }));

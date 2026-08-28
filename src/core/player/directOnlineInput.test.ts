@@ -21,13 +21,14 @@ const between = (source: string, start: string, end: string): string => {
   return section;
 };
 
-test("Qobuz/TIDAL Direct input becomes local before native load", () => {
+test("remote Direct input becomes local before native load", () => {
   const preparation = between(
     audioSource,
     "export const prepareDirectTrackSource = async (",
     "/**\n * 记录解析错误",
   );
-  assert.match(preparation, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
+  assert.match(preparation, /track\.source === "local"/);
+  assert.doesNotMatch(preparation, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
   assert.match(preparation, /outputDevice/);
   assert.match(preparation, /cache\.song\.fetch/);
   assert.match(preparation, /materializeDirectInput/);
@@ -73,13 +74,15 @@ test("Diretta next-track staging prepares online input before native gapless sta
   assert.ok(stageIndex > prepareIndex);
 });
 
-test("switching a remote Qobuz/TIDAL track into Diretta prepares local input first", () => {
+test("switching any remote HTTP track into Diretta prepares local input first", () => {
   const switchFlow = between(
     playerSource,
     "export const switchDevice = async (",
     "/**\n * 设置队列并从指定位置开始播放",
   );
   assert.match(switchFlow, /prepareDirectTrackSource/);
+  assert.match(switchFlow, /\^https\?:\\\/\\\//i);
+  assert.doesNotMatch(switchFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
   assert.match(switchFlow, /deviceId/);
   assert.match(switchFlow, /window\.api\.player\.stop/);
   assert.match(switchFlow, /setOutputDevice\(deviceId, false\)/);

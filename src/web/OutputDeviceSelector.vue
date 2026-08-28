@@ -26,12 +26,13 @@ const options = computed(() =>
 
 const current = computed(() => settings.player.outputDevice ?? "");
 
-const onChange = (value: string | number | boolean): void => {
-  void switchDevice(String(value));
+const onChange = async (value: string | number | boolean): Promise<void> => {
+  await switchDevice(String(value));
+  await refreshDevices();
 };
 
 onMounted(() => {
-  if (status.outputDevices.length === 0) void refreshDevices();
+  void refreshDevices();
 });
 </script>
 
