@@ -12,6 +12,7 @@ import * as cacheScheduler from "@/services/cacheScheduler";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
+import { handleError } from "@/utils/errors";
 import * as playStats from "./stats";
 import { consumeDirectGaplessBoundary } from "@/services/nextTrackPreloader";
 import {
@@ -134,6 +135,9 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
     }
     case "fftData":
       playback.setFftFrame(event.data.ldata, event.data.rdata);
+      break;
+    case "error":
+      handleError(event.data.error);
       break;
     case "ended": {
       // Headless main session 已经消费自然结束；远程 Web 只等待 session 快照更新。

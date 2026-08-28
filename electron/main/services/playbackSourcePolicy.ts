@@ -1,3 +1,4 @@
+import { ErrorCode } from "../../../shared/types/errors";
 import type { PluginQuality } from "../../../shared/types/plugin";
 import type { RepeatMode, ShuffleMode, Track } from "../../../shared/types/player";
 
@@ -22,6 +23,24 @@ export const playbackSourceCacheKey = (
   }
   return null;
 };
+
+const SKIPPABLE_PLAYBACK_ERRORS = new Set<string>([
+  ErrorCode.FILE_NOT_FOUND,
+  ErrorCode.FILE_NO_AUDIO_STREAM,
+  ErrorCode.FILE_DECODE_ERROR,
+  ErrorCode.NETWORK_ERROR,
+  ErrorCode.NETWORK_TIMEOUT,
+  ErrorCode.URL_RESOLVE_FAILED,
+  ErrorCode.NO_PLUGIN_AVAILABLE,
+  ErrorCode.NETEASE_LOGIN_EXPIRED,
+  ErrorCode.NETEASE_VIP_REQUIRED,
+  ErrorCode.NETEASE_TRIAL_DISABLED,
+  ErrorCode.NETEASE_UNAVAILABLE,
+]);
+
+/** 单曲级失败可由 Core 有界跳过；设备类/全局错误必须留给用户处理。 */
+export const isSkippablePlaybackError = (code: string): boolean =>
+  SKIPPABLE_PLAYBACK_ERRORS.has(code);
 
 /** Native sourceError 只允许在线/流媒体输入对同一 canonical Track fresh resolve 一次。 */
 export const shouldRetryPlaybackSource = (

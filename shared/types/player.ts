@@ -237,7 +237,7 @@ export type PlayerEvent =
   | { type: "addToQueue"; data: { tracks: Track[]; position: "next" | "end" } }
   | { type: "toggleLike" }
   | { type: "fftData"; data: FftData }
-  | { type: "error"; error: string }
+  | { type: "error"; data: { error: string } }
   | { type: "deviceChanged"; data: { defaultDevice: string | null } }
   | { type: "session"; data: PlaybackSessionSnapshot };
 

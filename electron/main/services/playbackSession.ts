@@ -12,8 +12,12 @@ import { getPlayer } from "@main/services/engine";
 import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
-import { resolvePlaybackSource } from "@main/services/playbackSourceResolver";
 import {
+  playbackSourceErrorCode,
+  resolvePlaybackSource,
+} from "@main/services/playbackSourceResolver";
+import {
+  isSkippablePlaybackError,
   nextPlaybackPreloadIndex,
   shouldRetryPlaybackSource,
 } from "@main/services/playbackSourcePolicy";
@@ -30,6 +34,7 @@ import { isHeadlessMode } from "@main/runtime";
 import { store } from "@main/store";
 import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { playerLog } from "@main/utils/logger";
+import { ErrorCode } from "@shared/types/errors";
 
 let queue: PlaybackQueueItem[] = [];
 let originalQueue: PlaybackQueueItem[] | null = null;
@@ -40,6 +45,25 @@ let active = false;
 let initialized = false;
 let loadGeneration = 0;
 let sourceRecoveryAttempts = 0;
+
+const MAX_CONSECUTIVE_LOAD_FAILURES = 5;
+
+class CorePlaybackLoadError extends Error {
+  constructor(
+    public readonly code: ErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "CorePlaybackLoadError";
+  }
+}
+
+const publishPlaybackError = (code: ErrorCode): void => {
+  const event = { type: "error" as const, data: { error: code } };
+  publishDesktopEvent("player:event", event);
+  wsBroadcast(event);
+};
 
 /** Linux headless Diretta Host requires root privileges in the supported deployment model. */
 const assertHeadlessDirettaPrivilege = (deviceId: string | null | undefined): void => {
@@ -119,8 +143,18 @@ const loadIndex = async (
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  const resolved =
-    consumePlaybackPreload(targetIndex, item) ?? (await resolvePlaybackSource(track));
+  let resolved = consumePlaybackPreload(targetIndex, item);
+  if (!resolved) {
+    try {
+      resolved = await resolvePlaybackSource(track);
+    } catch (error) {
+      throw new CorePlaybackLoadError(
+        playbackSourceErrorCode(error),
+        `${track.source} source resolve failed`,
+        { cause: error },
+      );
+    }
+  }
   if (generation !== loadGeneration) return;
 
   playerLog.info(`[session] load ${track.source} track: ${track.title}`);
@@ -131,7 +165,10 @@ const loadIndex = async (
   });
   if (generation !== loadGeneration) return;
   if (!result.success || !result.data) {
-    throw new Error(`${track.source} session load failed: ${result.error ?? "UNKNOWN"}`);
+    const code = Object.values(ErrorCode).includes(result.error as ErrorCode)
+      ? (result.error as ErrorCode)
+      : ErrorCode.UNKNOWN;
+    throw new CorePlaybackLoadError(code, `${track.source} session load failed: ${code}`);
   }
 
   if (resolved.cacheAfterLoad) {
@@ -142,12 +179,44 @@ const loadIndex = async (
 
   index = targetIndex;
   active = true;
+  publish();
   const duration = Math.max(track.duration || 0, result.data.mediaInfo.duration);
   nowPlaying.update({ ...track, duration }, [], null);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
   publishTrackLoaded(item, resolved.source, autoPlay, result.data.detail, result.data.mediaInfo);
   scheduleNextPlaybackPreload();
+};
+
+const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promise<boolean> => {
+  if (targetIndex < 0 || targetIndex >= queue.length) return false;
+  const maxAttempts = Math.max(1, Math.min(MAX_CONSECUTIVE_LOAD_FAILURES, queue.length));
+  let candidateIndex = targetIndex;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await loadIndex(candidateIndex, autoPlay);
+      return true;
+    } catch (error) {
+      const code = error instanceof CorePlaybackLoadError ? error.code : ErrorCode.UNKNOWN;
+      publishPlaybackError(code);
+      playerLog.warn(
+        `[session] load failed index=${candidateIndex} code=${code} attempt=${attempt + 1}/${maxAttempts}`,
+      );
+      if (!isSkippablePlaybackError(code)) throw error;
+      if (attempt + 1 >= maxAttempts) break;
+      invalidatePlaybackPreload();
+      candidateIndex = candidateIndex + 1 >= queue.length ? 0 : candidateIndex + 1;
+    }
+  }
+
+  ++loadGeneration;
+  invalidatePlaybackPreload();
+  getPlayer().stop();
+  active = false;
+  nowPlaying.onPlayStateChange("stopped");
+  publish();
+  return false;
 };
 
 export const initPlaybackSession = async (): Promise<void> => {
@@ -245,7 +314,7 @@ export const replaceQueue = async (
   }
   active = true;
   publish();
-  if (loadCurrent) await loadIndex(index, autoPlay);
+  if (loadCurrent) await loadIndexWithPolicy(index, autoPlay);
   return snapshot();
 };
 
@@ -296,7 +365,7 @@ export const removeQueueIndex = async (
   if (removingCurrent) {
     index = Math.min(removeIndex, queue.length - 1);
     publish();
-    if (loadCurrent) await loadIndex(index, true);
+    if (loadCurrent) await loadIndexWithPolicy(index, true);
   } else {
     publish();
     scheduleNextPlaybackPreload();
@@ -320,7 +389,7 @@ export const clearQueue = async (stop = false): Promise<void> => {
 
 export const play = async (): Promise<void> => {
   if (queue.length > 0 && (index < 0 || getPlayer().getStatus().state === "stopped")) {
-    await loadIndex(Math.max(0, index), true);
+    await loadIndexWithPolicy(Math.max(0, index), true);
     return;
   }
   await getPlayer().play();
@@ -341,7 +410,7 @@ export const selectIndex = async (
   index = targetIndex;
   active = true;
   publish();
-  if (loadCurrent) await loadIndex(index, autoPlay);
+  if (loadCurrent) await loadIndexWithPolicy(index, autoPlay);
   return snapshot();
 };
 

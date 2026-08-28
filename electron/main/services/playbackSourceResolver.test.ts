@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { ErrorCode } from "../../../shared/types/errors";
 import {
+  isSkippablePlaybackError,
   nextPlaybackPreloadIndex,
   playbackSourceCacheKey,
   shouldRetryPlaybackSource,
@@ -32,6 +34,27 @@ describe("playbackSourceCacheKey", () => {
   it("preserves inherited QQ/Kugou cache-key compatibility without claiming Core resolution", () => {
     assert.equal(playbackSourceCacheKey({ ...base, source: "qqmusic" }, "hq"), "o:qqmusic:42:");
     assert.equal(playbackSourceCacheKey({ ...base, source: "kugou" }, "hq"), "o:kugou:42:");
+  });
+});
+
+describe("isSkippablePlaybackError", () => {
+  it("allows Core to advance past track-scoped source failures", () => {
+    for (const code of [
+      ErrorCode.FILE_NOT_FOUND,
+      ErrorCode.FILE_DECODE_ERROR,
+      ErrorCode.NETWORK_ERROR,
+      ErrorCode.URL_RESOLVE_FAILED,
+      ErrorCode.NETEASE_VIP_REQUIRED,
+      ErrorCode.NETEASE_TRIAL_DISABLED,
+    ]) {
+      assert.equal(isSkippablePlaybackError(code), true);
+    }
+  });
+
+  it("keeps device and unknown failures outside automatic queue advancement", () => {
+    assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_NOT_FOUND), false);
+    assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_INIT_FAILED), false);
+    assert.equal(isSkippablePlaybackError(ErrorCode.UNKNOWN), false);
   });
 });
 
