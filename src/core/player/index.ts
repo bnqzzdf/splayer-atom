@@ -502,7 +502,8 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
     return;
   }
 
-  const pauseBeforeSwitch = settings.player.pauseOnDeviceSwitch && status.state === "playing";
+  const pauseBeforeSwitch =
+    settings.system.player.pauseOnDeviceSwitch && status.state === "playing";
   const result = await window.api.player.setOutputDevice(deviceId, pauseBeforeSwitch);
   if (result.success) settings.player.outputDevice = deviceId;
   else if (result.error) handleError(result.error);
@@ -995,7 +996,6 @@ export const initPlayer = async (): Promise<void> => {
   }
   // 刷新设备列表并恢复上次选择的输出设备
   await refreshDevices();
-  await window.api.player.setPauseOnDeviceSwitch(settings.player.pauseOnDeviceSwitch);
   if (settings.player.outputDevice) {
     // 1.0.0 及更早版本存的是显示名，就地换成稳定 ID；设备当前不在线时保留原值等下次启动
     const legacy = useStatusStore().outputDevices.find(

@@ -22,6 +22,7 @@ export const defaultSystemConfig: SystemConfig = {
     songLevel: "hq",
     allowTrialPlay: false,
     preloadNextTrack: false,
+    pauseOnDeviceSwitch: false,
     fuckDjMode: false,
     loudnessNormalization: false,
     equalizer: {

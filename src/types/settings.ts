@@ -183,8 +183,6 @@ export interface PlayerSettings {
   autoImmersive: boolean;
   /** 输出设备 ID（cpal DeviceId），null 表示跟随系统默认 */
   outputDevice: string | null;
-  /** 切换输出设备时暂停播放 */
-  pauseOnDeviceSwitch: boolean;
   /** 是否启用音乐频谱可视化 */
   enableSpectrum: boolean;
   /** 频谱单条宽度（px） */

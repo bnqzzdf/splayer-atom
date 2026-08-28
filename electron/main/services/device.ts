@@ -1,4 +1,5 @@
 import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { store } from "@main/store";
 import { isWin } from "@main/utils/config";
 import { playerLog } from "@main/utils/logger";
 import { evaluateDeviceChange, recoveryRetryDelay } from "./devicePolicy";
@@ -17,11 +18,10 @@ let lastDefaultDevice: string | null | undefined;
 let reinitPromise: Promise<void> | null = null;
 let pendingReinitPlayer: PlayerInstance | null = null;
 let retryTimer: NodeJS.Timeout | null = null;
-let pauseOnDeviceSwitch = false;
 
-/** 设置默认输出设备切换前是否立即暂停 */
+/** 兼容旧 IPC；真实 policy authority 已迁入 Core settings。 */
 export const setPauseOnDeviceSwitch = (enabled: boolean): void => {
-  pauseOnDeviceSwitch = enabled;
+  store.set("player.pauseOnDeviceSwitch", enabled);
 };
 
 /** 取消尚未开始的恢复重试；正在执行的原生重建由新的 load token / 输出代次接管。 */
@@ -68,7 +68,7 @@ export const requestReinit = (player: PlayerInstance): void => {
   // 暂停放在重建入口而非默认设备变化分支：Linux 的 cpal PipeWire 后端默认设备名恒为哨兵值
   // default_output，比较设备名判断不出切换，那里只有输出流错误能反映输出已经易主
   // ponytail: 若要区分「主动切换」与「被动断连」，需把各后端已有的精确信号透传进 DeviceChangedCallback
-  if (pauseOnDeviceSwitch) player.pauseImmediately();
+  if (store.get("player.pauseOnDeviceSwitch")) player.pauseImmediately();
   if (reinitPromise !== null || retryTimer !== null) {
     pendingReinitPlayer = player;
     return;
