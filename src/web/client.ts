@@ -44,6 +44,7 @@ export const connectWebEvents = (
   let disposed = false;
   let ws: WebSocket | null = null;
   let reconnectTimer: number | null = null;
+  let statusTimer: number | null = null;
 
   const sendVisibility = (): void => {
     if (ws?.readyState !== WebSocket.OPEN) return;
@@ -65,12 +66,40 @@ export const connectWebEvents = (
     }
   };
 
+  /** 高频 position 不走 WS；正式 Web 用轻量 status snapshot 驱动进度。 */
+  const syncStatus = async (): Promise<void> => {
+    if (disposed || document.visibilityState !== "visible" || ws?.readyState !== WebSocket.OPEN) return;
+    try {
+      const status = await request<PlayerStatus>("/status");
+      if (disposed || ws?.readyState !== WebSocket.OPEN) return;
+      onEvent({ type: "status", data: status });
+    } catch {
+      // WS 重连和下一轮 snapshot 会继续恢复状态。
+    }
+  };
+
+  const stopStatusPolling = (): void => {
+    if (statusTimer !== null) window.clearInterval(statusTimer);
+    statusTimer = null;
+  };
+
+  const startStatusPolling = (): void => {
+    stopStatusPolling();
+    statusTimer = window.setInterval(() => void syncStatus(), 500);
+  };
+
+  const handleVisibility = (): void => {
+    sendVisibility();
+    if (document.visibilityState === "visible") void syncStatus();
+  };
+
   const connect = (): void => {
     if (disposed) return;
     ws = new WebSocket(`${wsOrigin}/ws`);
     ws.onopen = () => {
       sendVisibility();
       void syncSnapshots();
+      startStatusPolling();
     };
     ws.onmessage = (message) => {
       try {
@@ -87,6 +116,7 @@ export const connectWebEvents = (
       }
     };
     ws.onclose = () => {
+      stopStatusPolling();
       if (disposed || reconnectTimer !== null) return;
       reconnectTimer = window.setTimeout(() => {
         reconnectTimer = null;
@@ -95,11 +125,12 @@ export const connectWebEvents = (
     };
   };
 
-  document.addEventListener("visibilitychange", sendVisibility);
+  document.addEventListener("visibilitychange", handleVisibility);
   connect();
   return () => {
     disposed = true;
-    document.removeEventListener("visibilitychange", sendVisibility);
+    document.removeEventListener("visibilitychange", handleVisibility);
+    stopStatusPolling();
     if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     reconnectTimer = null;
     ws?.close();

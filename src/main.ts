@@ -1,6 +1,7 @@
 import "@/services/client/webPolyfill";
 import "virtual:uno.css";
 import "@/styles/global.css";
+import "@/web/runtime.css";
 
 import piniaPersistedstate from "pinia-plugin-persistedstate";
 import { vRipple } from "./directives/ripple";

@@ -1,0 +1,9 @@
+/* Web 由浏览器窗口管理生命周期，不显示 Electron 原生窗口控制。 */
+html[data-atom-runtime="web"] div:has(> .window-control-button) {
+  display: none !important;
+}
+
+/* 同时移除紧邻窗口控制区的分隔线，避免留下桌面窗口装饰。 */
+html[data-atom-runtime="web"] [role="separator"]:has(+ div > .window-control-button) {
+  display: none !important;
+}

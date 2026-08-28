@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
+import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
@@ -11,6 +12,7 @@ import IconLucideMoreVertical from "~icons/lucide/more-vertical";
 import IconLucideClock from "~icons/lucide/clock";
 import IconLucideRepeat2 from "~icons/lucide/repeat-2";
 import IconLucideRadio from "~icons/lucide/radio";
+import IconLucideSpeaker from "~icons/lucide/speaker";
 
 const props = withDefaults(
   defineProps<{
@@ -35,6 +37,11 @@ const lyricButtonType = computed(() =>
 );
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
+const selectedOutputLabel = computed(() => {
+  const selected = settings.player.outputDevice;
+  if (!selected) return t("settings.outputDevice.default");
+  return status.outputDevices.find((device) => device.id === selected)?.name ?? selected;
+});
 
 /** 静音前的音量，用于解除静音时恢复 */
 const lastVolume = ref(status.volume || 0.7);
@@ -85,6 +92,37 @@ const onMoreMenuSelect = (key: string): void => {
   <div class="flex items-center gap-1">
     <!-- 在线音质 -->
     <QualityControl v-if="settings.appearance.showQualitySwitch" :cover="cover" />
+    <!-- Web 没有系统托盘/原生菜单，直接在播放器工具栏暴露主机输出选择。 -->
+    <SPopover
+      v-if="webRemote"
+      trigger="click"
+      side="top"
+      :cover="cover"
+      content-class="w-80 px-3 py-3"
+    >
+      <template #trigger>
+        <SButton
+          :type="buttonType"
+          variant="ghost"
+          circle
+          size="large"
+          :class="mutedClass"
+          :title="`${t('settings.outputDevice.label')}: ${selectedOutputLabel}`"
+        >
+          <template #icon><IconLucideSpeaker /></template>
+        </SButton>
+      </template>
+      <div class="flex flex-col gap-2">
+        <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
+        <DeviceSelector />
+        <div
+          v-if="settings.player.outputDevice?.startsWith('diretta:')"
+          class="text-xs text-on-surface-variant"
+        >
+          Diretta Source Direct
+        </div>
+      </div>
+    </SPopover>
     <SPopover trigger="hover" side="top" :cover="cover" content-class="px-3 pb-2 pt-3">
       <template #trigger>
         <SButton

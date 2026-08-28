@@ -76,6 +76,8 @@ const mapArtist = (artist: ArtistSummary): ArtistSummary => ({
 
 const eventListeners = new Set<(event: WebEvent) => void>();
 let disconnectEvents: (() => void) | null = null;
+/** Web 扫描请求代次，用于识别快于轮询周期完成的扫描。 */
+let scanRequestGeneration = 0;
 
 const ensureEventConnection = (): void => {
   if (disconnectEvents) return;
@@ -300,9 +302,9 @@ const playerApi: PlayerApi = {
     ),
   scanDirettaDevices: () =>
     asIpc(async () =>
-      (await request<OutputSnapshot>("/output/devices")).data.filter((device) =>
-        device.id.startsWith("diretta:"),
-      ),
+      (await request<OutputSnapshot>("/output/devices")).data
+        .filter((device) => device.id.startsWith("diretta:"))
+        .map((device) => ({ ...device, name: `${device.name} · Diretta` })),
     ),
   materializeDirectInput: async () => ({ success: false, error: "WEB_REMOTE_INPUT_UNSUPPORTED" }),
   getDefaultDeviceName: () =>
@@ -331,10 +333,13 @@ const playerApi: PlayerApi = {
 };
 
 const libraryApi: LibraryApi = {
-  scan: (incremental = true) =>
-    asCommand(() =>
+  scan: async (incremental = true) => {
+    const result = await asCommand(() =>
       request("/library/scan", { method: "POST", body: JSON.stringify({ incremental }) }),
-    ),
+    );
+    if (result.success) scanRequestGeneration++;
+    return result;
+  },
   cancelScan: () => asCommand(() => request("/library/scan/cancel", { method: "POST" })),
   getTracks: () =>
     asIpc(async () => (await request<{ data: Track[] }>("/library/tracks")).data.map(mapTrack)),
@@ -424,14 +429,18 @@ const libraryApi: LibraryApi = {
   onScanProgress: (callback) => {
     let disposed = false;
     let seenScanning = false;
+    let observedGeneration = scanRequestGeneration;
     const poll = async (): Promise<void> => {
       if (disposed || document.visibilityState !== "visible") return;
       try {
         const scanning = (await request<{ data: boolean }>("/library/is-scanning")).data;
+        const requestCompleted = observedGeneration !== scanRequestGeneration;
+        observedGeneration = scanRequestGeneration;
         if (scanning) {
           seenScanning = true;
           callback({ phase: "scanning", total: 0, scanned: 0 });
-        } else if (seenScanning) {
+        } else if (seenScanning || requestCompleted) {
+          // 增量扫描可能在一次轮询间隔内完成，仍需显式结束 renderer 的 scanning 状态。
           seenScanning = false;
           callback({ phase: "done", total: 0, scanned: 0 });
         }
@@ -439,7 +448,7 @@ const libraryApi: LibraryApi = {
         // 下一轮轮询继续恢复；HTTP snapshot 仍是权威。
       }
     };
-    const timer = window.setInterval(() => void poll(), 400);
+    const timer = window.setInterval(() => void poll(), 250);
     void poll();
     return () => {
       disposed = true;
