@@ -583,59 +583,180 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 # P3 — 发布、UX 与工程质量
 
-## 12. 正式发行身份
+## 12. 正式产品身份、版本与兼容协议
 
-当前部分 package / builder 元数据仍继承上游 SPlayer Next，仅适合开发阶段。
+当前部分 package / builder 元数据仍继承上游 SPlayer Next，仅适合开发阶段。正式发行时 Atom 必须拥有独立产品身份，但 Core / Desktop 继续来自同一 monorepo 与同一 release train。
+
+### 产品身份
 
 - [ ] 确定 Atom 正式产品名。
-- [ ] 独立 `appId`。
+- [ ] 独立 `appId` / package identity。
 - [ ] 独立 Git repository / bugs URL。
 - [ ] 独立 artifact name。
 - [ ] 独立 update feed / release channel。
 - [ ] 禁止 Atom release 错误指向 `SPlayer-Dev/SPlayer-Next` updater / publish。
-- [ ] Desktop 安装身份不得与 upstream SPlayer 冲突。
+- [ ] Desktop 安装身份、配置与 updater 不得与 upstream SPlayer 冲突。
+- [ ] release metadata 明确记录对应的 `vendor/splayer` upstream baseline commit。
+
+### 版本策略
+
+Core 与 Desktop 使用同一个 Atom 产品版本号，例如：
+
+```text
+Atom Version:      0.x.y
+Core:              0.x.y
+Desktop:           0.x.y
+SPlayer Baseline:  <commit>
+Atom Commit:       <commit>
+```
+
+另行维护独立的 **Core Protocol Version**，产品版本不直接等于协议版本。Control 连接 Core 时必须基于 protocol compatibility 判断是否可用，而不是要求 Core / Desktop 产品版本完全相等。
+
+- [ ] Core 提供正式 version / protocol / capability 信息接口。
+- [ ] Desktop / Web Control 根据协议范围与 capability 工作，不通过版本号猜测功能。
+- [ ] Core 声明 `diretta`、`netease`、`qobuz`、`tidal`、local library、remote output 等实际 capability。
+- [ ] 第一阶段 release channel 只保留 `beta` 与 `stable`；nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
+
+### 更新策略
+
+- [ ] Desktop 可使用 Atom 自有 updater，但不得消费 SPlayer upstream 更新通道。
+- [ ] Core 第一阶段不实现自更新；升级由用户替换新 `tar.gz` release 并按正式升级流程重启服务。
+- [ ] Desktop / Core 更新解耦，只要 Core Protocol 兼容即可交叉版本使用。
 
 ### 验收标准
 
-Atom 安装、升级、卸载和发布不会覆盖、冒充或消费 upstream SPlayer 的发布通道。
+- Atom 安装、升级、卸载和发布不会覆盖、冒充或消费 upstream SPlayer 的产品身份与发布通道。
+- 任意 Control 连接 Core 时都可以明确判断 protocol compatibility 与 capability。
+- release / debug 信息可以准确回答 Atom version、Atom commit、SPlayer baseline、protocol version、arch、Node runtime 与 Diretta capability。
 
 ---
 
-## 13. Linux Headless 正式部署包
+## 13. Linux Core 正式部署、数据与升级模型
 
-- [ ] 提供正式 systemd unit，而不是开发阶段临时 transient service。
-- [ ] 定义稳定数据目录，例如：
-  - `/var/lib/...`
-  - `/var/cache/...`
-  - `/var/log/...` 或 journald
-- [ ] 不再使用 `/tmp/atom-root-home` / `/tmp/atom-root-config` 作为产品数据位置。
-- [ ] 明确数据库、provider auth、queue、stats、library config 的备份 / 迁移策略。
-- [ ] 提供 `.deb` / `tar.gz` 中至少一种正式 Headless artifact。
-- [ ] 文档化 Diretta root 运行要求。
+正式 Core 采用 **portable tar.gz** 分发，不建设 `.deb` / rpm / AppImage 等 Core 安装包。`tar.gz` 解压目录即 Core 安装根目录，并同时作为需要长期保存的业务数据根。
+
+### 正式目录模型
+
+概念布局：
+
+```text
+<splayer-atom-core>/
+├─ node/ or node                 固定 Node runtime
+├─ app/                          Core JS / Web 资源
+├─ native/                       audio-engine / native dependencies
+├─ data/                         需要长期保存的业务数据
+└─ service/                      systemd 示例 / 安装辅助文件
+```
+
+`data/` 统一保存：
+
+- SQLite database；
+- Core settings；
+- provider auth / token / session；
+- authoritative queue / playback session；
+- play stats；
+- library configuration 与其他不可随意重建的用户状态。
+
+不再使用 `/tmp/atom-root-home` / `/tmp/atom-root-config` 作为正式数据位置。整个安装目录应可被整体复制、备份和迁移到另一台主机。
+
+### Cache 与日志
+
+- [ ] 可重新生成的 song cache、cover cache、临时 Direct materialization 等使用系统默认 cache 目录，不进入安装目录 `data/`。
+- [ ] Linux 优先遵循 `XDG_CACHE_HOME`；未设置时使用当前服务用户的系统默认 cache 位置。
+- [ ] 日志优先输出到 stdout/stderr，由 systemd / journald 管理，不在安装目录长期维护独立 log rotation。
+
+### systemd
+
+- [ ] 提供正式 systemd unit / 示例安装脚本，而不是开发阶段 transient service。
+- [ ] systemd `ExecStart` 明确指向安装目录内固定 Node runtime 与 Core entry。
+- [ ] 文档化 Diretta Host 的 root 运行要求。
+- [ ] service 更新不改变 `data/` 语义，用户替换程序文件时可保留原数据目录。
+
+### Schema Migration / Backup / Rollback
+
+从第一版正式发行前就建立数据 schema version 与 migration 策略：
+
+- [ ] database / durable config 具有明确 schema version。
+- [ ] migration 只能由 Core 在已知旧版本 → 新版本路径上执行，并有自动化测试。
+- [ ] 升级前至少自动创建一份可恢复的关键数据库 / durable config 备份。
+- [ ] 失败 migration 不允许通过“删数据库重建”作为正式恢复路径。
+- [ ] release 文档说明升级与回滚步骤，并保留上一版本 Core binary / release 的人工回滚能力。
+- [ ] 对不可向下兼容的数据升级，必须在迁移前保留旧版本可恢复副本。
+
+### 验收标准
+
+- 一个 Core 安装目录加上系统 cache 之外，不存在其他隐含业务状态目录。
+- 复制完整安装目录到兼容主机后，Core 的 durable state 可按文档恢复。
+- cache 删除不会丢失账号、媒体库配置、队列、统计或数据库状态。
+- Core 升级失败时，用户可以使用备份和上一 release 恢复，而不是丢弃数据。
 
 ---
 
-## 14. 可复现构建与 CI
+## 14. 可复现构建、Release Artifact 与 CI
 
 开发机曾出现 Corepack / pnpm store / `node_modules` 文件损坏及 Node 进程随机 SIGSEGV，正式发布不能依赖“失败后重跑”。
 
+### 固定构建环境
+
 - [ ] 建立干净 CI / container release 环境。
+- [ ] 固定 Node runtime、pnpm、Rust toolchain、lockfile、Linux build image 与 Diretta SDK 版本。
 - [ ] lockfile + 干净 package store 可重复构建。
-- [ ] CI 中分别执行 Desktop / Headless flavor 构建。
+- [ ] CI 中分别执行 Desktop / Core flavor 构建。
 - [ ] Node / Web / native / touch audit 自动门禁。
 - [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
-- [ ] release artifact 记录 commit、build flavor、arch 和 Diretta capability。
+
+### Core Artifact
+
+- [ ] 正式 Core 只发布 `tar.gz`。
+- [ ] `tar.gz` 自带固定 Node runtime，不依赖目标主机系统 Node。
+- [ ] 首个正式支持架构为 Linux x86-64。
+- [ ] ARM64 可构建不等于正式支持；完成真实机器上的 Node/native/ALSA/Diretta/systemd/长时间播放验收后再提升为正式支持平台。
+- [ ] release artifact 记录 Atom version、Atom commit、SPlayer baseline、Core Protocol、arch、Node version 与 Diretta capability。
+
+### Release Gate
+
+不能只验证源码 build；必须验证最终 `tar.gz`：
+
+```text
+clean Linux environment
+        ↓
+extract tar.gz
+        ↓
+start Core / systemd
+        ↓
+version + protocol health check
+        ↓
+Web Control load
+        ↓
+library fixture / queue / playback smoke
+```
+
+之后在真实音频主机执行 Hardware Release Gate：
+
+- [ ] 真实 ALSA hardware playback。
+- [ ] PCM / Native DSD 回归。
+- [ ] 真实 Diretta Target 播放。
+- [ ] 长时间播放 / auto-next / output switch 回归。
+
+### 验收标准
+
+- 同一 commit 在干净构建环境可稳定生成等价 Core release。
+- 用户拿到 `tar.gz` 后无需预装 Node 即可运行。
+- release 判断以最终 artifact smoke + hardware gate 为准，不以“开发目录 build 成功”代替。
 
 ---
 
-## 15. Diretta SDK 分发许可与 Release Gate
+## 15. Diretta SDK Release Gate
 
-技术构建已验证可静态链接 Diretta Linux SDK，但正式公开发布前仍需确认法律 / 授权边界。
+Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能否分发”转为确保 release build 的 SDK 来源、版本和能力一致。
 
-- [ ] 确认 Diretta SDK 是否允许在 Atom 发布物中静态再分发。
-- [ ] 确认支持的平台 / 架构 / 产品授权限制。
-- [ ] 明确 CI 中 SDK 的安全供应方式。
-- [ ] 未确认许可前，不把 SDK binary / archive 提交到公开仓库。
+- [x] Diretta SDK 支持公开 release。
+- [ ] 明确并固定正式 release 使用的 SDK 版本 / 支持架构。
+- [ ] 明确 CI 中 SDK 的安全供应方式，不把 SDK binary / archive 误提交到公开源码仓库。
+- [ ] 正式 Core release 要求包含 Diretta 时，缺少 SDK 必须构建失败，不允许静默生成同名 no-Diretta artifact。
+- [ ] release metadata 记录 Diretta capability；若 SDK 版本信息允许公开，也记录对应版本标识。
+
+---
 
 ---
 
@@ -698,7 +819,7 @@ docs/handoff-*            阶段 / 会话交接快照
 4. **以网易作为 reference provider 完成完整 Core 播放闭环回归。**
 5. **冻结 QQ Music / 酷狗 Atom 开发：从正式搜索 UI 移除并默认关闭，仅继承和兼容上游能力。**
 6. **实现 Qobuz / TIDAL Core 账户能力、Control UI 与真实账号播放验收。**
-7. **建立 Atom 独立 release identity、固定 Node runtime 与正式 Core systemd / `.deb` / `tar.gz` artifact。**
+7. **建立 Atom 独立 release identity、Core Protocol、固定 Node runtime、安装目录数据模型与正式 Core systemd / `tar.gz` artifact。**
 8. **完善扫描进度、Direct materialize loading 等 Web UX。**
 9. **Headless 安全增强保留为 P4；仅在产品网络边界发生变化时提前。**
 
