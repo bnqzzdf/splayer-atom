@@ -692,19 +692,19 @@ export const registerPlayerIpc = (): void => {
       const inst = getPlayer();
       switch (event.type) {
         case "Play":
-          void inst.play().catch(() => {});
+          void playbackSession.play().catch(() => {});
           break;
         case "Pause":
-          inst.pause();
+          playbackSession.pause();
           break;
         case "Stop":
-          inst.stop();
+          playbackSession.stop();
           break;
         case "Seek":
           if (event.positionMs != null) {
             const targetMs = event.positionMs;
             sendToMain("player:event", { type: "seek", data: { position: targetMs } });
-            void inst.seek(targetMs / 1000).then(() => {
+            void playbackSession.seek(targetMs).then(() => {
               mediaService.setTimeline({
                 currentMs: targetMs,
                 totalMs: toMs(inst.getDuration()),

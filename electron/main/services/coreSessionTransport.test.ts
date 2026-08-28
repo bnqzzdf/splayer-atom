@@ -37,6 +37,15 @@ test("Control reload and startup recovery no longer resolve or load playable URL
   assert.match(controlSource, /reloadSessionCurrent\(settings\.system\.player\.autoPlay\)/);
 });
 
+test("Desktop system media controls also use Core transport", () => {
+  const mediaControls = ipcSource.split("mediaService.onEvent((event: MediaEvent) => {")[1] ?? "";
+  assert.match(mediaControls, /playbackSession\.play\(\)/);
+  assert.match(mediaControls, /playbackSession\.pause\(\)/);
+  assert.match(mediaControls, /playbackSession\.stop\(\)/);
+  assert.match(mediaControls, /playbackSession\.seek\(targetMs\)/);
+  assert.doesNotMatch(mediaControls, /inst\.play\(|inst\.pause\(|inst\.stop\(|inst\.seek\(/);
+});
+
 test("Headless Web exposes the same Core reload-current command", () => {
   assert.match(routesSource, /api\.post\("\/session\/reload"/);
   assert.match(routesSource, /await reloadCurrent\(body\?\.forcePlay\)/);
