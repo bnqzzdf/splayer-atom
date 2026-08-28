@@ -40,10 +40,25 @@ import {
   updateQueueTracks,
 } from "@main/services/playbackSession";
 import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
+import { getLibraryStats } from "@main/database";
+import {
+  getPlayHistoryDaily,
+  getPlayHistoryHourly,
+  getStatsSummary,
+  getTopAlbums,
+  getTopArtists,
+  getTopTracks,
+  insertFavoriteEvent,
+} from "@main/database/playStats";
+import type { FavoriteEventInput } from "@shared/types/stats";
 import { toMs } from "@main/utils/time";
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
+const boundedInt = (value: string | undefined, fallback: number, min: number, max: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.trunc(parsed))) : fallback;
+};
 
 /**
  * Atom Headless 的 HTTP 控制面。
@@ -77,6 +92,30 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ error: "keyPath_required" }, 400);
     }
     store.set(body.keyPath, body.value);
+    return c.json({ ok: true });
+  });
+
+  api.get("/stats/summary", (c) => c.json(getStatsSummary()));
+  api.get("/stats/library", (c) => c.json(getLibraryStats()));
+  api.get("/stats/top-tracks", (c) =>
+    c.json(getTopTracks(boundedInt(c.req.query("limit"), 10, 1, 100))),
+  );
+  api.get("/stats/daily", (c) =>
+    c.json(getPlayHistoryDaily(boundedInt(c.req.query("days"), 30, 1, 365))),
+  );
+  api.get("/stats/hourly", (c) => c.json(getPlayHistoryHourly()));
+  api.get("/stats/top-albums", (c) =>
+    c.json(getTopAlbums(boundedInt(c.req.query("limit"), 10, 1, 100))),
+  );
+  api.get("/stats/top-artists", (c) =>
+    c.json(getTopArtists(boundedInt(c.req.query("limit"), 10, 1, 100))),
+  );
+  api.post("/stats/favorite", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as FavoriteEventInput | null;
+    if (!body?.track?.id || (body.action !== "add" && body.action !== "remove")) {
+      return c.json({ error: "invalid_favorite_event" }, 400);
+    }
+    insertFavoriteEvent(body);
     return c.json({ ok: true });
   });
 

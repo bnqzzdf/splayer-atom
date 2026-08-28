@@ -138,11 +138,38 @@ export const connectWebEvents = (
   };
 };
 
-/** 将 Electron cache:// 图像 URL 映射到同一 Headless HTTP 服务。 */
+const HEADLESS_IMAGE_CACHE = /^\/cache\/(covers|artists|backgrounds)(?:\/|$)/;
+
+/** 识别由 Headless 图像缓存产生的 HTTP URL，并返回可复用路径。 */
+const headlessCachePath = (value: string): string | null => {
+  try {
+    const url = new URL(value);
+    const current = new URL(apiOrigin);
+    if (!HEADLESS_IMAGE_CACHE.test(url.pathname)) return null;
+    // 旧队列可能由 localhost 页面写入；同一 Headless 端口的缓存 URL 仍应映射到当前浏览器主机。
+    if (url.port !== current.port && url.port !== "14558") return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+};
+
+/** 将 Electron cache:// 或旧 Headless 绝对图像 URL 映射到当前 Web 服务。 */
 export const webAssetUrl = (value: string | undefined): string | undefined => {
-  if (!value?.startsWith("cache://")) return value;
-  const rest = value.slice("cache://".length);
-  return `${apiOrigin}/cache/${rest}`;
+  if (!value) return value;
+  if (value.startsWith("cache://")) {
+    const rest = value.slice("cache://".length);
+    return `${apiOrigin}/cache/${rest}`;
+  }
+  const cachePath = headlessCachePath(value);
+  return cachePath ? `${apiOrigin}${cachePath}` : value;
+};
+
+/** 将 Web 展示 URL 还原为主进程可持久化的 cache:// 规范形式。 */
+export const serverAssetUrl = (value: string | undefined): string | undefined => {
+  if (!value || value.startsWith("cache://")) return value;
+  const cachePath = headlessCachePath(value);
+  return cachePath ? `cache://${cachePath.slice("/cache/".length)}` : value;
 };
 
 export const headlessClient = {

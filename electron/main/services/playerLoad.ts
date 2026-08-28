@@ -7,6 +7,7 @@ import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player"
 import { cancelPendingReinit } from "@main/services/device";
 import { getPlayer } from "@main/services/engine";
 import * as lastfm from "@main/services/lastfm";
+import { beginHeadlessPlayStats } from "@main/services/headlessPlayStats";
 import * as mediaService from "@main/services/media";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import { clearActiveCueRange, setActiveCueTrack, toDisplayDurationMs } from "@main/services/playerTimeline";
@@ -185,6 +186,17 @@ export const loadPlayerSource = async (
         quality,
       },
     };
+    if (authoritative) {
+      beginHeadlessPlayStats(
+        {
+          ...authoritative,
+          duration: authoritative.duration || durationMs,
+          cover: authoritative.cover ?? data.mediaInfo.cover,
+          quality: authoritative.quality ?? quality,
+        },
+        autoPlay,
+      );
+    }
     playerLog.debug(`加载成功: ${displayTitle}`);
     return { success: true, data };
   } catch (error) {

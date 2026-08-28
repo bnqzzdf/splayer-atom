@@ -12,6 +12,10 @@ import { fetchBytes } from "@main/utils/fetchBytes";
 import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
 import {
+  onHeadlessPlayerEnded,
+  onHeadlessPlayerState,
+} from "@main/services/headlessPlayStats";
+import {
   isCurrentPlayerLoadSeq,
   loadPlayerSource,
   nextPlayerLoadSeq,
@@ -78,6 +82,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
     switch (event.type) {
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
+        onHeadlessPlayerState(state);
         // 更新缩略图工具栏和托盘菜单
         getThumbar()?.updateThumbar(state === "playing");
         setTrayPlayState(state === "playing" ? "playing" : "paused");
@@ -113,6 +118,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "ended": {
+        onHeadlessPlayerEnded();
         const consumedBySession = playbackSession.onNativeEnded();
         if (!consumedBySession) sendToMain("player:event", { type: "ended" });
         wsBroadcast({ type: "ended", data: { consumedBySession } });

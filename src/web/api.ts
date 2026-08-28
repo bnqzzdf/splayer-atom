@@ -3,6 +3,7 @@ import type { LibraryApi, AlbumSummary, ArtistSummary } from "@shared/types/libr
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
+import type { StatsApi } from "@shared/types/stats";
 import type {
   AudioDevice,
   IpcResponse,
@@ -14,7 +15,7 @@ import type {
   PlayerStatus,
   Track,
 } from "@shared/types/player";
-import { connectWebEvents, request, webAssetUrl } from "./client";
+import { connectWebEvents, request, serverAssetUrl, webAssetUrl } from "./client";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -51,6 +52,37 @@ const mapTrack = (track: Track): Track => ({
   cover: webAssetUrl(track.cover),
   coverOriginal: webAssetUrl(track.coverOriginal),
 });
+
+/** Headless 主进程只持久化 cache:// 规范 URL，不保留某个浏览器的主机地址。 */
+const toServerTrack = (track: Track): Track => ({
+  ...track,
+  cover: serverAssetUrl(track.cover),
+  coverOriginal: serverAssetUrl(track.coverOriginal),
+});
+
+const toServerQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
+  ...item,
+  track: toServerTrack(item.track),
+});
+
+/** Linux Web 只展示系统默认、真实 ALSA hw 声卡；插件/转换/重复数字别名不暴露给用户。 */
+const filterSystemOutputs = (devices: AudioDevice[]): AudioDevice[] => {
+  const seen = new Set<string>();
+  return devices.filter((device) => {
+    if (device.id.startsWith("diretta:")) return false;
+    if (
+      device.id.startsWith("alsa:") &&
+      !device.isDefault &&
+      !/^alsa:hw:CARD=[A-Za-z_][^,]*,DEV=\d+$/.test(device.id)
+    ) {
+      return false;
+    }
+    const key = device.isDefault ? `default:${device.id}` : device.name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 const mapQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
   ...item,
@@ -130,7 +162,10 @@ const playerApi: PlayerApi = {
     try {
       const result = await request<IpcResponse<LoadResult>>("/player/load", {
         method: "POST",
-        body: JSON.stringify({ source, options }),
+        body: JSON.stringify({
+          source,
+          options: options?.meta ? { ...options, meta: toServerTrack(options.meta) } : options,
+        }),
       });
       if (result.success && result.data?.mediaInfo.cover) {
         result.data.mediaInfo.cover = webAssetUrl(result.data.mediaInfo.cover);
@@ -151,21 +186,26 @@ const playerApi: PlayerApi = {
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/queue", {
         method: "POST",
-        body: JSON.stringify({ items, startIndex, autoPlay, loadCurrent }),
+        body: JSON.stringify({
+          items: items.map(toServerQueueItem),
+          startIndex,
+          autoPlay,
+          loadCurrent,
+        }),
       }),
     ),
   appendSessionQueue: (items) =>
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/queue/append", {
         method: "POST",
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items: items.map(toServerQueueItem) }),
       }),
     ),
   insertSessionQueue: (items, index) =>
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/queue/insert", {
         method: "POST",
-        body: JSON.stringify({ items, index }),
+        body: JSON.stringify({ items: items.map(toServerQueueItem), index }),
       }),
     ),
   removeSessionQueueIndex: (index, loadCurrent = true) =>
@@ -199,7 +239,7 @@ const playerApi: PlayerApi = {
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>(`/session/queue/${index}`, {
         method: "PATCH",
-        body: JSON.stringify({ item }),
+        body: JSON.stringify({ item: toServerQueueItem(item) }),
       }),
     ),
   moveSessionQueue: (fromIndex, toIndex) =>
@@ -219,7 +259,7 @@ const playerApi: PlayerApi = {
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/queue/tracks", {
         method: "PATCH",
-        body: JSON.stringify({ tracks }),
+        body: JSON.stringify({ tracks: tracks.map(toServerTrack) }),
       }),
     ),
   clearSessionQueue: (stop = false) =>
@@ -295,11 +335,7 @@ const playerApi: PlayerApi = {
       request("/player/pitch-sync", { method: "POST", body: JSON.stringify({ enabled }) }),
     ),
   getOutputDevices: () =>
-    asIpc(async () =>
-      (await request<OutputSnapshot>("/output/devices")).data.filter(
-        (device) => !device.id.startsWith("diretta:"),
-      ),
-    ),
+    asIpc(async () => filterSystemOutputs((await request<OutputSnapshot>("/output/devices")).data)),
   scanDirettaDevices: () =>
     asIpc(async () =>
       (await request<OutputSnapshot>("/output/devices")).data
@@ -512,7 +548,13 @@ const playlistApi: PlaylistApi = {
 
 const nowPlayingApi: NowPlayingApi = {
   update: (payload) => {
-    void request("/now-playing", { method: "POST", body: JSON.stringify(payload) });
+    void request("/now-playing", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        track: payload.track ? toServerTrack(payload.track) : payload.track,
+      }),
+    });
   },
   requestSnapshot: async () => {
     const [light, lyric] = await Promise.all([
@@ -547,8 +589,35 @@ const lyricsApi: Partial<LyricsApi> = {
   matchLocalTTML: (track): Promise<LyricTTMLResponse> =>
     request<LyricTTMLResponse>("/lyrics/local", {
       method: "POST",
-      body: JSON.stringify({ track }),
+      body: JSON.stringify({ track: toServerTrack(track) }),
     }),
+};
+
+const statsApi: StatsApi = {
+  // Headless 播放统计由唯一主进程会话写入，避免多浏览器重复计数。
+  recordPlay: () => {},
+  recordFavorite: (event) => {
+    void request("/stats/favorite", {
+      method: "POST",
+      body: JSON.stringify({ ...event, track: toServerTrack(event.track) }),
+    });
+  },
+  getStatsSummary: () => request("/stats/summary"),
+  getTopTracks: async (limit) =>
+    (await request<Awaited<ReturnType<StatsApi["getTopTracks"]>>>(`/stats/top-tracks?limit=${limit}`)).map(
+      (item) => ({ ...item, track: mapTrack(item.track) }),
+    ),
+  getLibraryStats: () => request("/stats/library"),
+  getPlayHistoryDaily: (days) => request(`/stats/daily?days=${days}`),
+  getPlayHistoryHourly: () => request("/stats/hourly"),
+  getTopAlbums: async (limit) =>
+    (await request<Awaited<ReturnType<StatsApi["getTopAlbums"]>>>(`/stats/top-albums?limit=${limit}`)).map(
+      (item) => ({ ...item, track: mapTrack(item.track) }),
+    ),
+  getTopArtists: async (limit) =>
+    (await request<Awaited<ReturnType<StatsApi["getTopArtists"]>>>(`/stats/top-artists?limit=${limit}`)).map(
+      (item) => ({ ...item, track: mapTrack(item.track) }),
+    ),
 };
 
 /** 安装远程浏览器使用的最小 Electron API 兼容面。 */
@@ -561,6 +630,7 @@ export const installWebApi = async (): Promise<void> => {
     playlist: playlistApi,
     nowPlaying: nowPlayingApi,
     lyrics: lyricsApi,
+    stats: statsApi,
     system: {
       installType: "portable" as const,
       platform: info.platform,

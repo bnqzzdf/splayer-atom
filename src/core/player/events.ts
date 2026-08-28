@@ -1,6 +1,7 @@
 import type { PlayerEvent } from "@shared/types/player";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
+import { useHistoryStore } from "@/stores/history";
 import * as queue from "@/stores/queue";
 import { useFavorite } from "@/composables/useFavorite";
 import { isWebRemote } from "@/runtime";
@@ -193,6 +194,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
         if (event.data.current) {
           media.setTrack(event.data.current);
           media.setPlaybackContext(queue.getQueueItem(event.data.index)?.context);
+          // Headless 自动切歌由主进程驱动，Web 仍复用 upstream 播放历史 store 记录新曲。
+          void useHistoryStore().record(event.data.current);
         } else {
           media.clear();
         }

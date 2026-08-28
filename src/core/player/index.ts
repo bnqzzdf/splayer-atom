@@ -1245,6 +1245,13 @@ export const initPlayer = async (): Promise<void> => {
       playback.setDuration(currentStatus.data.duration);
       playback.setSpeed(currentStatus.data.speed);
       playback.setPlaying(currentStatus.data.state === "playing");
+      if (
+        current &&
+        (currentStatus.data.state === "playing" || currentStatus.data.state === "paused")
+      ) {
+        // Web 可能在主进程已经播放后才连入；把当前已加载曲补入同一 upstream 历史记录。
+        void useHistoryStore().record(current);
+      }
     }
     installNextTrackPreloadWatchers();
     scheduleNextTrackPreload();
