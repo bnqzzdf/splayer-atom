@@ -4,8 +4,8 @@
  */
 
 import { Hono } from "hono";
-import { app as electronApp } from "electron";
 import { getPlayer } from "@main/services/engine";
+import { appName, appVersion } from "@main/utils/config";
 import { toMs } from "@main/utils/time";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { playerControl } from "@main/services/playerControl";
@@ -16,8 +16,8 @@ export const buildRoutes = (): Hono => {
 
   api.get("/info", (c) =>
     c.json({
-      name: electronApp.getName(),
-      version: electronApp.getVersion(),
+      name: appName,
+      version: appVersion,
       wsClients: getWsClientCount(),
     }),
   );

@@ -1,5 +1,23 @@
 # SPlayer Atom — Findings & Decisions
 
+## 2026-08-28 — Atom self-origin and first pure Node Core bootstrap
+
+- 用户已创建正式 Atom self repository `https://github.com/bnqzzdf/splayer-atom.git`；本地 `origin` 已切换到该仓库，`splayer` 继续固定为官方 `SPlayer-Dev/SPlayer-Next` fetch-only remote，push URL 仍为 `DISABLED`。这消除了上一轮唯一需要外部确认的 self-origin URL 缺口。
+- `vendor/splayer` 当前为官方 `92026e2c69dd63dd42408ddc5beaf4876d231dc1`，accepted baseline 仍固定 `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`；“已验收 baseline”与“最新待整合 vendor”保持分离。
+- Node Core 首批 runtime-neutral seam 已证明可以保持现有业务实现：path/app metadata、native addon 定位、HTTP fetch、provider secret codec、Desktop event sink、playback presentation、song-cache lifecycle 均通过窄 adapter 注入；没有复制 database/settings/provider/player/queue。
+- 独立 `electron/main/core-node/index.ts` + `scripts/atom/vite.core.config.ts` production build 成功，Core JS artifact 的 `from "electron"` 命中数为 0。使用现有 `audio-engine.node` 与开发依赖启动普通 Node 进程后，`/api/info`、`/api/session`、`/api/library/count` smoke 全部通过。
+- 第一次把 build 输出放到 `/tmp` 时，Node ESM 无法解析 external `better-sqlite3`；改在仓库内 `out/core` 后正常。这是未来 tar.gz 必须显式携带 runtime dependencies / fixed Node 的发行约束证据，不是 Core 业务错误。
+- Node Core runtime-neutral refactor 新增 13 个上游基础设施 seam。touch audit 不再把这些与业务 delta 混为一个数字：业务 budget 继续保持 37，runtime-neutral seam 单独固定 budget 13 并逐文件白名单报告；任何新增 seam 仍会独立使门禁失败。
+- 当前没有新的产品决策需要用户拍板。仍需用户输入的事项只是在 roadmap 已明确标记为未来验收边界的真实 Qobuz/TIDAL 账号凭据和硬件手动确认；它们不阻塞 Node Core / Core-owned playback 实施。
+
+## 2026-08-28 — Roadmap P0 upstream sync mechanism
+
+- `docs/atom-roadmap.md` 明确覆盖历史 handoff / planning 的执行优先级；当前第一项必须先建立 `origin` / `splayer` / `vendor/splayer`，之后才进入 Node Core 与 Core-owned playback。
+- 当前本地只有 `origin=https://github.com/SPlayer-Dev/SPlayer-Next.git`，`dev` 直接跟踪 `origin/dev`；尚无 `splayer` remote，也无 `vendor/splayer` 分支。这与 roadmap 的长期 downstream 模型不符。
+- 当前已验收 Atom 基线可精确固定为官方 SPlayer commit `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`；它既是本地 `origin/dev` / `merge-base(dev, origin/dev)`，也能在官方 `SPlayer-Dev/SPlayer-Next` 仓库中验证存在。Atom `dev` 当前在其上有 24 个提交。
+- 官方 `SPlayer-Dev/SPlayer-Next` 的 `dev` 已前进到 `92026e2c69dd63dd42408ddc5beaf4876d231dc1`，因此普通 fetch 已足以改变移动 remote ref；`check-upstream-touch.mjs` 继续默认比较 `origin/dev` 会让已验收 touch 统计语义漂移，必须改为仓库内固定 baseline。
+- 当前 GitHub 账号可写的 `bnqzzdf/SPlayer-Next` 仍停在同一官方 baseline，但仓库名/身份尚未成为 roadmap 要求的正式 Atom self repository；在没有明确 Atom self-repo URL 前，不把它静默固化为最终 `origin`。同步机制应允许显式配置 Atom origin，同时强制 SPlayer remote fetch-only。
+
 ## 2026-08-27 — Local safety commits and recovery-path inspection
 
 - 用户新增的 proven oracles 路径已确认：`tinyLMS`、`tinylms-next`、`slim2Diretta`、`DirettaRendererUPnP`。四者仅作为连接/生命周期行为证据；Atom 仍不得复制它们的播放器、重采样、全轨 RAM、重试或 watchdog 架构。

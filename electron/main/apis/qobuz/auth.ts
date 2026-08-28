@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { safeStorage } from "electron";
 import { writeFileSync as atomicWriteSync } from "atomically";
 import { configDir } from "@main/utils/paths";
 import { coreLog } from "@main/utils/logger";
+import { runtimeSecretCodec } from "@main/atom/runtime/secrets";
 
 const STORAGE_FILE = path.join(configDir, "qobuz.json");
 
@@ -23,19 +23,16 @@ let authState: QobuzAuthState | null | undefined;
 
 const encrypt = (plain: string): string => {
   if (!plain) return "";
-  if (!safeStorage.isEncryptionAvailable()) {
-    coreLog.warn("[qobuz] safeStorage 不可用，用户 token 将以 base64 形式落盘");
-    return Buffer.from(plain, "utf-8").toString("base64");
+  if (!runtimeSecretCodec.protectedAtRest) {
+    coreLog.warn("[qobuz] 当前 Core secret codec 不提供静态加密，仅写入 0600 credential file");
   }
-  return safeStorage.encryptString(plain).toString("base64");
+  return runtimeSecretCodec.encode(plain);
 };
 
 const decrypt = (encrypted: string): string => {
   if (!encrypted) return "";
   try {
-    const buffer = Buffer.from(encrypted, "base64");
-    if (!safeStorage.isEncryptionAvailable()) return buffer.toString("utf-8");
-    return safeStorage.decryptString(buffer);
+    return runtimeSecretCodec.decode(encrypted);
   } catch {
     return "";
   }
@@ -89,6 +86,7 @@ export const setQobuzAuth = (state: QobuzAuthState): void => {
       encryptedToken: encrypt(state.token),
     };
     atomicWriteSync(STORAGE_FILE, JSON.stringify(persisted, null, 2));
+    fs.chmodSync(STORAGE_FILE, 0o600);
   } catch (err) {
     coreLog.error("[qobuz] 保存登录态失败:", err);
   }

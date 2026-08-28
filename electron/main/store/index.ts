@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
 import { writeFileSync as atomicWriteSync } from "atomically";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import type { SystemConfig } from "@shared/types/settings";
@@ -84,10 +83,6 @@ const init = (): SystemConfig => {
 
 /** 配置存储 */
 let data: SystemConfig = init();
-
-app.on("before-quit", () => {
-  flushImmediate(data);
-});
 
 /** 配置存储 */
 export const store = {

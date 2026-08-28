@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/SPlayer-Dev/SPlayer-Next.git",
+  "remote": "splayer",
+  "sourceBranch": "dev",
+  "vendorBranch": "vendor/splayer",
+  "acceptedBaseline": "0f5a2fcbf81904ea4303929f4cb285a57c1d6eee"
+}

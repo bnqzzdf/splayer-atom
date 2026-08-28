@@ -2,6 +2,8 @@ import path from "node:path";
 import { net, protocol, session } from "electron";
 import { getAppCacheDir } from "./config";
 
+export { toCacheUrl } from "@main/atom/cacheUrl";
+
 /** cache:// 协议方案名 */
 const SCHEME = "cache";
 const STREAMING_COVER_SCHEME = "streaming-cover";
@@ -67,17 +69,4 @@ export const handleCacheProtocol = (): void => {
  */
 export const handleCacheProtocolOnPartition = (partition: string): void => {
   session.fromPartition(partition).protocol.handle(SCHEME, cacheHandler);
-};
-
-/**
- * 将 app-cache 下的磁盘路径转为 cache:// 协议 URL
- * @param filePath 磁盘路径（如 C:/.../app-cache/covers/xxx.jpg）
- * @returns cache://covers/xxx.jpg 或 undefined
- */
-export const toCacheUrl = (filePath: string | undefined | null): string | undefined => {
-  if (!filePath) return undefined;
-  const relative = path.relative(getAppCacheDir(), filePath);
-  // 路径不在缓存根目录下时拒绝生成 URL，避免产出可逃逸的 cache:// 链接
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
-  return `${SCHEME}://${relative.replace(/\\/g, "/")}`;
 };

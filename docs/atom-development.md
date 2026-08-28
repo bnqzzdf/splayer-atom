@@ -2,12 +2,44 @@
 
 ## Current baseline
 
-- Upstream branch: `dev`
-- Checked baseline: `0f5a2fc`
-- Node/TypeScript/Vue baseline: green
-- Upstream JS/Web tests: 96/96 pass
-- Production build with `SKIP_NATIVE_BUILD=true`: green
-- Rust/native baseline: green on Linux (`build:native --dev` succeeds; `cargo test -p audio-engine` 56/56)
+- Atom repository: `https://github.com/bnqzzdf/splayer-atom.git` (`origin`)
+- Official upstream transport: `splayer/dev`
+- Accepted Atom upstream baseline: `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`
+- Pure upstream mirror: `vendor/splayer`
+- Current automated Atom baseline: Node 75/75, Web 52/52, no-SDK audio-engine 105/105, SDK 149 audio-engine 100/100, typecheck, ESLint and production build green
+- Upstream synchronization, accepted-baseline updates and integration gates are documented in [`upstream-sync.md`](./upstream-sync.md)
+
+The accepted baseline is intentionally fixed. A normal `git fetch splayer` may move `splayer/dev` and `vendor/splayer` may be fast-forwarded to a newer official commit, but the touch audit continues to compare against the last fully integrated and accepted baseline until that candidate has been merged and validated.
+
+## Upstream synchronization
+
+Before architecture work after an upstream update, verify the repository topology and candidate state:
+
+```bash
+node scripts/atom/upstream-sync.mjs status
+node scripts/atom/upstream-sync.mjs report
+node scripts/atom/check-upstream-touch.mjs
+```
+
+`origin` is `bnqzzdf/splayer-atom`; `splayer` is fetch-only and must never be a release/push target. `vendor/splayer` only points to official SPlayer commits and only moves by fast-forward. See `docs/upstream-sync.md` for the complete integration/worktree/CI flow.
+
+The upstream touch audit reports two independently bounded categories: the established Atom business-code delta and the explicit Node Core runtime-neutral seams. Runtime seams are limited to Electron-path/fetch/lifecycle/event integration points and have their own budget; adding a file to that category requires an architecture justification rather than silently increasing the business budget.
+
+## Node Core development bootstrap
+
+The first independent Node Core entry is `electron/main/core-node/index.ts`; it builds through `scripts/atom/vite.core.config.ts` into `out/core`. The current bootstrap reuses the existing settings store, database, song cache, playback session and Hono HTTP/WebSocket services. The built JS graph must contain no `electron` import.
+
+Development smoke:
+
+```bash
+node node_modules/vite/bin/vite.js build --config scripts/atom/vite.core.config.ts
+grep -RIl 'from "electron"' out/core --include='*.js'
+ATOM_USER_DATA_DIR=/tmp/splayer-atom-core-smoke \
+  ELECTRON_RENDERER_URL=http://127.0.0.1:9 \
+  node out/core/index.js
+```
+
+With `ELECTRON_RENDERER_URL` set, the development Core listens on port `14559`; `/api/info`, `/api/session` and `/api/library/count` are the current minimal process-level smoke endpoints. This is a migration bootstrap, not the final bundled-runtime release artifact.
 
 ## Linux native toolchain
 

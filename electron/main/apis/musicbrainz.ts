@@ -1,8 +1,8 @@
-import { net } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { getArtistCacheDir } from "@main/utils/config";
-import { toCacheUrl } from "@main/utils/protocol";
+import { toCacheUrl } from "@main/atom/cacheUrl";
+import { runtimeFetch } from "@main/atom/runtime/fetch";
 
 /** MusicBrainz User-Agent */
 const UA = "SPlayer-Next/1.0.0 (https://github.com/imsyy/SPlayer)";
@@ -44,7 +44,7 @@ const ensureCacheDir = (): void => {
  */
 const searchMusicBrainzId = async (artistName: string): Promise<string | null> => {
   const url = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(artistName)}&fmt=json&limit=1`;
-  const response = await net.fetch(url, {
+  const response = await runtimeFetch(url, {
     headers: { "User-Agent": UA },
   });
   if (!response.ok) return null;
@@ -59,7 +59,7 @@ const searchMusicBrainzId = async (artistName: string): Promise<string | null> =
  */
 const fetchAudioDbThumb = async (mbid: string): Promise<string | null> => {
   const url = `https://www.theaudiodb.com/api/v1/json/2/artist-mb.php?i=${mbid}`;
-  const response = await net.fetch(url, {
+  const response = await runtimeFetch(url, {
     headers: { "User-Agent": UA },
   });
   if (!response.ok) return null;
@@ -74,7 +74,7 @@ const fetchAudioDbThumb = async (mbid: string): Promise<string | null> => {
  * 下载图片到指定路径
  */
 const downloadImage = async (imageUrl: string, savePath: string): Promise<boolean> => {
-  const response = await net.fetch(imageUrl, {
+  const response = await runtimeFetch(imageUrl, {
     headers: { "User-Agent": UA },
   });
   if (!response.ok) return false;

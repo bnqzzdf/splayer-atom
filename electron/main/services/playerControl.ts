@@ -6,7 +6,7 @@
  */
 
 import { getPlayer } from "@main/services/engine";
-import { sendToMain } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { toMs } from "@main/utils/time";
 import type { ShuffleMode, RepeatMode, Track } from "@shared/types/player";
 
@@ -17,7 +17,7 @@ import type { ShuffleMode, RepeatMode, Track } from "@shared/types/player";
  * @param positionMs - 目标位置（毫秒）
  */
 const seek = (positionMs: number): Promise<void> => {
-  sendToMain("player:event", { type: "seek", data: { position: positionMs } });
+  publishDesktopEvent("player:event", { type: "seek", data: { position: positionMs } });
   return getPlayer().seek(positionMs / 1000);
 };
 
@@ -28,16 +28,16 @@ export const playerControl = {
       .catch(() => {}),
   pause: (): void => getPlayer().pause(),
   stop: (): void => getPlayer().stop(),
-  next: (): void => sendToMain("player:event", { type: "next" }),
-  prev: (): void => sendToMain("player:event", { type: "prev" }),
+  next: (): void => publishDesktopEvent("player:event", { type: "next" }),
+  prev: (): void => publishDesktopEvent("player:event", { type: "prev" }),
   setShuffle: (mode: ShuffleMode): void =>
-    sendToMain("player:event", { type: "setShuffle", data: { mode } }),
+    publishDesktopEvent("player:event", { type: "setShuffle", data: { mode } }),
   setRepeat: (mode: RepeatMode): void =>
-    sendToMain("player:event", { type: "setRepeat", data: { mode } }),
+    publishDesktopEvent("player:event", { type: "setRepeat", data: { mode } }),
   playTrack: (track: Track): void =>
-    sendToMain("player:event", { type: "playTrack", data: { track } }),
+    publishDesktopEvent("player:event", { type: "playTrack", data: { track } }),
   addToQueue: (tracks: Track[], position: "next" | "end"): void =>
-    sendToMain("player:event", { type: "addToQueue", data: { tracks, position } }),
+    publishDesktopEvent("player:event", { type: "addToQueue", data: { tracks, position } }),
   seek,
   setVolume: (volume: number): void => getPlayer().setVolume(volume),
   /** 当前播放进度（毫秒） */

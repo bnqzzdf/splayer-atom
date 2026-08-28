@@ -7,17 +7,14 @@ import type {
   Track,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
-import {
-  loadPlaybackSession,
-  savePlaybackSession,
-} from "@main/database/playbackSession";
+import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import { clearActiveCueRange, toEnginePositionMs } from "@main/services/playerTimeline";
 import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
 import { store } from "@main/store";
-import { sendToMain } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { playerLog } from "@main/utils/logger";
 
 let queue: PlaybackQueueItem[] = [];
@@ -58,7 +55,7 @@ const snapshot = (): PlaybackSessionSnapshot => ({
 const publish = (): void => {
   const data = snapshot();
   savePlaybackSession(data);
-  sendToMain("player:event", { type: "session", data });
+  publishDesktopEvent("player:event", { type: "session", data });
   wsBroadcast({ type: "session", data });
 };
 
@@ -383,7 +380,12 @@ export const setShuffle = (mode: ShuffleMode): PlaybackSessionSnapshot => {
   } else if (mode === "off" && originalQueue) {
     queue = cloneQueue(originalQueue);
     originalQueue = null;
-    index = currentId ? Math.max(0, queue.findIndex((item) => item.track.id === currentId)) : 0;
+    index = currentId
+      ? Math.max(
+          0,
+          queue.findIndex((item) => item.track.id === currentId),
+        )
+      : 0;
   }
   shuffle = mode;
   publish();
@@ -419,4 +421,5 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
 };
 
 /** 当前 Native 实际选择的输出设备，而不是仅返回持久化偏好。 */
-export const getSelectedOutputDevice = (): string | null => getPlayer().getSelectedDeviceName() ?? null;
+export const getSelectedOutputDevice = (): string | null =>
+  getPlayer().getSelectedDeviceName() ?? null;

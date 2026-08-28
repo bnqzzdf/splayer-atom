@@ -4,7 +4,6 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { app } from "electron";
 import { store } from "@main/store";
 import { getSongCacheDir } from "@main/utils/config";
 import { songCacheLog } from "@main/utils/logger";
@@ -286,9 +285,11 @@ export const init = async (): Promise<void> => {
   cacheDir = getSongCacheDir();
   await fsp.mkdir(cacheDir, { recursive: true });
   await cleanupOrphans();
-  app.on("before-quit", () => {
-    for (const entry of inFlight.values()) entry.controller.abort();
-  });
+};
+
+/** 停止所有进行中的缓存下载，供 Desktop / Node Core lifecycle 共用。 */
+export const shutdown = (): void => {
+  for (const entry of inFlight.values()) entry.controller.abort();
 };
 
 /** 切换缓存目录后调用，让服务感知新前缀 */

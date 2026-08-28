@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
+import { rmSync } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { app } from "electron";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { TIDAL_USER_AGENT } from "./config";
 import { parseTidalDashManifest, type TidalDashDescriptor } from "./dash";
 
@@ -15,13 +16,13 @@ export interface TidalDashMaterialization {
 }
 
 const tempRoot = (): string =>
-  path.join(app.getPath("temp"), "splayer-atom-tidal-dash", String(process.pid));
+  path.join(runtimeEnvironment.tempDir, "splayer-atom-tidal-dash", String(process.pid));
 
 const registerCleanup = (): void => {
   if (cleanupRegistered) return;
   cleanupRegistered = true;
-  app.once("before-quit", () => {
-    void fsp.rm(tempRoot(), { recursive: true, force: true });
+  process.once("exit", () => {
+    rmSync(tempRoot(), { recursive: true, force: true });
   });
 };
 

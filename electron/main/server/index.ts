@@ -13,12 +13,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { WebSocketServer } from "ws";
 import { store } from "@main/store";
 import { serverLog } from "@main/utils/logger";
-import {
-  getArtistCacheDir,
-  getBackgroundsDir,
-  getCoverCacheDir,
-} from "@main/utils/config";
-import { broadcast } from "@main/utils/broadcast";
+import { getArtistCacheDir, getBackgroundsDir, getCoverCacheDir } from "@main/utils/config";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
 import type { ExternalApiStatus } from "@shared/types/settings";
 import { buildAtomCompatRoutes } from "@main/atom/compat/routes";
 import { buildHeadlessRoutes } from "@main/atom/headless/routes";
@@ -62,7 +58,7 @@ export const getServerStatus = (): ExternalApiStatus => ({
 });
 
 /** 向渲染进程同步外部 API 服务状态 */
-const publishStatus = (): void => broadcast("externalApi:status", getServerStatus());
+const publishStatus = (): void => publishDesktopEvent("externalApi:status", getServerStatus());
 
 /** 启动外部 API 服务 */
 export const startServer = (): Promise<ExternalApiStatus> => {
@@ -86,7 +82,10 @@ export const startServer = (): Promise<ExternalApiStatus> => {
       if (process.env.ELECTRON_RENDERER_URL) app.use("/api/*", cors());
       app.route("/api", buildHeadlessRoutes());
       app.route("/api", buildAtomCompatRoutes());
-      app.get("/ws", upgradeWebSocket(() => wsHandlers));
+      app.get(
+        "/ws",
+        upgradeWebSocket(() => wsHandlers),
+      );
     } else {
       app.use("/api/*", externalControlGate);
       app.route("/api", buildRoutes());
@@ -116,7 +115,7 @@ export const startServer = (): Promise<ExternalApiStatus> => {
     }
     if (headless && !process.env.ELECTRON_RENDERER_URL) {
       // Production headless serves the same built Vue renderer; no second web service is started.
-      const rendererRoot = join(__dirname, "../renderer");
+      const rendererRoot = process.env.ATOM_RENDERER_DIR || join(__dirname, "../renderer");
       app.get("/", serveStatic({ root: rendererRoot, path: "index.html" }));
       app.get("/debug", serveStatic({ root: rendererRoot, path: "index.html" }));
       app.use("/*", serveStatic({ root: rendererRoot }));

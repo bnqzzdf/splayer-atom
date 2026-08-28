@@ -90,13 +90,13 @@ vendor/splayer == 某个官方 SPlayer commit
 
 ### 待开发
 
-- [ ] 把现有 remote 调整为：
+- [x] 把现有 remote 调整为：
   - `origin` → SPlayer Atom 自有仓库；
   - `splayer` → `SPlayer-Dev/SPlayer-Next`，fetch-only 用途。
-- [ ] 建立并维护纯净 `vendor/splayer` 分支；更新时只允许 fast-forward 到 `splayer/dev` 对应官方 commit。
-- [ ] Atom `dev` / `main` 只跟踪自身 `origin`，不直接跟踪 SPlayer remote。
-- [ ] 正式记录“Atom 已完成吸收与验收的 SPlayer baseline commit”，不要仅依赖移动的 `splayer/dev`。
-- [ ] 建立固定的 upstream integration 流程：
+- [x] 建立并维护纯净 `vendor/splayer` 分支；更新时只允许 fast-forward 到 `splayer/dev` 对应官方 commit。
+- [x] Atom `dev` / `main` 只跟踪自身 `origin`，不直接跟踪 SPlayer remote。
+- [x] 正式记录“Atom 已完成吸收与验收的 SPlayer baseline commit”，不要仅依赖移动的 `splayer/dev`。
+- [x] 建立固定的 upstream integration 流程：
   1. `git fetch splayer`
   2. fast-forward `vendor/splayer` 到目标 `splayer/dev`
   3. 从 Atom `dev` 创建独立 `sync/splayer-YYYYMMDD` 分支或 worktree
@@ -107,8 +107,8 @@ vendor/splayer == 某个官方 SPlayer commit
   8. 对 player / queue / native / output / main lifecycle 相关上游改动追加真实硬件 smoke
   9. 验收通过后合回 Atom `dev`
   10. 更新正式 Atom upstream baseline commit
-- [ ] upstream touch audit 改为比较稳定的 Atom upstream baseline，而不是直接比较移动的 remote ref，避免一次普通 fetch 改变统计语义。
-- [ ] 增加 upstream sync CI / 报告，至少能发现：
+- [x] upstream touch audit 改为比较稳定的 Atom upstream baseline，而不是直接比较移动的 remote ref，避免一次普通 fetch 改变统计语义。
+- [x] 增加 upstream sync CI / 报告，至少能发现：
   - merge conflict；
   - typecheck / tests 回归；
   - touch budget 异常增长；
@@ -236,8 +236,8 @@ Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 
 
 ### Headless Node Core Runtime
 
-- [ ] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
-- [ ] Core 不依赖 Electron、Chromium、BrowserWindow 或 GTK 桌面运行栈。
+- [x] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
+- [x] Core JS 构建图已不依赖 Electron / BrowserWindow；production Core bundle 的 Electron import audit 为 0，进程级 HTTP/session/library smoke 通过。GTK / 最小 native 系统依赖仍由后续 Core-only native flavor 收口。
 - [ ] 正式 Headless 发行包自带项目固定版本的 Node runtime，不依赖用户系统预装的任意 Node 版本。
 - [ ] 初期不以 Node SEA 为目标；先使用可审计、可调试的 bundled Node runtime + JS bundle + native addon 结构，稳定后再评估单文件发行。
 - [ ] `audio-engine.node` 验证固定 Node runtime 的 N-API 加载；未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
@@ -278,8 +278,8 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 
 这些里程碑只是内部检查点，不产生需要长期维护的 Electron Headless 发布产品：
 
-1. [ ] 识别并隔离当前 Electron main 中属于 Core domain 与 Desktop shell 的职责。
-2. [ ] 建立 Node Core bootstrap，可独立启动配置、数据库、媒体库、provider 与 HTTP / WS。
+1. [~] 已隔离首批 runtime-neutral path / fetch / secret / event / playback-presentation seam；Desktop shell 仍保留历史 authoritative playback orchestration，继续迁移。
+2. [~] Node Core bootstrap 已可独立启动 settings、database、song cache、playback session 与 HTTP / WS，并完成 `/api/info`、`/api/session`、`/api/library/count` 进程 smoke；provider/auth 与完整播放闭环继续验收。
 3. [ ] 完成第 5 节定义的 Core-owned playback orchestration，使 queue / source / policy / recovery / preload 全部归 Core。
 4. [ ] Node Core 完成本地 PCM / Native DSD 播放。
 5. [ ] Node Core 完成 ALSA hardware / Diretta 输出与设备切换。
@@ -863,9 +863,9 @@ Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capabili
 ## 17. 文档收口
 
 - [x] 建立本正式 Roadmap。
-- [ ] 更新 `docs/atom-development.md` 中已经过时的 baseline / test count 描述。
+- [x] 更新 `docs/atom-development.md` 中已经过时的 baseline / test count 描述。
 - [ ] 将 `handoff-*` 明确标记为历史阶段快照，不作为当前状态来源。
-- [ ] 建立正式 upstream sync 操作说明。
+- [x] 建立正式 upstream sync 操作说明。
 - [ ] 建立 Desktop / Headless build flavor 与发行说明。
 
 文档职责保持：

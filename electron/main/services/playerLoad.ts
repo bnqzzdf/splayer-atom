@@ -1,5 +1,4 @@
-import { getMainWindow } from "@main/window";
-import { appName, getSongCacheDir } from "@main/utils/config";
+import { getSongCacheDir } from "@main/utils/config";
 import {
   discardDirectInput,
   materializeDirectInput,
@@ -10,20 +9,25 @@ import type { LyricFormat } from "@shared/types/lyrics";
 import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player";
 import { cancelPendingReinit } from "@main/services/device";
 import { getPlayer } from "@main/services/engine";
-import * as lastfm from "@main/services/lastfm";
 import { beginHeadlessPlayStats } from "@main/services/headlessPlayStats";
-import * as mediaService from "@main/services/media";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
-import { clearActiveCueRange, setActiveCueTrack, toDisplayDurationMs } from "@main/services/playerTimeline";
+import {
+  clearActiveCueRange,
+  setActiveCueTrack,
+  toDisplayDurationMs,
+} from "@main/services/playerTimeline";
 import * as songCache from "@main/services/songCache";
-import { setTaskbarThumbnailCover } from "@main/services/thumbnail";
-import { setTrayPlayState, setTraySongName } from "@main/services/tray";
 import { wsBroadcast } from "@main/server/broadcast";
-import { sendToMain } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
+import {
+  notifyPlaybackTrackLoaded,
+  setPlaybackPresentationCover,
+  updatePlaybackPresentation,
+} from "@main/atom/runtime/playbackPresentation";
 import { fetchBytes } from "@main/utils/fetchBytes";
 import { playerLog } from "@main/utils/logger";
 import { formatArtists, parseAlbum, parseArtists } from "@main/utils/metadata";
-import { toCacheUrl } from "@main/utils/protocol";
+import { toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
 
 /** 每次音源加载自增，用于丢弃过期远端封面。 */
@@ -86,7 +90,7 @@ export const loadPlayerSource = async (
         isFinished: false,
       },
     };
-    sendToMain("player:event", loadingEvent);
+    publishDesktopEvent("player:event", loadingEvent);
     wsBroadcast(loadingEvent);
 
     const remoteCover =
@@ -95,7 +99,8 @@ export const loadPlayerSource = async (
         : undefined;
     const coverFetchUrl =
       remoteCover && /^(https?|streaming-cover):\/\//i.test(remoteCover) ? remoteCover : undefined;
-    const coverUrl = coverFetchUrl && /^https?:\/\//i.test(coverFetchUrl) ? coverFetchUrl : undefined;
+    const coverUrl =
+      coverFetchUrl && /^https?:\/\//i.test(coverFetchUrl) ? coverFetchUrl : undefined;
 
     const applyDisplay = (
       title: string,
@@ -104,12 +109,15 @@ export const loadPlayerSource = async (
       coverData: Buffer | undefined,
       durationMs: number,
     ): void => {
-      const header = artist ? `${title} - ${artist}` : title || appName;
-      mediaService.setMetadata({ title, artist, album, coverData, coverUrl, durationMs });
-      mediaService.setPlayState({ status: autoPlay ? "Playing" : "Paused" });
-      getMainWindow()?.setTitle(header);
-      setTraySongName(header);
-      setTrayPlayState(autoPlay ? "playing" : "paused");
+      updatePlaybackPresentation({
+        title,
+        artist,
+        album,
+        coverData,
+        coverUrl,
+        durationMs,
+        autoPlay,
+      });
     };
 
     if (authoritative) {
@@ -149,11 +157,13 @@ export const loadPlayerSource = async (
     const displayAlbum = authoritative?.album?.name ?? parseAlbum(meta.album ?? "")?.name ?? "";
     const localCover = isRemote ? null : (inst.getCoverRaw() ?? null);
     applyDisplay(displayTitle, displayArtist, displayAlbum, localCover ?? undefined, durationMs);
-    if (!isRemote) setTaskbarThumbnailCover(meta.cover);
+    if (!isRemote) setPlaybackPresentationCover(meta.cover);
 
     const primaryArtist =
-      authoritative?.artists?.[0]?.name ?? parseArtists(meta.artist ?? "")[0]?.name ?? displayArtist;
-    lastfm.onTrackLoaded({
+      authoritative?.artists?.[0]?.name ??
+      parseArtists(meta.artist ?? "")[0]?.name ??
+      displayArtist;
+    notifyPlaybackTrackLoaded(authoritative, options.context, {
       title: displayTitle,
       artist: primaryArtist,
       album: displayAlbum,
@@ -165,15 +175,16 @@ export const loadPlayerSource = async (
     if (coverFetchUrl) {
       void fetchBytes(coverFetchUrl).then((buf) => {
         if (!buf || !isCurrentPlayerLoadSeq(seq)) return;
-        mediaService.setMetadata({
+        updatePlaybackPresentation({
           title: displayTitle,
           artist: displayArtist,
           album: displayAlbum,
           coverData: buf,
           coverUrl,
           durationMs,
+          autoPlay,
         });
-        setTaskbarThumbnailCover(buf);
+        setPlaybackPresentationCover(buf);
       });
     }
 

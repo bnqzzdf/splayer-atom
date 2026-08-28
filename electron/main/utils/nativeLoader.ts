@@ -1,6 +1,6 @@
-import { app } from "electron";
 import { createRequire } from "module";
 import path from "path";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { nativeLog } from "./logger";
 
 const requireNative = createRequire(import.meta.url);
@@ -13,9 +13,9 @@ const requireNative = createRequire(import.meta.url);
 export const loadNativeModule = <T = unknown>(fileName: string, devDirName: string): T | null => {
   let nativeModulePath: string;
 
-  if (app.isPackaged) {
+  if (runtimeEnvironment.isPackaged) {
     // 打包后: resources/native/audio-engine.node
-    nativeModulePath = path.join(process.resourcesPath, "native", fileName);
+    nativeModulePath = path.join(runtimeEnvironment.resourcesDir, "native", fileName);
   } else {
     // 开发时: native/audio-engine/audio-engine.node
     nativeModulePath = path.join(process.cwd(), "native", devDirName, fileName);

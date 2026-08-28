@@ -59,13 +59,20 @@ import {
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
 import { toMs } from "@main/utils/time";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const errorText = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
 const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
 const isWebProviderPlatform = (value: unknown): value is ApiPlatform =>
   typeof value === "string" && WEB_PROVIDER_PLATFORMS.has(value as ApiPlatform);
-const boundedInt = (value: string | undefined, fallback: number, min: number, max: number): number => {
+const boundedInt = (
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.trunc(parsed))) : fallback;
 };
@@ -78,7 +85,11 @@ export const buildHeadlessRoutes = (): Hono => {
   const api = new Hono();
 
   api.get("/info", (c) =>
-    c.json({ name: "SPlayer-Next", version: "1.0.0", platform: process.platform }),
+    c.json({
+      name: runtimeEnvironment.appName,
+      version: runtimeEnvironment.appVersion,
+      platform: process.platform,
+    }),
   );
 
   api.get("/status", (c) => {
@@ -95,9 +106,10 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.get("/config", (c) => c.json(store.store));
   api.post("/config", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { keyPath?: unknown; value?: unknown }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      keyPath?: unknown;
+      value?: unknown;
+    } | null;
     if (typeof body?.keyPath !== "string" || !body.keyPath) {
       return c.json({ error: "keyPath_required" }, 400);
     }
@@ -106,9 +118,11 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/providers/call", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { platform?: unknown; name?: unknown; params?: unknown }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      platform?: unknown;
+      name?: unknown;
+      params?: unknown;
+    } | null;
     if (!isWebProviderPlatform(body?.platform)) {
       return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
     }
@@ -132,13 +146,15 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/providers/set-cookie", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { platform?: unknown; cookie?: unknown }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      platform?: unknown;
+      cookie?: unknown;
+    } | null;
     if (!isWebProviderPlatform(body?.platform)) {
       return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
     }
-    if (typeof body.cookie !== "string") return c.json({ ok: false, error: "cookie_required" }, 400);
+    if (typeof body.cookie !== "string")
+      return c.json({ ok: false, error: "cookie_required" }, 400);
     return c.json(setProviderCookie(body.platform, body.cookie));
   });
 
@@ -167,9 +183,10 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/load", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { source?: unknown; options?: LoadOptions }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      source?: unknown;
+      options?: LoadOptions;
+    } | null;
     if (typeof body?.source !== "string" || !body.source) {
       return c.json({ success: false, error: "source_required" }, 400);
     }
@@ -247,9 +264,11 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/equalizer", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { enabled?: boolean; bands?: number[]; preamp?: number }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      enabled?: boolean;
+      bands?: number[];
+      preamp?: number;
+    } | null;
     try {
       if (Array.isArray(body?.bands)) getPlayer().setEqualizerBands(body.bands);
       if (typeof body?.preamp === "number") getPlayer().setPreampGain(body.preamp);
@@ -285,7 +304,9 @@ export const buildHeadlessRoutes = (): Hono => {
   api.get("/player/cover", (c) => {
     try {
       const raw = getPlayer().getCoverRaw();
-      return c.json({ data: raw ? `data:image/jpeg;base64,${Buffer.from(raw).toString("base64")}` : null });
+      return c.json({
+        data: raw ? `data:image/jpeg;base64,${Buffer.from(raw).toString("base64")}` : null,
+      });
     } catch (error) {
       return c.json({ error: errorText(error) }, 500);
     }
@@ -295,7 +316,8 @@ export const buildHeadlessRoutes = (): Hono => {
     const body = (await c.req.json().catch(() => null)) as { path?: unknown } | null;
     if (typeof body?.path !== "string") return c.json({ error: "path_required" }, 400);
     const allowed = new Set([".ttml", ".lys", ".qrc", ".krc", ".yrc", ".lrc", ".ass", ".srt"]);
-    if (!allowed.has(extname(body.path).toLowerCase())) return c.json({ error: "unsupported_lyric" }, 400);
+    if (!allowed.has(extname(body.path).toLowerCase()))
+      return c.json({ error: "unsupported_lyric" }, 400);
     try {
       return c.json({ data: await readFile(body.path, "utf-8") });
     } catch (error) {
@@ -306,9 +328,11 @@ export const buildHeadlessRoutes = (): Hono => {
   api.get("/now-playing", (c) => c.json(nowPlaying.lightSnapshot()));
   api.get("/lyrics", (c) => c.json(nowPlaying.lyricSnapshot()));
   api.post("/now-playing", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { track?: Track | null; lyric?: unknown[]; source?: unknown }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      track?: Track | null;
+      lyric?: unknown[];
+      source?: unknown;
+    } | null;
     nowPlaying.update(
       body?.track ?? null,
       Array.isArray(body?.lyric) ? (body.lyric as never[]) : [],
@@ -317,9 +341,10 @@ export const buildHeadlessRoutes = (): Hono => {
     return c.json({ ok: true });
   });
   api.post("/now-playing/lyric-offset", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { trackId?: unknown; offsetMs?: unknown }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      trackId?: unknown;
+      offsetMs?: unknown;
+    } | null;
     if (typeof body?.trackId !== "string") return c.json({ error: "trackId_required" }, 400);
     nowPlaying.setLyricOffset(body.trackId, Number(body.offsetMs ?? 0));
     return c.json({ ok: true });
@@ -353,7 +378,8 @@ export const buildHeadlessRoutes = (): Hono => {
   api.post("/seek", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { positionMs?: number } | null;
     const positionMs = Number(body?.positionMs);
-    if (!Number.isFinite(positionMs) || positionMs < 0) return c.json({ error: "positionMs required" }, 400);
+    if (!Number.isFinite(positionMs) || positionMs < 0)
+      return c.json({ error: "positionMs required" }, 400);
     try {
       await seek(positionMs);
       return c.json({ ok: true });
@@ -380,9 +406,12 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.get("/session", (c) => c.json(getPlaybackSession()));
   api.post("/session/queue", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { items?: PlaybackQueueItem[]; startIndex?: number; autoPlay?: boolean; loadCurrent?: boolean }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      items?: PlaybackQueueItem[];
+      startIndex?: number;
+      autoPlay?: boolean;
+      loadCurrent?: boolean;
+    } | null;
     if (!Array.isArray(body?.items)) return c.json({ error: "items array required" }, 400);
     try {
       return c.json(
@@ -398,7 +427,10 @@ export const buildHeadlessRoutes = (): Hono => {
     }
   });
   api.post("/session/play-track", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { track?: Track; autoPlay?: boolean } | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      track?: Track;
+      autoPlay?: boolean;
+    } | null;
     if (!body?.track) return c.json({ error: "track required" }, 400);
     try {
       return c.json(await playTrack(body.track, body.autoPlay !== false));
@@ -412,9 +444,10 @@ export const buildHeadlessRoutes = (): Hono => {
     return c.json(appendQueue(body.items));
   });
   api.post("/session/queue/insert", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { items?: PlaybackQueueItem[]; index?: number }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      items?: PlaybackQueueItem[];
+      index?: number;
+    } | null;
     const index = Number(body?.index);
     if (!Array.isArray(body?.items) || !Number.isInteger(index)) {
       return c.json({ error: "items array and integer index required" }, 400);
@@ -422,9 +455,10 @@ export const buildHeadlessRoutes = (): Hono => {
     return c.json(insertQueue(body.items, index));
   });
   api.post("/session/queue/move", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { fromIndex?: number; toIndex?: number }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      fromIndex?: number;
+      toIndex?: number;
+    } | null;
     const fromIndex = Number(body?.fromIndex);
     const toIndex = Number(body?.toIndex);
     if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) {
@@ -435,7 +469,8 @@ export const buildHeadlessRoutes = (): Hono => {
   api.patch("/session/queue/:index", async (c) => {
     const index = Number(c.req.param("index"));
     const body = (await c.req.json().catch(() => null)) as { item?: PlaybackQueueItem } | null;
-    if (!Number.isInteger(index) || !body?.item) return c.json({ error: "valid index and item required" }, 400);
+    if (!Number.isInteger(index) || !body?.item)
+      return c.json({ error: "valid index and item required" }, 400);
     return c.json(updateQueueItem(index, body.item));
   });
   api.patch("/session/queue/tracks", async (c) => {
@@ -447,13 +482,17 @@ export const buildHeadlessRoutes = (): Hono => {
     c.json(removeServerTracks(c.req.param("serverId"))),
   );
   api.post("/session/queue/select", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as
-      | { index?: number; autoPlay?: boolean; loadCurrent?: boolean }
-      | null;
+    const body = (await c.req.json().catch(() => null)) as {
+      index?: number;
+      autoPlay?: boolean;
+      loadCurrent?: boolean;
+    } | null;
     const index = Number(body?.index);
     if (!Number.isInteger(index)) return c.json({ error: "integer index required" }, 400);
     try {
-      return c.json(await selectIndex(index, body?.loadCurrent !== false, body?.autoPlay !== false));
+      return c.json(
+        await selectIndex(index, body?.loadCurrent !== false, body?.autoPlay !== false),
+      );
     } catch (error) {
       return commandError(c, error);
     }
@@ -484,12 +523,14 @@ export const buildHeadlessRoutes = (): Hono => {
   });
   api.post("/session/repeat", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { mode?: RepeatMode } | null;
-    if (body?.mode !== "list" && body?.mode !== "one") return c.json({ error: "mode must be list or one" }, 400);
+    if (body?.mode !== "list" && body?.mode !== "one")
+      return c.json({ error: "mode must be list or one" }, 400);
     return c.json(setRepeat(body.mode));
   });
   api.post("/session/shuffle", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { mode?: ShuffleMode } | null;
-    if (body?.mode !== "off" && body?.mode !== "on") return c.json({ error: "mode must be off or on" }, 400);
+    if (body?.mode !== "off" && body?.mode !== "on")
+      return c.json({ error: "mode must be off or on" }, 400);
     return c.json(setShuffle(body.mode));
   });
 

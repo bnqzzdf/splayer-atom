@@ -1,14 +1,13 @@
-import { is } from "@electron-toolkit/utils";
-import { app } from "electron";
 import path from "node:path";
 import { store } from "@main/store";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { defaultCacheDir } from "./paths";
 
 /**
  * 是否为开发环境
  * @returns boolean
  */
-export const isDev = is.dev;
+export const isDev = !runtimeEnvironment.isPackaged;
 
 /** 是否为 Windows 系统 */
 export const isWin = process.platform === "win32";
@@ -30,10 +29,10 @@ export const isAppX = isWin && process.execPath.includes("WindowsApps");
  * 软件版本
  * @returns string
  */
-export const appVersion = app.getVersion();
+export const appVersion = runtimeEnvironment.appVersion;
 
 /** 应用名称 */
-export const appName = app.getName();
+export const appName = runtimeEnvironment.appName;
 
 /** 当前生效的缓存根目录 */
 export const getAppCacheDir = (): string => store.get("cache.dir") || defaultCacheDir;
@@ -52,4 +51,4 @@ export const getSongCacheDir = (): string => path.join(getAppCacheDir(), "songs"
 
 /** 当前生效的下载目录（默认：系统音乐目录下的软件名子目录） */
 export const getDownloadDir = (): string =>
-  store.get("download.dir") || path.join(app.getPath("music"), appName);
+  store.get("download.dir") || path.join(runtimeEnvironment.musicDir, appName);

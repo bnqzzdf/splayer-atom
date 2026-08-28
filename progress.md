@@ -1,5 +1,23 @@
 # SPlayer Atom — Progress
 
+## 2026-08-28 — Atom origin published path + Node Core bootstrap proof
+
+- Switched local `origin` to the user-created `https://github.com/bnqzzdf/splayer-atom.git`; retained `splayer=https://github.com/SPlayer-Dev/SPlayer-Next.git` with push disabled and kept `vendor/splayer` on official commit `92026e2c69dd63dd42408ddc5beaf4876d231dc1` while accepted baseline stays fixed at `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`.
+- Continued roadmap section 4 instead of stopping after documentation. Added runtime-neutral environment/fetch/secret/event/playback-presentation seams and moved Desktop-only window/media/tray/Last.fm presentation behind a Desktop adapter. Database/settings/song-cache/playback-session/provider code remains shared rather than duplicated.
+- Added independent `electron/main/core-node/index.ts` and `scripts/atom/vite.core.config.ts`. Node/Web typecheck, ESLint, Node 75/75, Web 52/52 and production Core build pass; built Core JS now contains zero Electron imports.
+- Ran a real ordinary-Node process smoke with isolated user data. Core successfully loaded the existing native audio engine and started Hono/WS; `/api/info`, `/api/session`, and `/api/library/count` returned valid responses. `/api/info` now uses runtime metadata rather than the old hard-coded SPlayer name.
+- Split upstream touch reporting into the existing 37 business-code budget and a separate explicit 13-file runtime-neutral seam budget. Both budgets currently pass; runtime seam growth remains gated rather than hidden by increasing the business count.
+- Development-machine Node/pnpm still exhibits the previously recorded intermittent SIGSEGV while launching Prettier; direct TypeScript/Core build/smoke commands continue to work. This remains a reproducible-build/release-environment issue for roadmap section 14, not a product decision blocker.
+- No user decision is currently required to continue roadmap implementation. The next implementation target is to finish the Node Core/Desktop boundary and then move canonical Track source resolution and recovery into the existing authoritative playback session.
+
+## 2026-08-28 — Roadmap P0 upstream sync started
+
+- Re-read root `AGENTS.md`, `CLAUDE.md`, persistent planning files, and the full `docs/atom-roadmap.md`; roadmap section 18 now governs execution order over the older Phase 16 handoff state.
+- Session catchup found two unsynced tool-only messages but `git diff --stat` was empty before this session's edits, so there was no recovered code delta to preserve.
+- Confirmed current Git topology is still the bootstrap model: only `origin` exists, it points directly to `SPlayer-Dev/SPlayer-Next`, and local `dev` tracks `origin/dev` while sitting 24 commits ahead.
+- Confirmed the accepted upstream baseline is official commit `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`; current official `splayer/dev` has since advanced, proving the touch audit must stop depending on a moving remote-tracking ref.
+- Starting the repository-level sync implementation now: fixed baseline record, topology/status tooling, stable touch audit, upstream integration CI/report, and maintenance documentation. Node Core work remains blocked behind completion of this P0 foundation.
+
 ## 2026-08-28 — Headless local Web phase completed
 
 - Resumed from `docs/handoff-2026-08-28.md`, fixed the Atom-owned Hono Context type blocker, and restored Node/Web typecheck.
@@ -154,14 +172,12 @@
 - Added `scripts/atom/check-upstream-touch.mjs`; it compares the working tree against `origin/dev`, separately reports upstream business-code edits, downstream metadata edits, and Atom-owned additions, and fails when the business-code touch budget exceeds 8. The script, ESLint, and `git diff --check` all pass.
 - Updated `docs/atom-development.md` with the now-green Linux native baseline, the correct Linux native test command, local Qobuz environment-variable setup, and the remaining live acceptance gate.
 
-
 ## 2026-08-25 — Session handoff
 
 - Stopped before Qobuz production code changes; current upstream application source remains functionally unmodified apart from mandatory Atom project rules/planning docs.
 - Recorded the next-session sequence in `task_plan.md`: install Rust/native Linux dependencies, verify the upstream native baseline, then implement the smallest Qobuz search → signed stream URL → existing SPlayer playback slice.
 - Added `docs/atom-development.md` with concise Debian/Ubuntu dependencies, rustup installation, native baseline commands, Electron `better-sqlite3` rebuild command, and Qobuz scope guardrails.
 - Preserve the current architectural conclusion: NetEase/QQ Music/Kugou are upstream-owned; Atom currently owns only Qobuz/Tidal additions and Diretta output.
-
 
 ## 2026-08-26 — Phase 15 Headless/Core compatibility
 
@@ -208,6 +224,7 @@
 - Qobuz credential discovery is being simplified around the qobuz-dl-proven Web Player Bundle route: no runtime dependency on qobuz-dl, no qobuz-dl config import, no disk cache of discovered app secrets; environment credentials remain an explicit override.
 - Implemented Atom-owned Web Player credential discovery with app-id + timezone/seed-derived secret candidates, in-memory winner reuse for signed requests, and updated Qobuz token validation to current `X-User-Auth-Token` + `user/get` semantics so `QOBUZ_USER_ID` is no longer required.
 - Live Web Player discovery succeeds against the current site and returns four signing candidates without logging any secret values. Full regression remains green: Node 49/49, Web 54/54, typecheck, lint, production Electron/Vite build, and the upstream-touch budget all pass; upstream business-code touches remain 8.
+
 ### 2026-08-27：连接语义交叉验证（进行中）
 
 - 已对照 `tinyLMS`、`slim2Diretta`、`DirettaRendererUPnP` 与 SDK 示例，确认四者都保留 `connectWait()`。
@@ -228,6 +245,7 @@
 - root 完整生命周期实测通过：5 秒 PCM16/44.1 kHz/stereo 静音源 load-paused 成功，play 后位置 0.743 s，pause 保持 0.836 s，resume 后推进到 1.579 s，stop 后进程自然退出 0。
 - 比例项目门禁全部通过：Node 72/72、Web 54/54、typecheck、ESLint、跳过重复 Native 编译的 production build、touch audit（31 business + 2 generated）与 `git diff --check`。
 - 已删除一次性 Node 生命周期脚本和 5 秒静音测试文件；Target 由成功测试正常 stop/release，未执行 SSH 或重启。
+
 ### 2026-08-27：Diretta 下一轮硬件验收准备
 
 - 用户已更新规则：不再逐次询问 Target 是否空闲；只在连接失败、占用状态可疑或测试无法继续时停止并沟通。开始执行下一轮 root 硬件验收。

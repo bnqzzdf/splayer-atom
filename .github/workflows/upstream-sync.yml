@@ -1,0 +1,97 @@
+name: Upstream Sync Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
+jobs:
+  integration:
+    name: SPlayer dev integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Atom
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch SPlayer upstream and vendor mirror
+        run: |
+          git remote add splayer https://github.com/SPlayer-Dev/SPlayer-Next.git
+          git config --add remote.splayer.pushurl DISABLED
+          git fetch --no-tags splayer dev
+          git fetch --no-tags origin vendor/splayer:refs/remotes/origin/vendor/splayer
+
+      - name: Verify topology and candidate merge
+        run: >-
+          node scripts/atom/upstream-sync.mjs report
+          --vendor-ref origin/vendor/splayer
+          --target splayer/dev
+          --head HEAD
+          --ci
+
+      - name: Merge candidate upstream
+        run: |
+          git config user.name "SPlayer Atom CI"
+          git config user.email "ci@splayer-atom.invalid"
+          git merge --no-commit --no-ff splayer/dev
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check candidate touch inventory
+        run: node scripts/atom/check-upstream-touch.mjs
+        env:
+          UPSTREAM_REF: splayer/dev
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Node and Web tests
+        run: pnpm test
+
+      - name: Production build
+        run: SKIP_NATIVE_BUILD=true pnpm build
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: upstream-sync-native-linux
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libasound2-dev libdbus-1-dev libpipewire-0.3-dev libpulse-dev pkg-config clang
+
+      - name: Test Linux audio engine
+        run: cargo test -p audio-engine
+
+      - name: Whitespace check
+        run: git diff --check

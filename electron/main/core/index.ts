@@ -13,9 +13,10 @@ import { isMac } from "@main/utils/config";
 import { registerIpcHandlers } from "@main/ipc";
 import { init as initMedia, shutdown as shutdownMedia } from "@main/services/media";
 import { init as initLastfm } from "@main/services/lastfm";
+import { registerDesktopPlaybackPresentation } from "@main/atom/desktop/playbackPresentation";
 import { initGlobalHotkey } from "@main/services/globalHotkey";
 import { initDatabase, closeDatabase } from "@main/database";
-import { init as initSongCache } from "@main/services/songCache";
+import { init as initSongCache, shutdown as shutdownSongCache } from "@main/services/songCache";
 import { init as initDownload } from "@main/services/downloadManager";
 import { pluginRegistry } from "@main/plugins/registry";
 import { isHeadless } from "./mode";
@@ -29,6 +30,9 @@ import { initPlaybackSession } from "@main/services/playbackSession";
 import { startMcpServer, stopMcpServer } from "@main/services/mcp/http";
 import { initUpdater, disposeUpdater } from "@main/services/updater";
 import { coreLog, initLogger } from "@main/utils/logger";
+import { store } from "@main/store";
+import { configureDesktopEventSink } from "@main/atom/runtime/events";
+import { sendToMain } from "@main/utils/broadcast";
 import {
   initOrpheusRegistration,
   extractOrpheusUrl,
@@ -81,6 +85,7 @@ const logProcessMemory = (): void => {
  */
 export const initApp = (): void => {
   configureMemoryOptimizations();
+  configureDesktopEventSink(sendToMain);
   // 初始化日志
   initLogger();
   // 单例锁
@@ -121,6 +126,7 @@ export const initApp = (): void => {
     if (!headless) {
       initMedia();
       initLastfm();
+      registerDesktopPlaybackPresentation();
     }
     // 初始化插件系统
     pluginRegistry.init();
@@ -164,6 +170,8 @@ export const initApp = (): void => {
   // 退出前清理
   app.on("before-quit", () => {
     coreLog.info("应用即将退出，清理资源");
+    store.flushImmediate();
+    shutdownSongCache();
     shutdownMedia();
     closeDatabase();
     void stopServer();

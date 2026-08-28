@@ -1,4 +1,4 @@
-import { sendToMain } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { isWin } from "@main/utils/config";
 import { playerLog } from "@main/utils/logger";
 import { evaluateDeviceChange, recoveryRetryDelay } from "./devicePolicy";
@@ -94,7 +94,7 @@ const handleDeviceChange = (notifyListChange: boolean): void => {
     if (lastDefaultDevice === undefined) {
       lastDefaultDevice = currentDefault;
       if (notifyListChange) {
-        sendToMain("player:event", {
+        publishDesktopEvent("player:event", {
           type: "deviceChanged",
           data: { defaultDevice: currentDefault },
         });
@@ -115,7 +115,7 @@ const handleDeviceChange = (notifyListChange: boolean): void => {
       playerLog.info(`默认音频设备变化: ${previousDefault} → ${currentDefault}`);
     }
     if (notifyListChange || decision.defaultChanged) {
-      sendToMain("player:event", {
+      publishDesktopEvent("player:event", {
         type: "deviceChanged",
         data: { defaultDevice: currentDefault },
       });

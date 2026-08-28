@@ -4,7 +4,7 @@
  * 主进程要拿封面字节是因为系统媒体集成 API 接受 Buffer，
  * 而渲染层的 Blob 跨进程传输不方便。
  */
-import { net } from "electron";
+import { runtimeFetch } from "@main/atom/runtime/fetch";
 
 /** 默认 15s 超时 */
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -29,7 +29,7 @@ export const fetchBytes = async (
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await net.fetch(url, { signal: controller.signal });
+    const res = await runtimeFetch(url, { signal: controller.signal });
     if (!res.ok || !res.body) return null;
     if (requireImage) {
       // octet-stream / 缺失类型常见于未配 MIME 的反代与自建流媒体服务器，封面场景放行；

@@ -11,7 +11,7 @@ import {
   getCueTrackPathsByDirs,
   type UpsertTrack,
 } from "@main/database";
-import { broadcast } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
 import { toCacheUrl } from "@main/utils/protocol";
 import { toMs } from "@main/utils/time";
 import { parseArtists, parseAlbum } from "@main/utils/metadata";
@@ -152,7 +152,7 @@ const finishScan = async (dirs: string[], event: JsScanEvent): Promise<void> => 
   }
   const cueCount = await syncCueTracks(event.cueFiles ?? [], dirs, event.unavailableDirs ?? []);
   scanning = false;
-  broadcast("library:scanProgress", {
+  publishDesktopEvent("library:scanProgress", {
     phase: "done",
     total: event.total,
     scanned: event.scanned,
@@ -196,7 +196,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
           if (event.tracks && event.tracks.length > 0) {
             upsertTracks(event.tracks.map(scannedToUpsert));
           }
-          broadcast("library:scanProgress", {
+          publishDesktopEvent("library:scanProgress", {
             phase: "scanning",
             total: event.total,
             scanned: event.scanned,
@@ -208,7 +208,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
           void finishScan(dirs, event).catch((error) => {
             scanning = false;
             libraryLog.error("扫描收尾失败:", error);
-            broadcast("library:scanProgress", {
+            publishDesktopEvent("library:scanProgress", {
               phase: "done",
               total: event.total,
               scanned: event.scanned,
