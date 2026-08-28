@@ -141,165 +141,299 @@ PR 只包含可独立贡献给 SPlayer 的最小改动，不从 Atom `dev` 直�
 
 ---
 
-## 4. Desktop / Headless 构建 Flavor
+## 4. Desktop / Headless 构建 Flavor 与 Core 边界
 
-当前 `ATOM_HEADLESS=1` / `--headless` 主要是运行时模式。它虽然不创建 Desktop 窗口，但仍运行在完整 Electron runtime 上，无法真正消除 Chromium、Electron lifecycle 与桌面运行栈依赖。
+当前 `ATOM_HEADLESS=1` / `--headless` 只是运行时模式：虽然不创建 Desktop 窗口，但仍启动完整 Electron runtime。长期产品架构不保留这种“Electron 既是 Desktop 又是 Headless Core”的双重职责。
 
-### 已确定的最终方向
+### 已确定的最终产品模型：Core / Control / Output
 
-不建设、也不发布一个长期存在的“Electron Headless”中间产品。考虑到项目不以尽快发布中间版本为目标，直接向最终 Headless 架构演进：
+SPlayer Atom 采用 Core-centric 架构，参考成熟音乐服务器的职责拆分：**Node Core 是唯一应用与播放权威；Web / Desktop 是 Control；实际音频播放由 Output 执行。**
 
 ```text
-                         shared application runtime
-                        /                          \
-Desktop flavor: Electron shell          Headless flavor: Node shell
-         ↓                                        ↓
- Electron IPC + Desktop UI                    HTTP / WebSocket + Web UI
-                        \                          /
-                         same main services
-                                ↓
-                  library / queue / player / provider
-                                ↓
-                      ALSA hardware / Diretta
+                         SPlayer Atom Core
+                         Node Linux Runtime
+                                │
+          ┌─────────────────────┼─────────────────────┐
+          │                     │                     │
+     Library / DB          Playback Domain        Providers
+          │              Queue / Policy /         NCM / QM / KG
+          │              Source Resolution        Qobuz / TIDAL
+          │                     │
+          └─────────────────────┼─────────────────────┘
+                                │
+                         Output Controller
+                                │
+                 ┌──────────────┴──────────────┐
+                 │                             │
+         Core Local Output              Future Remote Output
+         audio-engine.node              Desktop Output Agent
+                 │                             │
+          ALSA / Diretta                  local DAC / OS
+
+Controls:
+  Web UI ───────────────┐
+                        ├──── HTTP / WebSocket ────→ Core
+  Desktop Electron ─────┘
 ```
 
-Build flavor 决定的是**产品 shell 和构建图**，不是简单裁剪同一个 Electron artifact：
+因此 build flavor 决定的是产品角色与构建图：
 
-- `desktop` → Electron shell；
-- `headless` → Node Linux shell。
+- `headless` → **Atom Core**：固定 Node runtime + Core services + Web UI + Core 本机 Output；
+- `desktop` → **Atom Control**：Electron UI + Desktop integration + 未来可选的本机 Output Agent，但不拥有 Core playback/domain state。
 
-当前已验证的 Electron Headless 运行模式在迁移期间保留，作为行为 oracle 和回归参照；当 Node Headless 完整通过同一套功能与硬件验收后，它不再作为正式产品架构的一部分。
+不建设、也不发布一个长期存在的“Electron Headless”中间产品。当前已经验证的 Electron Headless 只在迁移期间作为行为 oracle；Node Core 完成等价验收后退出正式产品架构。
 
-### Shared Runtime 边界
+### Core 的唯一权威职责
 
-以下能力必须保持同一套实现，不因 Desktop / Headless shell 分叉：
+以下能力只存在于 Core，不允许 Desktop / Web 建立第二份 authority：
 
 - database / settings domain；
 - library / scanner；
-- playback session / queue authority；
-- player / `playerLoad`；
-- audio source resolution；
-- provider services；
+- provider session / entitlement；
+- playback session / authoritative queue；
+- playback policy；
+- source resolution / URL refresh；
 - song cache；
+- preload / gapless scheduling；
+- playback recovery；
 - lyrics / now playing / play stats；
-- output-device service；
+- output registry / active output assignment；
 - Diretta input materialization。
 
-不得因为引入 Node Headless shell 而复制这些业务逻辑。
+Control 可以缓存这些状态的 UI projection，但只能发送 command 并接受 Core snapshot / event，不得在本地成为播放状态事实来源。
 
-Electron-only capability 应留在 Desktop shell，例如：
+### Desktop 的长期职责
 
-- BrowserWindow / lyric windows；
-- IPC / preload；
-- global hotkey；
-- desktop updater；
-- protocol registration；
-- tray / desktop media integration；
-- taskbar / dynamic-island 等桌面 UI。
+Desktop Electron 降级为控制器，并可在未来增加独立的 Output Agent capability：
 
-两边都需要、但实现依赖 runtime 的能力应通过窄 adapter 提供，例如：
+- BrowserWindow / UI / preload；
+- Core discovery / connection；
+- queue、library、provider、settings 的控制与展示；
+- global hotkey / tray / desktop notification / protocol 等桌面 integration；
+- 可选 Desktop Output Agent。
 
-- `RuntimePaths`；
-- `SecretStore`；
-- `ApplicationLifecycle`；
-- 必要时的 logging adapter。
+Desktop Output Agent 即使实现，也只能执行 Core 下发的 `PlaybackJob`：load / play / pause / seek / stop / report status。它复用同一个 `audio-engine`，但不拥有 queue、provider、source fallback、next/prev policy 或 session authority，因此不构成第二套播放器。
 
-### Headless Node Runtime
+若未来提供“单机 Desktop”体验，也应由 Desktop 启动或连接一个 bundled local Core，而不是恢复 Electron renderer/main 自己成为播放 Core。
 
-- [ ] 建立独立 Node Headless entry，直接启动 shared runtime 与现有 HTTP / WebSocket server。
-- [ ] Headless 不依赖 Electron、Chromium、BrowserWindow 或 GTK 桌面运行栈。
+### Output 演进边界
+
+第一阶段只实现一个 Output：**Core Local Output**。
+
+```text
+Core Playback Domain
+        ↓
+Core Local Output
+        ↓
+audio-engine.node
+        ↓
+ALSA hardware / Diretta
+```
+
+Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 Output 传输优先保持原始媒体输入或 Core-controlled ranged media access，由 Endpoint 使用同一 `audio-engine` 解码；当前不引入 Core→Endpoint PCM 流协议，也不实现多 Zone 时钟同步。
+
+初始产品只要求 single active output。多 Zone / grouped synchronized playback 作为远期能力单独评估。
+
+### Headless Node Core Runtime
+
+- [ ] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
+- [ ] Core 不依赖 Electron、Chromium、BrowserWindow 或 GTK 桌面运行栈。
 - [ ] 正式 Headless 发行包自带项目固定版本的 Node runtime，不依赖用户系统预装的任意 Node 版本。
 - [ ] 初期不以 Node SEA 为目标；先使用可审计、可调试的 bundled Node runtime + JS bundle + native addon 结构，稳定后再评估单文件发行。
-- [ ] `audio-engine.node` 分别验证 Node runtime 与 Electron runtime 的 N-API 加载兼容性。
-- [ ] `better-sqlite3` 分别为 Electron Desktop 与固定 Node Headless runtime 建立正确的 native build / ABI 产物。
+- [ ] `audio-engine.node` 验证固定 Node runtime 的 N-API 加载；未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
+- [ ] `better-sqlite3` 的 Core 产物面向固定 Node runtime 构建；长期 Desktop Control 不应因 Core 数据库而继续依赖 Electron 版 `better-sqlite3`。
 
-### Linux Headless 音频能力
+### Linux Core Local Output
 
-正式 Headless 默认只支持：
+正式 Headless / Core 默认只支持：
 
 ```text
 ALSA hardware PCM
 Diretta Source Direct
 ```
 
-- [ ] Headless native build 不默认携带 PipeWire / PulseAudio backend。
-- [ ] Headless 不构建未启用的 `audio-capture`、`media-ctrl` 等 Desktop native addon。
-- [ ] `audio-engine` 使用 Cargo features / capability 拆分，使 build flavor 决定实际 Linux audio backend。
-- [ ] Desktop Linux 可继续保留上游需要的 PipeWire / PulseAudio / ALSA 能力。
-- [ ] 要求 Diretta 的正式 Headless release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包。
+- [ ] Core native build 不默认携带 PipeWire / PulseAudio backend。
+- [ ] Core 不构建未启用的 `audio-capture`、`media-ctrl` 等 Desktop native addon。
+- [ ] `audio-engine` 使用 Cargo features / capability 拆分，使 Core build 只包含需要的 Linux audio backend。
+- [ ] 未来 Desktop Output Agent 可按桌面平台需要构建其 OS output backend，不影响 Core 的最小 Linux 依赖。
+- [ ] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包。
+
+### Runtime-neutral 基础能力
+
+Core 不得依赖 Electron-only infrastructure。需要抽象的边界保持窄而明确，例如：
+
+- `RuntimePaths`；
+- `SecretStore`；
+- `ApplicationLifecycle`；
+- 必要时的 logging adapter。
+
+Provider 凭据属于 Core。Node Core 的 `SecretStore` 在当前单用户专用主机定位下，可优先使用：
+
+- systemd credentials / 部署环境变量；或
+- 服务用户专有、权限受限的本地 credential 文件（例如 `0600`）。
+
+Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Desktop-local secret，不再作为 provider 登录态的权威存储。
 
 ### 迁移里程碑
 
-这些里程碑只是内部重构检查点，不产生需要长期维护的 Electron Headless 发布产品：
+这些里程碑只是内部检查点，不产生需要长期维护的 Electron Headless 发布产品：
 
-1. [ ] 识别并隔离 shared runtime 中所有 Electron-only import / capability。
-2. [ ] 提取 runtime-neutral shared bootstrap，同时保持 Desktop Electron 行为不变。
-3. [ ] Node Headless entry 可独立启动配置、数据库、媒体库与 HTTP / WS。
-4. [ ] Node Headless 完成本地 PCM / Native DSD 播放。
-5. [ ] Node Headless 完成 ALSA hardware / Diretta 输出与设备切换。
-6. [ ] provider/auth 使用 runtime-neutral path / secret adapters。
-7. [ ] 正式 Web UI 在 Node Headless 上完成与当前 Electron Headless 等价的完整回归。
-8. [ ] 建立自带固定 Node runtime 的 Linux Headless `.deb` / `tar.gz` 发行。
-9. [ ] 全部验收通过后，当前 Electron Headless 运行模式退出正式产品架构，仅在确有调试价值时保留兼容入口。
-
-### Headless Secret Storage 方向
-
-Desktop 可继续使用 Electron `safeStorage`。Headless 在当前单用户专用主机定位下，不强制引入桌面 keyring；优先采用 runtime-neutral `SecretStore`，其 Linux 实现可基于：
-
-- systemd credentials / 部署环境变量；或
-- 受限权限的本地 credential 文件（例如服务用户可读、`0600`）。
-
-provider 本身不得直接依赖 Electron `safeStorage`。
+1. [ ] 识别并隔离当前 Electron main 中属于 Core domain 与 Desktop shell 的职责。
+2. [ ] 建立 Node Core bootstrap，可独立启动配置、数据库、媒体库、provider 与 HTTP / WS。
+3. [ ] 完成第 5 节定义的 Core-owned playback orchestration，使 queue / source / policy / recovery / preload 全部归 Core。
+4. [ ] Node Core 完成本地 PCM / Native DSD 播放。
+5. [ ] Node Core 完成 ALSA hardware / Diretta 输出与设备切换。
+6. [ ] Web 完全成为 Core Control，在浏览器关闭后 Core session 仍独立运行。
+7. [ ] Desktop Electron 逐步改为 Core Control，不再拥有本地 authoritative playback session。
+8. [ ] provider/auth 完全使用 Core 的 runtime-neutral path / secret adapters。
+9. [ ] 建立自带固定 Node runtime 的 Linux Core `.deb` / `tar.gz` 发行。
+10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
+11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
 
 ### 验收标准
 
-- `desktop` 与 `headless` 是两个明确的 compile-time build flavor，而不是同一个 Electron artifact 的运行参数差异。
-- Desktop 继续使用 Electron，且行为与现有 SPlayer / Atom Desktop 保持兼容。
-- Headless 正式运行时不需要 Electron / Chromium / GTK / PipeWire / PulseAudio。
-- Headless 发行包自带并固定 Node runtime，用户不需要自行维护 Node 环境。
-- Headless 默认音频输出仅为真实 ALSA hardware 与 Diretta。
-- Desktop / Headless 共享相同的播放器、队列、媒体库、provider、settings 与 source-resolution 业务实现。
-- 当前 Electron Headless 在 Node Headless 完成前持续作为已验证行为 oracle；最终产品不需要维护两套 Headless runtime。
+- 系统中无论同时打开多少 Web / Desktop Control，只有一个 Core queue / playback session / provider session / playback policy authority。
+- `headless` build 是固定 Node runtime 的 Core，而不是 Electron 的运行参数变体。
+- `desktop` build 是 Control；即使未来带 Output Agent，也不复制 Core playback orchestration。
+- Core 正式运行时不需要 Electron / Chromium / GTK / PipeWire / PulseAudio。
+- Core 发行包自带并固定 Node runtime，用户不需要自行维护 Node 环境。
+- Core Local Output 默认仅为真实 ALSA hardware 与 Diretta。
+- Desktop 可连接远程 Core；若提供本机独立使用方式，也通过 bundled local Core 保持相同架构。
+- 当前 Electron Headless 在 Node Core 完成前持续作为行为 oracle；最终产品不维护两个 Headless Core。
 
 ---
 
-# P1 — Headless 核心产品闭环
+# P1 — Core 播放架构闭环
 
-## 5. 在线播放的 Main-Authority 完整化
+## 5. Core-Owned Playback & Output Architecture
 
-当前本地音乐已经由 main playback session 作为权威；在线曲目手动播放已经可以走 provider → source resolution → player，但主进程自然结束后的自动推进仍保留本地音乐阶段的限制。
+当前本地 Headless 已经让 main playback session 持有队列；但完整 source resolution、cache policy、在线登录状态判断、next-track preload 等仍有 renderer-owned orchestration。长期目标不是只修复“在线自动下一首”，而是让 **Core 从 canonical `Track` 开始直到 Output 执行播放为止，成为唯一 playback orchestration authority。**
 
 ### 当前缺口
 
-- [~] 浏览器主动选择网易在线曲目可以播放。
-- [ ] 在线曲目自然播放结束后，main session 能独立解析并加载下一首在线曲目。
-- [ ] `sourceError` 后 main session 能在不依赖浏览器存活的情况下推进到下一首。
-- [ ] 浏览器关闭 / 刷新 / 断网后，当前在线队列仍可继续播放。
-- [ ] provider URL 失效时由 main 统一做重新解析 / reload，而不是依赖 renderer 生命周期。
+- [~] main 已拥有 Headless queue / index / repeat / shuffle，并能消费 native `ended` / `sourceError`。
+- [ ] `playbackSession.loadIndex()` 仍需移除“仅 local track”阶段限制。
+- [ ] 在线 source resolution 仍有 renderer store / `window.api` orchestration 依赖。
+- [ ] 播放音质、试听策略等影响实际音源选择的 policy 尚未全部成为 Core authority。
+- [ ] next-track preload / Diretta staged next 仍由 renderer 生命周期参与。
+- [ ] URL 过期 / 403 / 临时网络错误尚未形成 Core-controlled 的同曲有限重解析策略。
+- [ ] Desktop renderer 仍保留历史 playback orchestration，需要最终降级为 Control state projection。
 
-### 设计要求
+### Core Playback Domain
 
-应把 main authority 链路收敛为：
+统一链路收敛为：
 
 ```text
-main authoritative queue
+Authoritative PlaybackSession
         ↓
-current Track + PlaybackContext
+Track + PlaybackContext + PlaybackPolicy
         ↓
-shared provider/source resolver
+PlaybackSourceResolver
         ↓
-playerLoad
+ResolvedPlaybackInput
         ↓
-normal output / Diretta
+Playback Recovery / Preload / Cache orchestration
+        ↓
+PlaybackJob
+        ↓
+Active Output
+        ↓
+Core Local Output: audio-engine → ALSA / Diretta
 ```
 
-不得为 Headless 新建第二套 provider resolver 或独立播放器。
+未来增加 Desktop Output Endpoint 时，也只替换最后的 Output 执行位置，不改变前面的 Core domain。
+
+### PlaybackSourceResolver
+
+- [ ] 建立 runtime-neutral 的 Core `PlaybackSourceResolver`，统一处理 local / streaming / NCM / QM / KG / Qobuz / TIDAL / plugin source。
+- [ ] Resolver 复用现有 main provider API、Qobuz/TIDAL API、plugin router、streaming adapter、song cache 和 Direct materializer，不新增第二套 provider framework。
+- [ ] renderer 不再负责取得“最终可播放 URL/路径”后再交给 Core。
+- [ ] Queue / persisted session 只保存 canonical `Track` + `PlaybackContext`，不保存会过期的 CDN URL。
+- [ ] 每次需要播放或恢复时由 Core 根据 canonical Track 获取 fresh source。
+
+Search、浏览歌单、专辑、收藏等 UI 数据查询不必进入 PlaybackSession；单一 authority 边界从“用户选择 canonical Track 开始播放”开始。
+
+### PlaybackPolicy
+
+所有会改变实际播放结果、且在 Control 全部断开后仍必须生效的设置，由 Core 持有，例如：
+
+- 在线音质 `songLevel`；
+- 是否允许试听；
+- repeat / shuffle；
+- active output assignment；
+- 与 source cache / preload 直接相关的播放策略。
+
+纯展示设置（主题、字体、侧栏状态、动画等）继续属于 Control。本地 Pinia 可以投影 Core policy，但不能成为 policy authority。
+
+### Provider Session 与登录态
+
+- [ ] Provider 登录 / cookie / token 的真实状态只由 Core 持有。
+- [ ] Source resolver 直接查询 Core provider session，不以 Web / Desktop `userStore.isLoggedIn` 等 UI 状态决定是否使用会员权益。
+- [ ] Control 显示的登录状态只是 Core session snapshot 的投影。
+
+### Cache / Direct / Preload 所有权
+
+- [ ] song-cache lookup / fetch scheduling 收归 Core，避免多个 Control 重复触发同一缓存任务。
+- [ ] Diretta 对 HTTP 输入的 exact-byte materialization 完全属于 Core / Output preparation，Control 不需要理解“Diretta 只能加载本地 seekable input”。
+- [ ] next-track preload 收归 Core；浏览器关闭或 Desktop 退出后仍继续。
+- [ ] Diretta `stageDirectNext()` / gapless boundary 的准备与 temp input 生命周期由 Core 唯一管理。
+
+### Source Recovery
+
+在线 source error 必须区分临时 URL 失效和真正不可播放：
+
+```text
+first recoverable source failure
+        ↓
+invalidate current resolved input
+        ↓
+re-resolve same canonical Track once
+        ↓
+resume / restart according to safe recovery semantics
+        ↓
+repeated failure
+        ↓
+mark current item failed and advance
+```
+
+- [ ] 同曲重解析次数必须有严格上限，不允许无限 retry。
+- [ ] entitlement / purchase / trial-policy 等明确不可播放错误不做无意义重试。
+- [ ] Core 负责决定 retry / skip；Control 只负责展示错误状态。
+
+### Control Contract
+
+Web / Desktop 对播放只发送高层 command：
+
+- select / play track；
+- play / pause / seek / stop；
+- next / prev；
+- queue mutate；
+- repeat / shuffle；
+- output selection；
+- playback policy change。
+
+Core 返回 authoritative snapshot / event。Control 不直接 mutate 权威 queue 后再“同步”给 Core，也不拥有 auto-next、preload 或 source fallback 生命周期。
+
+### Output Contract
+
+Output 不拥有 playlist 或 provider 业务。概念上的 `PlaybackJob` 只要求 Output：
+
+- load；
+- play / pause / stop；
+- seek；
+- report position / duration / state；
+- report source / output failure。
+
+第一实现只有 Core Local Output。未来 Desktop Output Agent 继续复用同一个 `audio-engine`，但依然只执行 Core job；因此“Desktop 本机发声”不会重新引入 Desktop player authority。
 
 ### 验收标准
 
-- 网易队列至少连续自然播放 3 首，期间关闭所有 Web 页面仍继续。
-- QQ / 酷狗 / Qobuz / TIDAL 后续接入同一套 main auto-next 机制。
-- source URL 过期或单首 source error 不会让整个 Headless session 永久停死。
+- 本地、网易、QQ、酷狗、Qobuz、TIDAL、streaming Track 最终都通过同一个 Core playback entry，而不是 renderer-specific load path。
+- 网易队列至少连续自然播放 3 首，期间关闭所有 Web / Desktop Control 仍继续播放。
+- provider URL 过期时可由 Core 对同一 Track 做有限 fresh resolve；失败后再按 policy 跳过。
+- next-track preload / Diretta staged next 在无 Control 存活时仍有效。
+- 多个 Control 同时连接不会产生重复 queue、重复 source resolution authority 或重复 preload owner。
+- Desktop 最终仅为 Control + 可选 Output Endpoint；Web 与 Desktop 使用同一个 Core session。
 
 ---
 
