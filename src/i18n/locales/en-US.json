@@ -397,6 +397,9 @@
     "noResults": "No matching results",
     "noResultsHint": "Try another keyword or switch the source",
     "errorTitle": "Search failed",
+    "source": {
+      "local": "Local"
+    },
     "tabs": {
       "songs": "Songs",
       "albums": "Albums",

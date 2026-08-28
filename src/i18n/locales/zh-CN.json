@@ -385,6 +385,9 @@
     "noResults": "没有找到匹配内容",
     "noResultsHint": "换个关键词或切换音源试试",
     "errorTitle": "搜索失败",
+    "source": {
+      "local": "本地"
+    },
     "tabs": {
       "songs": "单曲",
       "albums": "专辑",

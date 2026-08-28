@@ -21,6 +21,7 @@ const webRemote = isWebRemote();
 const webSearchPlatforms = new Set<Platform>(["netease", "qqmusic", "kugou"]);
 if (webRemote && !webSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 
+type SearchSource = Platform | "local";
 type TabKey = "songs" | "albums" | "artists" | "playlists";
 
 const TAB_KEYS: readonly TabKey[] = ["songs", "albums", "artists", "playlists"];
@@ -32,6 +33,8 @@ const activeTab = ref<TabKey>("songs");
 
 /** 当前生效的关键词 */
 const keyword = ref("");
+/** Web 远程默认优先搜索本地曲库；桌面保持原有在线平台偏好。 */
+const searchSource = ref<SearchSource>(webRemote ? "local" : status.searchPlatform);
 
 const tabs = computed(() => {
   const items = [
@@ -40,15 +43,20 @@ const tabs = computed(() => {
     { key: "artists", label: t("search.tabs.artists") },
     { key: "playlists", label: t("search.tabs.playlists") },
   ];
-  return status.searchPlatform === "qobuz" || status.searchPlatform === "tidal"
+  return searchSource.value === "local" ||
+    searchSource.value === "qobuz" ||
+    searchSource.value === "tidal"
     ? items.slice(0, 1)
     : items;
 });
 
-const platformTabs = (webRemote
-  ? ALL_PLATFORMS.filter((key) => webSearchPlatforms.has(key))
-  : ALL_PLATFORMS
-).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+const platformTabs = computed(() => {
+  const online = (webRemote
+    ? ALL_PLATFORMS.filter((key) => webSearchPlatforms.has(key))
+    : ALL_PLATFORMS
+  ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+  return webRemote ? [{ key: "local", label: t("search.source.local") }, ...online] : online;
+});
 
 interface TabState<T> {
   items: T[];
@@ -104,19 +112,27 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
   }
   error.value = "";
   const generation = searchGeneration;
-  const requestPlatform = status.searchPlatform;
+  const requestSource = searchSource.value;
   const requestKeyword = keyword.value;
   try {
     const offset = append ? state.items.length : 0;
-    const result = await (fetchers[tab] as typeof searchSongs)(
-      requestPlatform,
-      requestKeyword,
-      offset,
-      PAGE_SIZE,
-    );
+    const result =
+      requestSource === "local"
+        ? await window.api.library.searchTracks(requestKeyword).then((response) => {
+            if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
+            const all = response.data ?? [];
+            const items = all.slice(offset, offset + PAGE_SIZE);
+            return { items, total: all.length, hasMore: offset + items.length < all.length };
+          })
+        : await (fetchers[tab] as typeof searchSongs)(
+            requestSource,
+            requestKeyword,
+            offset,
+            PAGE_SIZE,
+          );
     if (
       generation !== searchGeneration ||
-      requestPlatform !== status.searchPlatform ||
+      requestSource !== searchSource.value ||
       requestKeyword !== keyword.value
     ) {
       return;
@@ -156,7 +172,7 @@ const resetStates = (): void => {
 };
 
 let lastLoadedKeyword = "";
-let lastLoadedPlatform = status.searchPlatform;
+let lastLoadedSource = searchSource.value;
 
 /** 仅在当前处于搜索路由时同步路由参数，避免离开到其他页面时因 query 为空而误清空状态 */
 const syncFromRoute = (): void => {
@@ -167,7 +183,7 @@ const syncFromRoute = (): void => {
       ? (route.query.tab as TabKey)
       : "songs";
   const tab: TabKey =
-    status.searchPlatform === "qobuz" || status.searchPlatform === "tidal"
+    searchSource.value === "local" || searchSource.value === "qobuz" || searchSource.value === "tidal"
       ? "songs"
       : requestedTab;
   if (tab !== requestedTab) void router.replace({ query: { ...route.query, tab } });
@@ -176,11 +192,11 @@ const syncFromRoute = (): void => {
   keyword.value = q;
 
   const keywordChanged = q !== lastLoadedKeyword;
-  const platformChanged = status.searchPlatform !== lastLoadedPlatform;
+  const sourceChanged = searchSource.value !== lastLoadedSource;
 
-  if (keywordChanged || platformChanged) {
+  if (keywordChanged || sourceChanged) {
     lastLoadedKeyword = q;
-    lastLoadedPlatform = status.searchPlatform;
+    lastLoadedSource = searchSource.value;
     resetStates();
     if (q) fetchTab(tab, false);
   } else if (q && !states[tab].loaded) {
@@ -188,7 +204,7 @@ const syncFromRoute = (): void => {
   }
 };
 
-watch(() => [route.name, route.query.q, route.query.tab, status.searchPlatform], syncFromRoute, {
+watch(() => [route.name, route.query.q, route.query.tab, searchSource.value], syncFromRoute, {
   immediate: true,
 });
 
@@ -197,7 +213,13 @@ const onTabSwitch = (key: string): void => {
 };
 
 const onPlatformSwitch = (key: string): void => {
-  status.searchPlatform = key as Platform;
+  if (key === "local") {
+    searchSource.value = "local";
+    return;
+  }
+  const platform = key as Platform;
+  status.searchPlatform = platform;
+  searchSource.value = platform;
 };
 
 /** 失败后重试加载当前 tab */
@@ -273,9 +295,9 @@ const onLoginDialogClose = (open: boolean): void => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0" :class="webRemote ? 'w-48' : 'w-80 max-w-full'">
+        <div class="shrink-0" :class="webRemote ? 'w-64' : 'w-80 max-w-full'">
           <STabs
-            :model-value="status.searchPlatform"
+            :model-value="searchSource"
             :tabs="platformTabs"
             type="segment"
             size="small"
@@ -360,7 +382,7 @@ const onLoginDialogClose = (open: boolean): void => {
       <SongList
         v-if="activeTab === 'songs'"
         :items="states.songs.items"
-        :source="status.searchPlatform"
+        :source="searchSource"
         :show-size="false"
         :has-more="states.songs.hasMore"
         :loading-more="states.songs.loadingMore"
