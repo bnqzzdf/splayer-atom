@@ -484,9 +484,9 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ### 后续任务
 
-- [ ] 从 Atom 正式在线搜索界面移除 QQ Music 搜索入口。
-- [ ] Atom 默认配置不启用 QQ Music provider / 搜索能力。
-- [ ] 保留上游已有实现所必需的兼容代码，不为“清理”而重写或删除上游业务。
+- [x] Atom 正式在线搜索界面已移除 QQ Music 搜索入口；历史持久化 QQ 搜索偏好进入 Search 时归一到网易。
+- [x] Atom 默认搜索平台保持网易；正式 Desktop 搜索平台只暴露 Netease/Qobuz/TIDAL，当前 Web 只暴露 Local + Netease。
+- [x] QQ Music 底层 search/collection/lyric/plugin playback compatibility 保持上游兼容实现，不因产品入口冻结而删除或重写。
 - [ ] 上游未来新增 / 修改 QQ Music 能力时，仅做 Atom Core / Control 架构兼容与回归，不主动补充 Atom-specific 功能。
 - [ ] 若某项 QQ Music 通用修复适合贡献给 SPlayer，则按 `vendor/splayer` → `contrib/*` 流程单独向上游提交 PR。
 
@@ -507,9 +507,9 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ### 后续任务
 
-- [ ] 从 Atom 正式在线搜索界面移除酷狗搜索入口。
-- [ ] Atom 默认配置不启用酷狗 provider / 搜索能力。
-- [ ] 保留上游已有实现所必需的兼容代码，不主动形成 Atom-owned KG provider 分支。
+- [x] Atom 正式在线搜索界面已移除酷狗搜索入口；历史持久化 KG 搜索偏好进入 Search 时归一到网易。
+- [x] Atom 默认搜索平台不启用酷狗；正式 Desktop/Web 搜索平台集合均不包含 KG。
+- [x] 酷狗底层 search/collection/lyric/plugin playback compatibility 保持上游兼容实现，不形成新的 Atom-owned KG provider 分支。
 - [ ] 上游未来新增 / 修改酷狗能力时，仅做 Core / Control 架构兼容与必要回归。
 - [ ] 适合上游的通用修复继续通过纯净贡献分支提交，不把 Atom 私有能力带入 PR。
 
