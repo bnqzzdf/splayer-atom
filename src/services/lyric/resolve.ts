@@ -7,6 +7,7 @@ import { useSettingsStore } from "@/stores/settings";
 import { usePluginsStore } from "@/stores/plugins";
 import { DEFAULT_LYRIC_FORMAT_ORDER, DEFAULT_LYRIC_SOURCE_ORDER } from "@/types/settings";
 import { requestPlatformLyric, requestStreamingLyric, requestTTMLOverlay } from "./request";
+import { lyricsClient } from "@/core/lyricsClient";
 
 /** 支持 AMLL TTML DB 的平台列表 */
 const TTML_PLATFORMS = ["netease", "qqmusic"] as const;
@@ -277,7 +278,7 @@ export const resolveLocalRepoLyric = async (track: Track): Promise<ResolvedLyric
   ) {
     return null;
   }
-  const resp = await window.api.lyrics.matchLocalTTML(track);
+  const resp = await lyricsClient.matchLocalTTML(track);
   if (!resp.ok || !resp.data) return null;
   return { source: { source: "external", format: "ttml" }, input: { content: resp.data } };
 };

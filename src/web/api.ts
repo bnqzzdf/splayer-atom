@@ -3,7 +3,7 @@ import type { CoreInfo } from "@shared/types/core";
 import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
-import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
+import type { LyricsApi } from "@shared/types/lyrics";
 import type { NowPlayingApi } from "@shared/types/nowPlaying";
 import type {
   AudioDevice,
@@ -32,6 +32,7 @@ import { statsClient } from "@/core/statsClient";
 import { cacheClient } from "@/core/cacheClient";
 import { nowPlayingClient } from "@/core/nowPlayingClient";
 import { commentsClient } from "@/core/commentsClient";
+import { lyricsClient } from "@/core/lyricsClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -401,12 +402,9 @@ const nowPlayingApi: NowPlayingApi = {
   onLyricOffsetChange: (callback) => subscribeCoreControlEvent("lyricOffset", callback),
 };
 
-const lyricsApi: Partial<LyricsApi> = {
-  matchLocalTTML: (track): Promise<LyricTTMLResponse> =>
-    request<LyricTTMLResponse>("/lyrics/local", {
-      method: "POST",
-      body: JSON.stringify({ track: toServerTrack(track) }),
-    }),
+const lyricsApi: LyricsApi = {
+  ...lyricsClient,
+  pickLyricRepoDir: async () => null,
 };
 
 /** 安装远程浏览器使用的最小 Electron API 兼容面。 */

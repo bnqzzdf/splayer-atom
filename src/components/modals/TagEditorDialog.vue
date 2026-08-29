@@ -12,6 +12,7 @@ import { hasHostCapability } from "@/runtime";
 import { formatFileSize } from "@/utils/format";
 import { formatTime } from "@/utils/time";
 import { libraryClient } from "@/core/libraryClient";
+import { lyricsClient } from "@/core/lyricsClient";
 import IconWandSparkles from "~icons/lucide/wand-sparkles";
 
 const props = defineProps<{ open: boolean; track: Track | null }>();
@@ -149,7 +150,7 @@ const fillLyricFromCandidate = async (track: Track): Promise<void> => {
   // 特殊 ID 处理
   const lookupId = matchPlatform.value === "qqmusic" ? (track.extId ?? track.id) : track.id;
   try {
-    const resp = await window.api.lyrics.matchById(matchPlatform.value, lookupId);
+    const resp = await lyricsClient.matchById(matchPlatform.value, lookupId);
     if (resp.ok && resp.data?.content) form.lyrics = resp.data.content;
   } catch {
     // 拉取失败保留现有歌词，不打断匹配流程

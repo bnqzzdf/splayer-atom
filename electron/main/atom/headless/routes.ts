@@ -5,6 +5,7 @@ import { isManagedProviderPlatform } from "@shared/types/apis";
 import type { MusicCommentQuery } from "@shared/types/comment";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type { DownloadRequest } from "@shared/types/download";
+import type { Platform } from "@shared/types/platform";
 import type {
   LoadOptions,
   PlaybackQueueItem,
@@ -35,7 +36,12 @@ import {
 } from "@main/services/providerApi";
 import { getCommentSources, getMusicComments } from "@main/services/comments";
 import * as nowPlaying from "@main/services/nowPlaying";
-import { matchLocalTTML } from "@main/services/localLyricRepo";
+import {
+  fetchLyricTTMLOverlay,
+  matchCoreLocalTTML,
+  matchLyricById,
+  matchLyricByQuery,
+} from "@main/services/lyricMatching";
 import { store } from "@main/store";
 import {
   appendQueue,
@@ -503,14 +509,40 @@ export const buildHeadlessRoutes = (): Hono => {
     nowPlaying.setLyricOffset(body.trackId, Number(body.offsetMs ?? 0));
     return c.json({ ok: true });
   });
+  api.post("/lyrics/match-by-id", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      platform?: Platform;
+      id?: unknown;
+    } | null;
+    if (!body?.platform || typeof body.id !== "string") {
+      return c.json({ ok: false, error: "platform_and_id_required" }, 400);
+    }
+    return c.json(await matchLyricById(body.platform, body.id));
+  });
+  api.post("/lyrics/match-by-query", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      platform?: Platform;
+      track?: Track;
+    } | null;
+    if (!body?.platform || !body.track) {
+      return c.json({ ok: false, error: "platform_and_track_required" }, 400);
+    }
+    return c.json(await matchLyricByQuery(body.platform, body.track));
+  });
+  api.post("/lyrics/ttml-overlay", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      platform?: "netease" | "qqmusic";
+      track?: Track;
+    } | null;
+    if (!body?.track || (body.platform !== "netease" && body.platform !== "qqmusic")) {
+      return c.json({ ok: false, error: "track_and_supported_platform_required" }, 400);
+    }
+    return c.json(await fetchLyricTTMLOverlay(body.track, body.platform));
+  });
   api.post("/lyrics/local", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { track?: Track } | null;
     if (!body?.track) return c.json({ ok: false, error: "track_required" }, 400);
-    try {
-      return c.json({ ok: true, data: await matchLocalTTML(body.track) });
-    } catch (error) {
-      return c.json({ ok: false, error: errorText(error) }, 500);
-    }
+    return c.json(await matchCoreLocalTTML(body.track));
   });
 
   api.post("/play", async (c) => {
