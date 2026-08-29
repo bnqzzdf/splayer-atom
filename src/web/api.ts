@@ -31,7 +31,7 @@ interface WebEvent {
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const noopSubscription = (): (() => void) => () => {};
-const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
+const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qobuz", "tidal"]);
 
 const asIpc = async <T>(loader: () => Promise<T>): Promise<IpcResponse<T>> => {
   try {

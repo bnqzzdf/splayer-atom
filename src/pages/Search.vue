@@ -19,7 +19,7 @@ const router = useRouter();
 const status = useStatusStore();
 const webRemote = isWebRemote();
 const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
-const webSearchPlatforms = new Set<Platform>(["netease"]);
+const webSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
 const availableSearchPlatforms = webRemote ? webSearchPlatforms : atomSearchPlatforms;
 if (!availableSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 

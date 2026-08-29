@@ -73,7 +73,7 @@ import { runtimeEnvironment } from "@main/atom/runtime/environment";
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
-const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qqmusic", "kugou"]);
+const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qobuz", "tidal"]);
 const isWebProviderPlatform = (value: unknown): value is ApiPlatform =>
   typeof value === "string" && WEB_PROVIDER_PLATFORMS.has(value as ApiPlatform);
 const boundedInt = (

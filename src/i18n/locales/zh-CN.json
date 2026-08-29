@@ -760,6 +760,7 @@
       "hotkeys": "快捷键",
       "musicSpectrum": "音乐频谱",
       "discord": "Discord RPC",
+      "providerAccounts": "在线平台账号",
       "lastfm": "Last.fm",
       "externalApi": "外部 API",
       "mcp": "MCP",
@@ -1600,6 +1601,26 @@
     "lastfmLoveSync": {
       "label": "同步喜欢",
       "description": "点击喜欢时同步为 Last.fm 的 Love / Unlove"
+    },
+    "providerAccounts": {
+      "connectedAs": "已登录：{name}",
+      "disconnect": "退出登录",
+      "disconnected": "已退出平台账号",
+      "verify": "验证并登录",
+      "connectFailed": "账号验证失败：{error}",
+      "qobuz": {
+        "hint": "输入您自己的 user_auth_token；Core 会先验证再保存。",
+        "placeholder": "Qobuz user_auth_token",
+        "connected": "Qobuz 账号验证成功"
+      },
+      "tidal": {
+        "hint": "导入您自己的 access token；refresh token 与 client id 可选。",
+        "accessToken": "TIDAL access token",
+        "refreshToken": "Refresh token（可选）",
+        "clientId": "Client ID（可选，用于刷新）",
+        "connected": "已登录：{id} · {country}",
+        "refreshable": "当前凭据包含 refresh token 与 client id，可用于后续刷新。"
+      }
     },
     "lastfm": {
       "connect": "连接账号",

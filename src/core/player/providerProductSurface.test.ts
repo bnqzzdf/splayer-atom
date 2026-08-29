@@ -18,7 +18,10 @@ test("Atom formal search surface freezes QQ Music and Kugou without deleting com
     searchPageSource,
     /atomSearchPlatforms = new Set<Platform>\(\["netease", "qobuz", "tidal"\]\)/,
   );
-  assert.match(searchPageSource, /webSearchPlatforms = new Set<Platform>\(\["netease"\]\)/);
+  assert.match(
+    searchPageSource,
+    /webSearchPlatforms = new Set<Platform>\(\["netease", "qobuz", "tidal"\]\)/,
+  );
   assert.match(searchPageSource, /availableSearchPlatforms\.has\(status\.searchPlatform\)/);
   assert.match(
     searchPageSource,

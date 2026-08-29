@@ -6,12 +6,13 @@ const upstreamConfig = JSON.parse(
   readFileSync(new URL("./upstream.json", import.meta.url), "utf8"),
 );
 const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
-// 31 个既有 Atom 集成触点，加 6 个经本地 Web/Headless 阶段验证后不可删除的必要 seam：
+// 31 个既有 Atom 集成触点，加 6 个经本地 Web/Headless 阶段验证后不可删除的必要 seam，
+// 再加 1 个 Provider Accounts 在上游 Services settings schema 中的挂载点：
 // Headless 主进程生命周期、Native DSD 扫描、Web 启动入口、main-session queue 投影、
-// queue 权威态测试，以及移除 renderer 对播放索引/模式的重复持久化。
+// queue 权威态测试、移除 renderer 对播放索引/模式的重复持久化，以及 Services 账户入口。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 37);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 38);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 20);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 const metadataPaths = new Set(["AGENTS.md", "README.md", "README.zh-CN.md"]);

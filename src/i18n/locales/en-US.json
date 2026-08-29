@@ -772,6 +772,7 @@
       "hotkeys": "Hotkeys",
       "musicSpectrum": "Music Spectrum",
       "discord": "Discord RPC",
+      "providerAccounts": "Provider Accounts",
       "lastfm": "Last.fm",
       "externalApi": "External API",
       "mcp": "MCP",
@@ -1612,6 +1613,26 @@
     "lastfmLoveSync": {
       "label": "Sync Loves",
       "description": "Mirror your likes as Last.fm Love / Unlove"
+    },
+    "providerAccounts": {
+      "connectedAs": "Signed in as {name}",
+      "disconnect": "Sign out",
+      "disconnected": "Provider account signed out",
+      "verify": "Verify & Sign In",
+      "connectFailed": "Account verification failed: {error}",
+      "qobuz": {
+        "hint": "Enter your own user_auth_token. Core verifies it before saving.",
+        "placeholder": "Qobuz user_auth_token",
+        "connected": "Qobuz account verified"
+      },
+      "tidal": {
+        "hint": "Import your own access token. Refresh token and client id are optional.",
+        "accessToken": "TIDAL access token",
+        "refreshToken": "Refresh token (optional)",
+        "clientId": "Client ID (optional, for refresh)",
+        "connected": "Signed in: {id} · {country}",
+        "refreshable": "These credentials include a refresh token and client id for future refreshes."
+      }
     },
     "lastfm": {
       "connect": "Connect account",
