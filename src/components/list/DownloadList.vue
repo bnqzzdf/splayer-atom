@@ -10,6 +10,7 @@ import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
 import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import * as player from "@/core/player";
+import { hasHostCapability } from "@/runtime";
 import IconLucideLoaderCircle from "~icons/lucide/loader-circle";
 import IconLucideDownload from "~icons/lucide/download";
 import IconLucidePlay from "~icons/lucide/play";
@@ -31,6 +32,7 @@ const media = useMediaStore();
 const status = useStatusStore();
 const downloadStore = useDownloadStore();
 const { retry } = useDownload();
+const canOpenDownloadLocation = hasHostCapability("hostFileExplorer");
 
 const STATUS_KEY: Record<DownloadStatus, string> = {
   queued: "download.status.queued",
@@ -281,6 +283,7 @@ defineExpose({ playAll });
             </template>
             <template v-else-if="isDone(item)">
               <SButton
+                v-if="canOpenDownloadLocation"
                 variant="ghost"
                 circle
                 size="small"

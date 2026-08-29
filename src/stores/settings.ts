@@ -14,6 +14,7 @@ import type { SystemConfig, LocaleCode } from "@shared/types/settings";
 import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
+import { hasHostCapability } from "@/runtime";
 
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
@@ -181,54 +182,57 @@ export const useSettingsStore = defineStore(
       } catch {}
     };
 
-    /** IPC 订阅取消回调集合 */
-    const unsubscribers: Array<() => void> = [
-      // 订阅桌面歌词配置变化：歌词窗口点锁定按钮等场景需要回流到主窗口设置页
-      window.api.desktopLyric.onConfigChange((next) => {
-        Object.assign(system.desktopLyric, next as object);
-      }),
-      // 订阅桌面歌词窗口开关状态
-      window.api.window.onDesktopLyricVisibilityChange((open) => {
-        isDesktopLyricOpen.value = open;
-      }),
-      // 订阅灵动岛配置变化
-      window.api.dynamicIsland.onConfigChange((next) => {
-        Object.assign(system.dynamicIsland, next as object);
-      }),
-      // 订阅灵动岛窗口开关状态
-      window.api.window.onDynamicIslandVisibilityChange((open) => {
-        isDynamicIslandOpen.value = open;
-      }),
-      // 订阅任务栏歌词窗口开关状态
-      window.api.window.onTaskbarLyricVisibilityChange((open) => {
-        isTaskbarLyricOpen.value = open;
-      }),
-    ];
+    /** IPC 订阅取消回调集合。Desktop lyric/window 只在对应 Host capability 下注册。 */
+    const unsubscribers: Array<() => void> = [];
+    if (hasHostCapability("desktopLyric")) {
+      unsubscribers.push(
+        // 订阅桌面歌词配置变化：歌词窗口点锁定按钮等场景需要回流到主窗口设置页
+        window.api.desktopLyric.onConfigChange((next) => {
+          Object.assign(system.desktopLyric, next as object);
+        }),
+        // 订阅桌面歌词窗口开关状态
+        window.api.window.onDesktopLyricVisibilityChange((open) => {
+          isDesktopLyricOpen.value = open;
+        }),
+        // 订阅灵动岛配置变化
+        window.api.dynamicIsland.onConfigChange((next) => {
+          Object.assign(system.dynamicIsland, next as object);
+        }),
+        // 订阅灵动岛窗口开关状态
+        window.api.window.onDynamicIslandVisibilityChange((open) => {
+          isDynamicIslandOpen.value = open;
+        }),
+        // 订阅任务栏歌词窗口开关状态
+        window.api.window.onTaskbarLyricVisibilityChange((open) => {
+          isTaskbarLyricOpen.value = open;
+        }),
+      );
+
+      // 拉取窗口初始开关状态。
+      window.api.window
+        .isDesktopLyricOpen()
+        .then((open) => {
+          isDesktopLyricOpen.value = open;
+        })
+        .catch(() => {});
+      window.api.window
+        .isDynamicIslandOpen()
+        .then((open) => {
+          isDynamicIslandOpen.value = open;
+        })
+        .catch(() => {});
+      window.api.window
+        .isTaskbarLyricOpen()
+        .then((open) => {
+          isTaskbarLyricOpen.value = open;
+        })
+        .catch(() => {});
+    }
 
     onScopeDispose(() => {
       for (const off of unsubscribers) off();
       unsubscribers.length = 0;
     });
-
-    // 拉取窗口初始开关状态
-    window.api.window
-      .isDesktopLyricOpen()
-      .then((open) => {
-        isDesktopLyricOpen.value = open;
-      })
-      .catch(() => {});
-    window.api.window
-      .isDynamicIslandOpen()
-      .then((open) => {
-        isDynamicIslandOpen.value = open;
-      })
-      .catch(() => {});
-    window.api.window
-      .isTaskbarLyricOpen()
-      .then((open) => {
-        isTaskbarLyricOpen.value = open;
-      })
-      .catch(() => {});
 
     /**
      * 写入后端配置并同步本地

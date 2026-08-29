@@ -50,6 +50,23 @@ const fontConfigSource = readFileSync(
   "utf8",
 );
 const webApiSource = readFileSync(new URL("../../web/api.ts", import.meta.url), "utf8");
+const downloadListSource = readFileSync(
+  new URL("../../components/list/DownloadList.vue", import.meta.url),
+  "utf8",
+);
+const copyLyricsSource = readFileSync(
+  new URL("../../components/modals/CopyLyricsDialog.vue", import.meta.url),
+  "utf8",
+);
+const windowControlsSource = readFileSync(
+  new URL("../../composables/useWindowControls.ts", import.meta.url),
+  "utf8",
+);
+const updateStoreSource = readFileSync(new URL("../../stores/update.ts", import.meta.url), "utf8");
+const settingsStoreSource = readFileSync(
+  new URL("../../stores/settings.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -152,6 +169,33 @@ test("Font settings do not pretend Web can enumerate Desktop system fonts", () =
     /GROUP_ORDER\.filter\(\(group\) => group !== "externalLyric" \|\| externalLyricFontsAvailable\)/,
   );
   assert.match(fontConfigSource, /if \(systemFontEnumerationAvailable\) void ensureLoaded\(\)/);
+});
+
+test("Window and updater stores do not call Desktop facades from Web Control", () => {
+  assert.match(windowControlsSource, /hasHostCapability\("windowControls"\)/);
+  assert.match(windowControlsSource, /if \(!windowControlsAvailable\) return/);
+  assert.match(updateStoreSource, /hasHostCapability\("desktopUpdater"\)/);
+  assert.match(updateStoreSource, /updaterAvailable \? window\.api\.update\.onEvent/);
+  assert.match(
+    updateStoreSource,
+    /if \(updaterAvailable\) void window\.api\.update\.check\(false\)/,
+  );
+  assert.match(settingsStoreSource, /if \(hasHostCapability\("desktopLyric"\)\)/);
+  assert.match(settingsStoreSource, /window\.api\.window\s*\.isDesktopLyricOpen\(\)/);
+});
+
+test("Download list hides the Desktop file explorer action in Web Control", () => {
+  assert.match(downloadListSource, /hasHostCapability\("hostFileExplorer"\)/);
+  assert.match(downloadListSource, /v-if="canOpenDownloadLocation"/);
+  assert.match(downloadListSource, /window\.api\.system\.showInExplorer/);
+});
+
+test("Lyric poster export uses the current Control host save capability", () => {
+  assert.match(copyLyricsSource, /hasHostCapability\("hostFileSave"\)/);
+  assert.match(copyLyricsSource, /window\.api\.system\.saveFile/);
+  assert.match(copyLyricsSource, /hasHostCapability\("browserDownload"\)/);
+  assert.match(copyLyricsSource, /URL\.createObjectURL\(blob\)/);
+  assert.match(copyLyricsSource, /anchor\.download = fileName/);
 });
 
 test("About Settings does not require an Electron facade in Web Control", () => {

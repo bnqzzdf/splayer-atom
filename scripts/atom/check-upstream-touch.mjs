@@ -12,7 +12,8 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 1 个 Library tag editor Host-action seam、1 个 Provider embedded-login Host-action seam，
 // 2 个 Track Action Model / presentation seam、1 个 Collection Action Model seam、
 // 1 个 Artist Action Model seam、3 个 Cover Action presentation/Favorites seam，
-// 以及 1 个 system-font Host gating seam：
+// 1 个 system-font Host gating seam、2 个最终 Host-action 可达性收口 seam，
+// 以及 2 个 Desktop window/updater facade 初始化收口 seam：
 // Headless 主进程生命周期、Native DSD 扫描、Web 启动入口、main-session queue 投影、
 // queue 权威态测试、移除 renderer 对播放索引/模式的重复持久化、Services 账户入口，
 // 以及运行时 Settings 分类组装、stale 分类归一化、General Host section gating、About Host 信息投影
@@ -27,10 +28,13 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // header `...` 也复用同一 Action→menu adapter，而不创建第二 collection domain；Artist 的播放、收藏与
 // overflow 同样由一个 action list 驱动；CoverCard/CoverList 只投影可选 action，Favorites 提供真实
 // unsubscribe 语义，provider 调用仍留在 user store；FontConfig
-// 在 Web 只保留手动 CSS font-family，不再把空 `listFonts()` 冒充系统字体枚举能力。
+// 在 Web 只保留手动 CSS font-family，不再把空 `listFonts()` 冒充系统字体枚举能力；DownloadList
+// 隐藏无法从浏览器打开 Core 主机文件管理器的 action，歌词海报导出则在 Web 使用 browser download，
+// 不再触发 Desktop `saveFile()` 的 unsupported facade；`useWindowControls` 与 updater store 也在 Host
+// capability 不可用时停止 Desktop window/update API 初始化调用，避免不可见的 no-op facade 可达路径。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 65);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 69);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);

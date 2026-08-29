@@ -1,6 +1,7 @@
 import type { UpdateEvent, UpdateMeta, UpdatePhase } from "@shared/types/update";
 import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
+import { hasHostCapability } from "@/runtime";
 
 const { t } = i18n.global;
 
@@ -53,30 +54,36 @@ export const useUpdateStore = defineStore("update", () => {
     }
   };
 
-  // 订阅主进程推送的更新事件
-  const unsubscribe = window.api.update.onEvent(handleEvent);
-  onScopeDispose(unsubscribe);
-  // 触发启动检查
-  void window.api.update.check(false);
+  const updaterAvailable = hasHostCapability("desktopUpdater");
+  // Desktop updater 是 Host capability；Web 只保留 API shape，不触发 no-op facade。
+  const unsubscribe = updaterAvailable ? window.api.update.onEvent(handleEvent) : null;
+  if (unsubscribe) onScopeDispose(unsubscribe);
+  if (updaterAvailable) void window.api.update.check(false);
 
   /** 手动检查更新 */
   const checkManually = (): void => {
+    if (!updaterAvailable) return;
     phase.value = "checking";
     void window.api.update.check(true);
   };
 
   /** 下载更新 */
   const download = (): void => {
+    if (!updaterAvailable) return;
     phase.value = "downloading";
     percent.value = 0;
     void window.api.update.download();
   };
 
   /** 退出并安装 */
-  const install = (): void => void window.api.update.install();
+  const install = (): void => {
+    if (updaterAvailable) void window.api.update.install();
+  };
 
   /** 打开 Releases 下载页（mac） */
-  const openDownloadPage = (): void => void window.api.update.openDownloadPage();
+  const openDownloadPage = (): void => {
+    if (updaterAvailable) void window.api.update.openDownloadPage();
+  };
 
   /** 打开更新弹窗 */
   const openDialog = (): void => {

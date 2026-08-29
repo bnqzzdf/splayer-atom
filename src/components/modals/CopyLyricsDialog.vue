@@ -4,6 +4,7 @@ import { useThemeStore } from "@/stores/theme";
 import { useCopyText } from "@/composables/useCopyText";
 import { toast } from "@/composables/useToast";
 import { createLyricPoster } from "@/utils/lyric/poster";
+import { hasHostCapability } from "@/runtime";
 
 const props = defineProps<{ open: boolean }>();
 
@@ -139,9 +140,23 @@ const handleExport = async (): Promise<void> => {
     const artist = track.artists.map((item) => item.name).join(", ");
     const suffixName = t("player.copyLyric.fileSuffix");
     const fileName = `${track.title} - ${artist} - ${suffixName}.png`.replace(/[\\/:*?"<>|]/g, " ");
-    const res = await window.api.system.saveFile(await blob.arrayBuffer(), fileName);
-    if (res.success && res.path) toast.success(t("player.copyLyric.saved"));
-    else if (!res.success) toast.error(t("player.copyLyric.exportFailed"));
+    if (hasHostCapability("hostFileSave")) {
+      const res = await window.api.system.saveFile(await blob.arrayBuffer(), fileName);
+      if (res.success && res.path) toast.success(t("player.copyLyric.saved"));
+      else if (!res.success) toast.error(t("player.copyLyric.exportFailed"));
+    } else if (hasHostCapability("browserDownload")) {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(t("player.copyLyric.saved"));
+    } else {
+      toast.error(t("player.copyLyric.exportFailed"));
+    }
   } catch {
     toast.error(t("player.copyLyric.exportFailed"));
   } finally {
