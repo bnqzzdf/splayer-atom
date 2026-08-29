@@ -327,12 +327,6 @@ const playerApi: PlayerApi = {
     sessionResponse(() =>
       request<PlaybackSessionSnapshot>("/session/auto-close", { method: "DELETE" }),
     ),
-  stageDirectNext: async () => ({ success: true, data: { staged: false } }),
-  cancelDirectNext: async () => ({ success: true }),
-  commitDirectGaplessBoundary: async () => ({
-    success: false,
-    error: "WEB_DIRECT_STAGING_DISABLED",
-  }),
   setVolume: (volume) =>
     asCommand(() => request("/volume", { method: "POST", body: JSON.stringify({ volume }) })),
   setPauseOnDeviceSwitch: async () => ({ success: true }),
@@ -398,16 +392,6 @@ const playerApi: PlayerApi = {
       (await request<OutputSnapshot>("/output/devices")).data
         .filter((device) => device.id.startsWith("diretta:"))
         .map((device) => ({ ...device, name: `${device.name} · Diretta` })),
-    ),
-  materializeDirectInput: (source) =>
-    asIpc(
-      async () =>
-        (
-          await request<{ path: string }>("/player/direct-input/materialize", {
-            method: "POST",
-            body: JSON.stringify({ source }),
-          })
-        ).path,
     ),
   getDefaultDeviceName: () =>
     asIpc(

@@ -367,21 +367,6 @@ export interface PlayerApi {
   ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 取消 Core 定时关闭 */
   cancelSessionAutoClose: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
-  /** 为 Diretta Source Direct 预备一个同 wire-format 的下一本地音源 */
-  stageDirectNext: (
-    source: string,
-    durationMs: number,
-    generation: number,
-  ) => Promise<IpcResponse<DirectStageResult>>;
-  /** 作废尚未进入 Direct ring 的 staged 下一音源 */
-  cancelDirectNext: () => Promise<IpcResponse>;
-  /** Direct 无缝边界发生后同步当前 source 与权威歌曲元数据 */
-  commitDirectGaplessBoundary: (
-    source: string,
-    durationMs: number,
-    meta?: Track,
-    context?: PlaybackContext,
-  ) => Promise<IpcResponse>;
   /** 设置音量（0.0 ~ 1.0） */
   setVolume: (volume: number) => Promise<IpcResponse>;
   /** 设置输出设备切换时暂停播放 */
@@ -422,8 +407,6 @@ export interface PlayerApi {
   getOutputDevices: () => Promise<IpcResponse<AudioDevice[]>>;
   /** 异步扫描 Diretta Target */
   scanDirettaDevices: () => Promise<IpcResponse<AudioDevice[]>>;
-  /** 将在线音源物化为 Source Direct 可 seek 的本地临时文件 */
-  materializeDirectInput: (source: string) => Promise<IpcResponse<string>>;
   /** 获取系统默认输出设备名称 */
   getDefaultDeviceName: () => Promise<IpcResponse<string | null>>;
   /** 切换输出设备（传设备 ID，null 使用系统默认） */

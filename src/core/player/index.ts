@@ -24,19 +24,14 @@ import {
 } from "./directMode";
 import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
-import * as coverLoader from "@/services/coverLoader";
-import * as abLoop from "@/services/abLoop";
 import * as autoClose from "@/services/autoClose";
-import * as cacheScheduler from "@/services/cacheScheduler";
 import {
   disposeNextTrackPreload,
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
-  type NextTrackPreloadResult,
 } from "@/services/nextTrackPreloader";
 import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
-import { extractColorFromUrl } from "@/utils/color";
 import { handleError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
@@ -62,57 +57,6 @@ const applySessionResult = (
   status.fmMode = result.data.mode === "personalFm";
   autoClose.applySnapshot(result.data.autoClose);
   return result.data;
-};
-
-/**
- * Diretta 已在同一 connection 上跨过 track boundary 后，只提交 SPlayer 应用状态。
- * 这里绝不能再次调用 load/stop，否则会破坏已经成立的 sample-contiguous handoff。
- */
-export const commitDirectGaplessTrack = async (
-  preloaded: NextTrackPreloadResult,
-): Promise<boolean> => {
-  const source = preloaded.source?.source;
-  if (!source || preloaded.directGeneration === null) return false;
-
-  const duration = preloaded.track.duration ?? 0;
-  const committed = await window.api.player.commitDirectGaplessBoundary(
-    source,
-    duration,
-    preloaded.track,
-    preloaded.context,
-  );
-  if (!committed.success) return false;
-
-  sourceRecoveryCount = 0;
-  sourceRecoveryTrackId = null;
-  seekTarget = null;
-  playback.setSeeking(false);
-  abLoop.reset();
-  cacheScheduler.cancel();
-
-  const status = useStatusStore();
-  const media = useMediaStore();
-  status.playIndex = preloaded.queueIndex;
-  media.setTrack(preloaded.track, preloaded.directDetail);
-  media.setPlaybackContext(preloaded.context);
-  status.trackLoading = false;
-  status.position = 0;
-  status.duration = duration;
-  status.state = "playing";
-  status.currentSource = source;
-  playback.setCurrentTime(0, { force: true });
-  playback.setDuration(duration);
-  playback.setPlaying(true);
-
-  void lyricLoader.loadForTrack(preloaded.directDetail ?? null);
-  extractColorFromUrl(preloaded.track.cover ?? preloaded.track.coverOriginal ?? null);
-  void coverLoader.loadCoverForTrack(preloaded.track);
-  void useHistoryStore().record(preloaded.track);
-  if (preloaded.source?.cacheRequest) {
-    cacheScheduler.schedule(preloaded.track.id, preloaded.source.cacheRequest);
-  }
-  scheduleNextTrackPreload();
-  return true;
 };
 
 /**

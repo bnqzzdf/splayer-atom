@@ -26,12 +26,7 @@ import { setTrayPlayState, setTrayPlayMode, setTrayLikeState } from "@main/servi
 import { getMainWindow, setTaskbarProgress } from "@main/window";
 import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
-import { cleanupDirectInputs, materializeDirectInput } from "@main/atom/directInput";
-import {
-  cancelDirectPlaybackNext,
-  commitDirectPlaybackBoundary,
-  stageDirectPlaybackNext,
-} from "@main/services/directGapless";
+import { cleanupDirectInputs } from "@main/atom/directInput";
 import { ErrorCode } from "@shared/types/errors";
 import type {
   LoadOptions,
@@ -382,43 +377,6 @@ export const registerPlayerIpc = (): void => {
     data: playbackSession.cancelAutoClose(),
   }));
 
-  // 为 Diretta Source Direct 预备同 wire-format 的下一本地音源。
-  // staging 不兼容是正常降级条件：保持当前播放，renderer 在边界走普通 load。
-  ipcMain.handle(
-    "player:stageDirectNext",
-    async (_event, source: string, durationMs: number, generation: number) => ({
-      success: true,
-      data: await stageDirectPlaybackNext(source, durationMs, generation),
-    }),
-  );
-
-  ipcMain.handle("player:cancelDirectNext", () => {
-    try {
-      cancelDirectPlaybackNext();
-      return { success: true };
-    } catch (error) {
-      return fail(ErrorCode.UNKNOWN, error);
-    }
-  });
-
-  ipcMain.handle(
-    "player:commitDirectGaplessBoundary",
-    async (
-      _event,
-      source: string,
-      durationMs: number,
-      authoritative?: LoadOptions["meta"],
-      context?: LoadOptions["context"],
-    ) => {
-      try {
-        commitDirectPlaybackBoundary(source, durationMs, authoritative, context);
-        return { success: true };
-      } catch (error) {
-        return fail(ErrorCode.UNKNOWN, error);
-      }
-    },
-  );
-
   // 设置音量（0.0 ~ 1.0）
   ipcMain.handle("player:setVolume", (_event, volume: number) => {
     try {
@@ -627,15 +585,6 @@ export const registerPlayerIpc = (): void => {
       return { success: true, data: await getPlayer().scanDirettaDevices() };
     } catch (error) {
       return fail(ErrorCode.UNKNOWN, error);
-    }
-  });
-
-  // 将在线音源按原始响应字节物化为 Direct 可 seek 的进程级临时文件
-  ipcMain.handle("player:materializeDirectInput", async (_event, source: string) => {
-    try {
-      return { success: true, data: await materializeDirectInput(source) };
-    } catch (error) {
-      return fail(ErrorCode.NETWORK_ERROR, error);
     }
   });
 

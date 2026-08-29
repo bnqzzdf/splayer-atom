@@ -14,9 +14,7 @@ import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
 import { handleError } from "@/utils/errors";
 import * as playStats from "./stats";
-import { consumeDirectGaplessBoundary } from "@/services/nextTrackPreloader";
 import {
-  commitDirectGaplessTrack,
   hasReachedSeekTarget,
   insertManyToQueue,
   isSeeking,
@@ -145,33 +143,17 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     }
     case "directTrackBoundary": {
-      // Node Core 已消费 staged boundary；远程 Web 只等待 session 快照，不参与 gapless ownership。
+      // Core 正常消费 staged boundary；只有未消费的异常边界才会到 Desktop renderer。
+      // renderer 不再持有 Direct generation/source 第二状态机，只按当前队列语义安全恢复。
       if (isWebRemote()) break;
-      const preloaded = consumeDirectGaplessBoundary(event.data.generation);
-      if (!preloaded) {
-        // native 已经跨过边界但 renderer 上下文已变化：显式重建当前应播放的队列语义。
-        const stopByTimer = autoClose.onTrackEnded();
-        const repeatOne = status.repeatMode === "one" && !status.fmMode;
-        playStats.onTrackEnded(repeatOne && !stopByTimer);
-        await stop();
-        if (stopByTimer) break;
-        if (repeatOne) {
-          await reloadCurrentQueueTrack();
-        } else {
-          await nextTrack();
-        }
-        break;
-      }
-
       const stopByTimer = autoClose.onTrackEnded();
-      playStats.onTrackEnded(false);
-      if (stopByTimer) {
-        await stop();
-        break;
-      }
-
-      if (!(await commitDirectGaplessTrack(preloaded))) {
-        await stop();
+      const repeatOne = status.repeatMode === "one" && !status.fmMode;
+      playStats.onTrackEnded(repeatOne && !stopByTimer);
+      await stop();
+      if (stopByTimer) break;
+      if (repeatOne) {
+        await reloadCurrentQueueTrack();
+      } else {
         await nextTrack();
       }
       break;
