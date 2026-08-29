@@ -2,10 +2,10 @@
  * 宿主网络代理
  *
  * 插件通过 splayer.request(url, opts) 调用本模块，
- * 主进程用 Electron `net.fetch`（支持系统代理）去请求，应用超时与 URL 白名单。
+ * 主进程通过 runtime fetch 去请求，Desktop 注入 Electron net.fetch，Node Core 使用原生 fetch。
  */
 
-import { net } from "electron";
+import { runtimeFetch } from "@main/atom/runtime/fetch";
 import type { HostRequestOptions, HostRequestResult, MarketPlugin } from "@shared/types/plugin";
 import {
   REQUEST_DEFAULT_TIMEOUT,
@@ -29,7 +29,7 @@ export const fetchScript = async (url: string): Promise<string> => {
   if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
     throw new Error(`protocol not allowed: ${parsed.protocol}`);
   }
-  const resp = await net.fetch(url, {
+  const resp = await runtimeFetch(url, {
     method: "GET",
     redirect: "follow",
     signal: AbortSignal.timeout(INSTALL_URL_TIMEOUT),
@@ -49,7 +49,7 @@ export const fetchScript = async (url: string): Promise<string> => {
 
 /** 拉取插件市场索引 */
 export const fetchMarket = async (): Promise<MarketPlugin[]> => {
-  const resp = await net.fetch(PLUGIN_REGISTRY_URL, {
+  const resp = await runtimeFetch(PLUGIN_REGISTRY_URL, {
     method: "GET",
     redirect: "follow",
     signal: AbortSignal.timeout(INSTALL_URL_TIMEOUT),
@@ -102,13 +102,11 @@ export const hostRequest = async (
   }
 
   try {
-    const resp = await net.fetch(url, {
+    const resp = await runtimeFetch(url, {
       method: opts.method ?? "GET",
       headers: opts.headers ?? {},
       body,
       signal: ctrl.signal,
-      // 让 Electron 遵循系统代理
-      bypassCustomProtocolHandlers: true,
     });
 
     const headers: Record<string, string> = {};

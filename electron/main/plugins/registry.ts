@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import { app } from "electron";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { writeFileSync as atomicWriteSync } from "atomically";
 import type {
   PlaybackEventKind,
@@ -452,7 +452,7 @@ class PluginRegistry extends EventEmitter {
       pluginId: id,
       apiLevel: rt.manifest.apiLevel,
       locale: getLocale(),
-      appVersion: app.getVersion(),
+      appVersion: runtimeEnvironment.appVersion,
       userSettings,
       source: rt.source,
       scriptInfo: {

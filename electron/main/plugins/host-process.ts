@@ -8,8 +8,8 @@
  * - 陈旧消息守卫：死进程的迟到消息按 generation 丢弃
  */
 
-import path from "node:path";
-import { utilityProcess, type UtilityProcess, app } from "electron";
+import type { RuntimePluginHostChild } from "@main/atom/runtime/pluginHost";
+import { spawnRuntimePluginHost } from "@main/atom/runtime/pluginHost";
 import type {
   HostCallMethod,
   PlaybackEventKind,
@@ -46,11 +46,8 @@ export interface PluginHostCallbacks {
 /** loadPlugin 入参（即 loadPlugin 消息去掉 kind） */
 export type PluginLoadSpec = Omit<Extract<SandboxIn, { kind: "loadPlugin" }>, "kind">;
 
-const resolveWorkerEntry = (): string =>
-  path.join(app.getAppPath(), "out", "main", "host.worker.js");
-
 class PluginHost {
-  private child: UtilityProcess | null = null;
+  private child: RuntimePluginHostChild | null = null;
   /** 每次 (re)start 自增；用于丢弃死进程迟到消息 */
   private generation = 0;
   private hostReady = false;
@@ -86,10 +83,7 @@ class PluginHost {
       this.resolveStart = resolve;
       this.rejectStart = reject;
       const generation = ++this.generation;
-      const child = utilityProcess.fork(resolveWorkerEntry(), [], {
-        serviceName: "splayer-plugin-host",
-        stdio: "pipe",
-      });
+      const child = spawnRuntimePluginHost();
       this.child = child;
       this.hostReady = false;
       this.heartbeatMisses = 0;
@@ -101,11 +95,11 @@ class PluginHost {
         }
       }, PLUGIN_LOAD_TIMEOUT);
 
-      child.on("message", (msg: SandboxOut) => {
+      child.onMessage((message) => {
         if (generation !== this.generation) return; // 陈旧进程
-        this.onMessage(msg);
+        this.onMessage(message as SandboxOut);
       });
-      child.on("exit", (code) => {
+      child.onExit((code) => {
         if (generation !== this.generation) return;
         coreLog.warn(`[plugin-host] host 进程退出 code=${code}`);
         this.handleHostCrash("exit");

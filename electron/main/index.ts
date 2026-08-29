@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { app, net, safeStorage } from "electron";
+import { app, net, safeStorage, utilityProcess } from "electron";
 import { configureRuntimeFetch } from "./atom/runtime/fetch";
+import { configureRuntimePluginHost } from "./atom/runtime/pluginHost";
 import { configureRuntimeSecretCodec } from "./atom/runtime/secrets";
 
 const configureElectronRuntime = (): void => {
@@ -20,6 +21,23 @@ const configureElectronRuntime = (): void => {
   process.env.ATOM_RESOURCES_DIR = process.resourcesPath;
 
   configureRuntimeFetch((input, init) => net.fetch(input, init));
+  configureRuntimePluginHost({
+    entry: path.join(app.getAppPath(), "out", "main", "host.worker.js"),
+    spawn: (entry) => {
+      const child = utilityProcess.fork(entry, [], {
+        serviceName: "splayer-plugin-host",
+        stdio: "pipe",
+      });
+      return {
+        stdout: child.stdout,
+        stderr: child.stderr,
+        onMessage: (listener) => child.on("message", listener),
+        onExit: (listener) => child.on("exit", listener),
+        postMessage: (message) => child.postMessage(message),
+        kill: () => child.kill(),
+      };
+    },
+  });
   configureRuntimeSecretCodec({
     protectedAtRest: safeStorage.isEncryptionAvailable(),
     encode: (plain) =>

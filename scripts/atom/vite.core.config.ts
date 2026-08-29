@@ -18,15 +18,19 @@ export default defineConfig({
     },
   },
   build: {
-    ssr: resolve(root, "electron/main/core-node/index.ts"),
+    ssr: true,
     target: "node22",
     outDir: resolve(root, "out/core"),
     emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
+      input: {
+        index: resolve(root, "electron/main/core-node/index.ts"),
+        "plugin-host": resolve(root, "electron/main/atom/pluginHostNode.ts"),
+      },
       output: {
         format: "es",
-        entryFileNames: "index.js",
+        entryFileNames: "[name].js",
       },
     },
   },

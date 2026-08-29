@@ -1,10 +1,12 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 process.env.ATOM_HEADLESS = "1";
 process.env.ATOM_APP_NAME ??= "SPlayer Atom Core";
 process.env.ATOM_APP_VERSION ??= "1.0.0";
 process.env.ATOM_APP_PACKAGED ??= process.env.NODE_ENV === "production" ? "1" : "0";
 process.env.ATOM_RENDERER_DIR ??= path.join(process.cwd(), "out", "renderer");
+process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js", import.meta.url));
 
 let shuttingDown = false;
 
@@ -17,6 +19,7 @@ const start = async (): Promise<void> => {
     corePlayerEvents,
     server,
     { store },
+    { pluginRegistry },
   ] = await Promise.all([
     import("@main/utils/logger"),
     import("@main/database"),
@@ -25,11 +28,13 @@ const start = async (): Promise<void> => {
     import("@main/services/corePlayerEvents"),
     import("@main/server"),
     import("@main/store"),
+    import("@main/plugins/registry"),
   ]);
 
   initLogger();
   database.initDatabase();
   await songCache.init();
+  pluginRegistry.init();
   corePlayerEvents.registerCorePlayerEvents();
   await playbackSession.initPlaybackSession();
 
@@ -44,6 +49,7 @@ const start = async (): Promise<void> => {
     coreLog.info(`Atom Core 收到 ${signal}，开始停止服务`);
     store.flushImmediate();
     songCache.shutdown();
+    await pluginRegistry.shutdown();
     await server.stopServer();
     database.closeDatabase();
     process.exitCode = 0;
