@@ -1,5 +1,15 @@
 # SPlayer Atom — Progress
 
+## 2026-08-29 — Core Protocol closed; durable schema migration safety in progress
+
+- Committed `48e39ec feat: 建立 Core Protocol 与能力契约` and `805f8f2 docs: 记录 Core Protocol 能力契约`. Core `/api/info` now reports shared Protocol v1 plus `library/playback/diretta/netease/qobuz/tidal/remoteOutput` capabilities; Web verifies protocol compatibility before domain HTTP/WS work, and final tar validation checks `runtime.json` against runtime `/api/info`. Diretta capability comes from native `build.json`, so no-SDK artifacts report `false` instead of claiming unsupported hardware capability.
+- Current uncommitted work is the next P3 checkpoint: durable data schema migration/backup safety. It reuses existing SQLite `PRAGMA user_version` and settings `__configVersion`; no second persistence framework is introduced.
+- SQLite schema baseline is 4 and settings schema baseline is 1. Core now performs a preflight before loading store/database, rejects future unknown schema versions, backs up only installations that actually need migration, uses SQLite `VACUUM INTO` for a WAL-consistent DB snapshot, copies the durable config directory, and runs known SQLite migrations inside one transaction so failure rolls back both schema changes and `user_version`.
+- `runtime.json` now records database/config schema versions. Final extracted-artifact smoke verifies a fresh Core produces `settings.json.__configVersion === 1` and SQLite `user_version === 4` after clean shutdown.
+- Migration-focused tests pass 6/6. Full regression at the current uncommitted checkpoint passes Node 170/170, Web 52/52, Node/Web typecheck, ESLint, touch audit and the full `build-core-system.ts` final-tar pipeline. Touch budgets are 38 business / 21 runtime-neutral / 13 Core-authority; the added upstream `database/migration.ts` change is explicitly classified as the 21st runtime-neutral persistence seam.
+- Before committing this checkpoint, add the planned static schema-metadata regression to `electron/main/services/coreSystemArtifact.test.ts`, rerun proportional/full gates, commit the migration implementation, then update roadmap/progress. Do not reset or discard the current working tree.
+- No second Node 24 patch smoke is desired. Supported Node remains `>=24.18.0 <25` with exact reference runtime `24.18.0`. Live Qobuz/TIDAL credentials, Netease/live online acceptance and Diretta hardware gates remain separate external acceptance boundaries.
+
 ## 2026-08-29 — Provider product surface and account projection closed
 
 - Froze QQ Music/Kugou out of Atom's formal Desktop/Web search surface while preserving inherited upstream search/collection/lyric/plugin playback compatibility.
