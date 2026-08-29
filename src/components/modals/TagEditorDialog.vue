@@ -11,6 +11,7 @@ import { handleError } from "@/utils/errors";
 import { hasHostCapability } from "@/runtime";
 import { formatFileSize } from "@/utils/format";
 import { formatTime } from "@/utils/time";
+import { libraryClient } from "@/core/libraryClient";
 import IconWandSparkles from "~icons/lucide/wand-sparkles";
 
 const props = defineProps<{ open: boolean; track: Track | null }>();
@@ -85,7 +86,7 @@ watch(
     loading.value = true;
     original.value = null;
     resetForm(null);
-    const result = await window.api.library.readTags(props.track.path);
+    const result = await libraryClient.readTags(props.track.path);
     loading.value = false;
     if (!result.success || !result.data) {
       if (result.error) handleError(result.error);

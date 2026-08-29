@@ -147,24 +147,13 @@ export const registerLibraryIpc = (): void => {
     return { success: true, data: isScanning() };
   });
 
-  // 添加 Core 扫描目录；Desktop 省略路径时使用同机 native picker。
-  ipcMain.handle("library:addScanDir", async (_event, requestedDir?: string) => {
+  // 添加明确的 Core 扫描目录；业务 mutation 仍由 Library/Core 路径持有。
+  ipcMain.handle("library:addScanDir", async (_event, requestedDir: string) => {
     let dir: string;
-    if (requestedDir?.trim()) {
-      try {
-        dir = await resolveCoreDirectory(requestedDir);
-      } catch {
-        return { success: false, error: ErrorCode.SCAN_DIR_NOT_FOUND };
-      }
-    } else {
-      const result = await dialog.showOpenDialog({
-        title: "选择音乐文件夹",
-        properties: ["openDirectory"],
-      });
-      if (result.canceled || result.filePaths.length === 0) {
-        return { success: false, error: ErrorCode.SCAN_DIR_NOT_SELECTED };
-      }
-      dir = await resolveCoreDirectory(result.filePaths[0]);
+    try {
+      dir = await resolveCoreDirectory(requestedDir);
+    } catch {
+      return { success: false, error: ErrorCode.SCAN_DIR_NOT_FOUND };
     }
     const dirs = store.get("library.scanDirs") as string[];
     if (dirs.includes(dir)) {
@@ -174,6 +163,22 @@ export const registerLibraryIpc = (): void => {
     store.set("library.scanDirs", dirs);
     libraryLog.info(`添加扫描目录: ${dir}`);
     return { success: true, data: dir };
+  });
+
+  // Desktop Host 只负责选择目录，不修改 Library/Core 状态。
+  ipcMain.handle("library:pickScanDir", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "选择音乐文件夹",
+      properties: ["openDirectory"],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: ErrorCode.SCAN_DIR_NOT_SELECTED };
+    }
+    try {
+      return { success: true, data: await resolveCoreDirectory(result.filePaths[0]) };
+    } catch {
+      return { success: false, error: ErrorCode.SCAN_DIR_NOT_FOUND };
+    }
   });
 
   // 移除扫描目录及其下所有曲目

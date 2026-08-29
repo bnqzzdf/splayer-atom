@@ -15,6 +15,10 @@ const controlProtocolSource = readFileSync(
   new URL("../atom/controlProtocol.ts", import.meta.url),
   "utf8",
 );
+const controlRoutesSource = readFileSync(
+  new URL("../atom/controlRoutes.ts", import.meta.url),
+  "utf8",
+);
 const controlClientSource = readFileSync(
   new URL("../../../src/core/controlClient.ts", import.meta.url),
   "utf8",
@@ -45,7 +49,9 @@ test("Legacy Desktop player IPC remains a thin Core-session delegate", () => {
 });
 
 test("Desktop renderer play pause stop and seek use the same Core Protocol routes as Web", () => {
-  assert.match(controlProtocolSource, /buildHeadlessRoutes\(\)/);
+  assert.match(controlProtocolSource, /buildCoreControlRoutes\(\)/);
+  assert.match(controlRoutesSource, /buildHeadlessRoutes\(\)/);
+  assert.match(controlRoutesSource, /buildAtomCompatRoutes\(\)/);
   assert.match(controlProtocolSource, /scheme: CORE_CONTROL_SCHEME/);
   assert.match(controlProtocolSource, /supportFetchAPI: true/);
   assert.match(controlProtocolSource, /session\.fromPartition\(partition\)\.protocol\.handle/);

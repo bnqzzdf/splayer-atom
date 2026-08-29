@@ -12,6 +12,7 @@ import { fetchKugouArtist } from "@/apis/artist/kugou";
 import { fetchArtist as fetchQobuzArtist } from "@/apis/artist/qobuz";
 import { fetchArtist as fetchTidalArtist } from "@/apis/artist/tidal";
 import { albumsToCoverItems } from "@/utils/format/coverItem";
+import { libraryClient } from "@/core/libraryClient";
 
 export interface LoadArtistOptions {
   /** 名称兜底（在线源元数据返回前用于占位） */
@@ -77,7 +78,7 @@ const loadLocal = async (id: string, options: LoadArtistOptions): Promise<void> 
 
   // 头像异步补：本地无头像时去主进程取一次，命中后再次 onUpdate
   if (profile && !profile.avatar) {
-    const res = await window.api.library.fetchArtistAvatar(artistName);
+    const res = await libraryClient.fetchArtistAvatar(artistName);
     if (options.signal?.aborted) return;
     if (res.success && res.data) {
       libraryStore.setArtistAvatar(artistName, res.data);

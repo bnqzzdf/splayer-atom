@@ -3,6 +3,7 @@ import { useHeartMode } from "@/composables/useHeartMode";
 import { useFmMode } from "@/composables/useFmMode";
 import { toast } from "@/composables/useToast";
 import * as player from "@/core/player";
+import { libraryClient } from "@/core/libraryClient";
 import IconDices from "~icons/lucide/dices";
 import IconCalendarDays from "~icons/lucide/calendar-days";
 import IconHeart from "~icons/sp/heart-mode";
@@ -21,7 +22,7 @@ export const useQuickActions = () => {
   /** 试试手气 */
   const playLucky = useThrottleFn(async (): Promise<void> => {
     const online = user.likedPlaylistTracks;
-    const countRes = await window.api.library.getTrackCount();
+    const countRes = await libraryClient.getTrackCount();
     const hasLocal = (countRes.success ? (countRes.data ?? 0) : 0) > 0;
     const hasOnline = online.length > 0;
     if (!hasLocal && !hasOnline) {
@@ -31,7 +32,7 @@ export const useQuickActions = () => {
     // 两侧都有则各 50% 随机一侧，只有一侧则直接用那侧
     const fromLocal = hasLocal && (!hasOnline || Math.random() < 0.5);
     if (fromLocal) {
-      const trackRes = await window.api.library.getRandomTrack();
+      const trackRes = await libraryClient.getRandomTrack();
       const localTrack = trackRes.success ? trackRes.data : null;
       if (localTrack) await player.playNow(localTrack);
       return;

@@ -17,7 +17,7 @@ import { getArtistCacheDir, getBackgroundsDir, getCoverCacheDir } from "@main/ut
 import { publishDesktopEvent } from "@main/atom/runtime/events";
 import type { ExternalApiStatus } from "@shared/types/settings";
 import { buildAtomCompatRoutes } from "@main/atom/compat/routes";
-import { buildHeadlessRoutes } from "@main/atom/headless/routes";
+import { buildCoreControlRoutes } from "@main/atom/controlRoutes";
 import { getHeadlessServerPort, isHeadlessMode } from "@main/runtime";
 import { externalControlGate, wsGate } from "./gate";
 import { buildRoutes } from "./routes";
@@ -80,8 +80,7 @@ export const startServer = (): Promise<ExternalApiStatus> => {
     const app = new Hono();
     if (headless) {
       if (process.env.ELECTRON_RENDERER_URL) app.use("/api/*", cors());
-      app.route("/api", buildHeadlessRoutes());
-      app.route("/api", buildAtomCompatRoutes());
+      app.route("/api", buildCoreControlRoutes());
       app.get(
         "/ws",
         upgradeWebSocket(() => wsHandlers),

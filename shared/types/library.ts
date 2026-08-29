@@ -61,8 +61,10 @@ export interface LibraryApi {
   getRandomTracks: (limit: number) => Promise<IpcResponse<Track[]>>;
   /** 获取扫描状态 */
   isScanning: () => Promise<IpcResponse<boolean>>;
-  /** 添加扫描目录；Desktop 可省略路径使用本机/Core 同机目录选择器。 */
-  addScanDir: (dir?: string) => Promise<IpcResponse<string>>;
+  /** 添加 Core 扫描目录。 */
+  addScanDir: (dir: string) => Promise<IpcResponse<string>>;
+  /** Desktop Host 目录选择器；仅返回选中的本机/Core 同机路径，不修改 Library 状态。 */
+  pickScanDir: () => Promise<IpcResponse<string>>;
   /** 移除扫描目录及其下曲目 */
   removeScanDir: (dir: string) => Promise<IpcResponse>;
   /** 获取已配置的扫描目录 */

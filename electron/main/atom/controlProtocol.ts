@@ -1,5 +1,5 @@
 import { protocol, session } from "electron";
-import { buildHeadlessRoutes } from "@main/atom/headless/routes";
+import { buildCoreControlRoutes } from "@main/atom/controlRoutes";
 
 /** Desktop renderer 内部使用的 Core Protocol scheme。 */
 export const CORE_CONTROL_SCHEME = "atom-core";
@@ -7,7 +7,7 @@ const CORE_CONTROL_HOST = "control";
 const API_PREFIX = "/api";
 const ALLOWED_METHODS = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
 
-const routes = buildHeadlessRoutes();
+const routes = buildCoreControlRoutes();
 
 /** 给 Electron renderer 的跨 scheme Fetch 响应补齐最小 CORS 头。 */
 const withCors = (response: Response): Response => {
@@ -23,7 +23,7 @@ const withCors = (response: Response): Response => {
 };
 
 /**
- * 把 atom-core://control/api/* 请求直接转发给与 Web 相同的 Core Protocol router。
+ * 把 atom-core://control/api/* 请求直接转发给与 Web 相同的完整 Core Protocol router。
  * 不经过 external API 开关、LAN socket 或 Electron domain IPC。
  */
 const handleCoreControlRequest = async (request: Request): Promise<Response> => {

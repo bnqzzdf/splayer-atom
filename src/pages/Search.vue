@@ -13,6 +13,7 @@ import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { isWebRemote } from "@/runtime";
+import { libraryClient } from "@/core/libraryClient";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -120,11 +121,11 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
     if (requestSource === "local") {
       let all: Array<Track | CoverItem>;
       if (tab === "songs") {
-        const response = await window.api.library.searchTracks(requestKeyword);
+        const response = await libraryClient.searchTracks(requestKeyword);
         if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
         all = response.data ?? [];
       } else if (tab === "albums") {
-        const response = await window.api.library.getAlbums();
+        const response = await libraryClient.getAlbums();
         if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
         const needle = requestKeyword.toLocaleLowerCase();
         all = (response.data ?? [])
@@ -141,7 +142,7 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
             trackCount: album.trackCount,
           }));
       } else if (tab === "artists") {
-        const response = await window.api.library.getArtists();
+        const response = await libraryClient.getArtists();
         if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
         const needle = requestKeyword.toLocaleLowerCase();
         all = (response.data ?? [])

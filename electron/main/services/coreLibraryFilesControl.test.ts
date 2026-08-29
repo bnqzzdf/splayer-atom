@@ -6,6 +6,10 @@ const serviceSource = readFileSync(new URL("./libraryFiles.ts", import.meta.url)
 const ipcSource = readFileSync(new URL("../ipc/library.ts", import.meta.url), "utf8");
 const routesSource = readFileSync(new URL("../atom/compat/routes.ts", import.meta.url), "utf8");
 const webApiSource = readFileSync(new URL("../../../src/web/api.ts", import.meta.url), "utf8");
+const libraryClientSource = readFileSync(
+  new URL("../../../src/core/libraryClient.ts", import.meta.url),
+  "utf8",
+);
 const tagEditorSource = readFileSync(
   new URL("../../../src/components/modals/TagEditorDialog.vue", import.meta.url),
   "utf8",
@@ -51,12 +55,16 @@ test("Headless and Web expose real Core library delete and tag operations", () =
   assert.match(routesSource, /api\.post\("\/library\/tags\/read"/);
   assert.match(routesSource, /api\.post\("\/library\/tags\/write"/);
   assert.match(routesSource, /api\.delete\("\/library\/files"/);
-  assert.match(webApiSource, /request<IpcResponse<TrackTags>>\("\/library\/tags\/read"/);
-  assert.match(webApiSource, /request<IpcResponse<TagWriteOutcome\[\]>>\("\/library\/tags\/write"/);
+  assert.match(libraryClientSource, /request<IpcResponse<TrackTags>>\("\/library\/tags\/read"/);
   assert.match(
-    webApiSource,
+    libraryClientSource,
+    /request<IpcResponse<TagWriteOutcome\[\]>>\("\/library\/tags\/write"/,
+  );
+  assert.match(
+    libraryClientSource,
     /request<IpcResponse<\{ deleted: number; failed: number \}>>\("\/library\/files"/,
   );
+  assert.match(webApiSource, /\.\.\.libraryClient/);
   assert.doesNotMatch(webApiSource, /WEB_TAG_EDIT_UNSUPPORTED|Web 文件删除尚未开放/);
 });
 
@@ -64,5 +72,6 @@ test("Web tag editor hides only the Control-local cover file picker", () => {
   assert.match(tagEditorSource, /hasHostCapability\("nativeFileDialogs"\)/);
   assert.match(tagEditorSource, /v-if="localCoverPickerAvailable"/);
   assert.match(tagEditorSource, /newCoverUrl\.value = coverUrl/);
-  assert.match(tagEditorSource, /window\.api\.library\.readTags\(props\.track\.path\)/);
+  assert.match(tagEditorSource, /libraryClient\.readTags\(props\.track\.path\)/);
+  assert.match(tagEditorSource, /window\.api\.library\.pickCoverImage\(\)/);
 });

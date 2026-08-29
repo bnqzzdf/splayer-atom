@@ -19,6 +19,10 @@ const libraryIpcSource = readFileSync(new URL("../ipc/library.ts", import.meta.u
 const downloadIpcSource = readFileSync(new URL("../ipc/download.ts", import.meta.url), "utf8");
 const preloadSource = readFileSync(new URL("../../preload/index.ts", import.meta.url), "utf8");
 const webApiSource = readFileSync(new URL("../../../src/web/api.ts", import.meta.url), "utf8");
+const libraryClientSource = readFileSync(
+  new URL("../../../src/core/libraryClient.ts", import.meta.url),
+  "utf8",
+);
 const pickerSource = readFileSync(
   new URL("../../../src/web/CoreDirectoryPicker.vue", import.meta.url),
   "utf8",
@@ -64,11 +68,12 @@ test("Core directory browser stays Electron-free and Headless exposes only direc
 
 test("Library scan roots are validated as Core directories instead of browser-local prompt strings", () => {
   assert.match(compatRoutesSource, /await resolveCoreDirectory\(requestedDir\)/);
-  assert.match(libraryIpcSource, /requestedDir\?\.trim\(\)/);
-  assert.match(libraryIpcSource, /await resolveCoreDirectory\(requestedDir\)/);
-  assert.match(preloadSource, /addScanDir: \(dir\?: string\)/);
+  assert.match(libraryIpcSource, /ipcMain\.handle\("library:pickScanDir"/);
+  assert.match(libraryIpcSource, /await resolveCoreDirectory\(result\.filePaths\[0\]\)/);
+  assert.match(preloadSource, /pickScanDir: \(\) => ipcRenderer\.invoke\("library:pickScanDir"\)/);
   assert.doesNotMatch(webApiSource, /window\.prompt\("请输入主机上的音乐目录路径"/);
-  assert.match(webApiSource, /addScanDir: \(dir\) =>/);
+  assert.match(libraryClientSource, /addScanDir: \(dir\) =>/);
+  assert.match(libraryClientSource, /"\/library\/scan-dirs\/add"/);
   assert.match(folderManagerSource, /CoreDirectoryPicker/);
   assert.match(folderManagerSource, /libraryStore\.addScanDir\(dir\)/);
 });

@@ -287,8 +287,10 @@ const api = {
     getRandomTracks: (limit: number) => ipcRenderer.invoke("library:getRandomTracks", limit),
     // 获取扫描状态
     isScanning: () => ipcRenderer.invoke("library:isScanning"),
-    // 弹出目录选择器，添加扫描目录
-    addScanDir: (dir?: string) => ipcRenderer.invoke("library:addScanDir", dir),
+    // 添加明确的 Core 扫描目录（兼容 request seam）
+    addScanDir: (dir: string) => ipcRenderer.invoke("library:addScanDir", dir),
+    // Desktop Host 目录选择器；只返回路径，不修改 Library 状态
+    pickScanDir: () => ipcRenderer.invoke("library:pickScanDir"),
     // 移除扫描目录及其下曲目
     removeScanDir: (dir: string) => ipcRenderer.invoke("library:removeScanDir", dir),
     // 获取已配置的扫描目录

@@ -3,6 +3,7 @@ import { useUserStore } from "@/stores/user";
 import { useDataStore } from "@/stores/data";
 import { toast } from "@/composables/useToast";
 import * as player from "@/core/player";
+import { libraryClient } from "@/core/libraryClient";
 
 /** hero 源类型 */
 type HeroKind = "daily" | "liked" | "local";
@@ -85,7 +86,7 @@ export const useDailyRecommend = () => {
     try {
       if (kind === "daily") return toSource("daily", await data.ensureDailyRecommend());
       if (kind === "liked") return toSource("liked", [...user.likedPlaylistTracks]);
-      const res = await window.api.library.getRandomTracks(LOCAL_RANDOM_LIMIT);
+      const res = await libraryClient.getRandomTracks(LOCAL_RANDOM_LIMIT);
       return toSource("local", res.success ? (res.data ?? []) : []);
     } catch (error) {
       console.warn(`[home] hero source ${kind} failed:`, error);

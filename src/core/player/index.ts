@@ -39,6 +39,7 @@ import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
 import { sessionClient } from "@/core/sessionClient";
 import { playerClient } from "@/core/playerClient";
+import { libraryClient } from "@/core/libraryClient";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
 const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
@@ -370,7 +371,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     await coreCommand("/stop");
   }
 
-  const result = await window.api.library.writeTags(edits);
+  const result = await libraryClient.writeTags(edits);
   if (!result.success || !result.data) {
     if (result.error) handleError(result.error);
     // 写入失败也要恢复被停掉的当前曲

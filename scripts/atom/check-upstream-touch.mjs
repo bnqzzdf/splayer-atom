@@ -13,7 +13,8 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 2 个 Track Action Model / presentation seam、1 个 Collection Action Model seam、
 // 1 个 Artist Action Model seam、3 个 Cover Action presentation/Favorites seam，
 // 1 个 system-font Host gating seam、2 个最终 Host-action 可达性收口 seam，
-// 以及 2 个 Desktop window/updater facade 初始化收口 seam、2 个 Managed Provider Core transport seam：
+// 以及 2 个 Desktop window/updater facade 初始化收口 seam、2 个 Managed Provider Core transport seam、
+// 4 个 Library Core Protocol 调用面：
 // Headless 主进程生命周期、Native DSD 扫描、Web 启动入口、main-session queue 投影、
 // queue 权威态测试、移除 renderer 对播放索引/模式的重复持久化、Services 账户入口，
 // 以及运行时 Settings 分类组装、stale 分类归一化、General Host section gating、About Host 信息投影
@@ -32,10 +33,11 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 隐藏无法从浏览器打开 Core 主机文件管理器的 action，歌词海报导出则在 Web 使用 browser download，
 // 不再触发 Desktop `saveFile()` 的 unsupported facade；`useWindowControls` 与 updater store 也在 Host
 // capability 不可用时停止 Desktop window/update API 初始化调用，避免不可见的 no-op facade 可达路径；
-// Netease API wrapper 与手动 cookie dialog 则改走 shared Provider Core client，QQ/酷狗兼容 IPC 不扩权。
+// Netease API wrapper 与手动 cookie dialog 则改走 shared Provider Core client，QQ/酷狗兼容 IPC 不扩权；
+// Library 空状态、首页随机推荐/试试手气与本地歌手头像统一走 Library Core client，Desktop picker 只返回路径。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 71);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 75);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);

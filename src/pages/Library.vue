@@ -11,6 +11,7 @@ import IconRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideX from "~icons/lucide/x";
 import * as player from "@/core/player";
+import { isWebRemote } from "@/runtime";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
@@ -34,13 +35,20 @@ const totalSize = computed(() => {
   return bytes > 0 ? formatFileSize(bytes) : "";
 });
 
+// 目录管理弹窗
+const folderDialogOpen = ref(false);
+
 /** 新增目录（手动触发扫描，避免抢占播放资源） */
 const handleFolderAdded = (): void => {
   // 添加后不自动扫描，由用户按需点击扫描
 };
 
-const handleQuickAddFolder = (): void => {
-  folderDialogOpen.value = true;
+const handleQuickAddFolder = async (): Promise<void> => {
+  if (isWebRemote()) {
+    folderDialogOpen.value = true;
+    return;
+  }
+  await libraryStore.addScanDir();
 };
 
 // 播放全部
@@ -54,9 +62,6 @@ const scanPercent = computed(() => {
   if (!scanProgress.value || !scanProgress.value.total) return 0;
   return Math.min(100, Math.round((scanProgress.value.scanned / scanProgress.value.total) * 100));
 });
-
-// 目录管理弹窗
-const folderDialogOpen = ref(false);
 
 const moreMenuItems = computed<DropdownMenuItem[]>(() => {
   const items: DropdownMenuItem[] = [

@@ -12,12 +12,11 @@ import type {
   EnqueueResult,
 } from "@shared/types/download";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
-import type { LibraryApi, AlbumSummary, ArtistSummary, ScanProgress } from "@shared/types/library";
+import type { LibraryApi, ScanProgress } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
 import type { StatsApi } from "@shared/types/stats";
-import type { TrackTags, TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type {
   AudioDevice,
   IpcResponse,
@@ -32,6 +31,7 @@ import type {
 import { connectWebEvents, request, serverAssetUrl, webAssetUrl } from "./client";
 import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
+import { libraryClient } from "@/core/libraryClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -103,16 +103,6 @@ const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot =
   queue: session.queue.map(mapQueueItem),
   originalQueue: session.originalQueue?.map(mapQueueItem) ?? null,
   current: session.current ? mapTrack(session.current) : null,
-});
-
-const mapAlbum = (album: AlbumSummary): AlbumSummary => ({
-  ...album,
-  cover: webAssetUrl(album.cover),
-});
-
-const mapArtist = (artist: ArtistSummary): ArtistSummary => ({
-  ...artist,
-  cover: webAssetUrl(artist.cover),
 });
 
 const eventListeners = new Set<(event: WebEvent) => void>();
@@ -424,114 +414,14 @@ const playerApi: PlayerApi = {
 };
 
 const libraryApi: LibraryApi = {
+  ...libraryClient,
   scan: async (incremental = true) => {
-    const result = await asCommand(() =>
-      request("/library/scan", { method: "POST", body: JSON.stringify({ incremental }) }),
-    );
+    const result = await libraryClient.scan(incremental);
     if (result.success) scanRequestGeneration++;
     return result;
   },
-  cancelScan: () => asCommand(() => request("/library/scan/cancel", { method: "POST" })),
-  getTracks: () =>
-    asIpc(async () => (await request<{ data: Track[] }>("/library/tracks")).data.map(mapTrack)),
-  getAlbums: () =>
-    asIpc(async () =>
-      (await request<{ data: AlbumSummary[] }>("/library/albums")).data.map(mapAlbum),
-    ),
-  getArtists: () =>
-    asIpc(async () =>
-      (await request<{ data: ArtistSummary[] }>("/library/artists")).data.map(mapArtist),
-    ),
-  getAlbumTracks: (albumName) =>
-    asIpc(async () =>
-      (
-        await request<{ data: Track[] }>(`/library/albums/${encodeURIComponent(albumName)}/tracks`)
-      ).data.map(mapTrack),
-    ),
-  getArtistTracks: (artistName) =>
-    asIpc(async () =>
-      (
-        await request<{ data: Track[] }>(
-          `/library/artists/${encodeURIComponent(artistName)}/tracks`,
-        )
-      ).data.map(mapTrack),
-    ),
-  getTracksByIds: (ids) =>
-    asIpc(async () =>
-      (
-        await request<{ data: Track[] }>(
-          `/library/tracks/by-ids?ids=${encodeURIComponent(ids.join(","))}`,
-        )
-      ).data.map(mapTrack),
-    ),
-  searchTracks: (query) =>
-    asIpc(async () =>
-      (
-        await request<{ data: Track[] }>(
-          `/library/search?type=songs&q=${encodeURIComponent(query)}&limit=500`,
-        )
-      ).data.map(mapTrack),
-    ),
-  getTrackCount: () => asIpc(async () => (await request<{ data: number }>("/library/count")).data),
-  getRandomTrack: () =>
-    asIpc(async () => {
-      const track = (await request<{ data: Track | null }>("/library/random-one")).data;
-      return track ? mapTrack(track) : null;
-    }),
-  getRandomTracks: (limit) =>
-    asIpc(async () =>
-      (await request<{ data: Track[] }>(`/library/random?limit=${limit}`)).data.map(mapTrack),
-    ),
-  isScanning: () =>
-    asIpc(async () => (await request<{ data: boolean }>("/library/is-scanning")).data),
-  addScanDir: (dir) => {
-    if (!dir?.trim()) return Promise.resolve({ success: false, error: "CORE_DIRECTORY_REQUIRED" });
-    return request<IpcResponse<string>>("/library/scan-dirs/add", {
-      method: "POST",
-      body: JSON.stringify({ dir }),
-    }).catch((error) => ({ success: false, error: errorText(error) }));
-  },
-  removeScanDir: (dir) =>
-    asCommand(() =>
-      request("/library/scan-dirs", { method: "DELETE", body: JSON.stringify({ dir }) }),
-    ),
-  getScanDirs: () =>
-    asIpc(async () => (await request<{ data: string[] }>("/library/scan-dirs")).data),
-  deleteTracks: (paths) =>
-    request<IpcResponse<{ deleted: number; failed: number }>>("/library/files", {
-      method: "DELETE",
-      body: JSON.stringify({ paths }),
-    }).catch((error) => ({ success: false, error: errorText(error) })),
-  readTags: (path) =>
-    request<IpcResponse<TrackTags>>("/library/tags/read", {
-      method: "POST",
-      body: JSON.stringify({ path }),
-    }).catch((error) => ({ success: false, error: errorText(error) })),
-  writeTags: (edits: TagEditRequest[]) =>
-    request<IpcResponse<TagWriteOutcome[]>>("/library/tags/write", {
-      method: "POST",
-      body: JSON.stringify({ edits }),
-    }).catch((error) => ({ success: false, error: errorText(error) })),
+  pickScanDir: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
   pickCoverImage: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
-  fetchArtistAvatar: (artistName) =>
-    request<IpcResponse<string | null>>(
-      `/library/artists/${encodeURIComponent(artistName)}/avatar`,
-    ).then((result) => ({
-      ...result,
-      data: result.data ? webAssetUrl(result.data) : result.data,
-    })),
-  prefetchArtistAvatars: (artistNames) =>
-    request<IpcResponse<Record<string, string>>>("/library/artists/avatars", {
-      method: "POST",
-      body: JSON.stringify({ names: artistNames }),
-    }).then((result) => ({
-      ...result,
-      data: result.data
-        ? Object.fromEntries(
-            Object.entries(result.data).map(([key, value]) => [key, webAssetUrl(value) ?? value]),
-          )
-        : result.data,
-    })),
   onScanProgress: (callback) => {
     let disposed = false;
     let seenScanning = false;

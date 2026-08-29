@@ -4,6 +4,7 @@ import type { AlbumSummary, ArtistSummary, ScanProgress } from "@shared/types/li
 import type { Collection } from "@/types/collection";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
 import { buildFolderTree, countFolders } from "@/utils/folderTree";
+import { libraryClient } from "@/core/libraryClient";
 
 const trackDb = localforage.createInstance({ name: "splayer", storeName: "library" });
 
@@ -87,7 +88,7 @@ export const useLibraryStore = defineStore("library", () => {
       .filter((item) => !artistAvatars.value[normalizeArtistName(item.name)])
       .map((item) => item.name);
     if (!names.length) return;
-    const res = await window.api.library.prefetchArtistAvatars(names);
+    const res = await libraryClient.prefetchArtistAvatars(names);
     if (!res.success || !res.data) return;
     const patch: Record<string, string> = {};
     for (const [key, avatar] of Object.entries(res.data)) {
@@ -117,8 +118,8 @@ export const useLibraryStore = defineStore("library", () => {
     }
     // 拿最新数据并回写缓存
     const [tracksRes, dirsRes] = await Promise.all([
-      window.api.library.getTracks(),
-      window.api.library.getScanDirs(),
+      libraryClient.getTracks(),
+      libraryClient.getScanDirs(),
     ]);
     if (tracksRes.success && tracksRes.data) {
       tracks.value = tracksRes.data;
@@ -128,7 +129,7 @@ export const useLibraryStore = defineStore("library", () => {
     initialized.value = true;
     // 同步服务端真实扫描状态，防止残留
     try {
-      const scanStatus = await window.api.library.isScanning();
+      const scanStatus = await libraryClient.isScanning();
       if (scanStatus.success && scanStatus.data) {
         const isCurrentlyScanning = Boolean((scanStatus.data as any).is_scanning ?? scanStatus.data);
         scanning.value = isCurrentlyScanning;
@@ -151,7 +152,7 @@ export const useLibraryStore = defineStore("library", () => {
     scanning.value = true;
     scanProgress.value = { phase: "scanning", total: 0, scanned: 0 };
     try {
-      const res = await window.api.library.scan(incremental);
+      const res = await libraryClient.scan(incremental);
       if (!res.success) {
         scanning.value = false;
         scanProgress.value = null;
@@ -164,7 +165,7 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 取消扫描 */
   const cancelScan = async (): Promise<void> => {
-    await window.api.library.cancelScan();
+    await libraryClient.cancelScan();
     scanning.value = false;
     scanProgress.value = null;
   };
@@ -179,20 +180,25 @@ export const useLibraryStore = defineStore("library", () => {
         existing.startsWith(dir + "/"),
     );
 
-  /** 添加扫描目录；远程 Control 传入 Core 路径，Desktop 可省略并使用同机 picker。 */
+  /** 添加扫描目录；Desktop Host 只负责选路径，Library mutation 统一走 Core Protocol。 */
   const addScanDir = async (
     requestedDir?: string,
   ): Promise<{ success: boolean; error?: string }> => {
-    if (requestedDir && conflictsWithScanDir(requestedDir)) {
+    let dir = requestedDir?.trim();
+    if (!dir) {
+      const picked = await window.api.library.pickScanDir();
+      if (!picked.success || !picked.data) return { success: false, error: picked.error };
+      dir = picked.data;
+    }
+    if (conflictsWithScanDir(dir)) {
       return { success: false, error: "nested" };
     }
-    const res = await window.api.library.addScanDir(requestedDir);
-    if (!res.success) return res;
+    const res = await libraryClient.addScanDir(dir);
+    if (!res.success || !res.data) return res;
 
-    const newDir = (res.data as string | undefined) ?? requestedDir;
-    if (!newDir) return res;
+    const newDir = res.data as string;
     if (conflictsWithScanDir(newDir)) {
-      await window.api.library.removeScanDir(newDir);
+      await libraryClient.removeScanDir(newDir);
       return { success: false, error: "nested" };
     }
     if (!scanDirs.value.includes(newDir)) {
@@ -203,14 +209,14 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 移除扫描目录 */
   const removeScanDir = async (dir: string): Promise<void> => {
-    await window.api.library.removeScanDir(dir);
+    await libraryClient.removeScanDir(dir);
     scanDirs.value = scanDirs.value.filter((d) => d !== dir);
     // 移除目录取消正在进行的扫描
     if (scanning.value) {
       scanning.value = false;
       scanProgress.value = null;
     }
-    const res = await window.api.library.getTracks();
+    const res = await libraryClient.getTracks();
     if (res.success && res.data) {
       tracks.value = res.data;
       cacheTracks(res.data);
@@ -237,7 +243,7 @@ export const useLibraryStore = defineStore("library", () => {
       if (phase === "done") {
         scanning.value = false;
         scanProgress.value = null;
-        window.api.library.getTracks().then((res) => {
+        libraryClient.getTracks().then((res) => {
           if (res.success && res.data) {
             tracks.value = res.data;
             cacheTracks(res.data);
@@ -258,7 +264,7 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 删除曲目文件并刷新列表 */
   const deleteTracks = async (paths: string[]): Promise<{ deleted: number; failed: number }> => {
-    const res = await window.api.library.deleteTracks(paths);
+    const res = await libraryClient.deleteTracks(paths);
     if (res.success) {
       // 找出被删歌曲的 id，用于裁喜欢
       const pathSet = new Set(paths);
@@ -301,19 +307,19 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 专辑聚合列表 */
   const getAlbumList = async (): Promise<AlbumSummary[]> => {
-    const res = await window.api.library.getAlbums();
+    const res = await libraryClient.getAlbums();
     return res.success && res.data ? res.data : [];
   };
 
   /** 歌手聚合列表 */
   const getArtistList = async (): Promise<ArtistSummary[]> => {
-    const res = await window.api.library.getArtists();
+    const res = await libraryClient.getArtists();
     return res.success && res.data ? res.data : [];
   };
 
   /** 专辑详情 */
   const getAlbumCollection = async (albumName: string): Promise<Collection | null> => {
-    const res = await window.api.library.getAlbumTracks(albumName);
+    const res = await libraryClient.getAlbumTracks(albumName);
     if (!res.success || !res.data?.length) return null;
     const albumTracks = res.data;
     const artistMap = new Map<string, Artist>();
@@ -339,7 +345,7 @@ export const useLibraryStore = defineStore("library", () => {
   const getArtistProfile = async (artistName: string): Promise<ArtistProfile | null> => {
     const name = artistName.trim();
     if (!name) return null;
-    const res = await window.api.library.getArtistTracks(name);
+    const res = await libraryClient.getArtistTracks(name);
     if (!res.success || !res.data?.length) return null;
     const artistTracks = res.data;
     const albumMap = new Map<string, { cover?: string; count: number }>();

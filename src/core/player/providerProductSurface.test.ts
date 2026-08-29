@@ -34,9 +34,9 @@ test("Atom formal search surface freezes QQ Music and Kugou without deleting com
 test("Desktop and Web reuse the library API for local song album and artist search", () => {
   assert.match(searchPageSource, /\{ key: "local", label: t\("search\.source\.local"\) \}/);
   assert.match(searchPageSource, /searchSource\.value === "local".*items\.slice\(0, 3\)/);
-  assert.match(searchPageSource, /window\.api\.library\.searchTracks\(requestKeyword\)/);
-  assert.match(searchPageSource, /window\.api\.library\.getAlbums\(\)/);
-  assert.match(searchPageSource, /window\.api\.library\.getArtists\(\)/);
+  assert.match(searchPageSource, /libraryClient\.searchTracks\(requestKeyword\)/);
+  assert.match(searchPageSource, /libraryClient\.getAlbums\(\)/);
+  assert.match(searchPageSource, /libraryClient\.getArtists\(\)/);
   assert.match(searchPageSource, /source: searchSource, albumId: item\.id/);
   assert.match(searchPageSource, /source: searchSource, artistId: item\.id/);
   assert.doesNotMatch(searchPageSource, /webSearchPlatforms/);
