@@ -3,6 +3,7 @@ import { app, ipcMain, powerMonitor } from "electron";
 import { sendToMain } from "@main/utils/broadcast";
 import { readFileAutoEncoding } from "@main/utils/encoding";
 import { wsBroadcast } from "@main/server/broadcast";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { toMs } from "@main/utils/time";
 import * as mediaService from "@main/services/media";
 import * as nowPlaying from "@main/services/nowPlaying";
@@ -80,7 +81,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         lastfm.onState(state === "playing");
         neteaseScrobble.onState(state === "playing");
         const statusEvent = {
-          type: "status",
+          type: "status" as const,
           data: {
             state,
             position: toDisplayPositionMs(toMs(inst.getPosition())),
@@ -90,8 +91,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
             isFinished: false,
           },
         };
-        sendToMain("player:event", statusEvent);
-        wsBroadcast(statusEvent);
+        publishCoreControlEvent(statusEvent);
         break;
       }
       case "ended": {
@@ -668,7 +668,7 @@ export const registerPlayerIpc = (): void => {
             if (0 <= event.volume && event.volume <= 1) {
               inst.setVolume(event.volume);
               mediaService.setVolume(event.volume);
-              sendToMain("player:event", {
+              publishCoreControlEvent({
                 type: "status",
                 data: {
                   state: inst.getStatus().state as PlayerState,
@@ -690,7 +690,7 @@ export const registerPlayerIpc = (): void => {
               inst.setSpeed(event.rate);
               mediaService.setRate(event.rate);
               nowPlaying.onSpeedChange(event.rate);
-              sendToMain("player:event", {
+              publishCoreControlEvent({
                 type: "status",
                 data: {
                   state: inst.getStatus().state as PlayerState,
@@ -737,11 +737,17 @@ export const registerPlayerIpc = (): void => {
     resetPlayer();
     stopDeviceMonitoring();
     const stoppedEvent = {
-      type: "status",
-      data: { state: "stopped", position: 0, duration: 0, volume: 1, speed: 1, isFinished: false },
+      type: "status" as const,
+      data: {
+        state: "stopped" as const,
+        position: 0,
+        duration: 0,
+        volume: 1,
+        speed: 1,
+        isFinished: false,
+      },
     };
-    sendToMain("player:event", stoppedEvent);
-    wsBroadcast(stoppedEvent);
+    publishCoreControlEvent(stoppedEvent);
   };
   powerMonitor.on("resume", resumeHandler);
   // 退出前停止设备监听、释放播放器并清理进程级 Direct 输入

@@ -37,6 +37,7 @@ import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
+import { subscribeCorePlayerProjection } from "@/core/controlEventClient";
 import { sessionClient } from "@/core/sessionClient";
 import { playerClient } from "@/core/playerClient";
 import { libraryClient } from "@/core/libraryClient";
@@ -678,6 +679,7 @@ export const moveInQueue = async (fromIndex: number, toIndex: number): Promise<v
 };
 
 let unsubscribe: (() => void) | null = null;
+let unsubscribeCoreProjection: (() => void) | null = null;
 let initialized = false;
 
 /** 初始化播放器 */
@@ -796,9 +798,11 @@ export const initPlayer = async (): Promise<void> => {
       await switchDevice(migratedOutput);
     }
   }
-  // 先订阅事件，确保 load 触发播放后 position 事件能被接收
+  // 先订阅事件，确保 load 触发播放后 projection / position 事件都能被接收。
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
+  unsubscribeCoreProjection?.();
+  unsubscribeCoreProjection = subscribeCorePlayerProjection(handleEvent);
   // 安装播放统计累加器
   installPlayStats();
   // 订阅主进程下发的歌词偏移变化
@@ -872,5 +876,9 @@ export const disposePlayer = (): void => {
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;
+  }
+  if (unsubscribeCoreProjection) {
+    unsubscribeCoreProjection();
+    unsubscribeCoreProjection = null;
   }
 };

@@ -7,6 +7,7 @@ import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
 import { requestReinit } from "@main/services/device";
 import { wsBroadcast } from "@main/server/broadcast";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
 import { toMs } from "@main/utils/time";
 import { playerLog } from "@main/utils/logger";
@@ -23,7 +24,7 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         onHeadlessPlayerState(state);
         nowPlaying.onPlayStateChange(state);
         neteaseScrobble.onState(state === "playing");
-        wsBroadcast({
+        publishCoreControlEvent({
           type: "status",
           data: {
             state,

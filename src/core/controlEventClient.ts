@@ -1,4 +1,8 @@
-import type { CoreControlEvent, CoreEventsApi } from "@shared/types/coreEvents";
+import type {
+  CoreControlEvent,
+  CoreEventsApi,
+  CorePlayerProjectionEvent,
+} from "@shared/types/coreEvents";
 import type { PlaybackSessionSnapshot, PlayerStatus, Track } from "@shared/types/player";
 import { controlAssetUrl } from "./controlAssets";
 import { ensureCoreProtocolCompatible, request } from "./controlClient";
@@ -24,19 +28,52 @@ const mapTrack = (track: Track): Track => ({
   coverOriginal: controlAssetUrl(track.coverOriginal),
 });
 
-export const isCoreControlEvent = (event: ControlEvent): event is CoreControlEvent =>
+const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot => ({
+  ...session,
+  queue: session.queue.map((item) => ({ ...item, track: mapTrack(item.track) })),
+  originalQueue:
+    session.originalQueue?.map((item) => ({ ...item, track: mapTrack(item.track) })) ?? null,
+  current: session.current ? mapTrack(session.current) : null,
+});
+
+export const isCorePlayerProjectionEvent = (
+  event: ControlEvent,
+): event is CorePlayerProjectionEvent =>
   event.data !== undefined &&
-  (event.type === "providerSessions" ||
-    event.type === "libraryScanProgress" ||
-    event.type === "downloadState" ||
-    event.type === "downloadProgress");
+  (event.type === "status" ||
+    event.type === "trackLoaded" ||
+    event.type === "error" ||
+    event.type === "deviceChanged" ||
+    event.type === "session");
+
+export const isCoreControlEvent = (event: ControlEvent): event is CoreControlEvent =>
+  isCorePlayerProjectionEvent(event) ||
+  (event.data !== undefined &&
+    (event.type === "providerSessions" ||
+      event.type === "libraryScanProgress" ||
+      event.type === "downloadState" ||
+      event.type === "downloadProgress"));
 
 const projectCoreEvent = (event: CoreControlEvent): CoreControlEvent => {
-  if (event.type !== "downloadState") return event;
-  return {
-    ...event,
-    data: { ...event.data, track: mapTrack(event.data.track) },
-  };
+  if (event.type === "downloadState") {
+    return { ...event, data: { ...event.data, track: mapTrack(event.data.track) } };
+  }
+  if (event.type === "session") {
+    return { ...event, data: mapSession(event.data) };
+  }
+  if (event.type === "trackLoaded") {
+    return {
+      ...event,
+      data: {
+        ...event.data,
+        track: mapTrack(event.data.track),
+        mediaInfo: event.data.mediaInfo
+          ? { ...event.data.mediaInfo, cover: controlAssetUrl(event.data.mediaInfo.cover) }
+          : undefined,
+      },
+    };
+  }
+  return event;
 };
 
 const connectDesktop = (): (() => void) => {
@@ -68,9 +105,9 @@ const connectWeb = (): (() => void) => {
         request<PlayerStatus>("/status"),
       ]);
       if (disposed || ws?.readyState !== WebSocket.OPEN) return;
-      emit({ type: "session", data: session });
+      emit(projectCoreEvent({ type: "session", data: session }));
       emit({ type: "status", data: status });
-      emit({ type: "deviceChanged" });
+      emit({ type: "deviceChanged", data: { defaultDevice: null } });
     } catch {
       // 服务启动窗口或短暂断线由后续实时事件/重连继续恢复。
     }
@@ -194,4 +231,12 @@ export const subscribeCoreControlEvent = <T extends CoreEventType>(
     if (event.type === type && event.data !== undefined) {
       callback(event.data as CoreEventOf<T>["data"]);
     }
+  });
+
+/** 订阅已从 Host directive/recovery event 中拆出的低频 Player projection。 */
+export const subscribeCorePlayerProjection = (
+  callback: (event: CorePlayerProjectionEvent) => void,
+): (() => void) =>
+  subscribeControlEvent((event) => {
+    if (isCorePlayerProjectionEvent(event)) callback(event);
   });

@@ -24,11 +24,14 @@ describe("Core Control event client", () => {
       value: { coreEvents: { onEvent } },
     });
 
-    const { subscribeCoreControlEvent } = await import("./controlEventClient");
+    const { subscribeCoreControlEvent, subscribeCorePlayerProjection } =
+      await import("./controlEventClient");
     const provider = vi.fn();
     const progress = vi.fn();
+    const playerProjection = vi.fn();
     const offProvider = subscribeCoreControlEvent("providerSessions", provider);
     const offProgress = subscribeCoreControlEvent("downloadProgress", progress);
+    const offPlayer = subscribeCorePlayerProjection(playerProjection);
 
     expect(onEvent).toHaveBeenCalledTimes(1);
     emit({
@@ -40,13 +43,26 @@ describe("Core Control event client", () => {
       },
     });
     emit({ type: "downloadProgress", data: { taskId: "task-1", received: 10, total: 100 } });
+    emit({
+      type: "status",
+      data: {
+        state: "paused",
+        position: 1000,
+        duration: 2000,
+        volume: 1,
+        speed: 1,
+        isFinished: false,
+      },
+    });
 
     expect(provider).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledWith({ taskId: "task-1", received: 10, total: 100 });
+    expect(playerProjection).toHaveBeenCalledWith(expect.objectContaining({ type: "status" }));
 
     offProvider();
-    expect(unsubscribe).not.toHaveBeenCalled();
     offProgress();
+    expect(unsubscribe).not.toHaveBeenCalled();
+    offPlayer();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

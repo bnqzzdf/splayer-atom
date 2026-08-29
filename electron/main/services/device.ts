@@ -1,4 +1,4 @@
-import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { store } from "@main/store";
 import { isWin } from "@main/utils/config";
 import { playerLog } from "@main/utils/logger";
@@ -94,7 +94,7 @@ const handleDeviceChange = (notifyListChange: boolean): void => {
     if (lastDefaultDevice === undefined) {
       lastDefaultDevice = currentDefault;
       if (notifyListChange) {
-        publishDesktopEvent("player:event", {
+        publishCoreControlEvent({
           type: "deviceChanged",
           data: { defaultDevice: currentDefault },
         });
@@ -115,7 +115,7 @@ const handleDeviceChange = (notifyListChange: boolean): void => {
       playerLog.info(`默认音频设备变化: ${previousDefault} → ${currentDefault}`);
     }
     if (notifyListChange || decision.defaultChanged) {
-      publishDesktopEvent("player:event", {
+      publishCoreControlEvent({
         type: "deviceChanged",
         data: { defaultDevice: currentDefault },
       });

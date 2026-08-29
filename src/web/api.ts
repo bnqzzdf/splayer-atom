@@ -21,7 +21,11 @@ import type {
   Track,
 } from "@shared/types/player";
 import { request, serverAssetUrl, webAssetUrl } from "./client";
-import { isCoreControlEvent, subscribeControlEvent } from "@/core/controlEventClient";
+import {
+  isCoreControlEvent,
+  isCorePlayerProjectionEvent,
+  subscribeControlEvent,
+} from "@/core/controlEventClient";
 import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
 import { libraryClient } from "@/core/libraryClient";
@@ -370,7 +374,7 @@ const playerApi: PlayerApi = {
   dispatch: () => {},
   onEvent: (callback) =>
     subscribeEvent((event) => {
-      if (event.type === "libraryScanProgress") return;
+      if (isCoreControlEvent(event) && !isCorePlayerProjectionEvent(event)) return;
       if (event.type === "session") {
         callback({ type: "session", data: mapSession(event.data as PlaybackSessionSnapshot) });
         return;

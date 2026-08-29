@@ -17,8 +17,7 @@ import {
   toDisplayDurationMs,
 } from "@main/services/playerTimeline";
 import * as songCache from "@main/services/songCache";
-import { wsBroadcast } from "@main/server/broadcast";
-import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import {
   notifyPlaybackTrackLoaded,
   setPlaybackPresentationCover,
@@ -80,7 +79,7 @@ export const loadPlayerSource = async (
   try {
     const inst = getPlayer();
     const loadingEvent = {
-      type: "status",
+      type: "status" as const,
       data: {
         state: "loading" as const,
         position: 0,
@@ -90,8 +89,7 @@ export const loadPlayerSource = async (
         isFinished: false,
       },
     };
-    publishDesktopEvent("player:event", loadingEvent);
-    wsBroadcast(loadingEvent);
+    publishCoreControlEvent(loadingEvent);
 
     const remoteCover =
       authoritative && authoritative.source !== "local"

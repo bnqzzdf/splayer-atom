@@ -36,10 +36,9 @@ import {
   toDisplayPositionMs,
   toEnginePositionMs,
 } from "@main/services/playerTimeline";
-import { wsBroadcast } from "@main/server/broadcast";
 import { isHeadlessMode } from "@main/runtime";
 import { store } from "@main/store";
-import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { playerLog } from "@main/utils/logger";
 import { toMs } from "@main/utils/time";
 import { ErrorCode } from "@shared/types/errors";
@@ -88,8 +87,7 @@ class CorePlaybackLoadError extends Error {
 
 const publishPlaybackError = (code: ErrorCode): void => {
   const event = { type: "error" as const, data: { error: code } };
-  publishDesktopEvent("player:event", event);
-  wsBroadcast(event);
+  publishCoreControlEvent(event);
 };
 
 /** Linux headless Diretta Host requires root privileges in the supported deployment model. */
@@ -124,8 +122,7 @@ const snapshot = (): PlaybackSessionSnapshot => ({
 const publish = (): void => {
   const data = snapshot();
   savePlaybackSession(data);
-  publishDesktopEvent("player:event", { type: "session", data });
-  wsBroadcast({ type: "session", data });
+  publishCoreControlEvent({ type: "session", data });
 };
 
 const clearAutoCloseTimer = (): void => {
@@ -184,8 +181,7 @@ const publishTrackLoaded = (
       mediaInfo,
     },
   };
-  publishDesktopEvent("player:event", event);
-  wsBroadcast(event);
+  publishCoreControlEvent(event);
 };
 
 const scheduleNextPlaybackPreload = (): void => {
@@ -941,7 +937,7 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
     }
 
     store.set("player.outputDevice", deviceId);
-    wsBroadcast({
+    publishCoreControlEvent({
       type: "deviceChanged",
       data: { defaultDevice: player.getDefaultDeviceName() ?? null },
     });
