@@ -8,5 +8,8 @@ export const getRuntimeMode = (): AtomRuntimeMode => (isHeadless() ? "headless" 
 export const isHeadlessMode = isHeadless;
 
 /** External control is always reachable on LAN in headless mode. */
-export const getHeadlessServerPort = (): number =>
-  process.env.ELECTRON_RENDERER_URL ? 14559 : 14558;
+export const getHeadlessServerPort = (): number => {
+  const configured = Number(process.env.ATOM_SERVER_PORT);
+  if (Number.isInteger(configured) && configured >= 1 && configured <= 65535) return configured;
+  return process.env.ELECTRON_RENDERER_URL ? 14559 : 14558;
+};

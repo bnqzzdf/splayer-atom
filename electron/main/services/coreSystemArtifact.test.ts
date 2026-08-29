@@ -14,6 +14,26 @@ const stageSource = readFileSync(
   new URL("../../../scripts/atom/stage-core-system.ts", import.meta.url),
   "utf8",
 );
+const buildSource = readFileSync(
+  new URL("../../../scripts/atom/build-core-system.ts", import.meta.url),
+  "utf8",
+);
+const webConfigSource = readFileSync(
+  new URL("../../../scripts/atom/vite.web.config.ts", import.meta.url),
+  "utf8",
+);
+const artifactCheckSource = readFileSync(
+  new URL("../../../scripts/atom/check-core-artifact.ts", import.meta.url),
+  "utf8",
+);
+const launcherSource = readFileSync(
+  new URL("../../../scripts/atom/core-system/splayer-atom-core", import.meta.url),
+  "utf8",
+);
+const serviceSource = readFileSync(
+  new URL("../../../scripts/atom/core-system/splayer-atom-core.service", import.meta.url),
+  "utf8",
+);
 const coreEntrySource = readFileSync(new URL("../core-node/index.ts", import.meta.url), "utf8");
 const scannerSource = readFileSync(new URL("./scanner.ts", import.meta.url), "utf8");
 
@@ -25,6 +45,14 @@ test("Core production build targets Node 24 and keeps only better-sqlite3 extern
     viteSource,
     /"electron-log": resolve\(root, "node_modules\/electron-log\/node\.js"\)/,
   );
+});
+
+test("Core Web build reuses the Desktop renderer config without building Electron main/preload", () => {
+  assert.match(webConfigSource, /ATOM_CORE_WEB_BUILD = "1"/);
+  assert.match(webConfigSource, /electronConfig as \{ renderer: UserConfig \}/);
+  assert.match(webConfigSource, /out", "renderer"/);
+  assert.match(webConfigSource, /index: resolve\(root, "index\.html"\)/);
+  assert.doesNotMatch(webConfigSource, /electron\/main|electron\/preload/);
 });
 
 test("Core build audit rejects Electron and unexpected package dependencies", () => {
@@ -42,7 +70,42 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /prebuilds", "linux-x64\.node"/);
   assert.match(stageSource, /audio-engine\.node/);
   assert.match(stageSource, /AGPL license/);
+  assert.match(stageSource, /core-system-linux-x64\.tar\.gz/);
+  assert.match(stageSource, /--sort=name/);
+  assert.match(stageSource, /--mtime=@0/);
   assert.doesNotMatch(stageSource, /pnpm\s+(?:install|deploy)|npm\s+install|postinstall/);
+});
+
+test("formal Core system build always rebuilds before staging and checks the final tar", () => {
+  const nativeBuild = buildSource.indexOf("build-core-native.ts");
+  const coreBuild = buildSource.indexOf("vite.core.config.ts");
+  const webBuild = buildSource.indexOf("vite.web.config.ts");
+  const audit = buildSource.indexOf("check-core-build.mjs");
+  const stage = buildSource.indexOf("stage-core-system.ts");
+  const artifact = buildSource.indexOf("check-core-artifact.ts");
+  assert.ok(nativeBuild < coreBuild);
+  assert.ok(coreBuild < webBuild);
+  assert.ok(webBuild < audit);
+  assert.ok(audit < stage);
+  assert.ok(stage < artifact);
+});
+
+test("system-runtime launcher and systemd unit execute the same Core entry", () => {
+  assert.match(launcherSource, /ATOM_NODE_BIN/);
+  assert.match(launcherSource, /runtime\/bin\/node/);
+  assert.match(launcherSource, /app\/index\.js/);
+  assert.match(serviceSource, /WorkingDirectory=\/opt\/splayer-atom-core/);
+  assert.match(serviceSource, /ExecStart=\/opt\/splayer-atom-core\/bin\/splayer-atom-core/);
+  assert.match(serviceSource, /Diretta Host.*root/);
+});
+
+test("final tar artifact smoke starts the extracted Core on an isolated port", () => {
+  assert.match(artifactCheckSource, /ATOM_NODE_BIN: process\.execPath/);
+  assert.match(artifactCheckSource, /ATOM_SERVER_PORT: String\(port\)/);
+  assert.match(artifactCheckSource, /\/api\/info/);
+  assert.match(artifactCheckSource, /\/api\/session/);
+  assert.match(artifactCheckSource, /\/api\/library\/count/);
+  assert.match(artifactCheckSource, /child\.kill\("SIGTERM"\)/);
 });
 
 test("Core artifact paths are bundle-relative and scanner stays Electron-free", () => {

@@ -11,6 +11,8 @@ import RekaResolver from "reka-ui/resolver";
 import Components from "unplugin-vue-components/vite";
 import pkg from "./package.json" with { type: "json" };
 
+const isAtomCoreWebBuild = process.env.ATOM_CORE_WEB_BUILD === "1";
+
 /** 获取当前 git 提交 */
 const getGitCommit = (): string => {
   try {
@@ -123,8 +125,9 @@ export default defineConfig({
       UnoCSS(),
       AutoImport({
         imports: ["vue", "pinia", "vue-router", "@vueuse/core", "vue-i18n"],
+        dts: isAtomCoreWebBuild ? false : undefined,
         eslintrc: {
-          enabled: true,
+          enabled: !isAtomCoreWebBuild,
           filepath: "./auto-eslint.mjs",
         },
       }),
@@ -137,6 +140,7 @@ export default defineConfig({
       }),
       Components({
         dirs: ["src/components"],
+        dts: isAtomCoreWebBuild ? false : undefined,
         resolvers: [RekaResolver(), IconsResolver({ prefix: "icon", customCollections: ["sp"] })],
       }),
     ],

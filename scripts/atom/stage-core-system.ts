@@ -1,5 +1,13 @@
 import { createRequire } from "node:module";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -12,6 +20,9 @@ const rendererDir = path.join(root, "out", "renderer");
 const nativeBuildFile = path.join(root, "out", "native", "build.json");
 const audioEngineFile = path.join(root, "out", "native", "audio-engine.node");
 const require = createRequire(import.meta.url);
+const args = new Set(process.argv.slice(2));
+const archive = args.delete("--archive");
+if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 
 const fail = (message: string): never => {
   throw new Error(`[CoreStage] ${message}`);
@@ -72,6 +83,17 @@ mkdirSync(path.join(outputDir, "native"), { recursive: true });
 cpSync(audioEngineFile, path.join(outputDir, "native", "audio-engine.node"));
 cpSync(nativeBuildFile, path.join(outputDir, "native", "build.json"));
 cpSync(path.join(root, "LICENSE"), path.join(outputDir, "LICENSE"));
+mkdirSync(path.join(outputDir, "bin"), { recursive: true });
+cpSync(
+  path.join(root, "scripts", "atom", "core-system", "splayer-atom-core"),
+  path.join(outputDir, "bin", "splayer-atom-core"),
+);
+chmodSync(path.join(outputDir, "bin", "splayer-atom-core"), 0o755);
+mkdirSync(path.join(outputDir, "service"), { recursive: true });
+cpSync(
+  path.join(root, "scripts", "atom", "core-system", "splayer-atom-core.service"),
+  path.join(outputDir, "service", "splayer-atom-core.service"),
+);
 
 const stagedBetterSqlite = path.join(outputDir, "node_modules", "better-sqlite3");
 mkdirSync(path.join(stagedBetterSqlite, "prebuilds"), { recursive: true });
@@ -119,3 +141,27 @@ if (smoke.status !== 0 || smoke.signal) {
 
 console.log(`[CoreStage] PASS ${outputDir}`);
 console.log(smoke.stdout.trim());
+
+if (archive) {
+  const archiveFile = path.join(root, "out", "core-system-linux-x64.tar.gz");
+  rmSync(archiveFile, { force: true });
+  const tar = spawnSync(
+    "tar",
+    [
+      "--sort=name",
+      "--mtime=@0",
+      "--owner=0",
+      "--group=0",
+      "--numeric-owner",
+      "-czf",
+      archiveFile,
+      "core-system",
+    ],
+    { cwd: path.join(root, "out"), encoding: "utf8" },
+  );
+  if (tar.error) throw tar.error;
+  if (tar.status !== 0 || tar.signal) {
+    fail(`tar.gz 生成失败: ${`${tar.stdout ?? ""}${tar.stderr ?? ""}`.trim()}`);
+  }
+  console.log(`[CoreStage] ARCHIVE ${archiveFile}`);
+}

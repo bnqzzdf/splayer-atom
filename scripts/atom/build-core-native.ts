@@ -8,6 +8,7 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 const crateDir = path.join(root, "native", "audio-engine");
 const outputDir = path.join(root, "out", "native");
 const targetDir = path.join(root, "target", "core-audio");
+const napiBin = path.join(root, "node_modules", ".bin", "napi");
 
 const cargoBinDir = path.join(
   process.env.CARGO_HOME?.trim() || path.join(os.homedir(), ".cargo"),
@@ -48,7 +49,7 @@ const napiArgs = [
 if (!isDev) napiArgs.push("--release");
 
 console.log(`[CoreNative] 构建 audio-engine (${isDev ? "debug" : "release"}, ALSA-only)`);
-const build = spawnSync("napi", napiArgs, {
+const build = spawnSync(napiBin, napiArgs, {
   cwd: crateDir,
   env: childEnv,
   stdio: "inherit",

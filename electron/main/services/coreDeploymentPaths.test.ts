@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getHeadlessServerPort } from "../runtime";
 
 const environmentSource = readFileSync(
   new URL("../atom/runtime/environment.ts", import.meta.url),
@@ -27,6 +28,28 @@ test("Core cache defaults to the Linux XDG cache tree without changing Desktop d
   assert.match(environmentSource, /\.cache/);
   assert.match(environmentSource, /"splayer-atom"/);
   assert.match(pathsSource, /runtimeEnvironment\.cacheDir \?\? path\.join\(dataRoot, "cache"\)/);
+});
+
+test("Core deployment can override the Headless listen port without changing defaults", () => {
+  const previousPort = process.env.ATOM_SERVER_PORT;
+  const previousRendererUrl = process.env.ELECTRON_RENDERER_URL;
+  try {
+    Reflect.deleteProperty(process.env, "ATOM_SERVER_PORT");
+    Reflect.deleteProperty(process.env, "ELECTRON_RENDERER_URL");
+    assert.equal(getHeadlessServerPort(), 14558);
+    Reflect.set(process.env, "ATOM_SERVER_PORT", "24680");
+    assert.equal(getHeadlessServerPort(), 24680);
+    Reflect.set(process.env, "ATOM_SERVER_PORT", "70000");
+    assert.equal(getHeadlessServerPort(), 14558);
+  } finally {
+    if (previousPort === undefined) Reflect.deleteProperty(process.env, "ATOM_SERVER_PORT");
+    else Reflect.set(process.env, "ATOM_SERVER_PORT", previousPort);
+    if (previousRendererUrl === undefined) {
+      Reflect.deleteProperty(process.env, "ELECTRON_RENDERER_URL");
+    } else {
+      Reflect.set(process.env, "ELECTRON_RENDERER_URL", previousRendererUrl);
+    }
+  }
 });
 
 test("Core uses stdout stderr logging while Desktop keeps file logging", () => {
