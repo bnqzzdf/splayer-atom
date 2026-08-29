@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { ErrorCode } from "@shared/types/errors";
 import type { PluginQuality } from "@shared/types/plugin";
 import type { Track } from "@shared/types/player";
+import { buildPluginPlaybackMusicInfo, pluginPlaybackSource } from "@shared/utils/pluginPlayback";
 import { playbackSourceCacheKey } from "@main/services/playbackSourcePolicy";
 import { callNetease } from "@main/apis/netease";
 import { callQobuz } from "@main/apis/qobuz";
@@ -9,6 +10,8 @@ import { callTidal } from "@main/apis/tidal";
 import { store } from "@main/store";
 import * as songCache from "@main/services/songCache";
 import { withStreamingAdapter } from "@main/services/streaming/connection";
+import { pluginRegistry } from "@main/plugins/registry";
+import { resolveUrl as resolvePluginUrl } from "@main/plugins/router";
 
 const NETEASE_LEVEL: Record<PluginQuality, string> = {
   lq: "standard",
@@ -36,7 +39,7 @@ const TIDAL_QUALITY: Record<PluginQuality, string> = {
 
 export interface ResolvedPlaybackSource {
   source: string;
-  provider: "local" | "cache" | "streaming" | "official" | "trial";
+  provider: "local" | "cache" | "streaming" | "official" | "plugin" | "trial";
   cacheAfterLoad?: () => Promise<string | null>;
 }
 
@@ -117,6 +120,59 @@ const resolveStreaming = async (
   };
 };
 
+const resolvePluginCompatibility = async (
+  track: Track,
+  quality: PluginQuality,
+  cacheKey: string | null,
+): Promise<ResolvedPlaybackSource> => {
+  const pluginSource = pluginPlaybackSource(track.source);
+  if (!pluginSource) {
+    throw sourceError(
+      ErrorCode.NO_PLUGIN_AVAILABLE,
+      `No inherited plugin source mapping for ${track.source}`,
+    );
+  }
+  const candidates = pluginRegistry
+    .listInfo()
+    .filter(
+      (info) =>
+        info.enabled &&
+        info.status.state === "ready" &&
+        info.status.sources[pluginSource]?.actions.includes("musicUrl"),
+    );
+  if (candidates.length === 0) {
+    throw sourceError(
+      ErrorCode.NO_PLUGIN_AVAILABLE,
+      `No ready musicUrl plugin for inherited ${track.source} track: ${track.id}`,
+    );
+  }
+
+  const musicInfo = buildPluginPlaybackMusicInfo(track, pluginSource);
+  for (const plugin of candidates) {
+    try {
+      const resolved = await resolvePluginUrl({
+        pluginId: plugin.manifest.id,
+        source: pluginSource,
+        quality,
+        musicInfo,
+      });
+      if (!resolved.url) continue;
+      return {
+        source: resolved.url,
+        provider: "plugin",
+        cacheAfterLoad: cacheAfterLoad(track, cacheKey, resolved.url),
+      };
+    } catch {
+      // 兼容上游多插件兜底：单插件失败不阻止尝试下一候选。
+      continue;
+    }
+  }
+  throw sourceError(
+    ErrorCode.URL_RESOLVE_FAILED,
+    `Inherited plugin source failed for ${track.source} track: ${track.id}`,
+  );
+};
+
 const resolveNetease = async (
   track: Track,
   quality: PluginQuality,
@@ -161,6 +217,30 @@ const resolveNetease = async (
     provider: isTrial ? "trial" : "official",
     cacheAfterLoad: isTrial ? undefined : cacheAfterLoad(track, cacheKey, source),
   };
+};
+
+const resolveNeteaseWithPluginFallback = async (
+  track: Track,
+  quality: PluginQuality,
+  cacheKey: string | null,
+): Promise<ResolvedPlaybackSource> => {
+  let officialError: unknown = null;
+  let trial: ResolvedPlaybackSource | null = null;
+  try {
+    const official = await resolveNetease(track, quality, cacheKey);
+    if (official.provider !== "trial") return official;
+    trial = official;
+  } catch (error) {
+    officialError = error;
+  }
+
+  try {
+    return await resolvePluginCompatibility(track, quality, cacheKey);
+  } catch (pluginError) {
+    if (trial) return trial;
+    if (officialError) throw officialError;
+    throw pluginError;
+  }
 };
 
 const resolveQobuz = async (
@@ -221,12 +301,12 @@ export const resolvePlaybackSource = async (track: Track): Promise<ResolvedPlayb
   if (cached) return cached;
 
   if (track.source === "streaming") return resolveStreaming(track, cacheKey);
-  if (track.source === "netease") return resolveNetease(track, quality, cacheKey);
+  if (track.source === "netease") return resolveNeteaseWithPluginFallback(track, quality, cacheKey);
   if (track.source === "qobuz") return resolveQobuz(track, quality, cacheKey);
   if (track.source === "tidal") return resolveTidal(track, quality, cacheKey);
+  if (track.source === "qqmusic" || track.source === "kugou") {
+    return resolvePluginCompatibility(track, quality, cacheKey);
+  }
 
-  throw sourceError(
-    ErrorCode.NO_PLUGIN_AVAILABLE,
-    `Core playback source is not available for inherited ${track.source} track: ${track.id}`,
-  );
+  throw sourceError(ErrorCode.NO_PLUGIN_AVAILABLE, `No Core source resolver for ${track.source}`);
 };

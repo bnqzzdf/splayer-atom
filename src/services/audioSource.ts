@@ -1,5 +1,6 @@
 import type { Track, TrackSource } from "@shared/types/player";
 import type { Platform } from "@shared/types/platform";
+import { buildPluginPlaybackMusicInfo, pluginPlaybackSource } from "@shared/utils/pluginPlayback";
 import type { QualityLevel } from "@/utils/quality";
 import { useStreamingStore } from "@/stores/streaming";
 import { useSettingsStore } from "@/stores/settings";
@@ -13,14 +14,6 @@ import { resolveTidalUrl } from "@/apis/song/tidal";
 import { ErrorCode } from "@shared/types/errors";
 import { handleError } from "@/utils/errors";
 
-/** 在线平台 source → 插件 source key */
-const PLATFORM_TO_PLUGIN_SOURCE: Partial<Record<Platform, string>> = {
-  netease: "wy",
-  qqmusic: "tx",
-  kugou: "kg",
-  qobuz: "qobuz",
-  tidal: "tidal",
-};
 
 /** 解析选项 */
 export interface ResolveTrackSourceOptions {
@@ -90,7 +83,7 @@ export const resolveByPlugin = async (
 ): Promise<OnlineResolveResult> => {
   const fail = (errorCode: ErrorCode): OnlineResolveResult => ({ ok: false, errorCode });
   if (!isOnlinePlatform(track.source)) return fail(ErrorCode.URL_RESOLVE_FAILED);
-  const pluginSource = PLATFORM_TO_PLUGIN_SOURCE[track.source];
+  const pluginSource = pluginPlaybackSource(track.source);
   if (!pluginSource) return fail(ErrorCode.URL_RESOLVE_FAILED);
   const skip = new Set(skipPluginIds);
   const plugins = usePluginsStore();
@@ -102,39 +95,7 @@ export const resolveByPlugin = async (
       info.status.sources[pluginSource]?.actions.includes("musicUrl"),
   );
   if (candidates.length === 0) return fail(ErrorCode.NO_PLUGIN_AVAILABLE);
-  // 补齐 id / songmid / songId / hash / albumId 等字段
-  const totalSec = track.duration > 0 ? Math.round(track.duration / 1000) : 0;
-  const interval =
-    totalSec > 0
-      ? `${Math.floor(totalSec / 60)
-          .toString()
-          .padStart(2, "0")}:${(totalSec % 60).toString().padStart(2, "0")}`
-      : null;
-  const singer = track.artists.map((artist) => artist.name).join("/");
-  const songId = track.id;
-  const isHash =
-    typeof songId === "string" && songId.length === 32 && /^[0-9a-fA-F]{32}$/.test(songId);
-  const hash = isHash || track.source === "kugou" ? songId : "";
-  const musicInfo = {
-    id: songId,
-    songmid: songId,
-    songId,
-    name: track.title,
-    singer,
-    source: pluginSource,
-    interval,
-    img: track.cover ?? null,
-    hash,
-    albumId: track.album?.id ?? "",
-    albumName: track.album?.name ?? "",
-    meta: {
-      songId,
-      albumName: track.album?.name ?? "",
-      albumId: track.album?.id ?? "",
-      picUrl: track.cover ?? null,
-      hash,
-    },
-  };
+  const musicInfo = buildPluginPlaybackMusicInfo(track, pluginSource);
   for (const plugin of candidates) {
     try {
       const res = await window.api.plugins.resolveUrl({
