@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CoverItem } from "@/types/artist";
+import type { ControlAction } from "@/actions/model";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
 
@@ -28,6 +29,8 @@ export interface CoverListProps {
   hasMore?: boolean;
   /** 触底加载中 */
   loadingMore?: boolean;
+  /** 为每张卡片提供共享业务动作；不提供时保持纯点击卡片。 */
+  getActions?: (item: CoverItem) => ControlAction[];
 }
 
 const props = withDefaults(defineProps<CoverListProps>(), {
@@ -54,8 +57,11 @@ const virtualPaddingBottom = computed(() =>
 
 const emit = defineEmits<{
   click: [item: CoverItem];
+  action: [actionId: string, item: CoverItem];
   reachBottom: [];
 }>();
+
+const actionsFor = (item: CoverItem): ControlAction[] => props.getActions?.(item) ?? [];
 
 const virtualListRef = ref<SVirtualListExposed | null>(null);
 const scrollEl = computed(() => virtualListRef.value?.scrollRef ?? null);
@@ -155,7 +161,9 @@ const getRowKey = (row: Row): string => row.id;
           :type="type"
           :rounded="rounded"
           :fallback="fallback"
+          :actions="actionsFor(item)"
           @click="emit('click', item)"
+          @action="emit('action', $event, item)"
         />
       </div>
     </template>
@@ -177,7 +185,9 @@ const getRowKey = (row: Row): string => row.id;
       :type="type"
       :rounded="rounded"
       :fallback="fallback"
+      :actions="actionsFor(item)"
       @click="emit('click', item)"
+      @action="emit('action', $event, item)"
     />
   </div>
 </template>

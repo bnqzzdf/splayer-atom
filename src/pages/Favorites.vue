@@ -2,7 +2,9 @@
 defineOptions({ name: "Favorites" });
 
 import type { CoverItem } from "@/types/artist";
+import { createControlAction, type ControlAction } from "@/actions/model";
 import { useUserStore } from "@/stores/user";
+import { toast } from "@/composables/useToast";
 import {
   albumsToCoverItems,
   artistsToCoverItems,
@@ -86,6 +88,28 @@ const handleClick = (item: CoverItem): void => {
     router.push(`/collection/netease/${activeTab.value}/${encodeURIComponent(item.id)}`);
   }
 };
+
+/** 收藏卡片只描述取消收藏语义，具体 provider 调用仍复用 user store。 */
+const favoriteActions = (_item: CoverItem): ControlAction[] => [
+  createControlAction({
+    id: "unsubscribe",
+    label: t("collection.unsubscribe"),
+    icon: markRaw(IconMaterialSymbolsFavoriteOutline),
+    coreCommand: `provider.${activeTab.value}.subscribe`,
+  }),
+];
+
+const handleFavoriteAction = async (actionId: string, item: CoverItem): Promise<void> => {
+  if (actionId !== "unsubscribe") return;
+  const type = activeTab.value;
+  try {
+    if (type === "playlist") await user.togglePlaylistSubscribe(item.id, false);
+    else if (type === "album") await user.toggleAlbumSubscribe(item.id, false);
+    else await user.toggleArtistSubscribe(item.id, false);
+  } catch (error) {
+    toast.error(error instanceof Error && error.message ? error.message : t("liked.toast.failed"));
+  }
+};
 </script>
 
 <template>
@@ -126,7 +150,9 @@ const handleClick = (item: CoverItem): void => {
           :padding-x="20"
           :padding-top="8"
           :padding-bottom="20"
+          :get-actions="favoriteActions"
           @click="handleClick"
+          @action="handleFavoriteAction"
         />
       </div>
       <div v-else key="empty" class="flex-1 flex items-center justify-center">

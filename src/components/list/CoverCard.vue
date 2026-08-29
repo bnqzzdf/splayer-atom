@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { CoverItem } from "@/types/artist";
+import type { ControlAction } from "@/actions/model";
+import { controlActionsToMenuItems } from "@/actions/menu";
 import artistFallback from "@/assets/images/artist.jpg";
 
 export interface CoverCardProps {
@@ -11,6 +13,8 @@ export interface CoverCardProps {
   rounded?: string;
   /** 封面占位图 */
   fallback?: string;
+  /** 当前卡片可用的共享业务动作。 */
+  actions?: ControlAction[];
 }
 
 const props = withDefaults(defineProps<CoverCardProps>(), {
@@ -18,8 +22,10 @@ const props = withDefaults(defineProps<CoverCardProps>(), {
   rounded: "rounded-xl",
 });
 
-defineEmits<{ click: [] }>();
+const emit = defineEmits<{ click: []; action: [actionId: string] }>();
 
+const menuItems = computed(() => controlActionsToMenuItems(props.actions ?? []));
+const hasActions = computed(() => menuItems.value.some((item) => item.show !== false));
 const coverRounded = computed(() => (props.type === "artist" ? "rounded-full" : props.rounded));
 const actualFallback = computed(() => (props.type === "artist" ? artistFallback : props.fallback));
 </script>
@@ -38,6 +44,14 @@ const actualFallback = computed(() => (props.type === "artist" ? artistFallback 
         :alt="item.title"
         class="w-full aspect-square transition-[transform,filter] duration-300 ease-out group-hover:scale-108 group-hover:brightness-80"
       />
+      <!-- 业务动作入口 -->
+      <div v-if="hasActions" class="absolute top-2 right-2 z-2" @click.stop @pointerdown.stop>
+        <SDropdownMenu :items="menuItems" align="end" @select="emit('action', $event)">
+          <SButton variant="secondary" circle :size="28" :icon-size="16">
+            <template #icon><IconLucideEllipsis /></template>
+          </SButton>
+        </SDropdownMenu>
+      </div>
       <!-- 播放按钮 -->
       <div
         class="absolute size-9 flex items-center justify-center rounded-full opacity-0 transition-[opacity,transform] duration-300 group-hover:opacity-100"

@@ -3,6 +3,8 @@ import type { PlaybackContext, Track } from "@shared/types/player";
 import type { QualityLevel } from "@/utils/quality";
 import type { CollectionType } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
+import type { ControlAction } from "@/actions/model";
+import { controlActionsToMenuItems } from "@/actions/menu";
 import * as player from "@/core/player";
 import { useSettingsStore } from "@/stores/settings";
 import { usePluginsStore } from "@/stores/plugins";
@@ -69,130 +71,158 @@ export const useTrackMenu = (
   const isCloudView = options.collectionType === "cloud";
   const showPlay = !options.hidePlayActions;
   const canRemove = options.canRemove !== false;
-  // 菜单项
-  const items = computed<DropdownMenuItem[]>(() => {
+
+  const action = (
+    value: Omit<ControlAction, "enabled" | "visible" | "danger"> &
+      Partial<Pick<ControlAction, "enabled" | "visible" | "danger">>,
+  ): ControlAction => ({ enabled: true, visible: true, danger: false, ...value });
+
+  /** Track 业务动作模型；右键、长按、`...` 等 presentation 共用。 */
+  const actions = computed<ControlAction[]>(() => {
     const source = track.value?.source;
     const isLocal = source === "local";
     const isCue = !!track.value?.cuePath;
     const showCloudRemove = isCloudView && track.value?.cloud === true;
     const canAddToPlaylist = source === "local" || source === "netease";
     const isOnline = source !== "local" && source !== "streaming";
-    const base: DropdownMenuItem[] = [
-      { key: "play", label: t("songList.context.play"), icon: markRaw(IconPlay), show: showPlay },
-      {
-        key: "playNext",
+    const base: ControlAction[] = [
+      action({
+        id: "play",
+        label: t("songList.context.play"),
+        icon: markRaw(IconPlay),
+        visible: showPlay,
+        coreCommand: "player.playNow",
+      }),
+      action({
+        id: "playNext",
         label: t("songList.context.playNext"),
         icon: markRaw(IconListEnd),
-        show: showPlay,
-      },
-      {
-        key: "addToPlaylist",
+        visible: showPlay,
+        coreCommand: "player.insertQueueNext",
+      }),
+      action({
+        id: "addToPlaylist",
         label: t("collection.addTo", { type: t("collection.playlist") }),
         icon: markRaw(IconListPlus),
         separator: showPlay,
-        show: canAddToPlaylist,
-      },
-      {
-        key: "showInExplorer",
+        visible: canAddToPlaylist,
+        coreCommand: "playlist.addTracks",
+      }),
+      action({
+        id: "showInExplorer",
         label: t("songList.context.showInExplorer"),
         icon: markRaw(IconFolderOpen),
         separator: true,
-        show: isLocal,
-      },
-      {
-        key: "copyPath",
+        visible: isLocal,
+        requiredCapability: "hostFileExplorer",
+      }),
+      action({
+        id: "copyPath",
         label: t("songList.context.copyPath"),
         icon: markRaw(IconCopy),
-        show: isLocal,
-      },
-      {
-        key: "editTags",
+        visible: isLocal,
+      }),
+      action({
+        id: "editTags",
         label: t("songList.context.editTags"),
         icon: markRaw(IconSquarePen),
-        show: isLocal && !isCue && !!options.onEditTags,
-      },
-      {
-        key: "download",
+        visible: isLocal && !isCue && !!options.onEditTags,
+      }),
+      action({
+        id: "download",
         label: t("songList.context.download"),
         icon: markRaw(IconDownload),
         separator: true,
-        show: !isLocal && !!options.onDownload && settings.system.download.enabled,
-        children: buildDownloadQualityItems(t("download.qualityDefault"), "download:"),
-      },
-      {
-        key: "removeFromCollection",
+        visible: !isLocal && !!options.onDownload && settings.system.download.enabled,
+        coreCommand: "download.start",
+        children: buildDownloadQualityItems(t("download.qualityDefault"), "download:").map((item) =>
+          action({ id: item.key, label: item.label, coreCommand: "download.start" }),
+        ),
+      }),
+      action({
+        id: "removeFromCollection",
         label: t("collection.removeFrom", { type: t("collection.playlist") }),
         icon: markRaw(IconListMinus),
         separator: true,
-        show: isPlaylist && canRemove,
-      },
-      {
-        key: "deleteFile",
+        visible: isPlaylist && canRemove,
+        coreCommand: "playlist.removeTracks",
+      }),
+      action({
+        id: "deleteFile",
         label: t("songList.context.deleteFile"),
         icon: markRaw(IconTrash2),
         separator: !(isPlaylist && canRemove),
-        show: isLocal && !isCue,
-      },
-      {
-        key: "removeFromCloud",
+        visible: isLocal && !isCue,
+        danger: true,
+        coreCommand: "library.deleteTracks",
+      }),
+      action({
+        id: "removeFromCloud",
         label: t("cloud.removeAction"),
         icon: markRaw(IconCloudOff),
         separator: true,
-        show: showCloudRemove,
-      },
-      {
-        key: "searchSame",
+        visible: showCloudRemove,
+        danger: true,
+      }),
+      action({
+        id: "searchSame",
         label: t("songList.context.searchSame"),
         icon: markRaw(IconSearch),
         separator: true,
-      },
-      {
-        key: "comments",
+      }),
+      action({
+        id: "comments",
         label: t("comments.name"),
         icon: markRaw(IconMessageCircle),
-      },
-      {
-        key: "more",
+        coreCommand: "comments.get",
+      }),
+      action({
+        id: "more",
         label: t("songList.context.more"),
         icon: markRaw(IconMoreHorizontal),
         children: [
-          {
-            key: "copyTitle",
+          action({
+            id: "copyTitle",
             label: t("songList.context.copyTitle"),
             icon: markRaw(IconCopy),
-          },
-          {
-            key: "copyId",
+          }),
+          action({
+            id: "copyId",
             label: t("songList.context.copyId"),
             icon: markRaw(IconCopy),
-            show: !isLocal,
-          },
-          {
-            key: "copyUrl",
+            visible: !isLocal,
+          }),
+          action({
+            id: "copyUrl",
             label: t("songList.context.copyUrl"),
             icon: markRaw(IconCopy),
-            show: isOnline,
-          },
+            visible: isOnline,
+          }),
         ],
-      },
+      }),
     ];
+
     // 插件贡献：每个有 ui 权限的插件折叠成一个以插件名命名的子菜单
-    const pluginGroups: DropdownMenuItem[] = [];
+    const pluginGroups: ControlAction[] = [];
     for (const group of plugins.menuContributions) {
       const children = group.menus
         .filter((menu) => !menu.sources || menu.sources.includes(source ?? ""))
-        .map((menu) => ({ key: `plugin:${group.pluginId}:${menu.id}`, label: menu.label }));
+        .map((menu) => action({ id: `plugin:${group.pluginId}:${menu.id}`, label: menu.label }));
       if (!children.length) continue;
-      pluginGroups.push({
-        key: `plugin:${group.pluginId}`,
-        label: group.pluginName,
-        icon: markRaw(IconPuzzle),
-        separator: pluginGroups.length === 0,
-        children,
-      });
+      pluginGroups.push(
+        action({
+          id: `plugin:${group.pluginId}`,
+          label: group.pluginName,
+          icon: markRaw(IconPuzzle),
+          separator: pluginGroups.length === 0,
+          children,
+        }),
+      );
     }
     return [...base, ...pluginGroups];
   });
+
+  const items = computed<DropdownMenuItem[]>(() => controlActionsToMenuItems(actions.value));
 
   const handleSelect = async (key: string): Promise<void> => {
     const current = track.value;
@@ -273,5 +303,5 @@ export const useTrackMenu = (
     }
   };
 
-  return { items, handleSelect };
+  return { actions, items, handleSelect };
 };

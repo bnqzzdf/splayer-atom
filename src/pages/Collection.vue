@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { PlaybackContext, TrackSource } from "@shared/types/player";
 import type { Collection, CollectionType } from "@/types/collection";
-import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
+import { createControlAction, type ControlAction } from "@/actions/model";
+import { controlActionsToMenuItems } from "@/actions/menu";
 import { loadCollection as loadCollectionService } from "@/services/collection";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { useCopyText } from "@/composables/useCopyText";
@@ -165,52 +166,97 @@ const manage = usePlaylistManage(collection, {
   },
 });
 
-/** 更多菜单 */
+/** Collection 主动作与 header `...` 共用同一语义模型。 */
 const editLabel = computed(() => t("collection.edit", { type: typeLabel.value }));
 
-const moreMenuItems = computed<DropdownMenuItem[]>(() => {
+const collectionActions = computed<ControlAction[]>(() => {
   const isOnline = source !== "local" && source !== "streaming";
   const isLocal = source === "local";
-  const list: DropdownMenuItem[] = [
-    { key: "batchManage", label: t("songList.batch.manage"), icon: IconLucideListChecks },
-    { key: "edit", label: editLabel.value, icon: IconLucidePencil, show: manage.canManage.value },
-    {
-      key: "delete",
+  const manageCommandPrefix = isLocal ? "playlist" : "provider.playlist";
+  return [
+    createControlAction({
+      id: "playAll",
+      label: t("common.playAll"),
+      enabled: !!collection.value?.tracks.length,
+      coreCommand: "player.playFrom",
+    }),
+    createControlAction({
+      id: "toggleSubscribe",
+      label: t(subscribe.isSubscribed.value ? "collection.unsubscribe" : "collection.subscribe"),
+      visible: subscribe.available.value,
+      enabled: !subscribe.busy.value,
+      coreCommand: "provider.collection.subscribe",
+    }),
+    createControlAction({
+      id: "batchManage",
+      label: t("songList.batch.manage"),
+      icon: markRaw(IconLucideListChecks),
+    }),
+    createControlAction({
+      id: "edit",
+      label: editLabel.value,
+      icon: markRaw(IconLucidePencil),
+      visible: manage.canManage.value,
+      coreCommand: `${manageCommandPrefix}.update`,
+    }),
+    createControlAction({
+      id: "delete",
       label: t("collection.delete", { type: typeLabel.value }),
-      icon: IconLucideTrash2,
+      icon: markRaw(IconLucideTrash2),
       separator: true,
-      show: manage.canManage.value,
-    },
-    {
-      key: "more",
+      visible: manage.canManage.value,
+      danger: true,
+      coreCommand: `${manageCommandPrefix}.delete`,
+    }),
+    createControlAction({
+      id: "more",
       label: t("collection.context.more"),
       icon: markRaw(IconMoreHorizontal),
       children: [
-        {
-          key: "copyTitle",
+        createControlAction({
+          id: "copyTitle",
           label: t(`collection.context.${type}.copyTitle`),
           icon: markRaw(IconCopy),
-        },
-        {
-          key: "copyId",
+        }),
+        createControlAction({
+          id: "copyId",
           label: t(`collection.context.${type}.copyId`),
           icon: markRaw(IconCopy),
-          show: !isLocal,
-        },
-        {
-          key: "copyUrl",
+          visible: !isLocal,
+        }),
+        createControlAction({
+          id: "copyUrl",
           label: t(`collection.context.${type}.copyUrl`),
           icon: markRaw(IconCopy),
-          show: isOnline && type !== "cloud",
-        },
+          visible: isOnline && type !== "cloud",
+        }),
       ],
-    },
+    }),
   ];
-  return list;
 });
 
-const handleMoreMenu = (key: string) => {
+const playAllAction = computed(() =>
+  collectionActions.value.find((action) => action.id === "playAll"),
+);
+const subscribeAction = computed(() =>
+  collectionActions.value.find((action) => action.id === "toggleSubscribe"),
+);
+const moreMenuItems = computed(() =>
+  controlActionsToMenuItems(
+    collectionActions.value.filter(
+      (action) => action.id !== "playAll" && action.id !== "toggleSubscribe",
+    ),
+  ),
+);
+
+const handleCollectionAction = (key: string): void => {
   switch (key) {
+    case "playAll":
+      handlePlayAll();
+      break;
+    case "toggleSubscribe":
+      void subscribe.toggle();
+      break;
     case "batchManage":
       songListRef.value?.enterBatch();
       break;
@@ -347,8 +393,8 @@ onBeforeUnmount(() => {
                 type="primary"
                 variant="secondary"
                 round
-                :disabled="collection.tracks.length === 0"
-                @click="handlePlayAll"
+                :disabled="!playAllAction?.enabled"
+                @click="handleCollectionAction('playAll')"
               >
                 <template #icon>
                   <IconLucidePlay />
@@ -356,11 +402,11 @@ onBeforeUnmount(() => {
                 {{ t("common.playAll") }}
               </SButton>
               <SButton
-                v-if="subscribe.available.value"
+                v-if="subscribeAction?.visible"
                 variant="secondary"
                 round
-                :disabled="subscribe.busy.value"
-                @click="subscribe.toggle"
+                :disabled="!subscribeAction?.enabled"
+                @click="handleCollectionAction('toggleSubscribe')"
               >
                 <template #icon>
                   <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
@@ -378,7 +424,7 @@ onBeforeUnmount(() => {
                 v-if="moreMenuItems.length > 0"
                 :items="moreMenuItems"
                 align="start"
-                @select="handleMoreMenu"
+                @select="handleCollectionAction"
               >
                 <template #trigger>
                   <SButton variant="secondary" circle>

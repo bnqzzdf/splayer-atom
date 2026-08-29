@@ -28,6 +28,7 @@ import IconLucideArrowLeftRight from "~icons/lucide/arrow-left-right";
 import IconLucideX from "~icons/lucide/x";
 import IconLucideCloud from "~icons/lucide/cloud";
 import IconLucideCloudOff from "~icons/lucide/cloud-off";
+import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 
@@ -487,7 +488,7 @@ defineExpose({
                 </div>
               </div>
               <div v-if="showAlbum" class="flex-1 min-w-0">{{ t("songList.album") }}</div>
-              <div class="w-7 shrink-0 text-center">{{ t("songList.actions") }}</div>
+              <div class="w-14 shrink-0 text-center">{{ t("songList.actions") }}</div>
               <div v-if="showDuration" class="w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
@@ -680,6 +681,27 @@ defineExpose({
                     </SIconSwap>
                   </template>
                 </SButton>
+              </div>
+              <div v-else class="w-7 shrink-0" />
+              <!-- 同一 Track Action Model 的触摸/按钮入口 -->
+              <div
+                v-if="!batch.active.value"
+                class="w-7 shrink-0 flex items-center justify-center"
+                @click.stop
+              >
+                <SDropdownMenu :items="contextMenuItems" align="end" @select="onContextMenu">
+                  <SButton
+                    variant="text"
+                    circle
+                    :size="28"
+                    :icon-size="18"
+                    :title="t('songList.context.more')"
+                    @pointerdown.stop="contextTrack = item"
+                    @click.stop
+                  >
+                    <template #icon><IconLucideMoreHorizontal /></template>
+                  </SButton>
+                </SDropdownMenu>
               </div>
               <div v-else class="w-7 shrink-0" />
               <!-- 时长 -->

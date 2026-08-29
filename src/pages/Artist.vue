@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { PlaybackContext, TrackSource } from "@shared/types/player";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
+import { createControlAction, type ControlAction } from "@/actions/model";
+import { controlActionsToMenuItems } from "@/actions/menu";
 import { useSettingsStore } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
@@ -16,7 +18,6 @@ import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideListMusic from "~icons/lucide/list-music";
 import IconLucideHourglass from "~icons/lucide/hourglass";
 import IconLucideMusic from "~icons/lucide/music";
-import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconMaterialSymbolsFavoriteRounded from "~icons/material-symbols/favorite-rounded";
 import IconMaterialSymbolsFavoriteOutlineRounded from "~icons/material-symbols/favorite-outline-rounded";
@@ -183,15 +184,6 @@ const searchQuery = ref("");
 /** 歌曲列表引用 */
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
 
-/** 更多菜单 */
-const moreMenuItems = computed<DropdownMenuItem[]>(() => [
-  { key: "batchManage", label: t("songList.batch.manage"), icon: IconLucideListChecks },
-]);
-
-const handleMoreMenu = (key: string) => {
-  if (key === "batchManage") songListRef.value?.enterBatch();
-};
-
 type ArtistTab = "songs" | "albums";
 
 const ARTIST_TAB_KEYS: readonly ArtistTab[] = ["songs", "albums"];
@@ -203,6 +195,51 @@ const activeTab = computed<ArtistTab>(() => {
     ? (tab as ArtistTab)
     : "songs";
 });
+
+/** Artist 主动作与更多菜单共享同一语义模型。 */
+const artistActions = computed<ControlAction[]>(() => [
+  createControlAction({
+    id: "playAll",
+    label: t("common.playAll"),
+    enabled: !!artist.value?.tracks.length && activeTab.value === "songs",
+    coreCommand: "player.playFrom",
+  }),
+  createControlAction({
+    id: "toggleSubscribe",
+    label: t(isArtistSubscribed.value ? "collection.unsubscribe" : "collection.subscribe"),
+    visible: canSubscribeArtist.value,
+    enabled: !artistSubBusy.value,
+    coreCommand: "provider.artist.subscribe",
+  }),
+  createControlAction({
+    id: "batchManage",
+    label: t("songList.batch.manage"),
+    icon: markRaw(IconLucideListChecks),
+    visible: activeTab.value === "songs",
+  }),
+]);
+
+const playAllAction = computed(() => artistActions.value.find((action) => action.id === "playAll"));
+const subscribeAction = computed(() =>
+  artistActions.value.find((action) => action.id === "toggleSubscribe"),
+);
+const moreMenuItems = computed(() =>
+  controlActionsToMenuItems(artistActions.value.filter((action) => action.id === "batchManage")),
+);
+
+const handleArtistAction = (key: string): void => {
+  switch (key) {
+    case "playAll":
+      handlePlayAll();
+      break;
+    case "toggleSubscribe":
+      void handleToggleSubscribe();
+      break;
+    case "batchManage":
+      songListRef.value?.enterBatch();
+      break;
+  }
+};
 
 const onTabSwitch = (key: string): void => {
   router.replace({ query: { ...route.query, tab: key } });
@@ -286,8 +323,8 @@ const albumItems = computed<CoverItem[]>(() => {
                 type="primary"
                 variant="secondary"
                 round
-                :disabled="artist.tracks.length === 0 || activeTab !== 'songs'"
-                @click="handlePlayAll"
+                :disabled="!playAllAction?.enabled"
+                @click="handleArtistAction('playAll')"
               >
                 <template #icon>
                   <IconLucidePlay />
@@ -295,11 +332,11 @@ const albumItems = computed<CoverItem[]>(() => {
                 {{ t("common.playAll") }}
               </SButton>
               <SButton
-                v-if="canSubscribeArtist"
+                v-if="subscribeAction?.visible"
                 variant="secondary"
                 round
-                :disabled="artistSubBusy"
-                @click="handleToggleSubscribe"
+                :disabled="!subscribeAction?.enabled"
+                @click="handleArtistAction('toggleSubscribe')"
               >
                 <template #icon>
                   <IconMaterialSymbolsFavoriteRounded v-if="isArtistSubscribed" />
@@ -311,7 +348,7 @@ const albumItems = computed<CoverItem[]>(() => {
                 :items="moreMenuItems"
                 :disabled="activeTab !== 'songs'"
                 align="start"
-                @select="handleMoreMenu"
+                @select="handleArtistAction"
               >
                 <template #trigger>
                   <SButton variant="secondary" circle :disabled="activeTab !== 'songs'">
