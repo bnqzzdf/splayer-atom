@@ -1,8 +1,8 @@
 /**
  * Netease API 渲染端
  *
- * 用 Proxy 把所有接口代理到主进程：`netease.search({keywords})` 实际等于
- * `window.api.apis.call("netease", "search", {keywords})`
+ * 用 Proxy 把所有接口代理到 Core Provider Protocol：`netease.search({keywords})` 实际等于
+ * `providerClient.call("netease", "search", {keywords})`
  *
  * 调用约定：成功 → 返回 body；失败 → 抛 Error
  * 想取原始响应（含 HTTP status）用 `neteaseRaw`
@@ -10,6 +10,7 @@
 
 import type { ApiCallResponse } from "@shared/types/apis";
 import { isExplicitNeteaseAuthFailure } from "@/apis/neteaseAuth";
+import { providerClient } from "@/core/providerClient";
 
 type AuthFailureListener = (error: NeteaseApiError) => void;
 
@@ -43,7 +44,7 @@ export const neteaseRaw = async (
   params?: Record<string, unknown>,
   options?: NeteaseCallOptions,
 ): Promise<{ status: number; body: unknown }> => {
-  const res: ApiCallResponse = await window.api.apis.call("netease", name, params);
+  const res: ApiCallResponse = await providerClient.call("netease", name, params);
   if (!res.ok) {
     const error = new NeteaseApiError(res.error, res.status, res.body);
     if (
@@ -86,7 +87,7 @@ export const netease: NeteaseProxy = new Proxy({} as NeteaseProxy, {
 });
 
 /** 清空登录态 cookie */
-export const clearNeteaseSession = (): Promise<void> => window.api.apis.clearSession("netease");
+export const clearNeteaseSession = (): Promise<void> => providerClient.clearSession("netease");
 
 /**
  * 订阅服务端明确返回的登录失效

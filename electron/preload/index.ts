@@ -465,21 +465,20 @@ const api = {
       subscribe<PluginInfo>("plugin:status", callback),
   },
   apis: {
-    // 调用任意平台的任意接口
+    // QQ/酷狗 legacy provider 调用；Managed Provider 已走 Core Protocol。
     call: (platform: string, name: string, params?: Record<string, unknown>) =>
       ipcRenderer.invoke("apis:call", platform, name, params ?? {}),
-    // 清空指定平台的登录态
-    clearSession: (platform: string) => ipcRenderer.invoke("apis:clearSession", platform),
-    // 获取 Core 权威 Provider session 投影
-    getSessions: () => ipcRenderer.invoke("apis:getSessions"),
+    // QQ/酷狗 legacy session 清理。
+    clearSession: (platform: "qqmusic" | "kugou") =>
+      ipcRenderer.invoke("apis:clearSession", platform),
+    // QQ/酷狗 legacy cookie/session 写入。
+    setCookie: (platform: "qqmusic" | "kugou", cookie: string) =>
+      ipcRenderer.invoke("apis:setCookie", platform, cookie),
     // 订阅 Core Provider session 变化
     onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
       subscribe<ProviderSessionsSnapshot>("apis:sessions", callback),
     // 打开官方网页登录窗口
     openLoginWeb: (platform: string) => ipcRenderer.invoke("apis:openLoginWeb", platform),
-    // 手动写入 cookie 登录
-    setCookie: (platform: string, cookie: string) =>
-      ipcRenderer.invoke("apis:setCookie", platform, cookie),
   },
   cloud: {
     // 弹出文件选择器选择待上传歌曲

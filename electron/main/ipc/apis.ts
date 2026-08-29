@@ -1,9 +1,8 @@
 /**
- * 音源 API 统一 IPC
+ * 音源 API 兼容 / Host IPC。
  *
- * 只注册两个通道：
- * - apis:call(platform, name, params)   调用对应平台的任意接口
- * - apis:clearSession(platform)         清空某平台登录态
+ * Atom-managed Provider Core Domain 已走共享 Core Protocol；这里仅保留
+ * QQ/酷狗 legacy call 与 Netease embedded-login Host capability。
  */
 
 import { ipcMain } from "electron";
@@ -14,7 +13,6 @@ import { coreLog } from "@main/utils/logger";
 import {
   callProviderApi,
   clearProviderSession,
-  getProviderSessions,
   publishProviderSessionsIfChanged,
   setProviderCookie,
 } from "@main/services/providerApi";
@@ -27,12 +25,19 @@ export const registerApisIpc = (): void => {
       callProviderApi(platform, name, params),
   );
 
-  ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) =>
-    clearProviderSession(platform),
-  );
-  ipcMain.handle("apis:getSessions", () => getProviderSessions());
+  // QQ/酷狗仍是 legacy provider；Managed Provider 的 session 写入已走 Core Protocol。
+  ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) => {
+    if (platform !== "qqmusic" && platform !== "kugou") return;
+    return clearProviderSession(platform);
+  });
+  ipcMain.handle("apis:setCookie", (_evt, platform: ApiPlatform, raw: string) => {
+    if (platform !== "qqmusic" && platform !== "kugou") {
+      return { ok: false, error: "unsupported platform" };
+    }
+    return setProviderCookie(platform, raw);
+  });
 
-  // 打开官方网页登录，成功后把 cookies 合并写入 session
+  // 打开官方网页登录，成功后把 cookies 合并写入 session。
   ipcMain.handle("apis:openLoginWeb", async (_evt, platform: ApiPlatform) => {
     try {
       if (platform === "netease") {
@@ -55,9 +60,4 @@ export const registerApisIpc = (): void => {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
-
-  // 手动写入 cookie 登录
-  ipcMain.handle("apis:setCookie", (_evt, platform: ApiPlatform, raw: string) =>
-    setProviderCookie(platform, raw),
-  );
 };

@@ -10,6 +10,7 @@
  */
 
 import type { ApiCallResponse } from "@shared/types/apis";
+import { providerClient } from "@/core/providerClient";
 
 /**
  * 调用 Qobuz API，返回原始响应
@@ -21,7 +22,7 @@ export const qobuzRaw = async (
   name: string,
   params?: Record<string, unknown>,
 ): Promise<{ status: number; body: unknown }> => {
-  const res: ApiCallResponse = await window.api.apis.call("qobuz", name, params);
+  const res: ApiCallResponse = await providerClient.call("qobuz", name, params);
   if (!res.ok) throw new Error(res.error);
   return { status: res.status ?? 200, body: res.body ?? res.data };
 };

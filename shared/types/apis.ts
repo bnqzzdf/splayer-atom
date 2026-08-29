@@ -6,7 +6,13 @@
 export type ApiPlatform = "netease" | "qqmusic" | "kugou" | "qobuz" | "tidal";
 
 /** Atom 主动维护并投影登录态的在线平台。 */
-export type ManagedProviderPlatform = "netease" | "qobuz" | "tidal";
+export const MANAGED_PROVIDER_PLATFORMS = ["netease", "qobuz", "tidal"] as const;
+export type ManagedProviderPlatform = (typeof MANAGED_PROVIDER_PLATFORMS)[number];
+
+/** 判断平台是否属于 Atom 正式维护的 Provider Core Domain。 */
+export const isManagedProviderPlatform = (value: unknown): value is ManagedProviderPlatform =>
+  typeof value === "string" &&
+  MANAGED_PROVIDER_PLATFORMS.includes(value as ManagedProviderPlatform);
 
 /** Control 可安全读取的 Provider session 投影，不包含 cookie/token。 */
 export interface ProviderSessionState {
@@ -38,13 +44,13 @@ export interface ApisApi {
     name: string,
     params?: Record<string, unknown>,
   ) => Promise<ApiCallResponse>;
-  /**
-   * 清空指定平台的登录态
-   * @param platform 音源平台
-   */
-  clearSession: (platform: ApiPlatform) => Promise<void>;
-  /** 获取 Core 权威 Provider session 投影。 */
-  getSessions: () => Promise<ProviderSessionsSnapshot>;
+  /** QQ/酷狗 legacy provider session 清理；Managed Provider 已走 Core Protocol。 */
+  clearSession: (platform: "qqmusic" | "kugou") => Promise<void>;
+  /** QQ/酷狗 legacy cookie/session 写入；Managed Provider 已走 Core Protocol。 */
+  setCookie: (
+    platform: "qqmusic" | "kugou",
+    cookie: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** 订阅 Core Provider session 变化。 */
   onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) => () => void;
   /**
@@ -53,13 +59,4 @@ export interface ApisApi {
    * @returns 登录成功 `{ ok: true }`；用户取消 / 失败 `{ ok: false, error }`
    */
   openLoginWeb: (platform: ApiPlatform) => Promise<{ ok: true } | { ok: false; error: string }>;
-  /**
-   * 手动写入 cookie 登录（目前仅 netease）
-   * @param platform 音源平台
-   * @param cookie 形如 `MUSIC_U=xxx; __csrf=yyy` 的 cookie 字符串
-   */
-  setCookie: (
-    platform: ApiPlatform,
-    cookie: string,
-  ) => Promise<{ ok: true } | { ok: false; error: string }>;
 }

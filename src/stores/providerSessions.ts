@@ -1,4 +1,5 @@
 import type { ManagedProviderPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
+import { providerClient } from "@/core/providerClient";
 
 const EMPTY_SESSIONS: ProviderSessionsSnapshot = {
   netease: { authenticated: false },
@@ -16,7 +17,7 @@ export const useProviderSessionsStore = defineStore("providerSessions", () => {
   };
 
   const refresh = async (): Promise<void> => {
-    apply(await window.api.apis.getSessions());
+    apply(await providerClient.getSessions());
   };
 
   const start = (): void => {

@@ -2,6 +2,7 @@
 import { qobuzCall } from "@/apis/qobuz";
 import { tidalCall } from "@/apis/tidal";
 import { toast } from "@/composables/useToast";
+import { providerClient } from "@/core/providerClient";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import IconLucideKeyRound from "~icons/lucide/key-round";
 import IconLucideLogOut from "~icons/lucide/log-out";
@@ -72,7 +73,7 @@ const disconnect = async (platform: "qobuz" | "tidal"): Promise<void> => {
   const busy = platform === "qobuz" ? qobuzBusy : tidalBusy;
   busy.value = true;
   try {
-    await window.api.apis.clearSession(platform);
+    await providerClient.clearSession(platform);
     await providerSessions.refresh();
     toast.success(t("settings.providerAccounts.disconnected"));
   } finally {

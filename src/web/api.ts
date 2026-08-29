@@ -1,4 +1,8 @@
-import type { ApiCallResponse, ApiPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
+import {
+  isManagedProviderPlatform,
+  type ApiPlatform,
+  type ProviderSessionsSnapshot,
+} from "@shared/types/apis";
 import type { CoreInfo } from "@shared/types/core";
 import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
 import type {
@@ -27,6 +31,7 @@ import type {
 } from "@shared/types/player";
 import { connectWebEvents, request, serverAssetUrl, webAssetUrl } from "./client";
 import { filterWebSystemOutputs } from "@/core/outputDevices";
+import { providerClient } from "@/core/providerClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -41,7 +46,6 @@ interface WebEvent {
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const noopSubscription = (): (() => void) => () => {};
-const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qobuz", "tidal"]);
 
 const asIpc = async <T>(loader: () => Promise<T>): Promise<IpcResponse<T>> => {
   try {
@@ -887,26 +891,15 @@ export const installWebApi = async (): Promise<void> => {
     },
     apis: {
       call: async (platform: ApiPlatform, name: string, params?: Record<string, unknown>) => {
-        if (!WEB_PROVIDER_PLATFORMS.has(platform)) {
+        if (!isManagedProviderPlatform(platform)) {
           return { ok: false as const, error: "WEB_PROVIDER_UNSUPPORTED" };
         }
         try {
-          return await request<ApiCallResponse>("/providers/call", {
-            method: "POST",
-            body: JSON.stringify({ platform, name, params }),
-          });
+          return await providerClient.call(platform, name, params);
         } catch (error) {
           return { ok: false as const, error: errorText(error) };
         }
       },
-      clearSession: async (platform: ApiPlatform) => {
-        if (!WEB_PROVIDER_PLATFORMS.has(platform)) return;
-        await request("/providers/clear-session", {
-          method: "POST",
-          body: JSON.stringify({ platform }),
-        });
-      },
-      getSessions: () => request<ProviderSessionsSnapshot>("/providers/sessions"),
       onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
         subscribeEvent((event) => {
           if (event.type === "providerSessions" && event.data) {
@@ -914,22 +907,6 @@ export const installWebApi = async (): Promise<void> => {
           }
         }),
       openLoginWeb: async () => ({ ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" }),
-      setCookie: async (platform: ApiPlatform, cookie: string) => {
-        if (!WEB_PROVIDER_PLATFORMS.has(platform)) {
-          return { ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" };
-        }
-        try {
-          return await request<{ ok: true } | { ok: false; error: string }>(
-            "/providers/set-cookie",
-            {
-              method: "POST",
-              body: JSON.stringify({ platform, cookie }),
-            },
-          );
-        } catch (error) {
-          return { ok: false as const, error: errorText(error) };
-        }
-      },
     },
   };
   window.api = api as unknown as Window["api"];

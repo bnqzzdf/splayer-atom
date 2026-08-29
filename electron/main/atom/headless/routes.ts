@@ -1,7 +1,7 @@
 import { extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { Hono, type Context } from "hono";
-import type { ApiPlatform } from "@shared/types/apis";
+import { isManagedProviderPlatform } from "@shared/types/apis";
 import type { MusicCommentQuery } from "@shared/types/comment";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type { DownloadRequest } from "@shared/types/download";
@@ -89,7 +89,6 @@ import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFi
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
-const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qobuz", "tidal"]);
 const CACHE_CATEGORIES = new Set<CacheCategory>([
   "covers",
   "artists",
@@ -101,8 +100,6 @@ const CACHE_CATEGORIES = new Set<CacheCategory>([
 ]);
 const CACHE_KINDS = new Set<CacheKind>(["file", "db"]);
 const DOWNLOAD_QUALITIES = new Set(["lq", "sq", "hq", "lossless", "hi-res"]);
-const isWebProviderPlatform = (value: unknown): value is ApiPlatform =>
-  typeof value === "string" && WEB_PROVIDER_PLATFORMS.has(value as ApiPlatform);
 const isDownloadRequest = (value: unknown): value is DownloadRequest => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Partial<DownloadRequest>;
@@ -253,8 +250,8 @@ export const buildHeadlessRoutes = (): Hono => {
       name?: unknown;
       params?: unknown;
     } | null;
-    if (!isWebProviderPlatform(body?.platform)) {
-      return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    if (!isManagedProviderPlatform(body?.platform)) {
+      return c.json({ ok: false, error: "PROVIDER_UNSUPPORTED" }, 400);
     }
     if (typeof body?.name !== "string" || !body.name) {
       return c.json({ ok: false, error: "provider_name_required" }, 400);
@@ -270,8 +267,8 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.post("/providers/clear-session", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { platform?: unknown } | null;
-    if (!isWebProviderPlatform(body?.platform)) {
-      return c.json({ error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    if (!isManagedProviderPlatform(body?.platform)) {
+      return c.json({ error: "PROVIDER_UNSUPPORTED" }, 400);
     }
     await clearProviderSession(body.platform);
     return c.json({ ok: true });
@@ -301,8 +298,8 @@ export const buildHeadlessRoutes = (): Hono => {
       platform?: unknown;
       cookie?: unknown;
     } | null;
-    if (!isWebProviderPlatform(body?.platform)) {
-      return c.json({ ok: false, error: "WEB_PROVIDER_UNSUPPORTED" }, 400);
+    if (!isManagedProviderPlatform(body?.platform)) {
+      return c.json({ ok: false, error: "PROVIDER_UNSUPPORTED" }, 400);
     }
     if (typeof body.cookie !== "string")
       return c.json({ ok: false, error: "cookie_required" }, 400);

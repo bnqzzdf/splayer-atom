@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from "@/composables/useToast";
+import { providerClient } from "@/core/providerClient";
 import { useUserStore } from "@/stores/user";
 
 const props = defineProps<{ open: boolean }>();
@@ -33,7 +34,7 @@ const submit = async (): Promise<void> => {
   }
   loading.value = true;
   try {
-    const res = await window.api.apis.setCookie("netease", value);
+    const res = await providerClient.setCookie("netease", value);
     if (!res.ok) {
       toast.error(t("login.cookieInvalid"));
       return;

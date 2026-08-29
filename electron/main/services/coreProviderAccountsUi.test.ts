@@ -15,6 +15,7 @@ const loginDialogSource = read(
   new URL("../../../src/components/modals/LoginDialog.vue", import.meta.url),
 );
 const runtimeSource = read(new URL("../../../src/runtime.ts", import.meta.url));
+const sharedApisSource = read(new URL("../../../shared/types/apis.ts", import.meta.url));
 
 test("Qobuz and TIDAL account UI reuses existing Core auth actions without persisting tokens", () => {
   assert.match(servicesSource, /component: ProviderAccounts/);
@@ -22,17 +23,17 @@ test("Qobuz and TIDAL account UI reuses existing Core auth actions without persi
   assert.match(panelSource, /tidalCall\("auth_import", \{/);
   assert.match(panelSource, /access_token: accessToken/);
   assert.match(panelSource, /refresh_token: tidalRefreshToken\.value\.trim\(\) \|\| undefined/);
-  assert.match(panelSource, /window\.api\.apis\.clearSession\(platform\)/);
+  assert.match(panelSource, /providerClient\.clearSession\(platform\)/);
   assert.match(panelSource, /useProviderSessionsStore\(\)/);
   assert.doesNotMatch(panelSource, /localStorage|sessionStorage|persist:/);
 });
 
 test("Headless Web provider surface exposes only Atom-managed providers", () => {
-  const expected = /new Set<ApiPlatform>\(\["netease", "qobuz", "tidal"\]\)/;
-  assert.match(headlessRoutesSource, expected);
-  assert.match(webApiSource, expected);
-  assert.doesNotMatch(headlessRoutesSource, /new Set<ApiPlatform>\(\[[^\]]*qqmusic/);
-  assert.doesNotMatch(webApiSource, /new Set<ApiPlatform>\(\[[^\]]*kugou/);
+  assert.match(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \["netease", "qobuz", "tidal"\]/);
+  assert.match(headlessRoutesSource, /isManagedProviderPlatform\(body\?\.platform\)/);
+  assert.match(webApiSource, /isManagedProviderPlatform\(platform\)/);
+  assert.doesNotMatch(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \[[^\]]*qqmusic/);
+  assert.doesNotMatch(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \[[^\]]*kugou/);
 });
 
 test("Netease embedded login window is a Desktop Host capability, not a Core auth action", () => {
