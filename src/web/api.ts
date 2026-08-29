@@ -1,4 +1,4 @@
-import type { ApiCallResponse, ApiPlatform } from "@shared/types/apis";
+import type { ApiCallResponse, ApiPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi, AlbumSummary, ArtistSummary } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
@@ -832,6 +832,13 @@ export const installWebApi = async (): Promise<void> => {
           body: JSON.stringify({ platform }),
         });
       },
+      getSessions: () => request<ProviderSessionsSnapshot>("/providers/sessions"),
+      onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
+        subscribeEvent((event) => {
+          if (event.type === "providerSessions" && event.data) {
+            callback(event.data as ProviderSessionsSnapshot);
+          }
+        }),
       openLoginWeb: async () => ({ ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" }),
       setCookie: async (platform: ApiPlatform, cookie: string) => {
         if (!WEB_PROVIDER_PLATFORMS.has(platform)) {

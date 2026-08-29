@@ -14,6 +14,8 @@ import { coreLog } from "@main/utils/logger";
 import {
   callProviderApi,
   clearProviderSession,
+  getProviderSessions,
+  publishProviderSessionsIfChanged,
   setProviderCookie,
 } from "@main/services/providerApi";
 import type { ApiPlatform } from "@shared/types/apis";
@@ -28,6 +30,7 @@ export const registerApisIpc = (): void => {
   ipcMain.handle("apis:clearSession", (_evt, platform: ApiPlatform) =>
     clearProviderSession(platform),
   );
+  ipcMain.handle("apis:getSessions", () => getProviderSessions());
 
   // 打开官方网页登录，成功后把 cookies 合并写入 session
   ipcMain.handle("apis:openLoginWeb", async (_evt, platform: ApiPlatform) => {
@@ -36,12 +39,14 @@ export const registerApisIpc = (): void => {
         const cookies = await openNeteaseLoginWindow();
         if (!cookies) return { ok: false, error: "canceled" };
         mergeNeteaseCookies(cookies);
+        publishProviderSessionsIfChanged();
         return { ok: true };
       }
       if (platform === "qqmusic") {
         const cookies = await openQQMusicLoginWindow();
         if (!cookies) return { ok: false, error: "canceled" };
         mergeQQMusicCookies(cookies);
+        publishProviderSessionsIfChanged();
         return { ok: true };
       }
       return { ok: false, error: "unsupported platform" };

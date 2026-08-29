@@ -5,6 +5,21 @@
 /** 支持的音源平台 */
 export type ApiPlatform = "netease" | "qqmusic" | "kugou" | "qobuz" | "tidal";
 
+/** Atom 主动维护并投影登录态的在线平台。 */
+export type ManagedProviderPlatform = "netease" | "qobuz" | "tidal";
+
+/** Control 可安全读取的 Provider session 投影，不包含 cookie/token。 */
+export interface ProviderSessionState {
+  authenticated: boolean;
+  userId?: string;
+  username?: string;
+  countryCode?: string;
+  expiresAt?: number;
+  refreshable?: boolean;
+}
+
+export type ProviderSessionsSnapshot = Record<ManagedProviderPlatform, ProviderSessionState>;
+
 /** 通用响应包装 */
 export type ApiCallResponse =
   | { ok: true; status?: number; body?: unknown; data?: unknown }
@@ -28,6 +43,10 @@ export interface ApisApi {
    * @param platform 音源平台
    */
   clearSession: (platform: ApiPlatform) => Promise<void>;
+  /** 获取 Core 权威 Provider session 投影。 */
+  getSessions: () => Promise<ProviderSessionsSnapshot>;
+  /** 订阅 Core Provider session 变化。 */
+  onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) => () => void;
   /**
    * 打开官方网页登录
    * @param platform 音源平台

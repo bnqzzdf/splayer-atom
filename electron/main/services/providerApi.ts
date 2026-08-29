@@ -3,15 +3,58 @@
  * Electron IPC 与 Headless HTTP 都只能从这里进入，避免复制 provider 业务逻辑。
  */
 
-import { callNetease, clearNeteaseCookies, mergeNeteaseCookies } from "@main/apis/netease";
+import {
+  callNetease,
+  clearNeteaseCookies,
+  getNeteaseCookies,
+  mergeNeteaseCookies,
+} from "@main/apis/netease";
 import { NeteaseRequestError } from "@main/apis/netease/core/request";
 import { cookieToJson } from "@main/apis/netease/core/cookie";
 import { callQQMusic, clearQQMusicCookies, mergeQQMusicCookies } from "@main/apis/qqmusic";
 import { callKugou, clearKugouSession, mergeKugouSession } from "@main/apis/kugou";
 import { callQobuz } from "@main/apis/qobuz";
+import { getQobuzAuthStatus } from "@main/apis/qobuz/auth";
 import { callTidal } from "@main/apis/tidal";
+import { getTidalAuthStatus } from "@main/apis/tidal/auth";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { wsBroadcast } from "@main/server/broadcast";
 import { coreLog } from "@main/utils/logger";
-import type { ApiCallResponse, ApiPlatform } from "@shared/types/apis";
+import type { ApiCallResponse, ApiPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
+
+let lastSessionProjection = "";
+
+/** 读取 Core 当前持有的 provider session；任何 Control 都只投影这份状态。 */
+export const getProviderSessions = (): ProviderSessionsSnapshot => {
+  const qobuz = getQobuzAuthStatus();
+  const tidal = getTidalAuthStatus();
+  return {
+    netease: { authenticated: Boolean(getNeteaseCookies().MUSIC_U) },
+    qobuz: {
+      authenticated: qobuz.loggedIn,
+      userId: qobuz.userId,
+      username: qobuz.username,
+    },
+    tidal: {
+      authenticated: tidal.loggedIn,
+      userId: tidal.userId,
+      username: tidal.username,
+      countryCode: tidal.countryCode,
+      expiresAt: tidal.expiresAt,
+      refreshable: tidal.refreshable,
+    },
+  };
+};
+
+/** 仅在 session 投影实际变化时广播，避免普通 provider 查询制造事件噪声。 */
+export const publishProviderSessionsIfChanged = (): void => {
+  const snapshot = getProviderSessions();
+  const serialized = JSON.stringify(snapshot);
+  if (serialized === lastSessionProjection) return;
+  lastSessionProjection = serialized;
+  publishDesktopEvent("apis:sessions", snapshot);
+  wsBroadcast({ type: "providerSessions", data: snapshot });
+};
 
 /** 各平台的调用器：统一返回 renderer 既有响应结构。 */
 const dispatch = async (
@@ -64,7 +107,9 @@ export const callProviderApi = async (
   params: Record<string, unknown> = {},
 ): Promise<ApiCallResponse> => {
   try {
-    return { ok: true, ...(await dispatch(platform, name, params)) };
+    const response = { ok: true as const, ...(await dispatch(platform, name, params)) };
+    publishProviderSessionsIfChanged();
+    return response;
   } catch (error) {
     coreLog.warn(`[apis] ${platform}.${name} failed:`, error);
     if (platform === "netease" && error instanceof NeteaseRequestError) {
@@ -85,6 +130,7 @@ export const clearProviderSession = async (platform: ApiPlatform): Promise<void>
   else if (platform === "kugou") clearKugouSession();
   else if (platform === "qobuz") await callQobuz("auth_logout");
   else if (platform === "tidal") await callTidal("auth_logout");
+  publishProviderSessionsIfChanged();
 };
 
 /** 手动写入登录 Cookie / session。 */
@@ -96,6 +142,7 @@ export const setProviderCookie = (
   if (platform === "netease") {
     if (!parsed.MUSIC_U) return { ok: false, error: "missing MUSIC_U" };
     mergeNeteaseCookies(parsed);
+    publishProviderSessionsIfChanged();
     return { ok: true };
   }
   if (platform === "qqmusic") {
@@ -103,11 +150,13 @@ export const setProviderCookie = (
       return { ok: false, error: "missing uin or key" };
     }
     mergeQQMusicCookies(parsed);
+    publishProviderSessionsIfChanged();
     return { ok: true };
   }
   if (platform === "kugou") {
     if (!parsed.token || !parsed.userid) return { ok: false, error: "missing token or userid" };
     mergeKugouSession(parsed);
+    publishProviderSessionsIfChanged();
     return { ok: true };
   }
   return { ok: false, error: "unsupported platform" };

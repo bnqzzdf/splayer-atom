@@ -10,6 +10,7 @@ import type {
   PluginMatchCoverArgs,
 } from "@shared/types/plugin";
 import type { HotkeyActionId, HotkeyBinding, HotkeyConflict } from "@shared/types/hotkey";
+import type { ProviderSessionsSnapshot } from "@shared/types/apis";
 import type { LoadOptions, TrackSource } from "@shared/types/player";
 import type { StreamingServerInput } from "@shared/types/streaming";
 import type { RecognitionConfig, RecognitionEvent } from "@shared/types/recognition";
@@ -485,6 +486,11 @@ const api = {
       ipcRenderer.invoke("apis:call", platform, name, params ?? {}),
     // 清空指定平台的登录态
     clearSession: (platform: string) => ipcRenderer.invoke("apis:clearSession", platform),
+    // 获取 Core 权威 Provider session 投影
+    getSessions: () => ipcRenderer.invoke("apis:getSessions"),
+    // 订阅 Core Provider session 变化
+    onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
+      subscribe<ProviderSessionsSnapshot>("apis:sessions", callback),
     // 打开官方网页登录窗口
     openLoginWeb: (platform: string) => ipcRenderer.invoke("apis:openLoginWeb", platform),
     // 手动写入 cookie 登录

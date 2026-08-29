@@ -30,6 +30,7 @@ import {
 import { subscribeAlbum } from "@/apis/album/netease";
 import { subscribeArtist } from "@/apis/artist/netease";
 import { fetchUserCloud, deleteCloudSongs } from "@/apis/cloud/netease";
+import { useProviderSessionsStore } from "./providerSessions";
 
 /** 登录 cookie 保活间隔 */
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -81,6 +82,7 @@ const EMPTY_SUBCOUNT: UserSubcount = {
 export const useUserStore = defineStore(
   "user",
   () => {
+    const providerSessions = useProviderSessionsStore();
     /** 用户基础资料 */
     const profile = ref<UserProfile | null>(null);
     /** 上一次 login_refresh 时间戳（毫秒） */
@@ -89,8 +91,8 @@ export const useUserStore = defineStore(
     let lastRefreshAttemptAt = 0;
     let statusRequestId = 0;
     let invalidationPromise: Promise<void> | null = null;
-    /** 是否已登录 */
-    const isLoggedIn = computed(() => profile.value !== null);
+    /** 登录凭据是否存在以 Core provider session 为权威；profile 仅负责网易 UI 资料。 */
+    const isLoggedIn = computed(() => providerSessions.isAuthenticated("netease"));
     /** 全部歌单 */
     const playlists = shallowRef<Playlist[]>([]);
     /** 红心歌曲 id 集合 */

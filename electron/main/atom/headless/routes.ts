@@ -17,6 +17,7 @@ import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   callProviderApi,
   clearProviderSession,
+  getProviderSessions,
   setProviderCookie,
 } from "@main/services/providerApi";
 import * as nowPlaying from "@main/services/nowPlaying";
@@ -153,6 +154,8 @@ export const buildHeadlessRoutes = (): Hono => {
         : {};
     return c.json(await callProviderApi(body.platform, body.name, params));
   });
+
+  api.get("/providers/sessions", (c) => c.json(getProviderSessions()));
 
   api.post("/providers/clear-session", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { platform?: unknown } | null;
