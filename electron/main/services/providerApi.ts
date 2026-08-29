@@ -17,8 +17,7 @@ import { callQobuz } from "@main/apis/qobuz";
 import { getQobuzAuthStatus } from "@main/apis/qobuz/auth";
 import { callTidal } from "@main/apis/tidal";
 import { getTidalAuthStatus } from "@main/apis/tidal/auth";
-import { publishDesktopEvent } from "@main/atom/runtime/events";
-import { wsBroadcast } from "@main/server/broadcast";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { coreLog } from "@main/utils/logger";
 import type { ApiCallResponse, ApiPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
 
@@ -52,8 +51,7 @@ export const publishProviderSessionsIfChanged = (): void => {
   const serialized = JSON.stringify(snapshot);
   if (serialized === lastSessionProjection) return;
   lastSessionProjection = serialized;
-  publishDesktopEvent("apis:sessions", snapshot);
-  wsBroadcast({ type: "providerSessions", data: snapshot });
+  publishCoreControlEvent({ type: "providerSessions", data: snapshot });
 };
 
 /** 各平台的调用器：统一返回 renderer 既有响应结构。 */

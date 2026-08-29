@@ -5,6 +5,7 @@ import type { Collection } from "@/types/collection";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
 import { buildFolderTree, countFolders } from "@/utils/folderTree";
 import { libraryClient } from "@/core/libraryClient";
+import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 
 const trackDb = localforage.createInstance({ name: "splayer", storeName: "library" });
 
@@ -229,18 +230,9 @@ export const useLibraryStore = defineStore("library", () => {
   /** 监听扫描进度 */
   const subscribeScanProgress = (): void => {
     unsubscribe?.();
-    unsubscribe = window.api.library.onScanProgress((raw: any) => {
-      if (!raw) return;
-      const phase = raw.phase || (raw.type === "done" ? "done" : raw.type === "error" ? "error" : "scanning");
-      const normalized: ScanProgress = {
-        phase,
-        scanned: raw.scanned ?? 0,
-        total: raw.total ?? 0,
-        current: raw.current,
-        error: raw.error,
-      };
-      scanProgress.value = normalized;
-      if (phase === "done") {
+    unsubscribe = subscribeCoreControlEvent("libraryScanProgress", (data) => {
+      scanProgress.value = data;
+      if (data.phase === "done") {
         scanning.value = false;
         scanProgress.value = null;
         libraryClient.getTracks().then((res) => {

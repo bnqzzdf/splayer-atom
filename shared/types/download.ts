@@ -102,6 +102,4 @@ export interface DownloadApi {
   getDir: () => Promise<string>;
   setDir: (dir: string) => Promise<string>;
   resetDir: () => Promise<string>;
-  onProgress: (callback: (data: DownloadProgress) => void) => () => void;
-  onState: (callback: (task: DownloadTask) => void) => () => void;
 }

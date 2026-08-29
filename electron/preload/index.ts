@@ -10,7 +10,7 @@ import type {
   PluginMatchCoverArgs,
 } from "@shared/types/plugin";
 import type { HotkeyActionId, HotkeyBinding, HotkeyConflict } from "@shared/types/hotkey";
-import type { ProviderSessionsSnapshot } from "@shared/types/apis";
+import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { LoadOptions, TrackSource } from "@shared/types/player";
 import type { StreamingServerInput } from "@shared/types/streaming";
 import type { RecognitionConfig, RecognitionEvent } from "@shared/types/recognition";
@@ -49,6 +49,12 @@ const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => 
 
 // 暴露给渲染进程的自定义 API
 const api = {
+  coreEvents: {
+    onEvent: (callback: (event: CoreControlEvent) => void) => {
+      ipcRenderer.removeAllListeners("core:event");
+      return subscribe<CoreControlEvent>("core:event", callback);
+    },
+  },
   config: {
     get: (keyPath: string) => ipcRenderer.invoke("config:get", keyPath),
     set: (keyPath: string, value: unknown) => ipcRenderer.invoke("config:set", keyPath, value),
@@ -309,9 +315,6 @@ const api = {
     // 预取歌手头像
     prefetchArtistAvatars: (artistNames: string[]) =>
       ipcRenderer.invoke("library:prefetchArtistAvatars", artistNames),
-    // 订阅扫描进度事件
-    onScanProgress: (callback: (progress: unknown) => void) =>
-      subscribe("library:scanProgress", callback),
   },
   playlist: {
     list: () => ipcRenderer.invoke("playlist:list"),
@@ -476,9 +479,6 @@ const api = {
     // QQ/酷狗 legacy cookie/session 写入。
     setCookie: (platform: "qqmusic" | "kugou", cookie: string) =>
       ipcRenderer.invoke("apis:setCookie", platform, cookie),
-    // 订阅 Core Provider session 变化
-    onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
-      subscribe<ProviderSessionsSnapshot>("apis:sessions", callback),
     // 打开官方网页登录窗口
     openLoginWeb: (platform: string) => ipcRenderer.invoke("apis:openLoginWeb", platform),
   },
@@ -542,10 +542,6 @@ const api = {
     setDir: (dir: string) => ipcRenderer.invoke("download:setDir", dir),
     // 重置为默认下载目录
     resetDir: () => ipcRenderer.invoke("download:resetDir"),
-    // 订阅进度
-    onProgress: (callback: (data: unknown) => void) => subscribe("download:progress", callback),
-    // 订阅状态变更
-    onState: (callback: (task: unknown) => void) => subscribe("download:state", callback),
   },
   nowPlaying: {
     // 渲染进程同步当前播放状态到主进程

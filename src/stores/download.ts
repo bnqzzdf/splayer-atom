@@ -6,6 +6,7 @@
  */
 
 import type { DownloadTask, DownloadProgress, DownloadStatus } from "@shared/types/download";
+import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 
 export const useDownloadStore = defineStore("download", () => {
   /** 是否尚未结束 */
@@ -59,8 +60,8 @@ export const useDownloadStore = defineStore("download", () => {
     const tasks = await window.api.download.list();
     activeTasks.value = tasks.filter((task) => isActive(task.status)).sort(compareActive);
     historyTasks.value = tasks.filter((task) => !isActive(task.status)).sort(compareHistory);
-    unsubscribers.push(window.api.download.onState(applyTask));
-    unsubscribers.push(window.api.download.onProgress(applyProgress));
+    unsubscribers.push(subscribeCoreControlEvent("downloadState", applyTask));
+    unsubscribers.push(subscribeCoreControlEvent("downloadProgress", applyProgress));
   };
 
   const cancel = (taskId: string): void => void window.api.download.cancel(taskId);

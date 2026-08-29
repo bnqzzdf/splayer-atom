@@ -14,8 +14,8 @@ const controlClientSource = readFileSync(
   new URL("../../../src/core/controlClient.ts", import.meta.url),
   "utf8",
 );
-const webClientSource = readFileSync(
-  new URL("../../../src/web/client.ts", import.meta.url),
+const eventClientSource = readFileSync(
+  new URL("../../../src/core/controlEventClient.ts", import.meta.url),
   "utf8",
 );
 const headlessRoutesSource = readFileSync(
@@ -65,6 +65,6 @@ test("Headless info and Web transport enforce the shared Core Protocol contract"
     controlClientSource,
     /if \(path !== "\/info"\) await ensureCoreProtocolCompatible\(\)/,
   );
-  assert.match(webClientSource, /await ensureCoreProtocolCompatible\(\)/);
-  assert.match(webClientSource, /coreCompatibilityError/);
+  assert.match(eventClientSource, /await ensureCoreProtocolCompatible\(\)/);
+  assert.match(eventClientSource, /coreCompatibilityError/);
 });

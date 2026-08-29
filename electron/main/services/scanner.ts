@@ -12,7 +12,7 @@ import {
   getCueTrackPathsByDirs,
   type UpsertTrack,
 } from "@main/database";
-import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
 import { parseArtists, parseAlbum } from "@main/utils/metadata";
@@ -26,7 +26,7 @@ let currentScanProgress: ScanProgress = { phase: "done", total: 0, scanned: 0 };
 
 const publishScanProgress = (progress: ScanProgress): void => {
   currentScanProgress = progress;
-  publishDesktopEvent("library:scanProgress", progress);
+  publishCoreControlEvent({ type: "libraryScanProgress", data: progress });
 };
 
 /** 路径比较键，Windows 下保持大小写不敏感 */

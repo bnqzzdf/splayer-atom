@@ -11,8 +11,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { store } from "@main/store";
 import { getDownloadDir, getCoverCacheDir, getAppCacheDir } from "@main/utils/config";
-import { publishDesktopEvent } from "@main/atom/runtime/events";
-import { wsBroadcast } from "@main/server/broadcast";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { downloadLog } from "@main/utils/logger";
 import { getEngine } from "@main/services/engine";
 import { fetchBytes } from "@main/utils/fetchBytes";
@@ -80,8 +79,7 @@ const broadcastState = (task: DownloadTask): void => {
   // 已删除的任务：收尾态（如中断产生的 canceled）不再写回 DB / 推送，否则会在删行后复活
   if (tasks.get(task.taskId)?.removed) return;
   db.upsert(task);
-  publishDesktopEvent("download:state", task);
-  wsBroadcast({ type: "downloadState", data: task });
+  publishCoreControlEvent({ type: "downloadState", data: task });
 };
 
 /** 跨盘安全移动 */
@@ -123,8 +121,7 @@ const streamToFile = async (
         if (now - lastTs >= PROGRESS_INTERVAL_MS) {
           lastTs = now;
           const progress = { taskId, received, total };
-          publishDesktopEvent("download:progress", progress);
-          wsBroadcast({ type: "downloadProgress", data: progress });
+          publishCoreControlEvent({ type: "downloadProgress", data: progress });
         }
         yield value;
       }
@@ -259,8 +256,7 @@ const runTask = async (
       await fsp.copyFile(audioUrl, partPath);
       received = sourceStat.size;
       const progress = { taskId: req.taskId, received, total };
-      publishDesktopEvent("download:progress", progress);
-      wsBroadcast({ type: "downloadProgress", data: progress });
+      publishCoreControlEvent({ type: "downloadProgress", data: progress });
     } else {
       throw new Error(`unsupported download source: ${audioUrl}`);
     }

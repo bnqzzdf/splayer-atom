@@ -31,8 +31,11 @@ test("Core download queue resolves sources without a renderer round-trip", () =>
   assert.doesNotMatch(managerSource, /waitForResolution|resolutionGates/);
   assert.doesNotMatch(managerSource, /submitResolution|failResolution/);
   assert.doesNotMatch(managerSource, /from "electron"/);
-  assert.match(managerSource, /publishDesktopEvent\("download:state"/);
-  assert.match(managerSource, /wsBroadcast\(\{ type: "downloadState"/);
+  assert.match(managerSource, /publishCoreControlEvent\(\{ type: "downloadState", data: task \}\)/);
+  assert.match(
+    managerSource,
+    /publishCoreControlEvent\(\{ type: "downloadProgress", data: progress \}\)/,
+  );
   assert.match(managerSource, /export const shutdown/);
 });
 
@@ -68,8 +71,12 @@ test("Headless Control exposes real Core download queue management", () => {
   }
   assert.match(webApiSource, /request<EnqueueResult>\("\/download\/start"/);
   assert.match(webApiSource, /request<DownloadTask\[]>\("\/download\/tasks"\)/);
-  assert.match(webApiSource, /event\.type === "downloadProgress"/);
-  assert.match(webApiSource, /event\.type === "downloadState"/);
+  assert.match(downloadStoreSource, /subscribeCoreControlEvent\("downloadState", applyTask\)/);
+  assert.match(
+    downloadStoreSource,
+    /subscribeCoreControlEvent\("downloadProgress", applyProgress\)/,
+  );
+  assert.doesNotMatch(webApiSource, /onProgress:|onState:|event\.type === "downloadProgress"/);
   assert.doesNotMatch(webApiSource, /download:\s*\{\s*list: async \(\) => \[\]/);
 });
 

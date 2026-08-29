@@ -37,7 +37,7 @@ const mapArtist = (artist: ArtistSummary): ArtistSummary => ({
   cover: controlAssetUrl(artist.cover),
 });
 
-type CoreLibraryClient = Omit<LibraryApi, "pickScanDir" | "pickCoverImage" | "onScanProgress">;
+type CoreLibraryClient = Omit<LibraryApi, "pickScanDir" | "pickCoverImage">;
 
 /** Library Core Domain request client；文件 picker 与扫描事件属于独立 Host/event transport。 */
 export const libraryClient: CoreLibraryClient = {

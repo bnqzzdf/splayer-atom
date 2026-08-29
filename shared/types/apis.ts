@@ -51,8 +51,6 @@ export interface ApisApi {
     platform: "qqmusic" | "kugou",
     cookie: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  /** 订阅 Core Provider session 变化。 */
-  onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) => () => void;
   /**
    * 打开官方网页登录
    * @param platform 音源平台

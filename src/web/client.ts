@@ -5,6 +5,7 @@ import {
   request,
 } from "@/core/controlClient";
 import { serverAssetUrl, webAssetUrl } from "@/core/controlAssets";
+import { subscribeControlEvent } from "@/core/controlEventClient";
 import type {
   AudioDevice,
   PlaybackQueueItem,
@@ -22,130 +23,9 @@ export interface OutputSnapshot {
   data: AudioDevice[];
 }
 
-const host = window.location.hostname || "127.0.0.1";
-const dev = import.meta.env.DEV;
 export const apiOrigin = coreApiOrigin;
-export const wsOrigin = dev
-  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14559`
-  : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
-export { ensureCoreProtocolCompatible, getCoreInfo, request };
-
-export const connectWebEvents = (
-  onEvent: (event: { type: string; data?: unknown }) => void,
-): (() => void) => {
-  let disposed = false;
-  let ws: WebSocket | null = null;
-  let reconnectTimer: number | null = null;
-  let statusTimer: number | null = null;
-
-  const sendVisibility = (): void => {
-    if (ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ op: "visibility", visible: document.visibilityState === "visible" }));
-  };
-
-  const syncSnapshots = async (): Promise<void> => {
-    try {
-      const [session, status] = await Promise.all([
-        request<PlaybackSessionSnapshot>("/session"),
-        request<PlayerStatus>("/status"),
-      ]);
-      if (disposed || ws?.readyState !== WebSocket.OPEN) return;
-      onEvent({ type: "session", data: session });
-      onEvent({ type: "status", data: status });
-      onEvent({ type: "deviceChanged" });
-    } catch {
-      // 连接建立后服务仍可能处于启动窗口，后续实时事件会继续恢复状态。
-    }
-  };
-
-  /** 高频 position 不走 WS；正式 Web 用轻量 status snapshot 驱动进度。 */
-  const syncStatus = async (): Promise<void> => {
-    if (disposed || document.visibilityState !== "visible" || ws?.readyState !== WebSocket.OPEN)
-      return;
-    try {
-      const status = await request<PlayerStatus>("/status");
-      if (disposed || ws?.readyState !== WebSocket.OPEN) return;
-      onEvent({ type: "status", data: status });
-    } catch {
-      // WS 重连和下一轮 snapshot 会继续恢复状态。
-    }
-  };
-
-  const stopStatusPolling = (): void => {
-    if (statusTimer !== null) window.clearInterval(statusTimer);
-    statusTimer = null;
-  };
-
-  const startStatusPolling = (): void => {
-    stopStatusPolling();
-    statusTimer = window.setInterval(() => void syncStatus(), 500);
-  };
-
-  const handleVisibility = (): void => {
-    sendVisibility();
-    if (document.visibilityState === "visible") void syncStatus();
-  };
-
-  const scheduleReconnect = (): void => {
-    if (disposed || reconnectTimer !== null) return;
-    reconnectTimer = window.setTimeout(() => {
-      reconnectTimer = null;
-      void connect();
-    }, 1000);
-  };
-
-  const connect = async (): Promise<void> => {
-    if (disposed) return;
-    try {
-      await ensureCoreProtocolCompatible();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      onEvent({ type: "coreCompatibilityError", data: { error: message } });
-      if (!message.startsWith("CORE_PROTOCOL_UNSUPPORTED:")) scheduleReconnect();
-      return;
-    }
-    if (disposed) return;
-    ws = new WebSocket(`${wsOrigin}/ws`);
-    ws.onopen = () => {
-      sendVisibility();
-      void syncSnapshots();
-      startStatusPolling();
-    };
-    ws.onmessage = (message) => {
-      try {
-        const payload = JSON.parse(String(message.data)) as {
-          kind?: string;
-          type?: string;
-          data?: unknown;
-        };
-        if (payload.kind === "event" && payload.type) {
-          onEvent({ type: payload.type, data: payload.data });
-        }
-      } catch {
-        // HTTP snapshots remain authoritative if a malformed external message is received.
-      }
-    };
-    ws.onclose = () => {
-      stopStatusPolling();
-      scheduleReconnect();
-    };
-  };
-
-  document.addEventListener("visibilitychange", handleVisibility);
-  void connect();
-  return () => {
-    disposed = true;
-    document.removeEventListener("visibilitychange", handleVisibility);
-    stopStatusPolling();
-    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-    ws?.close();
-    ws = null;
-  };
-};
-
-export { serverAssetUrl, webAssetUrl };
+export { ensureCoreProtocolCompatible, getCoreInfo, request, serverAssetUrl, webAssetUrl };
 
 export const headlessClient = {
   tracks: (): Promise<{ data: Track[]; total: number }> => request("/library/tracks"),
@@ -199,5 +79,5 @@ export const headlessClient = {
   outputs: (): Promise<OutputSnapshot> => request("/output/devices"),
   selectOutput: (deviceId: string | null): Promise<{ ok: boolean; selected: string | null }> =>
     request("/output/select", { method: "POST", body: JSON.stringify({ deviceId }) }),
-  connectEvents: connectWebEvents,
+  connectEvents: subscribeControlEvent,
 };

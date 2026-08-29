@@ -1,5 +1,6 @@
 import type { ManagedProviderPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
 import { providerClient } from "@/core/providerClient";
+import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 
 const EMPTY_SESSIONS: ProviderSessionsSnapshot = {
   netease: { authenticated: false },
@@ -22,7 +23,7 @@ export const useProviderSessionsStore = defineStore("providerSessions", () => {
 
   const start = (): void => {
     if (unsubscribe) return;
-    unsubscribe = window.api.apis.onSessionsChange(apply);
+    unsubscribe = subscribeCoreControlEvent("providerSessions", apply);
     void refresh();
   };
 

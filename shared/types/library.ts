@@ -81,6 +81,4 @@ export interface LibraryApi {
   fetchArtistAvatar: (artistName: string) => Promise<IpcResponse<string | null>>;
   /** 批量预取歌手头像 */
   prefetchArtistAvatars: (artistNames: string[]) => Promise<IpcResponse<Record<string, string>>>;
-  /** 订阅扫描进度事件 */
-  onScanProgress: (callback: (progress: ScanProgress) => void) => () => void;
 }

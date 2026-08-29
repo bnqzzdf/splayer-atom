@@ -1,18 +1,10 @@
-import {
-  isManagedProviderPlatform,
-  type ApiPlatform,
-  type ProviderSessionsSnapshot,
-} from "@shared/types/apis";
+import { isManagedProviderPlatform, type ApiPlatform } from "@shared/types/apis";
 import type { CoreInfo } from "@shared/types/core";
+import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
-import type {
-  DownloadProgress,
-  DownloadRequest,
-  DownloadTask,
-  EnqueueResult,
-} from "@shared/types/download";
+import type { DownloadRequest, DownloadTask, EnqueueResult } from "@shared/types/download";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
-import type { LibraryApi, ScanProgress } from "@shared/types/library";
+import type { LibraryApi } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
@@ -28,7 +20,8 @@ import type {
   PlayerStatus,
   Track,
 } from "@shared/types/player";
-import { connectWebEvents, request, serverAssetUrl, webAssetUrl } from "./client";
+import { request, serverAssetUrl, webAssetUrl } from "./client";
+import { isCoreControlEvent, subscribeControlEvent } from "@/core/controlEventClient";
 import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
 import { libraryClient } from "@/core/libraryClient";
@@ -36,11 +29,6 @@ import { libraryClient } from "@/core/libraryClient";
 interface OutputSnapshot {
   selected: string | null;
   data: AudioDevice[];
-}
-
-interface WebEvent {
-  type: string;
-  data?: unknown;
 }
 
 const errorText = (error: unknown): string =>
@@ -105,29 +93,7 @@ const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot =
   current: session.current ? mapTrack(session.current) : null,
 });
 
-const eventListeners = new Set<(event: WebEvent) => void>();
-let disconnectEvents: (() => void) | null = null;
-/** Web 扫描请求代次，用于识别快于轮询周期完成的扫描。 */
-let scanRequestGeneration = 0;
-
-const ensureEventConnection = (): void => {
-  if (disconnectEvents) return;
-  disconnectEvents = connectWebEvents((event) => {
-    for (const listener of eventListeners) listener(event);
-  });
-};
-
-const subscribeEvent = (listener: (event: WebEvent) => void): (() => void) => {
-  eventListeners.add(listener);
-  ensureEventConnection();
-  return () => {
-    eventListeners.delete(listener);
-    if (eventListeners.size === 0) {
-      disconnectEvents?.();
-      disconnectEvents = null;
-    }
-  };
-};
+const subscribeEvent = subscribeControlEvent;
 
 const sessionResponse = (loader: () => Promise<PlaybackSessionSnapshot>) =>
   asIpc(async () => mapSession(await loader()));
@@ -415,42 +381,8 @@ const playerApi: PlayerApi = {
 
 const libraryApi: LibraryApi = {
   ...libraryClient,
-  scan: async (incremental = true) => {
-    const result = await libraryClient.scan(incremental);
-    if (result.success) scanRequestGeneration++;
-    return result;
-  },
   pickScanDir: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
   pickCoverImage: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
-  onScanProgress: (callback) => {
-    let disposed = false;
-    let seenScanning = false;
-    let observedGeneration = scanRequestGeneration;
-    const poll = async (): Promise<void> => {
-      if (disposed || document.visibilityState !== "visible") return;
-      try {
-        const progress = (await request<{ data: ScanProgress }>("/library/scan-progress")).data;
-        const requestCompleted = observedGeneration !== scanRequestGeneration;
-        observedGeneration = scanRequestGeneration;
-        if (progress.phase === "scanning") {
-          seenScanning = true;
-          callback(progress);
-        } else if (seenScanning || requestCompleted) {
-          // 增量扫描可能在一次轮询间隔内完成，仍需显式结束 renderer 的 scanning 状态。
-          seenScanning = false;
-          callback(progress);
-        }
-      } catch {
-        // 下一轮轮询继续恢复；HTTP snapshot 仍是权威。
-      }
-    };
-    const timer = window.setInterval(() => void poll(), 250);
-    void poll();
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
-  },
 };
 
 const playlistApi: PlaylistApi = {
@@ -594,6 +526,12 @@ const statsApi: StatsApi = {
 export const installWebApi = async (): Promise<void> => {
   const info = await request<CoreInfo>("/info");
   const api = {
+    coreEvents: {
+      onEvent: (callback: (event: CoreControlEvent) => void) =>
+        subscribeControlEvent((event) => {
+          if (isCoreControlEvent(event)) callback(event);
+        }),
+    },
     config: configApi,
     player: playerApi,
     library: libraryApi,
@@ -751,18 +689,6 @@ export const installWebApi = async (): Promise<void> => {
         ).dir,
       resetDir: async () =>
         (await request<{ dir: string }>("/download/reset-dir", { method: "POST" })).dir,
-      onProgress: (callback: (progress: DownloadProgress) => void) =>
-        subscribeEvent((event) => {
-          if (event.type === "downloadProgress" && event.data) {
-            callback(event.data as DownloadProgress);
-          }
-        }),
-      onState: (callback: (task: DownloadTask) => void) =>
-        subscribeEvent((event) => {
-          if (event.type === "downloadState" && event.data) {
-            callback(mapDownloadTask(event.data as DownloadTask));
-          }
-        }),
       cancel: async (taskId: string) => {
         await request("/download/cancel", {
           method: "POST",
@@ -790,12 +716,6 @@ export const installWebApi = async (): Promise<void> => {
           return { ok: false as const, error: errorText(error) };
         }
       },
-      onSessionsChange: (callback: (snapshot: ProviderSessionsSnapshot) => void) =>
-        subscribeEvent((event) => {
-          if (event.type === "providerSessions" && event.data) {
-            callback(event.data as ProviderSessionsSnapshot);
-          }
-        }),
       openLoginWeb: async () => ({ ok: false as const, error: "WEB_PROVIDER_LOGIN_UNSUPPORTED" }),
     },
   };

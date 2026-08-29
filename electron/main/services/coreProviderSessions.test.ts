@@ -26,13 +26,15 @@ test("Core owns one token-free provider session snapshot for Netease Qobuz and T
   assert.match(serviceSource, /getNeteaseCookies\(\)\.MUSIC_U/);
   assert.match(serviceSource, /getQobuzAuthStatus\(\)/);
   assert.match(serviceSource, /getTidalAuthStatus\(\)/);
-  assert.match(serviceSource, /publishDesktopEvent\("apis:sessions", snapshot\)/);
-  assert.match(serviceSource, /wsBroadcast\(\{ type: "providerSessions", data: snapshot \}\)/);
+  assert.match(
+    serviceSource,
+    /publishCoreControlEvent\(\{ type: "providerSessions", data: snapshot \}\)/,
+  );
   assert.match(serviceSource, /publishProviderSessionsIfChanged\(\)/);
   assert.doesNotMatch(serviceSource, /accessToken|user_auth_token|MUSIC_U:/);
 });
 
-test("Managed Provider requests use Core Protocol while session events keep the existing event transport", () => {
+test("Managed Provider requests and session projection use the shared Core Control transports", () => {
   assert.match(routesSource, /api\.post\("\/providers\/call"/);
   assert.match(routesSource, /api\.get\("\/providers\/sessions"/);
   assert.match(routesSource, /api\.post\("\/providers\/clear-session"/);
@@ -47,10 +49,10 @@ test("Managed Provider requests use Core Protocol while session events keep the 
   assert.match(providerClientSource, /"\/providers\/set-cookie"/);
 
   assert.match(projectionStoreSource, /providerClient\.getSessions\(\)/);
-  assert.match(projectionStoreSource, /window\.api\.apis\.onSessionsChange\(apply\)/);
-  assert.match(preloadSource, /subscribe<ProviderSessionsSnapshot>\("apis:sessions", callback\)/);
+  assert.match(projectionStoreSource, /subscribeCoreControlEvent\("providerSessions", apply\)/);
+  assert.match(preloadSource, /subscribe<CoreControlEvent>\("core:event", callback\)/);
   assert.match(webApiSource, /providerClient\.call\(platform, name, params\)/);
-  assert.match(webApiSource, /event\.type === "providerSessions"/);
+  assert.doesNotMatch(webApiSource, /onSessionsChange|event\.type === "providerSessions"/);
 
   const obsoleteRequestIpc = /apis:(getSessions|clearSession|setCookie)/;
   assert.doesNotMatch(ipcSource, obsoleteRequestIpc);

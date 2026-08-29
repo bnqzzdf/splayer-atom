@@ -42,7 +42,10 @@ test("active Library requests use the shared Core client while Host and event se
   assert.match(libraryStoreSource, /libraryClient\.getTracks\(\)/);
   assert.match(libraryStoreSource, /libraryClient\.addScanDir\(dir\)/);
   assert.match(libraryStoreSource, /window\.api\.library\.pickScanDir\(\)/);
-  assert.match(libraryStoreSource, /window\.api\.library\.onScanProgress/);
+  assert.match(
+    libraryStoreSource,
+    /subscribeCoreControlEvent\("libraryScanProgress", \(data\) => \{/,
+  );
   assert.doesNotMatch(
     libraryStoreSource,
     /window\.api\.library\.(?:getTracks|getAlbums|getArtists|getAlbumTracks|getArtistTracks|prefetchArtistAvatars|scan|cancelScan|addScanDir|removeScanDir|deleteTracks)/,
