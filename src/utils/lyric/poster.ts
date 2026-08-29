@@ -1,5 +1,6 @@
 import type { Track } from "@shared/types/player";
 import { hexToRgb } from "@/utils/color";
+import { playerClient } from "@/core/playerClient";
 
 /** 海报中的一行歌词 */
 export interface LyricPosterLine {
@@ -62,7 +63,7 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
 const resolveCoverDataUrl = async (track: Track): Promise<string | null> => {
   // 本地：主进程返回解码后的原图 dataURL
   if (track.source === "local") {
-    const res = await window.api.player.getCoverRaw();
+    const res = await playerClient.getCoverRaw();
     return res.success && res.data ? res.data : null;
   }
   // 远程：主进程拉字节回渲染层

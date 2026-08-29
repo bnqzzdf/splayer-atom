@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
+import { playerClient } from "@/core/playerClient";
 
 withDefaults(defineProps<{ fullscreen?: boolean }>(), { fullscreen: false });
 
@@ -24,7 +25,7 @@ watchEffect(async () => {
   const id = displayTrack.value?.id;
   if (!status.isPlayerExpanded || status.trackLoading || !id) return;
   if (displayTrack.value?.source !== "local" || hdCache.value?.id === id) return;
-  const r = await window.api.player.getCoverRaw();
+  const r = await playerClient.getCoverRaw();
   if (displayTrack.value?.id !== id || !r.success || !r.data) return;
   hdCache.value = { id, data: r.data };
 });

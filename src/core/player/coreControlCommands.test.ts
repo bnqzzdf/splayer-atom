@@ -5,6 +5,22 @@ import test from "node:test";
 const playerSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const playerClientSource = readFileSync(new URL("../playerClient.ts", import.meta.url), "utf8");
 const settingsSource = readFileSync(new URL("../../stores/settings.ts", import.meta.url), "utf8");
+const playerCoverSource = readFileSync(
+  new URL("../../components/player/FullPlayer/PlayerCover.vue", import.meta.url),
+  "utf8",
+);
+const lyricLoaderSource = readFileSync(
+  new URL("../../services/lyric/loader.ts", import.meta.url),
+  "utf8",
+);
+const fftCaptureSource = readFileSync(
+  new URL("../../services/fftCapture.ts", import.meta.url),
+  "utf8",
+);
+const lyricPosterSource = readFileSync(
+  new URL("../../utils/lyric/poster.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (start: string, end: string): string => {
   const afterStart = playerSource.split(start)[1];
@@ -54,6 +70,31 @@ test("renderer processing and status controls use Core Protocol instead of Playe
     /window\.api\.player\.(getStatus|setVolume|setSpeed|setPitch|setPitchSync|setFadeDuration|setNormalizationEnabled|setEqualizerBands|setPreampGain|setEqualizerEnabled)/;
   assert.doesNotMatch(playerSource, processingIpc);
   assert.doesNotMatch(settingsSource, processingIpc);
+});
+
+test("distributed player helpers use Core Protocol while Host presentation and events stay separate", () => {
+  assert.match(playerClientSource, /coreCommand\("\/player\/fft", \{ enabled \}\)/);
+  assert.match(playerClientSource, /coreResult<\{ data: string \| null \}>\("\/player\/cover"\)/);
+  assert.match(playerClientSource, /coreResult<\{ data: string \}>\("\/player\/read-lyric"/);
+
+  assert.match(playerCoverSource, /playerClient\.getCoverRaw\(\)/);
+  assert.match(lyricPosterSource, /playerClient\.getCoverRaw\(\)/);
+  assert.match(lyricLoaderSource, /playerClient\.readLyricFile\(ext\.path\)/);
+  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(true\)/);
+  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(false\)/);
+
+  const migratedIpc = /window\.api\.player\.(getCoverRaw|readLyricFile|setFftEnabled|getFftData)/;
+  for (const source of [
+    playerCoverSource,
+    lyricPosterSource,
+    lyricLoaderSource,
+    fftCaptureSource,
+  ]) {
+    assert.doesNotMatch(source, migratedIpc);
+  }
+  assert.match(playerSource, /window\.api\.player\.syncPlayMode/);
+  assert.match(playerSource, /window\.api\.player\.syncLikeState/);
+  assert.match(playerSource, /window\.api\.player\.onEvent/);
 });
 
 test("next always delegates playback advancement to the Core session", () => {

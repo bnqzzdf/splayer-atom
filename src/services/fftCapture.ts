@@ -1,3 +1,5 @@
+import { playerClient } from "@/core/playerClient";
+
 /**
  * FFT 频谱推送的引用计数
  *
@@ -13,7 +15,7 @@ let refCount = 0;
 export const acquireFft = (): void => {
   refCount++;
   if (refCount === 1) {
-    window.api.player.setFftEnabled(true);
+    void playerClient.setFftEnabled(true);
   }
 };
 
@@ -22,6 +24,6 @@ export const releaseFft = (): void => {
   if (refCount === 0) return;
   refCount--;
   if (refCount === 0) {
-    window.api.player.setFftEnabled(false);
+    void playerClient.setFftEnabled(false);
   }
 };

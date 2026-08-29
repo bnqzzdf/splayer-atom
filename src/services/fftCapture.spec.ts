@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("fftCapture", () => {
-  const setFftEnabled = vi.fn();
+const { setFftEnabled } = vi.hoisted(() => ({ setFftEnabled: vi.fn() }));
 
+vi.mock("@/core/playerClient", () => ({
+  playerClient: { setFftEnabled },
+}));
+
+describe("fftCapture", () => {
   beforeEach(() => {
     vi.resetModules();
     setFftEnabled.mockReset();
-    Object.defineProperty(window, "api", {
-      configurable: true,
-      value: { player: { setFftEnabled } },
-    });
   });
 
   it("首个消费者开启 FFT，最后一个消费者释放时关闭", async () => {
@@ -28,7 +28,7 @@ describe("fftCapture", () => {
     expect(setFftEnabled).toHaveBeenLastCalledWith(false);
   });
 
-  it("没有消费者时重复释放不会产生 IPC 调用", async () => {
+  it("没有消费者时重复释放不会产生 Core command", async () => {
     const { releaseFft } = await import("./fftCapture");
 
     releaseFft();

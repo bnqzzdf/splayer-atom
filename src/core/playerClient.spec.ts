@@ -75,6 +75,69 @@ describe("shared player processing Core Protocol client", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/output/devices");
   });
 
+  it("uses shared helper routes for FFT, cover and external lyric reads", async () => {
+    document.documentElement.dataset.atomRuntime = "desktop";
+    const fft = { ldata: [0.1], rdata: [0.2] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ protocol: { version: 1 } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: fft }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: "data:image/jpeg;base64,abc" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: "[00:00.00]lyric" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { playerClient } = await import("./playerClient");
+    await expect(playerClient.setFftEnabled(true)).resolves.toEqual({ success: true });
+    await expect(playerClient.getFftData()).resolves.toEqual({ success: true, data: fft });
+    await expect(playerClient.getCoverRaw()).resolves.toEqual({
+      success: true,
+      data: "data:image/jpeg;base64,abc",
+    });
+    await expect(playerClient.readLyricFile("/music/a.lrc")).resolves.toEqual({
+      success: true,
+      data: "[00:00.00]lyric",
+    });
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/player/fft");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ enabled: true }),
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/player/fft");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("atom-core://control/api/player/cover");
+    expect(fetchMock.mock.calls[4]?.[0]).toBe("atom-core://control/api/player/read-lyric");
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ path: "/music/a.lrc" }),
+    });
+  });
+
   it("reads the same Core status snapshot contract", async () => {
     document.documentElement.dataset.atomRuntime = "desktop";
     const status = {

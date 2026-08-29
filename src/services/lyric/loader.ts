@@ -23,6 +23,7 @@ import {
   type ResolvedLyric,
 } from "@/services/lyric/resolve";
 import { consumePreloadedLyric } from "@/services/lyric/preload";
+import { playerClient } from "@/core/playerClient";
 
 /** 竞态 token */
 let currentToken = 0;
@@ -38,7 +39,7 @@ const readLocal = async (
   const idx = bestExternalIndex(detail.externalLyrics, order);
   if (idx !== -1) {
     const ext = detail.externalLyrics[idx];
-    const result = await window.api.player.readLyricFile(ext.path);
+    const result = await playerClient.readLyricFile(ext.path);
     if (!result.success || result.data == null) return null;
     return { source: { source: "external", format: ext.format }, content: result.data };
   }
