@@ -12,6 +12,7 @@ import type {
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { materializeDirectInput } from "@main/atom/directInput";
+import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "@main/atom/runtime/nodeRuntime";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   callProviderApi,
@@ -96,6 +97,9 @@ export const buildHeadlessRoutes = (): Hono => {
       name: runtimeEnvironment.appName,
       version: runtimeEnvironment.appVersion,
       platform: process.platform,
+      node: process.versions.node,
+      nodeRange: CORE_NODE_RANGE,
+      nodeReference: CORE_NODE_REFERENCE,
     }),
   );
 

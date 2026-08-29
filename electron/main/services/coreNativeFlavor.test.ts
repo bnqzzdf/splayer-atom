@@ -14,6 +14,11 @@ const buildSource = readFileSync(
   new URL("../../../scripts/atom/build-core-native.ts", import.meta.url),
   "utf8",
 );
+const coreEntrySource = readFileSync(new URL("../core-node/index.ts", import.meta.url), "utf8");
+const nativeLoaderSource = readFileSync(
+  new URL("../utils/nativeLoader.ts", import.meta.url),
+  "utf8",
+);
 
 test("audio-engine keeps Desktop extras behind a Cargo feature", () => {
   assert.match(cargoSource, /default = \["desktop-audio"\]/);
@@ -38,4 +43,10 @@ test("Core native builder emits only the ALSA-only audio-engine addon", () => {
   assert.match(buildSource, /DIRETTA_SDK_ROOT/);
   assert.match(buildSource, /lib\(\?:pipewire\|pulse\)/);
   assert.doesNotMatch(buildSource, /audio-capture|media-ctrl|taskbar-lyric|opencc/);
+});
+
+test("Node Core loads native addons from the Core flavor directory", () => {
+  assert.match(coreEntrySource, /ATOM_NATIVE_DIR.*\.\.\/core-native/);
+  assert.match(nativeLoaderSource, /runtimeEnvironment\.nativeDir/);
+  assert.match(nativeLoaderSource, /path\.join\(runtimeEnvironment\.nativeDir, fileName\)/);
 });

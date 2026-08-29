@@ -13,8 +13,10 @@ const requireNative = createRequire(import.meta.url);
 export const loadNativeModule = <T = unknown>(fileName: string, devDirName: string): T | null => {
   let nativeModulePath: string;
 
-  if (runtimeEnvironment.isPackaged) {
-    // 打包后: resources/native/audio-engine.node
+  if (runtimeEnvironment.nativeDir) {
+    nativeModulePath = path.join(runtimeEnvironment.nativeDir, fileName);
+  } else if (runtimeEnvironment.isPackaged) {
+    // Desktop 打包后: resources/native/audio-engine.node
     nativeModulePath = path.join(runtimeEnvironment.resourcesDir, "native", fileName);
   } else {
     // 开发时: native/audio-engine/audio-engine.node

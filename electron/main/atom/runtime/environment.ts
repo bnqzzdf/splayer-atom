@@ -42,4 +42,7 @@ export const runtimeEnvironment = {
   get resourcesDir(): string {
     return envText("ATOM_RESOURCES_DIR") ?? process.cwd();
   },
+  get nativeDir(): string | null {
+    return envText("ATOM_NATIVE_DIR");
+  },
 };
