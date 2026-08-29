@@ -701,12 +701,12 @@ Atom Commit:       <commit>
 
 ### 固定构建环境
 
-- [~] 已新增独立 `Core System Gate`，在干净 GitHub `ubuntu-24.04` runner 上执行 Core system artifact 全链；首次远端运行需在当前 checkpoint commit/push 后确认，通过前不标记 complete。
-- [~] Core CI 已固定 reference Node `24.18.0`、Rust `1.98.0`、Ubuntu 24.04，并由 `packageManager` / frozen lockfile 固定 pnpm 依赖来源；正式 Diretta SDK 版本/provisioning 仍属于 §15 release gate。Core 的 Node 24.x compatibility range 与 reference build runtime 保持分离。
-- [~] Core CI 使用 ephemeral runner + `pnpm install --frozen-lockfile` 从干净 package store 构建；配置与本地静态门禁已完成，首次远端成功运行后再提升为 complete。
-- [~] upstream Desktop CI 保持原流程，Atom `Core System Gate` 独立构建 Core flavor；Core runtime、`audio-engine.node`、`better-sqlite3` 与真实 plugin-host `hostReady → ping → pong` smoke 全部固定在 reference Node `24.18.0` artifact pipeline，待首次远端运行确认。
-- [~] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch 全量门禁也已接入 `Core System Gate`，当前仅缺 commit/push 后的首次 clean-run 证据。
-- [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
+- [x] 独立 `Core System Gate` 已在干净 GitHub `ubuntu-24.04` runner 上完成首次真实 clean run：2026-08-29 对 commit `fd5671f` 的 Actions run `33245921866` 全部 step PASS。
+- [x] Core CI 固定 reference Node `24.18.0`、Rust `1.98.0`、Ubuntu 24.04，并由 `packageManager` / frozen lockfile 固定 pnpm 依赖来源；Core 的 Node 24.x compatibility range 与 reference build runtime 保持分离。
+- [x] Core CI 使用 ephemeral runner + `pnpm install --frozen-lockfile` 从干净 package store 构建；首次 hosted clean run 已验证该环境与依赖策略可实际完成 artifact 全链。
+- [x] upstream Desktop CI 保持原流程，Atom `Core System Gate` 独立构建 Core flavor；Core runtime、`audio-engine.node`、`better-sqlite3` 与真实 plugin-host `hostReady → ping → pong` smoke 已在 reference Node `24.18.0` hosted artifact pipeline 通过。
+- [x] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch、部署面与 whitespace 门禁均在首次 GitHub-hosted run 通过。
+- [~] SDK-enabled Diretta build 的受控 provisioning 已落实为独立手动 `Core Diretta Release Gate`：只运行在 `self-hosted/linux/x64/diretta-sdk-149` 受控 runner，SDK 149 只读预置在 checkout 外 `/opt/diretta/HostSDK_149`，不进入 GitHub Secrets / repository / Actions artifact / release upload；首次远端执行仍需注册 runner 并配置 `diretta-release` environment protection。
 
 ### Core Artifact
 
@@ -762,7 +762,8 @@ Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能�
 
 - [x] Diretta SDK 支持公开 release。
 - [x] 首个正式 Core release 固定 **Diretta Host SDK 149 + Linux x86-64**。构建从 SDK 自带 `Host/Release.hpp` 读取 `ReleaseNo` 并在编译前拒绝非 149；AArch64 只保留当前 native compile capability，不在真实机器 release gate 完成前声明正式支持。
-- [ ] 明确 CI 中 SDK 的安全供应方式，不把 SDK binary / archive 误提交到公开源码仓库。
+- [x] CI 中 SDK 的安全供应方式已明确并代码化：SDK-enabled gate 仅手动运行在受控 self-hosted `diretta-sdk-149` runner，SDK 149 只读预置于 checkout 外固定路径；普通 GitHub-hosted CI 永不接触 SDK，workflow 也不上传 SDK/source/archive。
+- [ ] 注册并保护首台 `diretta-sdk-149` release runner，配置 `diretta-release` Environment 后执行首次远端 SDK-enabled `--require-diretta` gate。
 - [x] 正式 Core release 要求包含 Diretta 时必须使用 `--require-diretta`；缺少 `DIRETTA_SDK_ROOT` 会在清理/编译前失败，不允许静默生成同名 no-Diretta artifact。
 - [x] native `build.json` 与最终 `runtime.json` 同时记录 Diretta capability 与 `direttaSdkRelease`；SDK-enabled artifact 已实构建记录 149，no-Diretta artifact 记录 `null`。
 

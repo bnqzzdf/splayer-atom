@@ -1,0 +1,77 @@
+name: Core Diretta Release Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-diretta-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: true
+  DIRETTA_SDK_ROOT: /opt/diretta/HostSDK_149
+
+jobs:
+  core-diretta-linux-x64:
+    name: Core Diretta artifact (SDK 149)
+    if: github.ref == 'refs/heads/dev'
+    runs-on: [self-hosted, linux, x64, diretta-sdk-149]
+    environment: diretta-release
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify controlled release runner
+        run: |
+          test "$(uname -m)" = "x86_64"
+          . /etc/os-release
+          test "$ID" = "ubuntu"
+          test "$VERSION_ID" = "24.04"
+          test -r "$DIRETTA_SDK_ROOT/Host/Release.hpp"
+          test "${DIRETTA_SDK_ROOT#"$GITHUB_WORKSPACE"}" = "$DIRETTA_SDK_ROOT"
+          test -f /usr/include/alsa/asoundlib.h
+          command -v pkg-config
+          command -v clang
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup reference Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Setup reference Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Repository gates
+        run: |
+          pnpm test
+          pnpm typecheck
+          pnpm lint
+          node scripts/atom/check-upstream-touch.mjs
+
+      - name: Build and validate SDK-enabled Core artifact
+        run: pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
+
+      - name: Verify SDK stays outside release artifact
+        run: |
+          if tar -tzf out/core-system-linux-x64.tar.gz | grep -E '(^|/)(DirettaHostSDK|Release\.hpp)(/|$)'; then
+            echo "Diretta SDK source/archive leaked into Core artifact" >&2
+            exit 1
+          fi
+
+      - name: Whitespace check
+        run: git diff --check
