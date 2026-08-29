@@ -1,5 +1,13 @@
 # SPlayer Atom — Progress
 
+## 2026-08-29 — P1 Core-owned playback implementation closed
+
+- Completed and committed the remaining Desktop→Core playback ownership migration through `b4489ac`: Core now owns transport, reload-current, tag-write recovery, output switching, system-media-control transport, native lifecycle and raw playable-source loading; Desktop renderer is a Control projection rather than a second player authority.
+- Committed `dfa47a0 refactor: 让插件运行时支持 Node Core`. Existing plugin registry/router/host are reused; Desktop injects Electron utilityProcess/net fetch while Node Core builds and forks `plugin-host.js`. Direct Node host smoke returned `hostReady` and `pong`; Core JS audit remains zero Electron runtime refs.
+- Committed `7a6a103 refactor: 让 Core 复用上游插件音源兼容`. Netease retains official→plugin→trial fallback, QQ/Kugou retain only inherited musicUrl compatibility, and Qobuz/TIDAL remain official Atom paths. Shared musicInfo mapping prevents Core/legacy compatibility drift.
+- Full gate passes at Node 134/134 and Web 52/52 with Node/Web typecheck, targeted/full ESLint/Prettier, Core multi-entry production build, plugin-host process smoke, zero-Electron artifact audit, `git diff --check`, and touch audit at 37 business / 16 runtime-neutral / 12 Core-authority.
+- Updated roadmap section 5 to reflect implementation reality while leaving live-account/hardware acceptance open. The next software implementation target returns to roadmap section 4: fixed bundled Node runtime and Core-only native build flavor/package surface.
+
 ## 2026-08-28 — Atom origin published path + Node Core bootstrap proof
 
 - Switched local `origin` to the user-created `https://github.com/bnqzzdf/splayer-atom.git`; retained `splayer=https://github.com/SPlayer-Dev/SPlayer-Next.git` with push disabled and kept `vendor/splayer` on official commit `92026e2c69dd63dd42408ddc5beaf4876d231dc1` while accepted baseline stays fixed at `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`.

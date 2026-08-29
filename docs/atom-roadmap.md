@@ -278,14 +278,14 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 
 这些里程碑只是内部检查点，不产生需要长期维护的 Electron Headless 发布产品：
 
-1. [~] 已隔离首批 runtime-neutral path / fetch / secret / event / playback-presentation seam；Desktop shell 仍保留历史 authoritative playback orchestration，继续迁移。
-2. [~] Node Core bootstrap 已可独立启动 settings、database、song cache、playback session 与 HTTP / WS，并完成 `/api/info`、`/api/session`、`/api/library/count` 进程 smoke；provider/auth 与完整播放闭环继续验收。
-3. [ ] 完成第 5 节定义的 Core-owned playback orchestration，使 queue / source / policy / recovery / preload 全部归 Core。
+1. [x] runtime-neutral path / fetch / secret / event / playback-presentation / plugin-host seam 已隔离；Desktop renderer 不再拥有 authoritative playback orchestration。
+2. [x] Node Core bootstrap 可独立启动 settings、database、song cache、plugin registry、playback session 与 HTTP / WS，并完成 `/api/info`、`/api/session`、`/api/library/count` 及 plugin-host 进程 smoke。
+3. [x] 第 5 节定义的 Core-owned playback orchestration 已完成实现层收口：queue / source / policy / recovery / preload / output switching 均由 Core 持有；真实在线连续播放与硬件验收继续单列。
 4. [ ] Node Core 完成本地 PCM / Native DSD 播放。
 5. [ ] Node Core 完成 ALSA hardware / Diretta 输出与设备切换。
-6. [ ] Web 完全成为 Core Control，在浏览器关闭后 Core session 仍独立运行。
-7. [ ] Desktop Electron 逐步改为 Core Control，不再拥有本地 authoritative playback session。
-8. [ ] provider/auth 完全使用 Core 的 runtime-neutral path / secret adapters。
+6. [~] Web 播放链已成为 Core Control，浏览器不再拥有 queue / source / recovery / preload authority；完整产品面与长时间断连运行仍待验收。
+7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 bundled-local-Core / remote-Core 产品形态。
+8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam；各 Control 的 provider 登录状态统一投影仍待收口。
 9. [ ] 建立自带固定 Node runtime 的 Linux Core `.deb` / `tar.gz` 发行。
 10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
 11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
@@ -309,15 +309,15 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 
 当前本地 Headless 已经让 main playback session 持有队列；但完整 source resolution、cache policy、在线登录状态判断、next-track preload 等仍有 renderer-owned orchestration。长期目标不是只修复“在线自动下一首”，而是让 **Core 从 canonical `Track` 开始直到 Output 执行播放为止，成为唯一 playback orchestration authority。**
 
-### 当前缺口
+### 已收口的原缺口
 
-- [~] main 已拥有 Headless queue / index / repeat / shuffle，并能消费 native `ended` / `sourceError`。
-- [ ] `playbackSession.loadIndex()` 仍需移除“仅 local track”阶段限制。
-- [ ] 在线 source resolution 仍有 renderer store / `window.api` orchestration 依赖。
-- [ ] 播放音质、试听策略等影响实际音源选择的 policy 尚未全部成为 Core authority。
-- [ ] next-track preload / Diretta staged next 仍由 renderer 生命周期参与。
-- [ ] URL 过期 / 403 / 临时网络错误尚未形成 Core-controlled 的同曲有限重解析策略。
-- [ ] Desktop renderer 仍保留历史 playback orchestration，需要最终降级为 Control state projection。
+- [x] main/Core 拥有唯一 queue / index / repeat / shuffle，并在 Node 与 Desktop runtime 都消费 native `ended` / `sourceError` / Direct boundary。
+- [x] `playbackSession.loadIndex()` 已移除“仅 local track”阶段限制。
+- [x] 播放用在线 source resolution 已从 renderer `window.api` orchestration 迁入 Core；renderer 旧 resolver 仅保留非 authoritative 兼容用途。
+- [x] 在线音质、试听、DJ 跳过、定时关闭、设备切换暂停等会改变实际播放结果的 policy 已迁入 Core authority。
+- [x] next-track playable-input preload / Diretta staged next 已由 Core 唯一管理；Control 仅保留歌词/封面 UI 预热。
+- [x] URL/source failure 已形成 Core-controlled 的同曲一次 fresh resolve + 有界 skip 策略。
+- [x] Desktop renderer 已移除 raw playable-source load path，普通 command、native lifecycle、output switching 与 reload-current 均通过 Core session。
 
 ### Core Playback Domain
 
@@ -345,12 +345,12 @@ Core Local Output: audio-engine → ALSA / Diretta
 
 ### PlaybackSourceResolver
 
-- [ ] 建立 runtime-neutral 的 Core `PlaybackSourceResolver`，统一处理 local / streaming / NCM / Qobuz / TIDAL，以及上游已存在的兼容 source。
-- [ ] Resolver 复用现有 main provider API、Qobuz/TIDAL API、plugin router、streaming adapter、song cache 和 Direct materializer，不新增第二套 provider framework。
-- [ ] QQ Music / 酷狗只保留上游继承所需的兼容 seam；Core 重构不得因此扩大 Atom 对 QM/KG provider、账号、权益或取流逻辑的所有权。
-- [ ] renderer 不再负责取得“最终可播放 URL/路径”后再交给 Core。
-- [ ] Queue / persisted session 只保存 canonical `Track` + `PlaybackContext`，不保存会过期的 CDN URL。
-- [ ] 每次需要播放或恢复时由 Core 根据 canonical Track 获取 fresh source。
+- [x] 建立 runtime-neutral 的 Core `PlaybackSourceResolver`，统一处理 local / streaming / NCM / Qobuz / TIDAL，以及上游已存在的兼容 source。
+- [x] Resolver 复用现有 main provider API、Qobuz/TIDAL API、plugin router、streaming adapter、song cache 和 Direct materializer，不新增第二套 provider framework。
+- [x] QQ Music / 酷狗只保留上游继承所需的 `musicUrl` plugin compatibility seam；未扩大 Atom 对 QM/KG provider、账号、权益或取流逻辑的所有权。
+- [x] renderer 不再负责取得“最终可播放 URL/路径”后再交给 Core。
+- [x] Queue / persisted session 只保存 canonical `Track` + `PlaybackContext`，不保存会过期的 CDN URL。
+- [x] 每次需要播放、reload-current 或 source recovery 时由 Core 根据 canonical Track 获取 fresh source。
 
 Search、浏览歌单、专辑、收藏等 UI 数据查询不必进入 PlaybackSession；单一 authority 边界从“用户选择 canonical Track 开始播放”开始。
 
@@ -368,16 +368,16 @@ Search、浏览歌单、专辑、收藏等 UI 数据查询不必进入 PlaybackS
 
 ### Provider Session 与登录态
 
-- [ ] Provider 登录 / cookie / token 的真实状态只由 Core 持有。
-- [ ] Source resolver 直接查询 Core provider session，不以 Web / Desktop `userStore.isLoggedIn` 等 UI 状态决定是否使用会员权益。
-- [ ] Control 显示的登录状态只是 Core session snapshot 的投影。
+- [~] 播放所需 Provider cookie/token 的权威存储已在 Core/main；Qobuz/TIDAL/streaming secret 已使用 runtime-neutral adapter，但完整 provider session contract 仍待统一。
+- [x] Core source resolver 直接使用 main provider session / credential，不以 Web / Desktop `userStore.isLoggedIn` 等 UI 状态决定实际取流。
+- [ ] Control 显示的登录状态统一改为 Core provider-session snapshot/event 投影。
 
 ### Cache / Direct / Preload 所有权
 
-- [ ] song-cache lookup / fetch scheduling 收归 Core，避免多个 Control 重复触发同一缓存任务。
-- [ ] Diretta 对 HTTP 输入的 exact-byte materialization 完全属于 Core / Output preparation，Control 不需要理解“Diretta 只能加载本地 seekable input”。
-- [ ] next-track preload 收归 Core；浏览器关闭或 Desktop 退出后仍继续。
-- [ ] Diretta `stageDirectNext()` / gapless boundary 的准备与 temp input 生命周期由 Core 唯一管理。
+- [x] song-cache lookup / fetch scheduling 收归 Core，避免多个 Control 重复触发同一缓存任务。
+- [x] Diretta 对 HTTP 输入的 exact-byte materialization 完全属于 Core / Output preparation，Control 不需要理解“Diretta 只能加载本地 seekable input”。
+- [x] next-track playable-input preload 收归 Core；Control 生命周期不再是 preload owner。
+- [x] Diretta `stageDirectNext()` / gapless boundary 的准备、commit 与 temp input 生命周期由 Core 唯一管理。
 
 ### Source Recovery
 
@@ -397,9 +397,9 @@ repeated failure
 mark current item failed and advance
 ```
 
-- [ ] 同曲重解析次数必须有严格上限，不允许无限 retry。
-- [ ] entitlement / purchase / trial-policy 等明确不可播放错误不做无意义重试。
-- [ ] Core 负责决定 retry / skip；Control 只负责展示错误状态。
+- [x] 同曲重解析次数有严格上限：非本地 sourceError 最多 fresh resolve 一次，不允许无限 retry。
+- [x] entitlement / purchase / trial-policy 等明确不可播放错误不做同曲无意义重试，并进入有界 skip policy。
+- [x] Core 负责决定 retry / skip；Control 只接收 error/session/trackLoaded projection。
 
 ### Control Contract
 

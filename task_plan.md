@@ -4,10 +4,10 @@
 Build SPlayer Atom as a continuously-updatable downstream of SPlayer-Next. Reuse upstream capabilities wherever possible and keep Atom-specific behavior limited to the smallest proven delta.
 
 ## Current Phase
-Roadmap P0/P1 transition — Node Core / Desktop Control migration
+Roadmap P1 — Node Core productization after Core-owned playback closure
 
 ## Next Step
-`origin` / `splayer` / `vendor/splayer` upstream sync foundation is established and `origin` now points to `https://github.com/bnqzzdf/splayer-atom.git`. The independent Node Core build now has zero Electron imports and passes process-level info/session/library smoke. Continue roadmap section 4 in order: finish the Node Core runtime boundary and build flavor, then move canonical Track source resolution / playback policy / recovery / cache / preload into Core-owned playback without creating a second provider, queue, player, or settings domain.
+P0 upstream sync and roadmap section 5 Core-owned playback are now implementation-complete: Desktop/Web no longer own playable-source resolution, auto-next, recovery, preload, Direct staging, output switching, or raw player load; Node Core production bundles remain Electron-free and now include a runtime-neutral plugin host. Keep real provider/hardware acceptance separate. Resume roadmap section 4 at the first still-open software task: pin and bundle the project Node runtime, then split the Linux Core native build so it carries only required audio-engine capabilities/backends before packaging work proceeds.
 
 以下 Phase 16 内容保留为历史验收记录，不再决定当前执行顺序。
 

@@ -1,5 +1,16 @@
 # SPlayer Atom — Findings & Decisions
 
+## 2026-08-29 — P1 Core-owned playback implementation closure
+
+- Core-owned playback is now implementation-complete at the architecture level: canonical Track resolution, playback policy, bounded failure recovery, song-cache scheduling, next-track preload, Diretta staged-next/boundary, reload-current, output switching, native lifecycle and Desktop/Web command transport all converge on the same `PlaybackSession`.
+- Desktop renderer no longer owns a raw playable-source load path. Remaining renderer `audioSource` logic is compatibility/non-authoritative code; playback commands and natural lifecycle do not depend on it.
+- Private FM recommendation ownership moved into Core and projects its canonical queue/mode through the same session contract. Auto-close and Fuck DJ policy also moved into Core so Control disconnect cannot silently disable playback policy.
+- Upstream plugin playback compatibility exposed a hidden Node-Core blocker: the existing plugin registry/router depended on Electron `app` / `utilityProcess` / `net`. The sandbox itself is Node `vm`, so no new plugin framework was created. Three narrow upstream files were made runtime-neutral; Desktop injects `utilityProcess`, Node Core uses `child_process.fork`, and both reuse the existing host.worker/router/registry.
+- Node Core now builds `index.js` plus `plugin-host.js`; an ordinary Node fork receives `hostReady` and answers ping/pong. Production Core JS remains free of Electron runtime imports. Runtime-neutral seam budget is therefore explicitly 16 while business budget remains 37 and Core-authority seam budget remains 12.
+- Core resolver now preserves inherited upstream plugin semantics without expanding Atom provider scope: Netease is official first → plugin fallback → allowed trial; QQ Music/Kugou only use inherited `musicUrl` plugin compatibility; Qobuz/TIDAL remain Atom official-provider paths.
+- Full automated gate after this closure is Node 134/134 and Web 52/52, with Node/Web typecheck, ESLint, Prettier, Core build, zero-Electron audit, plugin-host smoke, touch audit and `git diff --check` passing.
+- Roadmap section 5 implementation boxes can be marked complete, but real acceptance remains separate: Netease three-track/no-Control continuity, live URL-expiry recovery, real ALSA/Diretta combinations, and Qobuz/TIDAL account-backed playback are not implied by static/automated architecture proof.
+
 ## 2026-08-28 — Atom self-origin and first pure Node Core bootstrap
 
 - 用户已创建正式 Atom self repository `https://github.com/bnqzzdf/splayer-atom.git`；本地 `origin` 已切换到该仓库，`splayer` 继续固定为官方 `SPlayer-Dev/SPlayer-Next` fetch-only remote，push URL 仍为 `DISABLED`。这消除了上一轮唯一需要外部确认的 self-origin URL 缺口。
