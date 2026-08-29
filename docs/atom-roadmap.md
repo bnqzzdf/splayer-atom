@@ -241,7 +241,7 @@ Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 
 - [ ] Core 正式支持 **Node 24.x LTS**；首个兼容范围定为 `>=24.18.0 <25`。CI / release 使用一个精确 reference runtime，初始为 `24.18.0`；reference patch 升级必须重新执行 Node/Web/native/Core process/plugin-host 与硬件相关门禁，不允许静默漂移。
 - [ ] 系统 Node 与 bundled Node 都使用同一 Core JS / native artifact contract。首阶段优先支持受验证的 system Node 部署；bundled Node 是可选的自包含发行形式，不作为 Core 架构、P1 功能或普通部署的硬前提。
 - [ ] 初期不以 Node SEA 为目标；Core 保持可审计、可调试的 JS bundle + native addon 结构。若发布 bundled-runtime artifact，也只是在外层附带 reference Node，不建立第二套 Core 产品。
-- [~] `audio-engine.node` 已在本机 Node `24.18.0` 完成 N-API 加载与 Core process smoke；正式支持矩阵仍需在 reference Node 及至少另一个兼容 Node 24 patch 上自动验证。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
+- [~] `audio-engine.node` 已在本机 Node `24.18.0` 完成 N-API 加载与 Core process smoke；正式 release 继续以 reference Node `24.18.0` 运行自动门禁，不额外维护第二个 Node 24 patch 的兼容 smoke。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
 - [ ] `better-sqlite3` 的 Core native 产物必须在 reference Node 24 runtime 下构建并验证；release staging 不允许被构建机上的任意 Node major 隐式重编。长期 Desktop Control 不应因 Core 数据库而继续依赖 Electron 版 `better-sqlite3`。
 
 Node runtime 的来源属于部署策略，不属于 Core authority 边界：system Node 与 bundled Node 必须运行同一 Core domain、同一 protocol、同一 native compatibility contract，不能因为打包方式不同形成两个产品分支。
@@ -255,9 +255,9 @@ ALSA hardware PCM
 Diretta Source Direct
 ```
 
-- [ ] Core native build 不默认携带 PipeWire / PulseAudio backend。
-- [ ] Core 不构建未启用的 `audio-capture`、`media-ctrl` 等 Desktop native addon。
-- [ ] `audio-engine` 使用 Cargo features / capability 拆分，使 Core build 只包含需要的 Linux audio backend。
+- [x] Core native build 通过 `core-audio` flavor 只保留 ALSA，release addon 的 `ldd` 已验证不携带 PipeWire / PulseAudio backend。
+- [x] Core native build 只构建 `audio-engine`，不构建 `audio-capture`、`media-ctrl`、taskbar/opencc 等 Desktop native addon。
+- [x] `audio-engine` 已使用 Cargo features 拆分 Desktop extras 与 Core `core-audio` flavor，使 Core build 只包含需要的 Linux audio backend。
 - [ ] 未来 Desktop Output Agent 可按桌面平台需要构建其 OS output backend，不影响 Core 的最小 Linux 依赖。
 - [ ] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包。
 
@@ -704,7 +704,7 @@ Atom Commit:       <commit>
 - [ ] 建立干净 CI / container release 环境。
 - [ ] 固定 **reference Node 24.x patch**（初始 `24.18.0`）、pnpm、Rust toolchain、lockfile、Linux build image 与 Diretta SDK 版本；同时单独维护 Core 的 Node 24.x compatibility range，不能把“支持范围”和“reference build runtime”混成一件事。
 - [ ] lockfile + 干净 package store 可重复构建。
-- [ ] CI 中分别执行 Desktop / Core flavor 构建，并至少在 reference Node 与另一个受支持 Node 24 patch 上运行 Core runtime/native load smoke。
+- [ ] CI 中分别执行 Desktop / Core flavor 构建；Core runtime、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke 固定在 reference Node `24.18.0` 上执行。
 - [ ] Node / Web / native / touch audit 自动门禁。
 - [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
 
@@ -749,7 +749,7 @@ library fixture / queue / playback smoke
 
 - 同一 commit 在干净构建环境可稳定生成等价 Core release。
 - system-runtime `tar.gz` 在受支持的 Node 24.x 环境可按文档直接运行；若发布 bundled-runtime 变体，则该变体在无系统 Node 的干净环境也必须可运行。
-- reference Node 与兼容范围内的第二个 Node 24 patch 均通过 Core process、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke。
+- reference Node `24.18.0` 通过 Core process、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke；不要求维护第二个 Node 24 patch 的兼容 smoke。
 - release 判断以最终 artifact smoke + hardware gate 为准，不以“开发目录 build 成功”代替。
 
 ---
