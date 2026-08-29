@@ -1,4 +1,3 @@
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSupportedCoreNodeRuntime } from "@main/atom/runtime/nodeRuntime";
 
@@ -8,8 +7,8 @@ process.env.ATOM_HEADLESS = "1";
 process.env.ATOM_APP_NAME ??= "SPlayer Atom Core";
 process.env.ATOM_APP_VERSION ??= "1.0.0";
 process.env.ATOM_APP_PACKAGED ??= process.env.NODE_ENV === "production" ? "1" : "0";
-process.env.ATOM_RENDERER_DIR ??= path.join(process.cwd(), "out", "renderer");
-process.env.ATOM_NATIVE_DIR ??= fileURLToPath(new URL("../core-native", import.meta.url));
+process.env.ATOM_RENDERER_DIR ??= fileURLToPath(new URL("../renderer", import.meta.url));
+process.env.ATOM_NATIVE_DIR ??= fileURLToPath(new URL("../native", import.meta.url));
 process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js", import.meta.url));
 
 let shuttingDown = false;

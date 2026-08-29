@@ -14,6 +14,10 @@ const buildSource = readFileSync(
   new URL("../../../scripts/atom/build-core-native.ts", import.meta.url),
   "utf8",
 );
+const stageSource = readFileSync(
+  new URL("../../../scripts/atom/stage-core-system.ts", import.meta.url),
+  "utf8",
+);
 const coreEntrySource = readFileSync(new URL("../core-node/index.ts", import.meta.url), "utf8");
 const nativeLoaderSource = readFileSync(
   new URL("../utils/nativeLoader.ts", import.meta.url),
@@ -39,14 +43,22 @@ test("Linux Core disables the PipeWire device watcher", () => {
 test("Core native builder emits only the ALSA-only audio-engine addon", () => {
   assert.match(buildSource, /"--no-default-features"/);
   assert.match(buildSource, /"--features",\n {2}"core-audio"/);
-  assert.match(buildSource, /out", "core-native"/);
+  assert.match(buildSource, /out", "native"/);
   assert.match(buildSource, /DIRETTA_SDK_ROOT/);
+  assert.match(buildSource, /CARGO_HOME/);
+  assert.match(buildSource, /build\.json/);
+  assert.match(buildSource, /profile: isDev \? "debug" : "release"/);
   assert.match(buildSource, /lib\(\?:pipewire\|pulse\)/);
   assert.doesNotMatch(buildSource, /audio-capture|media-ctrl|taskbar-lyric|opencc/);
 });
 
+test("Core system staging refuses debug native addons", () => {
+  assert.match(stageSource, /nativeBuild\.profile !== "release"/);
+  assert.match(stageSource, /nativeBuild\.flavor !== "core-audio"/);
+});
+
 test("Node Core loads native addons from the Core flavor directory", () => {
-  assert.match(coreEntrySource, /ATOM_NATIVE_DIR.*\.\.\/core-native/);
+  assert.match(coreEntrySource, /ATOM_NATIVE_DIR.*\.\.\/native/);
   assert.match(nativeLoaderSource, /runtimeEnvironment\.nativeDir/);
   assert.match(nativeLoaderSource, /path\.join\(runtimeEnvironment\.nativeDir, fileName\)/);
 });

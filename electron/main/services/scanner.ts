@@ -12,7 +12,7 @@ import {
   type UpsertTrack,
 } from "@main/database";
 import { publishDesktopEvent } from "@main/atom/runtime/events";
-import { toCacheUrl } from "@main/utils/protocol";
+import { toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
 import { parseArtists, parseAlbum } from "@main/utils/metadata";
 import { getCoverCacheDir, isWin } from "@main/utils/config";

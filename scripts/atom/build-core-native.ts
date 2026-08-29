@@ -1,12 +1,22 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const crateDir = path.join(root, "native", "audio-engine");
-const outputDir = path.join(root, "out", "core-native");
+const outputDir = path.join(root, "out", "native");
 const targetDir = path.join(root, "target", "core-audio");
+
+const cargoBinDir = path.join(
+  process.env.CARGO_HOME?.trim() || path.join(os.homedir(), ".cargo"),
+  "bin",
+);
+const childEnv = {
+  ...process.env,
+  PATH: [process.env.PATH, cargoBinDir].filter(Boolean).join(path.delimiter),
+};
 
 const args = new Set(process.argv.slice(2));
 const isDev = args.delete("--dev");
@@ -40,6 +50,7 @@ if (!isDev) napiArgs.push("--release");
 console.log(`[CoreNative] 构建 audio-engine (${isDev ? "debug" : "release"}, ALSA-only)`);
 const build = spawnSync("napi", napiArgs, {
   cwd: crateDir,
+  env: childEnv,
   stdio: "inherit",
   shell: false,
 });
@@ -51,6 +62,20 @@ const addonPath = path.join(outputDir, "audio-engine.node");
 if (!existsSync(addonPath)) {
   throw new Error(`Core native addon 未生成: ${addonPath}`);
 }
+writeFileSync(
+  path.join(outputDir, "build.json"),
+  `${JSON.stringify(
+    {
+      profile: isDev ? "debug" : "release",
+      flavor: "core-audio",
+      platform: process.platform,
+      arch: process.arch,
+      diretta: Boolean(process.env.DIRETTA_SDK_ROOT?.trim()),
+    },
+    null,
+    2,
+  )}\n`,
+);
 
 const ldd = spawnSync("ldd", [addonPath], { encoding: "utf8" });
 if (ldd.error) throw ldd.error;
