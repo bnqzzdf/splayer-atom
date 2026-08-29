@@ -288,7 +288,7 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 5. [ ] Node Core 完成 ALSA hardware / Diretta 输出与设备切换。
 6. [~] Web 播放链已成为 Core Control，浏览器不再拥有 queue / source / recovery / preload authority；完整产品面与长时间断连运行仍待验收。
 7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 local-Core / remote-Core 产品形态。
-8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam；各 Control 的 provider 登录状态统一投影仍待收口。
+8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam，Netease/Qobuz/TIDAL 登录状态也已统一由 Core snapshot/event 投影；Qobuz/TIDAL Account UI 与真实账号验收仍待完成。
 9. [~] 已建立 Node 24.x LTS system-runtime Linux x64 `tar.gz` 技术 artifact、统一 launcher 与 final-artifact smoke；正式 release identity / CI 发布链、硬件 gate 与可选 bundled Node 变体仍待完成。
 10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
 11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
@@ -373,7 +373,7 @@ Search、浏览歌单、专辑、收藏等 UI 数据查询不必进入 PlaybackS
 
 - [~] 播放所需 Provider cookie/token 的权威存储已在 Core/main；Qobuz/TIDAL/streaming secret 已使用 runtime-neutral adapter，但完整 provider session contract 仍待统一。
 - [x] Core source resolver 直接使用 main provider session / credential，不以 Web / Desktop `userStore.isLoggedIn` 等 UI 状态决定实际取流。
-- [ ] Control 显示的登录状态统一改为 Core provider-session snapshot/event 投影。
+- [x] Control 登录状态已统一改为 Core `ProviderSessionsSnapshot` + Desktop/WS event 投影；Netease `user.isLoggedIn` 不再由 renderer profile 是否存在推断，Qobuz/TIDAL 后续账户 UI 复用同一非持久化 projection store。
 
 ### Cache / Direct / Preload 所有权
 
