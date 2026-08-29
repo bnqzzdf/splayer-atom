@@ -11,12 +11,62 @@ const controlSource = readFileSync(
 const routesSource = readFileSync(new URL("../atom/headless/routes.ts", import.meta.url), "utf8");
 const playerControlSource = readFileSync(new URL("./playerControl.ts", import.meta.url), "utf8");
 const webApiSource = readFileSync(new URL("../../../src/web/api.ts", import.meta.url), "utf8");
+const controlProtocolSource = readFileSync(
+  new URL("../atom/controlProtocol.ts", import.meta.url),
+  "utf8",
+);
+const controlClientSource = readFileSync(
+  new URL("../../../src/core/controlClient.ts", import.meta.url),
+  "utf8",
+);
+const coreMainSource = readFileSync(new URL("../core/index.ts", import.meta.url), "utf8");
+const autoCloseSource = readFileSync(
+  new URL("../../../src/services/autoClose.ts", import.meta.url),
+  "utf8",
+);
 
-test("Desktop transport delegates play pause stop and seek to the Core session", () => {
+test("Legacy Desktop player IPC remains a thin Core-session delegate", () => {
   assert.match(ipcSource, /await playbackSession\.play\(\)/);
   assert.match(ipcSource, /playbackSession\.pause\(\)/);
   assert.match(ipcSource, /playbackSession\.stop\(\)/);
   assert.match(ipcSource, /await playbackSession\.seek\(positionMs\)/);
+});
+
+test("Desktop renderer play pause stop and seek use the same Core Protocol routes as Web", () => {
+  assert.match(controlProtocolSource, /buildHeadlessRoutes\(\)/);
+  assert.match(controlProtocolSource, /scheme: CORE_CONTROL_SCHEME/);
+  assert.match(controlProtocolSource, /supportFetchAPI: true/);
+  assert.match(controlProtocolSource, /session\.fromPartition\(partition\)\.protocol\.handle/);
+  assert.doesNotMatch(
+    controlProtocolSource,
+    /externalApi\.enabled|externalControlGate|buildRoutes/,
+  );
+
+  const registerIndex = coreMainSource.indexOf("registerCoreControlScheme();");
+  const readyIndex = coreMainSource.indexOf("app.whenReady().then");
+  const handleIndex = coreMainSource.indexOf(
+    "handleCoreControlProtocolOnPartition(MAIN_PARTITION);",
+  );
+  const windowIndex = coreMainSource.indexOf("createMainWindow();");
+  assert.ok(registerIndex >= 0 && registerIndex < readyIndex);
+  assert.ok(handleIndex > readyIndex && handleIndex < windowIndex);
+
+  assert.match(controlClientSource, /dataset\.atomRuntime === "desktop"/);
+  assert.match(controlClientSource, /"atom-core:\/\/control"/);
+  assert.match(controlClientSource, /assertCoreProtocolCompatible\(info\)/);
+
+  assert.match(controlSource, /coreCommand\("\/play"\)/);
+  assert.match(controlSource, /coreCommand\("\/pause"\)/);
+  assert.match(controlSource, /coreCommand\("\/stop"\)/);
+  assert.match(controlSource, /coreCommand\("\/seek", \{ positionMs: posMs \}\)/);
+  assert.doesNotMatch(controlSource, /window\.api\.player\.(play|pause|stop|seek)\(/);
+  assert.match(autoCloseSource, /coreCommand\("\/pause"\)/);
+  assert.doesNotMatch(autoCloseSource, /window\.api\.player\.pause\(/);
+
+  assert.match(routesSource, /api\.post\("\/play"/);
+  assert.match(routesSource, /api\.post\("\/pause"/);
+  assert.match(routesSource, /api\.post\("\/stop"/);
+  assert.match(routesSource, /api\.post\("\/seek"/);
 });
 
 test("Core reload-current captures native position and play state before fresh loading", () => {

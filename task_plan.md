@@ -11,7 +11,7 @@ Roadmap P3 — Core release gates plus §16 capability-driven Control convergenc
 ## Current Baseline
 
 - P0 upstream sync, Core-owned playback, Node Core runtime/artifacts, Core Protocol v1, provider-session projection, durable schema migration/backup, and deployment/upgrade/rollback are software-complete at their current checkpoints.
-- The latest validated repository baseline is Node 230/230, Web 52/52, Node/Web typecheck, ESLint, focused Prettier, `git diff --check`, touch audit at 69 business / 22 runtime-neutral / 13 Core-authority, and a Desktop production build with native rebuild skipped.
+- The latest validated repository baseline is Node 231/231, Web 54/54, Node/Web typecheck, ESLint, focused Prettier, `git diff --check`, touch audit at 69 business / 22 runtime-neutral / 13 Core-authority, and a Desktop production build with native rebuild skipped.
 - Core comments, filesystem paths, library file operations, cache, Download, network-proxy testing, and audio-output reinitialization are projected through existing Core services/commands rather than parallel Web-owned implementations.
 - The shared `ControlAction` model now covers Track, Collection detail (playlist/album), Artist, and optional CoverList card presentation. Track right-click/row `...`, Collection/Artist primary+overflow actions, and Favorites card unsubscribe all consume shared semantic lists; provider execution stays in existing stores/services.
 - Diretta Source Direct remains bound by the source-rate/channel/sample/DSD-sequence invariants in `AGENTS.md`; SDK release provenance is pinned to Diretta SDK 149 for the first Linux x86-64 Core release.
@@ -24,7 +24,7 @@ Roadmap P3 — Core release gates plus §16 capability-driven Control convergenc
 - [x] Split the validated working tree into ownership-coherent Conventional Commits: `12214ae` (Control Action Model), `223c18e` (Core release/migration chain), and `fb77991` (§16 Core/Control convergence); this documentation cleanup is the final local-clean checkpoint.
 - [x] Push the reviewed `dev` commits to `origin` and obtain the first GitHub-hosted clean `Core System Gate` result; run `33245921866` passed for commit `fd5671f` on 2026-08-29.
 - [~] Secure Diretta SDK CI provisioning is defined as a manual `Core Diretta Release Gate`; the `diretta-release` Environment exists with a `dev`-only deployment policy, and ordinary hosted Core gate run `33246384095` also passed after the workflow was added. Registering a trusted self-hosted `diretta-sdk-149` runner with SDK 149 pre-provisioned outside the checkout, then executing the first remote SDK-enabled gate, remain pending.
-- [~] Continue §16 Desktop/Core transport audit: remaining Electron IPC must be classified as true Host capability or migrated to the same Core Protocol path used by Web; do not create a second domain transport/state model.
+- [~] Continue §16 Desktop/Core transport convergence. The first Desktop renderer slice is complete: play/pause/stop/seek now use the same Core Protocol paths as Web through an Electron-session-only `atom-core://control` transport backed directly by `buildHeadlessRoutes()`. It is independent from the optional external API and does not expose a new LAN listener. Remaining Electron IPC must be classified as true Host capability or migrated incrementally to this same contract; event transport is intentionally unchanged in this slice.
 - [ ] Complete live-account Qobuz/TIDAL and genuinely manual DAC/bitstream acceptance when user-owned credentials and hardware confirmation are available.
 
 ## Git Access

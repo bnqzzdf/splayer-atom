@@ -10,6 +10,10 @@ import {
 } from "../../../shared/constants/coreProtocol";
 import { getCoreCapabilities, getCoreInfo } from "../atom/runtime/coreInfo";
 
+const controlClientSource = readFileSync(
+  new URL("../../../src/core/controlClient.ts", import.meta.url),
+  "utf8",
+);
 const webClientSource = readFileSync(
   new URL("../../../src/web/client.ts", import.meta.url),
   "utf8",
@@ -56,8 +60,11 @@ test("Core capability reports actual Diretta native metadata instead of a hard-c
 
 test("Headless info and Web transport enforce the shared Core Protocol contract", () => {
   assert.match(headlessRoutesSource, /c\.json\(getCoreInfo\(\)\)/);
-  assert.match(webClientSource, /assertCoreProtocolCompatible\(info\)/);
-  assert.match(webClientSource, /if \(path !== "\/info"\) await ensureCoreProtocolCompatible\(\)/);
+  assert.match(controlClientSource, /assertCoreProtocolCompatible\(info\)/);
+  assert.match(
+    controlClientSource,
+    /if \(path !== "\/info"\) await ensureCoreProtocolCompatible\(\)/,
+  );
   assert.match(webClientSource, /await ensureCoreProtocolCompatible\(\)/);
   assert.match(webClientSource, /coreCompatibilityError/);
 });

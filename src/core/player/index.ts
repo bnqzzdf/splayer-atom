@@ -41,6 +41,7 @@ import { handleError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
+import { coreCommand } from "@/core/controlClient";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
 const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
@@ -171,7 +172,7 @@ export const play = async (): Promise<void> => {
   const prev = status.state;
   status.state = "playing";
   playback.setPlaying(true);
-  const result = await window.api.player.play();
+  const result = await coreCommand("/play");
   if (!result.success) {
     status.state = prev;
     playback.setPlaying(false);
@@ -195,7 +196,7 @@ export const pause = async (): Promise<void> => {
   const prev = status.state;
   status.state = "paused";
   playback.setPlaying(false);
-  const result = await window.api.player.pause();
+  const result = await coreCommand("/pause");
   if (!result.success) {
     status.state = prev;
     playback.setPlaying(true);
@@ -206,7 +207,7 @@ export const pause = async (): Promise<void> => {
 export const stop = async (): Promise<void> => {
   const status = useStatusStore();
   status.trackLoading = false;
-  const result = await window.api.player.stop();
+  const result = await coreCommand("/stop");
   if (result.success) {
     status.state = "stopped";
     status.position = 0;
@@ -256,7 +257,7 @@ export const seek = async (posMs: number): Promise<void> => {
   // 设置 seek 目标，屏蔽旧 position 推送
   seekTarget = posMs;
 
-  const result = await window.api.player.seek(posMs);
+  const result = await coreCommand("/seek", { positionMs: posMs });
   if (result.success) {
     status.position = posMs;
     playback.setCurrentTime(posMs);
@@ -426,7 +427,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     resumeMs = Math.round(playback.getCurrentTime());
     wasPlaying = status.isPlaying;
     // Windows 下引擎持有文件句柄，必须先停止才能写入
-    await window.api.player.stop();
+    await coreCommand("/stop");
   }
 
   const result = await window.api.library.writeTags(edits);
@@ -541,8 +542,8 @@ const onQueueEnded = async (): Promise<void> => {
   status.trackLoading = false;
   playback.setPlaying(false);
   playback.reset();
-  // 通知主进程停止音频引擎
-  await window.api.player.stop();
+  // 通过共享 Core Protocol 停止音频引擎
+  await coreCommand("/stop");
   status.state = "stopped";
   status.position = status.duration;
 };

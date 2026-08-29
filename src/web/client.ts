@@ -1,5 +1,9 @@
-import { assertCoreProtocolCompatible } from "@shared/constants/coreProtocol";
-import type { CoreInfo } from "@shared/types/core";
+import {
+  coreApiOrigin,
+  ensureCoreProtocolCompatible,
+  getCoreInfo,
+  request,
+} from "@/core/controlClient";
 import type {
   AudioDevice,
   PlaybackQueueItem,
@@ -19,51 +23,12 @@ export interface OutputSnapshot {
 
 const host = window.location.hostname || "127.0.0.1";
 const dev = import.meta.env.DEV;
-export const apiOrigin = dev
-  ? `${window.location.protocol}//${host}:14559`
-  : window.location.origin;
+export const apiOrigin = coreApiOrigin;
 export const wsOrigin = dev
   ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14559`
   : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
-const rawRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${apiOrigin}/api${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
-  if (!response.ok) {
-    const message = data && typeof data === "object" && "error" in data ? data.error : null;
-    throw new Error(message || `HTTP ${response.status}`);
-  }
-  return data as T;
-};
-
-let coreInfoPromise: Promise<CoreInfo> | null = null;
-
-/** 获取并缓存 Core 兼容信息；网络失败允许下一次请求重新探测。 */
-export const getCoreInfo = (): Promise<CoreInfo> => {
-  coreInfoPromise ??= rawRequest<CoreInfo>("/info").catch((error) => {
-    coreInfoPromise = null;
-    throw error;
-  });
-  return coreInfoPromise;
-};
-
-/** Web Control 在任何 domain 请求前先验证 Core Protocol。 */
-export const ensureCoreProtocolCompatible = async (): Promise<CoreInfo> => {
-  const info = await getCoreInfo();
-  assertCoreProtocolCompatible(info);
-  return info;
-};
-
-export const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  if (path !== "/info") await ensureCoreProtocolCompatible();
-  return rawRequest<T>(path, init);
-};
+export { ensureCoreProtocolCompatible, getCoreInfo, request };
 
 export const connectWebEvents = (
   onEvent: (event: { type: string; data?: unknown }) => void,

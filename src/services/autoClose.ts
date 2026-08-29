@@ -6,6 +6,7 @@
 
 import type { PlaybackAutoCloseSnapshot } from "@shared/types/player";
 import { useStatusStore } from "@/stores/status";
+import { coreCommand } from "@/core/controlClient";
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -77,7 +78,7 @@ export const cancel = (): void => {
  */
 export const onTrackEnded = (): boolean => {
   if (!useStatusStore().autoClose.pendingStopOnEnd) return false;
-  void window.api.player.pause().catch(() => {});
+  void coreCommand("/pause");
   cancel();
   return true;
 };

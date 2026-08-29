@@ -24,7 +24,11 @@ import {
   init as initPlaybackBridge,
   dispose as disposePlaybackBridge,
 } from "@main/plugins/playbackBridge";
-import { registerCacheScheme, handleCacheProtocol } from "@main/utils/protocol";
+import { registerCacheScheme, handleCacheProtocol, MAIN_PARTITION } from "@main/utils/protocol";
+import {
+  handleCoreControlProtocolOnPartition,
+  registerCoreControlScheme,
+} from "@main/atom/controlProtocol";
 import { startServer, stopServer } from "@main/server";
 import { initPlaybackSession } from "@main/services/playbackSession";
 import { startMcpServer, stopMcpServer } from "@main/services/mcp/http";
@@ -104,14 +108,16 @@ export const initApp = (): void => {
     event.preventDefault();
     captureOrpheusUrl(url);
   });
-  // 注册缓存协议方案
+  // 注册缓存与 Desktop 内部 Core Control 协议方案
   registerCacheScheme();
+  registerCoreControlScheme();
   // 其他初始化
   app.whenReady().then(async () => {
     const headless = isHeadless();
     electronApp.setAppUserModelId("top.imsyy.splayer-next");
-    // 注册 cache:// 协议处理
+    // 注册 cache:// 与 Desktop 主 Control 的内部 Core Protocol 处理
     handleCacheProtocol();
+    handleCoreControlProtocolOnPartition(MAIN_PARTITION);
     app.on("browser-window-created", (_, window) => {
       optimizer.watchWindowShortcuts(window);
     });
