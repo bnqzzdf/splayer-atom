@@ -165,7 +165,8 @@
   "directMode": {
     "title": "Source Direct",
     "entryBlocked": "Before entering Diretta Source Direct, restore software volume to 100%, turn off volume normalization and EQ, and return to 1.0x speed with 0 semitone pitch. Existing settings will not be changed automatically.",
-    "processingUnavailable": "Diretta Source Direct preserves the original audio data. Software volume, volume normalization, EQ/preamp, fade, speed, and pitch controls are unavailable in Direct mode; your normal-output settings are preserved."
+    "processingUnavailable": "Diretta Source Direct preserves the original audio data. Software volume, volume normalization, EQ/preamp, fade, speed, and pitch controls are unavailable in Direct mode; your normal-output settings are preserved.",
+    "preparingSource": "Preparing the online source for Source Direct…"
   },
   "autoClose": {
     "title": "Sleep Timer",
@@ -196,6 +197,14 @@
     "title": "Interface Zoom",
     "range": "Range: 50% - 200%",
     "reset": "Reset to default"
+  },
+  "coreDirectory": {
+    "parent": "Parent directory",
+    "open": "Open",
+    "current": "Current Core directory",
+    "selectCurrent": "Select current directory",
+    "empty": "This directory has no browsable subdirectories",
+    "pathPlaceholder": "Enter a directory path on the Core host"
   },
   "nav": {
     "home": "Home",

@@ -40,6 +40,8 @@ export const playerControl = {
     publishDesktopEvent("player:event", { type: "addToQueue", data: { tracks, position } }),
   seek,
   setVolume: (volume: number): void => getPlayer().setVolume(volume),
+  /** 重建当前 Core 音频输出。 */
+  reinitOutput: (): Promise<void> => getPlayer().reinitOutput(),
   /** 当前播放进度（毫秒） */
   getPosition: (): number => toMs(getPlayer().getPosition()),
 };

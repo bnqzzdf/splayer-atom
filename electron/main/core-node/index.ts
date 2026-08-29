@@ -29,6 +29,7 @@ const start = async (): Promise<void> => {
     songCache,
     playbackSession,
     corePlayerEvents,
+    downloadManager,
     server,
     { store },
     { pluginRegistry },
@@ -38,6 +39,7 @@ const start = async (): Promise<void> => {
     import("@main/services/songCache"),
     import("@main/services/playbackSession"),
     import("@main/services/corePlayerEvents"),
+    import("@main/services/downloadManager"),
     import("@main/server"),
     import("@main/store"),
     import("@main/plugins/registry"),
@@ -49,6 +51,7 @@ const start = async (): Promise<void> => {
   await songCache.init();
   pluginRegistry.init();
   corePlayerEvents.registerCorePlayerEvents();
+  await downloadManager.init();
   await playbackSession.initPlaybackSession();
 
   const status = await server.startServer();
@@ -62,6 +65,7 @@ const start = async (): Promise<void> => {
     coreLog.info(`Atom Core 收到 ${signal}，开始停止服务`);
     store.flushImmediate();
     songCache.shutdown();
+    downloadManager.shutdown();
     await pluginRegistry.shutdown();
     await server.stopServer();
     database.closeDatabase();

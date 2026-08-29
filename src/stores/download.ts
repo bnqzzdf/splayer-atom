@@ -6,7 +6,6 @@
  */
 
 import type { DownloadTask, DownloadProgress, DownloadStatus } from "@shared/types/download";
-import { initDownloadResolver } from "@/services/download/resolver";
 
 export const useDownloadStore = defineStore("download", () => {
   /** 是否尚未结束 */
@@ -57,7 +56,6 @@ export const useDownloadStore = defineStore("download", () => {
   const init = async (): Promise<void> => {
     if (initialized.value) return;
     initialized.value = true;
-    unsubscribers.push(initDownloadResolver());
     const tasks = await window.api.download.list();
     activeTasks.value = tasks.filter((task) => isActive(task.status)).sort(compareActive);
     historyTasks.value = tasks.filter((task) => !isActive(task.status)).sort(compareHistory);

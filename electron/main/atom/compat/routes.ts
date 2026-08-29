@@ -29,12 +29,16 @@ import type {
   PlaylistCreateInput,
   PlaylistUpdateInput,
 } from "@shared/types/playlist";
+import type { TagEditRequest } from "@shared/types/tagEditor";
 import { getPlayer } from "@main/services/engine";
 import * as nowPlaying from "@main/services/nowPlaying";
-import { cancelScan, isScanning, startScan } from "@main/services/scanner";
+import { cancelScan, getScanProgress, isScanning, startScan } from "@main/services/scanner";
+import { resolveCoreDirectory } from "@main/services/coreFilesystem";
+import { deleteLibraryFiles, readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
 import { store } from "@main/store";
 
-const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const visibleTracks = () => {
   const all = getAllTracks();
@@ -133,7 +137,8 @@ export const buildAtomCompatRoutes = (): Hono => {
       const limit = Number(c.req.query("limit") ?? 0) || 0;
       if (!query) return c.json({ data: [], total: 0 });
 
-      const includes = (value: string): boolean => value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+      const includes = (value: string): boolean =>
+        value.toLocaleLowerCase().includes(query.toLocaleLowerCase());
       if (type === "albums") {
         const items = getAlbumList().filter((item) => includes(item.name));
         return c.json(page(items, offset, limit));
@@ -188,8 +193,14 @@ export const buildAtomCompatRoutes = (): Hono => {
 
   api.post("/library/scan-dirs/add", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { dir?: unknown } | null;
-    const dir = typeof body?.dir === "string" ? body.dir.trim() : "";
-    if (!dir) return c.json({ success: false, error: "dir_required" }, 400);
+    const requestedDir = typeof body?.dir === "string" ? body.dir.trim() : "";
+    if (!requestedDir) return c.json({ success: false, error: "dir_required" }, 400);
+    let dir: string;
+    try {
+      dir = await resolveCoreDirectory(requestedDir);
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 400);
+    }
     const dirs = store.get("library.scanDirs") as string[];
     if (dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_EXISTS" }, 409);
     store.set("library.scanDirs", [...dirs, dir]);
@@ -211,7 +222,53 @@ export const buildAtomCompatRoutes = (): Hono => {
     return c.json({ success: true });
   });
 
+  api.post("/library/tags/read", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { path?: unknown } | null;
+    if (typeof body?.path !== "string" || !body.path) {
+      return c.json({ success: false, error: "path_required" }, 400);
+    }
+    try {
+      return c.json({ success: true, data: await readLibraryTags(body.path) });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  api.post("/library/tags/write", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { edits?: unknown } | null;
+    if (
+      !Array.isArray(body?.edits) ||
+      !body.edits.every(
+        (edit) =>
+          !!edit && typeof edit === "object" && typeof (edit as TagEditRequest).path === "string",
+      )
+    ) {
+      return c.json({ success: false, error: "tag_edits_required" }, 400);
+    }
+    try {
+      return c.json({
+        success: true,
+        data: await writeLibraryTags(body.edits as TagEditRequest[]),
+      });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  api.delete("/library/files", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { paths?: unknown } | null;
+    if (!Array.isArray(body?.paths) || !body.paths.every((item) => typeof item === "string")) {
+      return c.json({ success: false, error: "paths_string_array_required" }, 400);
+    }
+    try {
+      return c.json({ success: true, data: await deleteLibraryFiles(body.paths) });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 400);
+    }
+  });
+
   api.get("/library/is-scanning", (c) => c.json({ data: isScanning() }));
+  api.get("/library/scan-progress", (c) => c.json({ data: getScanProgress() }));
 
   api.post("/library/scan", async (c) => {
     try {

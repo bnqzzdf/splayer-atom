@@ -1,5 +1,6 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import { useThemeStore } from "@/stores/theme";
+import { hasHostCapability } from "@/runtime";
 import FontConfig from "@/components/settings/custom/FontConfig.vue";
 import BackgroundImagePicker from "@/components/settings/custom/BackgroundImagePicker.vue";
 import IconLucidePalette from "~icons/lucide/palette";
@@ -70,6 +71,7 @@ const appearanceCategory: SettingCategory = {
             { value: "image", labelKey: "settings.appearanceStyle.image" },
           ],
           defaultValue: "solid",
+          visible: () => hasHostCapability("nativeFileDialogs"),
           childrenCondition: () => useThemeStore().appearanceStyle === "image",
           hideChildren: true,
           children: [

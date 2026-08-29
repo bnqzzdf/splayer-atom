@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineOptions({ name: "SearchPage" });
 
+import type { AlbumSummary, ArtistSummary } from "@shared/types/library";
 import type { Track } from "@shared/types/player";
 import { ALL_PLATFORMS, PLATFORM_SHORT_NAME, type Platform } from "@shared/types/platform";
 import type { CoverItem } from "@/types/artist";
@@ -19,9 +20,7 @@ const router = useRouter();
 const status = useStatusStore();
 const webRemote = isWebRemote();
 const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
-const webSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
-const availableSearchPlatforms = webRemote ? webSearchPlatforms : atomSearchPlatforms;
-if (!availableSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
+if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 
 type SearchSource = Platform | "local";
 type TabKey = "songs" | "albums" | "artists" | "playlists";
@@ -45,19 +44,18 @@ const tabs = computed(() => {
     { key: "artists", label: t("search.tabs.artists") },
     { key: "playlists", label: t("search.tabs.playlists") },
   ];
-  return searchSource.value === "local" ||
-    searchSource.value === "qobuz" ||
-    searchSource.value === "tidal"
+  if (searchSource.value === "local") return items.slice(0, 3);
+  return searchSource.value === "qobuz" || searchSource.value === "tidal"
     ? items.slice(0, 1)
     : items;
 });
 
 const platformTabs = computed(() => {
-  const online = ALL_PLATFORMS.filter((key) => availableSearchPlatforms.has(key)).map((key) => ({
+  const online = ALL_PLATFORMS.filter((key) => atomSearchPlatforms.has(key)).map((key) => ({
     key,
     label: PLATFORM_SHORT_NAME[key],
   }));
-  return webRemote ? [{ key: "local", label: t("search.source.local") }, ...online] : online;
+  return [{ key: "local", label: t("search.source.local") }, ...online];
 });
 
 interface TabState<T> {
@@ -118,20 +116,55 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
   const requestKeyword = keyword.value;
   try {
     const offset = append ? state.items.length : 0;
-    const result =
-      requestSource === "local"
-        ? await window.api.library.searchTracks(requestKeyword).then((response) => {
-            if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
-            const all = response.data ?? [];
-            const items = all.slice(offset, offset + PAGE_SIZE);
-            return { items, total: all.length, hasMore: offset + items.length < all.length };
-          })
-        : await (fetchers[tab] as typeof searchSongs)(
-            requestSource,
-            requestKeyword,
-            offset,
-            PAGE_SIZE,
-          );
+    let result: { items: Array<Track | CoverItem>; total: number; hasMore: boolean };
+    if (requestSource === "local") {
+      let all: Array<Track | CoverItem>;
+      if (tab === "songs") {
+        const response = await window.api.library.searchTracks(requestKeyword);
+        if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
+        all = response.data ?? [];
+      } else if (tab === "albums") {
+        const response = await window.api.library.getAlbums();
+        if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
+        const needle = requestKeyword.toLocaleLowerCase();
+        all = (response.data ?? [])
+          .filter(
+            (album: AlbumSummary) =>
+              album.name.toLocaleLowerCase().includes(needle) ||
+              album.artist.toLocaleLowerCase().includes(needle),
+          )
+          .map((album: AlbumSummary) => ({
+            id: album.name,
+            title: album.name,
+            cover: album.cover,
+            subtitle: album.artist,
+            trackCount: album.trackCount,
+          }));
+      } else if (tab === "artists") {
+        const response = await window.api.library.getArtists();
+        if (!response.success) throw new Error(response.error ?? "LOCAL_SEARCH_FAILED");
+        const needle = requestKeyword.toLocaleLowerCase();
+        all = (response.data ?? [])
+          .filter((artist: ArtistSummary) => artist.name.toLocaleLowerCase().includes(needle))
+          .map((artist: ArtistSummary) => ({
+            id: artist.name,
+            title: artist.name,
+            cover: artist.cover,
+            trackCount: artist.trackCount,
+          }));
+      } else {
+        all = [];
+      }
+      const items = all.slice(offset, offset + PAGE_SIZE);
+      result = { items, total: all.length, hasMore: offset + items.length < all.length };
+    } else {
+      result = await (fetchers[tab] as typeof searchSongs)(
+        requestSource,
+        requestKeyword,
+        offset,
+        PAGE_SIZE,
+      );
+    }
     if (
       generation !== searchGeneration ||
       requestSource !== searchSource.value ||
@@ -185,11 +218,11 @@ const syncFromRoute = (): void => {
       ? (route.query.tab as TabKey)
       : "songs";
   const tab: TabKey =
-    searchSource.value === "local" ||
-    searchSource.value === "qobuz" ||
-    searchSource.value === "tidal"
+    searchSource.value === "qobuz" || searchSource.value === "tidal"
       ? "songs"
-      : requestedTab;
+      : searchSource.value === "local" && requestedTab === "playlists"
+        ? "songs"
+        : requestedTab;
   if (tab !== requestedTab) void router.replace({ query: { ...route.query, tab } });
 
   activeTab.value = tab;
@@ -400,9 +433,7 @@ const onLoginDialogClose = (open: boolean): void => {
         :padding-bottom="20"
         :has-more="states.albums.hasMore"
         :loading-more="states.albums.loadingMore"
-        @click="
-          (item) => navigateToAlbum(item.title, { source: status.searchPlatform, albumId: item.id })
-        "
+        @click="(item) => navigateToAlbum(item.title, { source: searchSource, albumId: item.id })"
         @reach-bottom="onReachBottom('albums')"
       />
       <CoverList
@@ -415,10 +446,7 @@ const onLoginDialogClose = (open: boolean): void => {
         :padding-bottom="20"
         :has-more="states.artists.hasMore"
         :loading-more="states.artists.loadingMore"
-        @click="
-          (item) =>
-            navigateToArtist(item.title, { source: status.searchPlatform, artistId: item.id })
-        "
+        @click="(item) => navigateToArtist(item.title, { source: searchSource, artistId: item.id })"
         @reach-bottom="onReachBottom('artists')"
       />
       <CoverList

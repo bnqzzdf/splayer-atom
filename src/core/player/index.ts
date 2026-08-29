@@ -348,14 +348,23 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
     toast.error(i18n.global.t("directMode.entryBlocked"));
     return;
   }
-  const result = await window.api.player.setOutputDevice(deviceId);
-  if (!result.success) {
-    if (result.error) handleError(result.error);
-    return;
+  const track = useMediaStore().track;
+  const preparingDirect = isDirettaOutput(deviceId) && track !== null && track.source !== "local";
+  const preparingToast = preparingDirect
+    ? toast.loading(i18n.global.t("directMode.preparingSource"), { duration: 0 })
+    : null;
+  try {
+    const result = await window.api.player.setOutputDevice(deviceId);
+    if (!result.success) {
+      if (result.error) handleError(result.error);
+      return;
+    }
+    const settings = useSettingsStore();
+    settings.system.player.outputDevice = deviceId;
+    settings.player.outputDevice = deviceId;
+  } finally {
+    preparingToast?.close();
   }
-  const settings = useSettingsStore();
-  settings.system.player.outputDevice = deviceId;
-  settings.player.outputDevice = deviceId;
 };
 
 /**

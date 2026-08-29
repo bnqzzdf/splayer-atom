@@ -3,6 +3,7 @@ import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
 import { dialog } from "@/composables/useDialog";
 import { REPO_NAME } from "@/utils/config";
+import { hasHostCapability } from "@/runtime";
 import { neteaseQrLoginAdapter } from "@/apis/login/netease";
 
 const props = defineProps<{ open: boolean }>();
@@ -11,6 +12,7 @@ const { t } = useI18n();
 const user = useUserStore();
 const adapter = neteaseQrLoginAdapter;
 const panelRef = useTemplateRef("panelRef");
+const providerLoginWindowAvailable = hasHostCapability("providerLoginWindow");
 const loading = ref(false);
 const cookieDialogOpen = ref(false);
 
@@ -84,7 +86,13 @@ const onCookieDialogOpen = (open: boolean): void => {
         @success="handleQrSuccess"
       />
       <div class="flex items-center gap-2 pt-1">
-        <SButton variant="ghost" size="small" :disabled="loading" @click="startAutoFetch">
+        <SButton
+          v-if="providerLoginWindowAvailable"
+          variant="ghost"
+          size="small"
+          :disabled="loading"
+          @click="startAutoFetch"
+        >
           <template #icon><IconLucideScanLine /></template>
           {{ t("login.autoFetch") }}
         </SButton>

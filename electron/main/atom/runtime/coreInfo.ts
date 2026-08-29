@@ -28,6 +28,7 @@ export const getCoreCapabilities = (): CoreCapabilities => {
   return {
     library: true,
     playback: true,
+    download: true,
     diretta: nativeBuild.diretta === true,
     netease: true,
     qobuz: true,

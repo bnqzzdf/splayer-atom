@@ -1,32 +1,27 @@
 /**
  * 下载管理服务
  *
- * 渲染层构建好请求后交给本服务：整批入队、串行下载，轮到某任务且
- * 缺少 URL 时经 download:resolve 向渲染层即时索取
+ * Control 构建好请求后交给本服务：整批入队、串行下载；轮到任务时由
+ * Core 根据 canonical Track 即时解析源，避免临时 URL 过期或依赖 Control 存活。
  */
 
 import fs from "node:fs";
 import fsp, { type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { app } from "electron";
 import { store } from "@main/store";
 import { getDownloadDir, getCoverCacheDir, getAppCacheDir } from "@main/utils/config";
-import { broadcast } from "@main/utils/broadcast";
+import { publishDesktopEvent } from "@main/atom/runtime/events";
+import { wsBroadcast } from "@main/server/broadcast";
 import { downloadLog } from "@main/utils/logger";
 import { getEngine } from "@main/services/engine";
 import { fetchBytes } from "@main/utils/fetchBytes";
+import { resolveDownloadSource } from "@main/services/playbackSourceResolver";
 import { renderDownloadPath, dedupePath, resolveExtension } from "@main/utils/filename";
 import * as db from "@main/database/downloads";
 import { ErrorCode } from "@shared/types/errors";
 import type { JsTagWriteRequest } from "@splayer/audio-engine";
-import type {
-  DownloadRequest,
-  DownloadResolvePayload,
-  DownloadResolution,
-  DownloadTask,
-  EnqueueResult,
-} from "@shared/types/download";
+import type { DownloadRequest, DownloadTask, EnqueueResult } from "@shared/types/download";
 
 /** 进度推送节流间隔 */
 const PROGRESS_INTERVAL_MS = 250;
@@ -69,15 +64,6 @@ const queue: string[] = [];
 /** 当前正在下载的 taskId；null 表示空闲 */
 let active: string | null = null;
 
-/** 渲染层解析结果的等待门 */
-interface ResolutionGate {
-  resolve: (res: DownloadResolution) => void;
-  reject: (err: Error) => void;
-}
-
-/** 轮到下载但缺 URL 的任务，按 taskId 等待渲染层回传解析 */
-const resolutionGates = new Map<string, ResolutionGate>();
-
 /** 临时分片目录（与用户下载目录隔离） */
 const tmpDir = (): string => path.join(getAppCacheDir(), "downloads-tmp");
 
@@ -94,7 +80,8 @@ const broadcastState = (task: DownloadTask): void => {
   // 已删除的任务：收尾态（如中断产生的 canceled）不再写回 DB / 推送，否则会在删行后复活
   if (tasks.get(task.taskId)?.removed) return;
   db.upsert(task);
-  broadcast("download:state", task);
+  publishDesktopEvent("download:state", task);
+  wsBroadcast({ type: "downloadState", data: task });
 };
 
 /** 跨盘安全移动 */
@@ -135,7 +122,9 @@ const streamToFile = async (
         const now = Date.now();
         if (now - lastTs >= PROGRESS_INTERVAL_MS) {
           lastTs = now;
-          broadcast("download:progress", { taskId, received, total }, true);
+          const progress = { taskId, received, total };
+          publishDesktopEvent("download:progress", progress);
+          wsBroadcast({ type: "downloadProgress", data: progress });
         }
         yield value;
       }
@@ -197,43 +186,6 @@ const writeLyricFiles = async (req: DownloadRequest, audioPath: string): Promise
   if (req.tagOptions.saveTtml && req.ttmlText) await writeSidecar(`${base}.ttml`, req.ttmlText);
 };
 
-/** 等待渲染层补全解析；任务被取消/删除时经中断信号立即拒绝 */
-const waitForResolution = (taskId: string, signal: AbortSignal): Promise<DownloadResolution> =>
-  new Promise((resolve, reject) => {
-    const onAbort = (): void => {
-      resolutionGates.delete(taskId);
-      reject(new Error("resolution aborted"));
-    };
-    const gate: ResolutionGate = {
-      resolve: (res) => {
-        resolutionGates.delete(taskId);
-        signal.removeEventListener("abort", onAbort);
-        resolve(res);
-      },
-      reject: (err) => {
-        resolutionGates.delete(taskId);
-        signal.removeEventListener("abort", onAbort);
-        reject(err);
-      },
-    };
-    resolutionGates.set(taskId, gate);
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-
-/** 渲染层回传解析结果 */
-export const submitResolution = (taskId: string, res: DownloadResolution): void => {
-  resolutionGates.get(taskId)?.resolve(res);
-};
-
-/** 渲染层解析失败，任务按失败收尾 */
-export const failResolution = (taskId: string): void => {
-  resolutionGates.get(taskId)?.reject(new Error("resolve failed"));
-};
-
 /** 实际下载 + 落盘 + 写标签 */
 const runTask = async (
   req: DownloadRequest,
@@ -243,23 +195,18 @@ const runTask = async (
   const partPath = path.join(tmpDir(), `${req.taskId}.part`);
 
   try {
-    // 轮到才向渲染层即时解析
     if (!req.url) {
-      const payload: DownloadResolvePayload = {
-        taskId: req.taskId,
-        track: req.track,
-        qualityLevel: req.qualityLevel,
-        tagOptions: req.tagOptions,
-        coverUrl: req.coverUrl,
-        usePlaybackForDownload: req.usePlaybackForDownload,
-        lyricFileFormat: req.lyricFileFormat,
-      };
-      const resolution = waitForResolution(req.taskId, controller.signal);
-      broadcast("download:resolve", payload);
-      Object.assign(req, await resolution);
+      const resolved = await resolveDownloadSource(
+        req.track,
+        req.qualityLevel,
+        req.usePlaybackForDownload,
+      );
+      req.url = resolved.source;
+      req.declaredFormat ??= resolved.format;
+      req.declaredSize ??= resolved.size;
     }
     const audioUrl = req.url;
-    if (!audioUrl) throw new Error("missing download url");
+    if (!audioUrl) throw new Error("missing download source");
 
     const downloadDir = getDownloadDir();
     const { relDir, baseName } = renderDownloadPath(
@@ -288,21 +235,35 @@ const runTask = async (
     await fsp.mkdir(tmpDir(), { recursive: true });
     await fsp.mkdir(targetDir, { recursive: true });
 
-    const response = await fetch(audioUrl, { signal: controller.signal });
-    if (!response.ok || !response.body) {
-      throw new Error(`HTTP ${response.status}`);
+    let mime: string | null = null;
+    let total = req.declaredSize || 0;
+    let received = 0;
+    if (/^https?:\/\//i.test(audioUrl)) {
+      const response = await fetch(audioUrl, { signal: controller.signal });
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      mime = response.headers.get("content-type");
+      if (isRejectedMime(mime)) throw new Error(`rejected mime ${mime}`);
+      total = Number(response.headers.get("content-length")) || total;
+      received = await streamToFile(
+        response.body as ReadableStream<Uint8Array>,
+        partPath,
+        req.taskId,
+        total,
+        controller.signal,
+      );
+    } else if (path.isAbsolute(audioUrl)) {
+      const sourceStat = await fsp.stat(audioUrl);
+      total ||= sourceStat.size;
+      await fsp.copyFile(audioUrl, partPath);
+      received = sourceStat.size;
+      const progress = { taskId: req.taskId, received, total };
+      publishDesktopEvent("download:progress", progress);
+      wsBroadcast({ type: "downloadProgress", data: progress });
+    } else {
+      throw new Error(`unsupported download source: ${audioUrl}`);
     }
-    const mime = response.headers.get("content-type");
-    if (isRejectedMime(mime)) throw new Error(`rejected mime ${mime}`);
-    const total = Number(response.headers.get("content-length")) || req.declaredSize || 0;
-
-    const received = await streamToFile(
-      response.body as ReadableStream<Uint8Array>,
-      partPath,
-      req.taskId,
-      total,
-      controller.signal,
-    );
     if (received === 0) throw new Error("empty body");
     if (!(await looksLikeAudio(partPath))) throw new Error("not audio");
 
@@ -465,7 +426,9 @@ export const init = async (): Promise<void> => {
     const entries = await fsp.readdir(dir);
     await Promise.all(entries.map((name) => fsp.unlink(path.join(dir, name)).catch(() => {})));
   } catch {}
-  app.on("before-quit", () => {
-    for (const pending of tasks.values()) pending.controller.abort();
-  });
+};
+
+/** 停止当前下载任务，供 Desktop / Node Core lifecycle 共用。 */
+export const shutdown = (): void => {
+  for (const pending of tasks.values()) pending.controller.abort();
 };

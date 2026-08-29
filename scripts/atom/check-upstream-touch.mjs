@@ -7,20 +7,40 @@ const upstreamConfig = JSON.parse(
 );
 const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 31 个既有 Atom 集成触点，加 6 个经本地 Web/Headless 阶段验证后不可删除的必要 seam，
-// 再加 1 个 Provider Accounts 在上游 Services settings schema 中的挂载点：
+// 再加 1 个 Provider Accounts 挂载点、5 个 Host-only Control/Settings 收敛 seam，
+// 7 个 Core Download 收敛 seam、4 个 Core filesystem / Library path 收敛 seam，
+// 1 个 Library tag editor Host-action seam、1 个 Provider embedded-login Host-action seam，
+// 2 个 Track Action Model / presentation seam、1 个 Collection Action Model seam、
+// 1 个 Artist Action Model seam、3 个 Cover Action presentation/Favorites seam，
+// 以及 1 个 system-font Host gating seam：
 // Headless 主进程生命周期、Native DSD 扫描、Web 启动入口、main-session queue 投影、
-// queue 权威态测试、移除 renderer 对播放索引/模式的重复持久化，以及 Services 账户入口。
+// queue 权威态测试、移除 renderer 对播放索引/模式的重复持久化、Services 账户入口，
+// 以及运行时 Settings 分类组装、stale 分类归一化、General Host section gating、About Host 信息投影
+// 与 Appearance 本地背景图 Host capability gating；Core Download 使用既有 manager，
+// 并收回源解析、任务歌词固化、Control projection 与 Core 路径 Host action gating，
+// 同时删除旧 renderer resolution IPC 与 shared contract，避免保留 no-op 兼容协议；
+// Core filesystem browser 则让 Library API/type/store/FolderManager 统一接收真实 Core 路径，
+// 不再由 Web prompt 写入未经验证的主机路径字符串；Tag Editor 只隐藏 Control-local 封面 picker，
+// Core 标签读写与在线封面写入仍保持 Web/Desktop 对等；Netease 的 Electron 登录窗口只在
+// `providerLoginWindow` Host capability 下展示，Web 继续使用同一 Core QR/manual-cookie auth；Track action
+// 语义集中到既有 `useTrackMenu`，SongList 的右键与 `...` 入口只投影同一模型；Collection
+// header `...` 也复用同一 Action→menu adapter，而不创建第二 collection domain；Artist 的播放、收藏与
+// overflow 同样由一个 action list 驱动；CoverCard/CoverList 只投影可选 action，Favorites 提供真实
+// unsubscribe 语义，provider 调用仍留在 user store；FontConfig
+// 在 Web 只保留手动 CSS font-family，不再把空 `listFonts()` 冒充系统字体枚举能力。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 38);
-const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 20);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 65);
+const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
-const metadataPaths = new Set(["AGENTS.md", "README.md", "README.zh-CN.md"]);
+const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);
 const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
 const runtimeNeutralSeamPaths = new Set([
   "electron.vite.config.ts",
   "electron/main/apis/musicbrainz.ts",
+  "electron/main/database/migration.ts",
   "electron/main/index.ts",
+  "electron/main/ipc/cache.ts",
   "electron/main/plugins/host-process.ts",
   "electron/main/plugins/net.ts",
   "electron/main/plugins/registry.ts",

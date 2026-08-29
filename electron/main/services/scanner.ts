@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { JsScanEvent, JsScannedTrack } from "@splayer/audio-engine";
+import type { ScanProgress } from "@shared/types/library";
 import { getEngine } from "./engine";
 import {
   getAllTracks,
@@ -21,6 +22,12 @@ import { getCueAudioPath, parseCueSheet, extractCuePath } from "./cue";
 import { readFileAutoEncoding } from "@main/utils/encoding";
 
 let scanning = false;
+let currentScanProgress: ScanProgress = { phase: "done", total: 0, scanned: 0 };
+
+const publishScanProgress = (progress: ScanProgress): void => {
+  currentScanProgress = progress;
+  publishDesktopEvent("library:scanProgress", progress);
+};
 
 /** 路径比较键，Windows 下保持大小写不敏感 */
 const pathKey = (value: string): string => {
@@ -152,7 +159,7 @@ const finishScan = async (dirs: string[], event: JsScanEvent): Promise<void> => 
   }
   const cueCount = await syncCueTracks(event.cueFiles ?? [], dirs, event.unavailableDirs ?? []);
   scanning = false;
-  publishDesktopEvent("library:scanProgress", {
+  publishScanProgress({
     phase: "done",
     total: event.total,
     scanned: event.scanned,
@@ -162,6 +169,9 @@ const finishScan = async (dirs: string[], event: JsScanEvent): Promise<void> => 
 
 /** 是否正在扫描 */
 export const isScanning = (): boolean => scanning;
+
+/** 当前扫描进度快照，供 Desktop 事件之外的 Control 读取。 */
+export const getScanProgress = (): ScanProgress => ({ ...currentScanProgress });
 
 /**
  * 开始扫描
@@ -179,6 +189,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
   }
 
   scanning = true;
+  currentScanProgress = { phase: "scanning", total: 0, scanned: 0 };
   libraryLog.info(`开始扫描 ${dirs.length} 个目录 (增量=${incremental})`);
 
   // 增量扫描时传入已有文件记录，Rust 端会比对 mtime/size 跳过未变化的文件
@@ -196,7 +207,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
           if (event.tracks && event.tracks.length > 0) {
             upsertTracks(event.tracks.map(scannedToUpsert));
           }
-          publishDesktopEvent("library:scanProgress", {
+          publishScanProgress({
             phase: "scanning",
             total: event.total,
             scanned: event.scanned,
@@ -208,7 +219,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
           void finishScan(dirs, event).catch((error) => {
             scanning = false;
             libraryLog.error("扫描收尾失败:", error);
-            publishDesktopEvent("library:scanProgress", {
+            publishScanProgress({
               phase: "done",
               total: event.total,
               scanned: event.scanned,
@@ -229,5 +240,6 @@ export const cancelScan = (): void => {
   const engine = getEngine();
   engine.cancelScan();
   scanning = false;
+  currentScanProgress = { ...currentScanProgress, phase: "done" };
   libraryLog.info("已发送扫描取消信号");
 };

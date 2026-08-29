@@ -144,6 +144,7 @@ writeFileSync(
       capabilities: {
         library: true,
         playback: true,
+        download: true,
         diretta: nativeBuild.diretta === true,
         netease: true,
         qobuz: true,

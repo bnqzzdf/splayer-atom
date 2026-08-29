@@ -43,6 +43,12 @@ export interface ResolvedPlaybackSource {
   cacheAfterLoad?: () => Promise<string | null>;
 }
 
+export interface ResolvedDownloadSource {
+  source: string;
+  format?: string;
+  size?: number;
+}
+
 export class PlaybackSourceError extends Error {
   constructor(
     public readonly code: ErrorCode,
@@ -219,6 +225,44 @@ const resolveNetease = async (
   };
 };
 
+const resolveNeteaseDownload = async (
+  track: Track,
+  quality: PluginQuality,
+  usePlaybackForDownload: boolean,
+): Promise<ResolvedDownloadSource | null> => {
+  const level = NETEASE_LEVEL[quality];
+  if (!usePlaybackForDownload) {
+    try {
+      const response = await callNetease("song_download_url", { id: track.id, level });
+      const item = (response.body as { data?: unknown } | undefined)?.data as
+        { url?: unknown; type?: unknown; size?: unknown } | undefined;
+      if (typeof item?.url === "string" && item.url) {
+        return {
+          source: item.url,
+          format: typeof item.type === "string" ? item.type : undefined,
+          size: typeof item.size === "number" ? item.size : undefined,
+        };
+      }
+    } catch {
+      // 与现有下载行为一致：官方下载失败后继续尝试播放地址。
+    }
+  }
+
+  try {
+    const response = await callNetease("song_url", { id: track.id, level });
+    const item = (response.body as { data?: unknown[] } | undefined)?.data?.[0] as
+      { url?: unknown; type?: unknown; size?: unknown; freeTrialInfo?: unknown } | undefined;
+    if (typeof item?.url !== "string" || !item.url || item.freeTrialInfo != null) return null;
+    return {
+      source: item.url,
+      format: typeof item.type === "string" ? item.type : undefined,
+      size: typeof item.size === "number" ? item.size : undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const resolveNeteaseWithPluginFallback = async (
   track: Track,
   quality: PluginQuality,
@@ -280,6 +324,44 @@ const resolveTidal = async (
     provider: "official",
     cacheAfterLoad: cacheAfterLoad(track, cacheKey, resolved.streamUrl),
   };
+};
+
+/**
+ * 为 Core 下载任务解析指定音质的源；任务只保存 canonical Track，不依赖 Control 回传临时 URL。
+ * @param track - 下载歌曲
+ * @param quality - 下载音质
+ * @param usePlaybackForDownload - 网易是否只使用播放地址避免占用下载次数
+ * @returns 当前可用下载输入
+ */
+export const resolveDownloadSource = async (
+  track: Track,
+  quality: PluginQuality,
+  usePlaybackForDownload: boolean,
+): Promise<ResolvedDownloadSource> => {
+  if (track.source === "local") {
+    throw sourceError(
+      ErrorCode.FILE_NOT_FOUND,
+      `Local track is not a download source: ${track.id}`,
+    );
+  }
+  if (track.source === "streaming") {
+    return { source: (await resolveStreaming(track, null)).source };
+  }
+  if (track.source === "netease") {
+    const official = await resolveNeteaseDownload(track, quality, usePlaybackForDownload);
+    if (official) return official;
+    return { source: (await resolvePluginCompatibility(track, quality, null)).source };
+  }
+  if (track.source === "qobuz") {
+    return { source: (await resolveQobuz(track, quality, null)).source };
+  }
+  if (track.source === "tidal") {
+    return { source: (await resolveTidal(track, quality, null)).source };
+  }
+  if (track.source === "qqmusic" || track.source === "kugou") {
+    return { source: (await resolvePluginCompatibility(track, quality, null)).source };
+  }
+  throw sourceError(ErrorCode.NO_PLUGIN_AVAILABLE, `No Core download resolver for ${track.source}`);
 };
 
 /**

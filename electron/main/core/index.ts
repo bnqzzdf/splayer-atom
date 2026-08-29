@@ -17,7 +17,7 @@ import { registerDesktopPlaybackPresentation } from "@main/atom/desktop/playback
 import { initGlobalHotkey } from "@main/services/globalHotkey";
 import { initDatabase, closeDatabase } from "@main/database";
 import { init as initSongCache, shutdown as shutdownSongCache } from "@main/services/songCache";
-import { init as initDownload } from "@main/services/downloadManager";
+import { init as initDownload, shutdown as shutdownDownload } from "@main/services/downloadManager";
 import { pluginRegistry } from "@main/plugins/registry";
 import { isHeadless } from "./mode";
 import {
@@ -121,8 +121,8 @@ export const initApp = (): void => {
     initDatabase();
     // 启动歌曲缓存
     void initSongCache();
-    // 下载器是同进程服务；第一阶段 headless 不主动启动它。
-    if (!headless) void initDownload();
+    // 下载任务属于 Core；Control 是否存在不影响队列执行。
+    void initDownload();
     if (!headless) {
       initMedia();
       initLastfm();
@@ -172,6 +172,7 @@ export const initApp = (): void => {
     coreLog.info("应用即将退出，清理资源");
     store.flushImmediate();
     shutdownSongCache();
+    shutdownDownload();
     shutdownMedia();
     closeDatabase();
     void stopServer();

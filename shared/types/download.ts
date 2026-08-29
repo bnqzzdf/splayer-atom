@@ -1,6 +1,6 @@
 /**
  * 下载功能共享类型
- * 跨渲染层（解析 URL/歌词）与主进程（落盘/写标签）
+ * Control 提交 canonical Track 与任务选项，Core 持有队列、源解析、落盘与写标签权威。
  */
 
 import type { Track } from "./player";
@@ -30,9 +30,9 @@ export interface DownloadTagOptions {
   saveTtml: boolean;
 }
 
-/** 渲染层 → 主进程的下载请求 */
+/** Control → Core 的下载请求 */
 export interface DownloadRequest {
-  /** 渲染层生成的 UUID */
+  /** Control 生成的 UUID */
   taskId: string;
   track: Track;
   qualityLevel: PluginQuality;
@@ -82,22 +82,6 @@ export interface DownloadProgress {
   total: number;
 }
 
-/** 渲染层回传的解析结果（补全 DownloadRequest 缺省的网络字段，url 必填） */
-export type DownloadResolution = Required<Pick<DownloadRequest, "url">> &
-  Pick<DownloadRequest, "declaredFormat" | "declaredSize" | "lyricText" | "ttmlText">;
-
-/** 主进程 → 渲染层的解析请求载荷（轮到下载但缺少 URL 时下发） */
-export type DownloadResolvePayload = Pick<
-  DownloadRequest,
-  | "taskId"
-  | "track"
-  | "qualityLevel"
-  | "tagOptions"
-  | "coverUrl"
-  | "usePlaybackForDownload"
-  | "lyricFileFormat"
->;
-
 /** 入队结果；ok 为 false 时 reason 说明原因 */
 export interface EnqueueResult {
   ok: boolean;
@@ -116,12 +100,8 @@ export interface DownloadApi {
   list: () => Promise<DownloadTask[]>;
   pickDir: () => Promise<{ ok: boolean; dir: string; reason?: "canceled" }>;
   getDir: () => Promise<string>;
+  setDir: (dir: string) => Promise<string>;
   resetDir: () => Promise<string>;
-  /** 回传即时解析结果（主进程 download:resolve 的应答） */
-  submitResolution: (taskId: string, res: DownloadResolution) => Promise<void>;
-  /** 上报即时解析失败，任务标记为 failed */
-  failResolution: (taskId: string) => Promise<void>;
   onProgress: (callback: (data: DownloadProgress) => void) => () => void;
   onState: (callback: (task: DownloadTask) => void) => () => void;
-  onResolve: (callback: (payload: DownloadResolvePayload) => void) => () => void;
 }

@@ -2,7 +2,9 @@ import { extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { Hono, type Context } from "hono";
 import type { ApiPlatform } from "@shared/types/apis";
+import type { MusicCommentQuery } from "@shared/types/comment";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
+import type { DownloadRequest } from "@shared/types/download";
 import type {
   LoadOptions,
   PlaybackQueueItem,
@@ -11,6 +13,17 @@ import type {
   Track,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
+import { playerControl } from "@main/services/playerControl";
+import * as downloadManager from "@main/services/downloadManager";
+import {
+  clearCacheByKind,
+  clearCacheCategory,
+  getCacheDir,
+  getCacheStats,
+  resetCacheDir,
+  type CacheCategory,
+  type CacheKind,
+} from "@main/services/cache";
 import { materializeDirectInput } from "@main/atom/directInput";
 import { getCoreInfo } from "@main/atom/runtime/coreInfo";
 import { loadPlayerSource } from "@main/services/playerLoad";
@@ -20,6 +33,7 @@ import {
   getProviderSessions,
   setProviderCookie,
 } from "@main/services/providerApi";
+import { getCommentSources, getMusicComments } from "@main/services/comments";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { matchLocalTTML } from "@main/services/localLyricRepo";
 import { store } from "@main/store";
@@ -68,13 +82,44 @@ import {
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
 import { toMs } from "@main/utils/time";
+import { testNetworkProxy } from "@main/utils/proxy";
+import { getDownloadDir } from "@main/utils/config";
+import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFilesystem";
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
 const WEB_PROVIDER_PLATFORMS = new Set<ApiPlatform>(["netease", "qobuz", "tidal"]);
+const CACHE_CATEGORIES = new Set<CacheCategory>([
+  "covers",
+  "artists",
+  "backgrounds",
+  "songs",
+  "lyric",
+  "lyricTTML",
+  "lyricMatch",
+]);
+const CACHE_KINDS = new Set<CacheKind>(["file", "db"]);
+const DOWNLOAD_QUALITIES = new Set(["lq", "sq", "hq", "lossless", "hi-res"]);
 const isWebProviderPlatform = (value: unknown): value is ApiPlatform =>
   typeof value === "string" && WEB_PROVIDER_PLATFORMS.has(value as ApiPlatform);
+const isDownloadRequest = (value: unknown): value is DownloadRequest => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Partial<DownloadRequest>;
+  return (
+    typeof request.taskId === "string" &&
+    !!request.taskId &&
+    !!request.track &&
+    typeof request.track.id === "string" &&
+    typeof request.track.source === "string" &&
+    typeof request.qualityLevel === "string" &&
+    DOWNLOAD_QUALITIES.has(request.qualityLevel) &&
+    !!request.tagOptions &&
+    typeof request.tagOptions === "object" &&
+    typeof request.usePlaybackForDownload === "boolean" &&
+    (request.lyricFileFormat === "lrc" || request.lyricFileFormat === "enhanced-lrc")
+  );
+};
 const boundedInt = (
   value: string | undefined,
   fallback: number,
@@ -126,6 +171,82 @@ export const buildHeadlessRoutes = (): Hono => {
     return c.json({ ok: true });
   });
 
+  api.get("/cache/stats", async (c) => c.json(await getCacheStats()));
+  api.get("/cache/dir", (c) => c.json({ dir: getCacheDir() }));
+  api.post("/cache/clear", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
+    if (typeof body?.id !== "string" || !CACHE_CATEGORIES.has(body.id as CacheCategory)) {
+      return c.json({ error: "cache_category_invalid" }, 400);
+    }
+    await clearCacheCategory(body.id as CacheCategory);
+    return c.json({ ok: true });
+  });
+  api.post("/cache/clear-all", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { kind?: unknown } | null;
+    if (typeof body?.kind !== "string" || !CACHE_KINDS.has(body.kind as CacheKind)) {
+      return c.json({ error: "cache_kind_invalid" }, 400);
+    }
+    await clearCacheByKind(body.kind as CacheKind);
+    return c.json({ ok: true });
+  });
+  api.post("/cache/reset-dir", async (c) => c.json({ dir: await resetCacheDir() }));
+
+  api.get("/filesystem/directories", async (c) => {
+    try {
+      return c.json(await listCoreDirectories(c.req.query("path")));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+
+  api.get("/download/tasks", (c) => c.json(downloadManager.list()));
+  api.get("/download/dir", (c) => c.json({ dir: getDownloadDir() }));
+  api.post("/download/dir", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dir?: unknown } | null;
+    if (typeof body?.dir !== "string") return c.json({ error: "dir_required" }, 400);
+    try {
+      const dir = await resolveCoreDirectory(body.dir);
+      store.set("download.dir", dir);
+      return c.json({ dir });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/download/reset-dir", (c) => {
+    store.set("download.dir", null);
+    return c.json({ dir: getDownloadDir() });
+  });
+  api.post("/download/start", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!isDownloadRequest(body)) return c.json({ error: "download_request_invalid" }, 400);
+    return c.json(downloadManager.enqueue(body));
+  });
+  api.post("/download/start-many", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!Array.isArray(body) || !body.every(isDownloadRequest)) {
+      return c.json({ error: "download_requests_invalid" }, 400);
+    }
+    return c.json(downloadManager.enqueueMany(body));
+  });
+  api.post("/download/cancel", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { taskId?: unknown } | null;
+    if (typeof body?.taskId !== "string") return c.json({ error: "task_id_required" }, 400);
+    downloadManager.cancel(body.taskId);
+    return c.json({ ok: true });
+  });
+  api.post("/download/remove", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { taskId?: unknown } | null;
+    if (typeof body?.taskId !== "string") return c.json({ error: "task_id_required" }, 400);
+    downloadManager.remove(body.taskId);
+    return c.json({ ok: true });
+  });
+  api.post("/download/clear-finished", (c) => {
+    downloadManager.clearFinished();
+    return c.json({ ok: true });
+  });
+
+  api.post("/system/network-proxy/test", async (c) => c.json({ ok: await testNetworkProxy() }));
+
   api.post("/providers/call", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       platform?: unknown;
@@ -154,6 +275,25 @@ export const buildHeadlessRoutes = (): Hono => {
     }
     await clearProviderSession(body.platform);
     return c.json({ ok: true });
+  });
+
+  api.get("/comments/sources", (c) => c.json(getCommentSources()));
+  api.post("/comments/music", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as MusicCommentQuery | null;
+    if (
+      !body ||
+      typeof body.sourceId !== "string" ||
+      !body.track ||
+      typeof body.track.id !== "string" ||
+      (body.type !== "hot" && body.type !== "new")
+    ) {
+      return c.json({ ok: false, error: "comment_query_invalid" }, 400);
+    }
+    try {
+      return c.json({ ok: true, data: await getMusicComments(body) });
+    } catch (error) {
+      return c.json({ ok: false, error: errorText(error) });
+    }
   });
 
   api.post("/providers/set-cookie", async (c) => {
@@ -226,6 +366,15 @@ export const buildHeadlessRoutes = (): Hono => {
       getPlayer().setVolume(volume);
       store.set("player.volume", volume);
       return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+
+  api.post("/player/reinit", async (c) => {
+    try {
+      await playerControl.reinitOutput();
+      return c.json({ success: true });
     } catch (error) {
       return commandError(c, error);
     }

@@ -2,6 +2,7 @@
 import { getContributors, type Contributor } from "@/apis/github";
 import { useCopyText } from "@/composables/useCopyText";
 import { useUpdateStore } from "@/stores/update";
+import { hasHostCapability, isDesktopRenderer } from "@/runtime";
 import { openExternal } from "@/utils/url";
 import {
   APP_VERSION,
@@ -21,20 +22,23 @@ import IconLucideChevronDown from "~icons/lucide/chevron-down";
 
 const { t } = useI18n();
 const { copy } = useCopyText();
-const update = useUpdateStore();
+const updaterAvailable = hasHostCapability("desktopUpdater");
+const logDirectoryAvailable = hasHostCapability("hostLogDirectory");
+const update = updaterAvailable ? useUpdateStore() : null;
 
 /** 提交时间 */
 const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
-/** 当前版本 */
-const versions = window.electron.process.versions;
+/** Desktop runtime 版本；Web 不伪造 Electron 环境。 */
+const versions = isDesktopRenderer() ? window.electron.process.versions : null;
 /** 操作系统信息 */
 const osInfo = window.api.system.osInfo;
 
 /** 检查更新中 */
-const checking = computed(() => update.phase === "checking");
+const checking = computed(() => update?.phase === "checking");
 
 /** 触发更新检查 */
 const handleCheckUpdate = (): void => {
+  if (!update) return;
   if (update.hasUpdate) {
     update.openDialog();
     return;
@@ -43,7 +47,9 @@ const handleCheckUpdate = (): void => {
 };
 
 /** 打开日志目录 */
-const handleOpenLogs = (): void => void window.api.system.openLogsDir();
+const handleOpenLogs = (): void => {
+  if (logDirectoryAvailable) void window.api.system.openLogsDir();
+};
 
 interface EnvItem {
   label: string;
@@ -62,11 +68,15 @@ const envItems = computed<EnvItem[]>(() => [
     label: t("settings.about.date"),
     value: `${COMMIT_DATE} (${commitTimeAgo.value})`,
   },
-  { label: "Electron", value: versions.electron },
-  { label: "Chromium", value: versions.chrome },
-  { label: "Node.js", value: versions.node },
-  { label: "V8", value: versions.v8 },
-  { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}` },
+  ...(versions
+    ? [
+        { label: "Electron", value: versions.electron },
+        { label: "Chromium", value: versions.chrome },
+        { label: "Node.js", value: versions.node },
+        { label: "V8", value: versions.v8 },
+      ]
+    : []),
+  { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}`.trim() },
 ]);
 
 /** 复制环境信息 */
@@ -142,17 +152,22 @@ onMounted(async () => {
           </STag>
         </div>
         <div class="flex items-center gap-2">
-          <SButton variant="secondary" :loading="checking" @click="handleCheckUpdate">
+          <SButton
+            v-if="updaterAvailable"
+            variant="secondary"
+            :loading="checking"
+            @click="handleCheckUpdate"
+          >
             <template #icon><IconLucideRefreshCw /></template>
             {{
-              update.hasUpdate
+              update?.hasUpdate
                 ? t("settings.about.newVersion")
                 : checking
                   ? t("settings.about.checking")
                   : t("settings.about.checkUpdate")
             }}
           </SButton>
-          <SButton variant="secondary" @click="handleOpenLogs">
+          <SButton v-if="logDirectoryAvailable" variant="secondary" @click="handleOpenLogs">
             {{ t("settings.about.openLogs") }}
           </SButton>
         </div>

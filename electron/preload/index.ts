@@ -304,7 +304,7 @@ const api = {
     // 获取扫描状态
     isScanning: () => ipcRenderer.invoke("library:isScanning"),
     // 弹出目录选择器，添加扫描目录
-    addScanDir: () => ipcRenderer.invoke("library:addScanDir"),
+    addScanDir: (dir?: string) => ipcRenderer.invoke("library:addScanDir", dir),
     // 移除扫描目录及其下曲目
     removeScanDir: (dir: string) => ipcRenderer.invoke("library:removeScanDir", dir),
     // 获取已配置的扫描目录
@@ -543,11 +543,6 @@ const api = {
     cancel: (taskId: string) => ipcRenderer.invoke("download:cancel", taskId),
     // 重试（复用 taskId 重新入队）
     retry: (req: unknown) => ipcRenderer.invoke("download:retry", req),
-    // 回传即时解析结果
-    submitResolution: (taskId: string, res: unknown) =>
-      ipcRenderer.invoke("download:resolution", taskId, res),
-    // 上报即时解析失败
-    failResolution: (taskId: string) => ipcRenderer.invoke("download:resolveFailed", taskId),
     // 删除一条任务记录
     remove: (taskId: string) => ipcRenderer.invoke("download:remove", taskId),
     // 清空已结束任务
@@ -558,17 +553,14 @@ const api = {
     pickDir: () => ipcRenderer.invoke("download:pickDir"),
     // 当前下载目录
     getDir: () => ipcRenderer.invoke("download:getDir"),
+    // 设置 Core 下载目录
+    setDir: (dir: string) => ipcRenderer.invoke("download:setDir", dir),
     // 重置为默认下载目录
     resetDir: () => ipcRenderer.invoke("download:resetDir"),
     // 订阅进度
     onProgress: (callback: (data: unknown) => void) => subscribe("download:progress", callback),
     // 订阅状态变更
     onState: (callback: (task: unknown) => void) => subscribe("download:state", callback),
-    // 订阅解析请求
-    onResolve: (callback: (payload: unknown) => void) => {
-      ipcRenderer.removeAllListeners("download:resolve");
-      return subscribe("download:resolve", callback);
-    },
   },
   nowPlaying: {
     // 渲染进程同步当前播放状态到主进程

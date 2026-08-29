@@ -7,6 +7,7 @@ export interface CoreProtocolInfo {
 export interface CoreCapabilities {
   library: boolean;
   playback: boolean;
+  download: boolean;
   diretta: boolean;
   netease: boolean;
   qobuz: boolean;

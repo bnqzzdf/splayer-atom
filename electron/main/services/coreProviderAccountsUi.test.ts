@@ -11,6 +11,10 @@ const servicesSource = read(
 );
 const headlessRoutesSource = read(new URL("../atom/headless/routes.ts", import.meta.url));
 const webApiSource = read(new URL("../../../src/web/api.ts", import.meta.url));
+const loginDialogSource = read(
+  new URL("../../../src/components/modals/LoginDialog.vue", import.meta.url),
+);
+const runtimeSource = read(new URL("../../../src/runtime.ts", import.meta.url));
 
 test("Qobuz and TIDAL account UI reuses existing Core auth actions without persisting tokens", () => {
   assert.match(servicesSource, /component: ProviderAccounts/);
@@ -29,4 +33,13 @@ test("Headless Web provider surface exposes only Atom-managed providers", () => 
   assert.match(webApiSource, expected);
   assert.doesNotMatch(headlessRoutesSource, /new Set<ApiPlatform>\(\[[^\]]*qqmusic/);
   assert.doesNotMatch(webApiSource, /new Set<ApiPlatform>\(\[[^\]]*kugou/);
+});
+
+test("Netease embedded login window is a Desktop Host capability, not a Core auth action", () => {
+  assert.match(runtimeSource, /"providerLoginWindow"/);
+  assert.match(loginDialogSource, /hasHostCapability\("providerLoginWindow"\)/);
+  assert.match(loginDialogSource, /v-if="providerLoginWindowAvailable"/);
+  assert.match(loginDialogSource, /window\.api\.apis\.openLoginWeb\("netease"\)/);
+  assert.match(loginDialogSource, /openManualCookie/);
+  assert.match(loginDialogSource, /startQrFlow/);
 });

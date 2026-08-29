@@ -2,6 +2,7 @@
 import type { StyleValue } from "vue";
 import { useSettingsStore } from "@/stores/settings";
 import { useSystemFonts } from "@/composables/useSystemFonts";
+import { hasHostCapability } from "@/runtime";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 
 defineOptions({ inheritAttrs: false });
@@ -9,6 +10,8 @@ defineOptions({ inheritAttrs: false });
 const { t } = useI18n();
 const settings = useSettingsStore();
 const { families: fonts, loading: loadingFonts, ensureLoaded } = useSystemFonts();
+const systemFontEnumerationAvailable = hasHostCapability("systemFonts");
+const externalLyricFontsAvailable = hasHostCapability("desktopLyric");
 
 type FontDraftKey =
   | "global"
@@ -48,7 +51,7 @@ interface FontOption {
 }
 
 const open = ref(false);
-const mode = ref<FontMode>("select");
+const mode = ref<FontMode>(systemFontEnumerationAvailable ? "select" : "custom");
 
 const draft = reactive<FontDraft>({
   global: "",
@@ -98,17 +101,23 @@ const groupedTargets = computed<Array<{ group: FontGroup; items: FontTarget[] }>
             : t("settings.fontConfig.useSystem"),
     };
   };
-  return GROUP_ORDER.map((group) => ({
-    group,
-    items: TARGET_DEFS.filter((d) => d.group === group).map((d) => buildTarget(d.key)),
-  })).filter((g) => g.items.length > 0);
+  return GROUP_ORDER.filter((group) => group !== "externalLyric" || externalLyricFontsAvailable)
+    .map((group) => ({
+      group,
+      items: TARGET_DEFS.filter((d) => d.group === group).map((d) => buildTarget(d.key)),
+    }))
+    .filter((g) => g.items.length > 0);
 });
 
 /** 设置方式选项 */
-const modeOptions = computed<FontOption[]>(() => [
-  { value: "select", label: t("settings.fontConfig.modeSelect") },
-  { value: "custom", label: t("settings.fontConfig.modeCustom") },
-]);
+const modeOptions = computed<FontOption[]>(() =>
+  systemFontEnumerationAvailable
+    ? [
+        { value: "select", label: t("settings.fontConfig.modeSelect") },
+        { value: "custom", label: t("settings.fontConfig.modeCustom") },
+      ]
+    : [{ value: "custom", label: t("settings.fontConfig.modeCustom") }],
+);
 
 /** 系统字体下拉项 */
 const fontOptions = computed<FontOption[]>(() =>
@@ -146,7 +155,8 @@ const syncDraft = (): void => {
 watch(open, (value) => {
   if (!value) return;
   syncDraft();
-  ensureLoaded();
+  if (systemFontEnumerationAvailable) void ensureLoaded();
+  else mode.value = "custom";
 });
 
 /** 选择字体 */

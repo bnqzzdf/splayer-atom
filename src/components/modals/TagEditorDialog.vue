@@ -8,6 +8,7 @@ import { rankTagCandidates, type RankedTagCandidate } from "@/utils/tagMatch";
 import * as player from "@/core/player";
 import { toast } from "@/composables/useToast";
 import { handleError } from "@/utils/errors";
+import { hasHostCapability } from "@/runtime";
 import { formatFileSize } from "@/utils/format";
 import { formatTime } from "@/utils/time";
 import IconWandSparkles from "~icons/lucide/wand-sparkles";
@@ -16,6 +17,7 @@ const props = defineProps<{ open: boolean; track: Track | null }>();
 const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 const { t } = useI18n();
+const localCoverPickerAvailable = hasHostCapability("nativeFileDialogs");
 
 /** 文件名 */
 const fileName = computed(
@@ -244,7 +246,13 @@ const handleSave = async (): Promise<void> => {
             </span>
             <span v-if="fileMeta" class="text-xs text-on-surface-variant/70">{{ fileMeta }}</span>
           </div>
-          <SButton variant="secondary" size="small" class="w-fit" @click="pickCover">
+          <SButton
+            v-if="localCoverPickerAvailable"
+            variant="secondary"
+            size="small"
+            class="w-fit"
+            @click="pickCover"
+          >
             {{ t("tagEditor.replaceCover") }}
           </SButton>
         </div>

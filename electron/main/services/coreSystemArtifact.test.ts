@@ -105,6 +105,8 @@ test("final tar artifact smoke starts the extracted Core on an isolated port", (
   assert.match(artifactCheckSource, /\/api\/info/);
   assert.match(artifactCheckSource, /\/api\/session/);
   assert.match(artifactCheckSource, /\/api\/library\/count/);
+  assert.match(artifactCheckSource, /\/api\/cache\/stats/);
+  assert.match(artifactCheckSource, /\/api\/cache\/dir/);
   assert.match(artifactCheckSource, /child\.kill\("SIGTERM"\)/);
 });
 

@@ -24,6 +24,32 @@ const settingsSource = readFileSync(
   new URL("../../settings/categories/player.ts", import.meta.url),
   "utf8",
 );
+const runtimeSource = readFileSync(new URL("../../runtime.ts", import.meta.url), "utf8");
+const settingsSchemaSource = readFileSync(
+  new URL("../../settings/schema.ts", import.meta.url),
+  "utf8",
+);
+const settingsDialogSource = readFileSync(
+  new URL("../../settings/useSettingsDialog.ts", import.meta.url),
+  "utf8",
+);
+const generalSettingsSource = readFileSync(
+  new URL("../../settings/categories/general.ts", import.meta.url),
+  "utf8",
+);
+const appearanceSettingsSource = readFileSync(
+  new URL("../../settings/categories/appearance.ts", import.meta.url),
+  "utf8",
+);
+const aboutSettingsSource = readFileSync(
+  new URL("../../components/settings/custom/AboutSettings.vue", import.meta.url),
+  "utf8",
+);
+const fontConfigSource = readFileSync(
+  new URL("../../components/settings/custom/FontConfig.vue", import.meta.url),
+  "utf8",
+);
+const webApiSource = readFileSync(new URL("../../web/api.ts", import.meta.url), "utf8");
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -77,6 +103,71 @@ test("Existing sample-altering UI is visibly locked while Diretta is selected", 
   );
 });
 
+test("Desktop-only toolbar actions use explicit Host capability instead of Web branching", () => {
+  assert.match(runtimeSource, /export type ControlHostCapability/);
+  assert.match(runtimeSource, /"desktopLyric"/);
+  assert.match(runtimeSource, /export const hasHostCapability/);
+  assert.match(toolbarSource, /hasHostCapability\("desktopLyric"\)/);
+  assert.match(toolbarSource, /v-if="desktopLyricAvailable"/);
+  assert.doesNotMatch(toolbarSource, /v-if="!webRemote"/);
+});
+
+test("Host-only Settings categories follow Control capabilities", () => {
+  assert.match(settingsSchemaSource, /hasHostCapability\("desktopLyric"\)/);
+  assert.match(settingsSchemaSource, /\[externalLyricCategory\]/);
+  assert.match(settingsSchemaSource, /hasHostCapability\("globalHotkeys"\)/);
+  assert.match(settingsSchemaSource, /\[hotkeysCategory\]/);
+  assert.match(settingsDialogSource, /settingsSchema\.some\(\(item\) => item\.id === requested\)/);
+  assert.match(settingsDialogSource, /: settingsSchema\[0\]\.id/);
+});
+
+test("General Settings hides Desktop shell, updater and file-dialog surfaces by Host capability", () => {
+  assert.match(runtimeSource, /"desktopUpdater"/);
+  assert.match(
+    generalSettingsSource,
+    /hasHostCapability\("windowControls"\) \? \[systemConfigSection\]/,
+  );
+  assert.match(generalSettingsSource, /hasHostCapability\("desktopUpdater"\) \? \[updateSection\]/);
+  assert.match(
+    generalSettingsSource,
+    /hasHostCapability\("nativeFileDialogs"\) \? \[backupResetSection\]/,
+  );
+});
+
+test("Appearance hides Desktop-managed background images without native file dialogs", () => {
+  assert.match(
+    appearanceSettingsSource,
+    /key: "appearanceStyle"[\s\S]*visible: \(\) => hasHostCapability\("nativeFileDialogs"\)/,
+  );
+  assert.doesNotMatch(webApiSource, /theme:\s*\{/);
+});
+
+test("Font settings do not pretend Web can enumerate Desktop system fonts", () => {
+  assert.match(runtimeSource, /"systemFonts"/);
+  assert.match(fontConfigSource, /hasHostCapability\("systemFonts"\)/);
+  assert.match(fontConfigSource, /hasHostCapability\("desktopLyric"\)/);
+  assert.match(fontConfigSource, /systemFontEnumerationAvailable \? "select" : "custom"/);
+  assert.match(
+    fontConfigSource,
+    /GROUP_ORDER\.filter\(\(group\) => group !== "externalLyric" \|\| externalLyricFontsAvailable\)/,
+  );
+  assert.match(fontConfigSource, /if \(systemFontEnumerationAvailable\) void ensureLoaded\(\)/);
+});
+
+test("About Settings does not require an Electron facade in Web Control", () => {
+  assert.match(runtimeSource, /"hostLogDirectory"/);
+  assert.match(aboutSettingsSource, /hasHostCapability\("desktopUpdater"\)/);
+  assert.match(aboutSettingsSource, /hasHostCapability\("hostLogDirectory"\)/);
+  assert.match(
+    aboutSettingsSource,
+    /isDesktopRenderer\(\) \? window\.electron\.process\.versions : null/,
+  );
+  assert.match(aboutSettingsSource, /v-if="updaterAvailable"/);
+  assert.match(aboutSettingsSource, /v-if="logDirectoryAvailable"/);
+  assert.match(webApiSource, /request<CoreInfo>\("\/info"\)/);
+  assert.match(webApiSource, /osInfo: \{ type: info\.platform, arch: info\.arch, release: "" \}/);
+});
+
 test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {
   assert.match(toolbarSource, /OutputDeviceSelector/);
   assert.match(webOutputSelectorSource, /startsWith\("diretta:"\)/);
@@ -85,6 +176,24 @@ test("Headless Web output selector only exposes real ALSA hardware and Diretta",
   assert.match(webOutputSelectorSource, /await switchDevice/);
   assert.match(webOutputSelectorSource, /await refreshDevices/);
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
+});
+
+test("shared Control output switch reports online Source Direct preparation", () => {
+  const switchFlow = between(
+    playerSource,
+    "export const switchDevice = async (",
+    "/**\n * 设置队列并从指定位置开始播放",
+  );
+  assert.match(switchFlow, /const track = useMediaStore\(\)\.track/);
+  assert.match(
+    switchFlow,
+    /isDirettaOutput\(deviceId\) && track !== null && track\.source !== "local"/,
+  );
+  assert.match(switchFlow, /toast\.loading\(i18n\.global\.t\("directMode\.preparingSource"\)/);
+  assert.match(switchFlow, /duration: 0/);
+  assert.match(switchFlow, /preparingToast\?\.close\(\)/);
+  assert.match(switchFlow, /await window\.api\.player\.setOutputDevice\(deviceId\)/);
+  assert.doesNotMatch(switchFlow, /materializeDirectInput|prepareDirectTrackSource/);
 });
 
 test("Controls refresh output preference from Core config authority", () => {

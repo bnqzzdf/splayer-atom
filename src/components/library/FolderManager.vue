@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { useLibraryStore } from "@/stores/library";
 import { toast } from "@/composables/useToast";
-import ServerDirPicker from "./ServerDirPicker.vue";
+import { isWebRemote } from "@/runtime";
+import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideFolderPlus from "~icons/lucide/folder-plus";
-import IconLucideFolderSearch from "~icons/lucide/folder-search";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
 const { scanDirs } = storeToRefs(libraryStore);
+const webRemote = isWebRemote();
 
 const emit = defineEmits<{
   (e: "added"): void;
@@ -22,19 +23,16 @@ const folderName = (dir: string): string => {
 };
 
 const adding = ref(false);
-const inputPath = ref("");
+const corePickerOpen = ref(false);
 const removingDir = ref<string | null>(null);
 const removeConfirmOpen = ref(false);
-const serverPickerOpen = ref(false);
 
-const handleAdd = async (path?: string): Promise<void> => {
+const addDirectory = async (dir?: string): Promise<void> => {
   if (adding.value) return;
-  const targetPath = path ?? inputPath.value.trim();
   adding.value = true;
   try {
-    const res = await libraryStore.addScanDir(targetPath || undefined);
+    const res = await libraryStore.addScanDir(dir);
     if (res.success) {
-      inputPath.value = "";
       emit("added");
     } else if (res.error === "nested") {
       toast.warning(t("library.nestedHint"));
@@ -46,8 +44,9 @@ const handleAdd = async (path?: string): Promise<void> => {
   }
 };
 
-const onServerDirSelected = (dir: string) => {
-  void handleAdd(dir);
+const handleAdd = (): void => {
+  if (webRemote) corePickerOpen.value = true;
+  else void addDirectory();
 };
 
 const confirmRemove = (dir: string): void => {
@@ -71,7 +70,6 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col gap-2">
-    <!-- 已添加的目录列表 -->
     <div
       v-for="dir in scanDirs"
       :key="dir"
@@ -91,46 +89,18 @@ onMounted(() => {
       {{ t("library.emptyHint") }}
     </div>
 
-    <!-- 浏览与添加操作区域 -->
-    <div class="mt-2 flex flex-col gap-2">
-      <!-- 浏览选择服务器文件夹主按钮 -->
-      <SButton
-        type="primary"
-        variant="secondary"
-        block
-        @click="serverPickerOpen = true"
-      >
-        <template #icon><IconLucideFolderSearch /></template>
-        浏览并选择服务端目录
-      </SButton>
+    <SButton class="mt-1" variant="secondary" :loading="adding" block @click="handleAdd">
+      <template #icon><IconLucideFolderPlus /></template>
+      {{ t("library.addFolder") }}
+    </SButton>
 
-      <!-- 或手动输入路径 -->
-      <div class="flex items-center gap-2">
-        <SInput
-          v-model="inputPath"
-          placeholder="或手动输入路径 (如 /home/songlian/Music)"
-          class="flex-1"
-          @keydown.enter="handleAdd(inputPath)"
-        />
-        <SButton
-          variant="secondary"
-          :loading="adding"
-          :disabled="!inputPath.trim()"
-          @click="handleAdd(inputPath)"
-        >
-          <template #icon><IconLucideFolderPlus /></template>
-          添加
-        </SButton>
-      </div>
-    </div>
-
-    <!-- 服务端目录浏览器弹窗 -->
-    <ServerDirPicker
-      v-model:open="serverPickerOpen"
-      @select="onServerDirSelected"
+    <CoreDirectoryPicker
+      v-if="webRemote"
+      v-model:open="corePickerOpen"
+      :title="t('library.addFolder')"
+      @select="(dir) => addDirectory(dir)"
     />
 
-    <!-- 移除确认对话框 -->
     <SDialog v-model:open="removeConfirmOpen" :title="t('library.removeFolder')">
       <template #default>
         <p class="text-sm text-on-surface-variant">{{ t("library.removeFolderConfirm") }}</p>

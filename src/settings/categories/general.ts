@@ -1,8 +1,119 @@
-import type { SettingCategory } from "@/types/settings-schema";
+import type { SettingCategory, SettingSection } from "@/types/settings-schema";
+import { hasHostCapability } from "@/runtime";
 import { LOCALES } from "@shared/types/settings";
 import StorageManager from "@/components/settings/custom/StorageManager.vue";
 import { useUpdateStore } from "@/stores/update";
 import IconLucideCog from "~icons/lucide/cog";
+
+const systemConfigSection: SettingSection = {
+  id: "systemConfig",
+  items: [
+    {
+      key: "rememberWindowState",
+      type: "switch",
+      binding: { store: "settings", path: "system.system.rememberWindowState" },
+      defaultValue: true,
+    },
+    {
+      key: "borderlessWindow",
+      type: "switch",
+      binding: { store: "settings", path: "system.system.borderlessWindow" },
+      defaultValue: true,
+      confirm: {
+        titleKey: "settings.confirm.restartRequiredTitle",
+        contentKey: "settings.confirm.restartRequiredContent",
+        type: "warning",
+        confirmTextKey: "common.saveAndRelaunch",
+      },
+      action: async (next) => {
+        await window.api.config.set("system.borderlessWindow", next);
+        await window.api.system.relaunch();
+      },
+    },
+    {
+      key: "taskbarProgress",
+      type: "switch",
+      binding: { store: "settings", path: "system.system.taskbarProgress" },
+      defaultValue: true,
+    },
+    {
+      key: "taskbarThumbnailCover",
+      type: "switch",
+      binding: { store: "settings", path: "system.system.taskbarThumbnailCover" },
+      defaultValue: true,
+      visible: () => navigator.platform.startsWith("Win"),
+    },
+    {
+      key: "orpheusProtocol",
+      type: "switch",
+      binding: { store: "settings", path: "system.system.registerOrpheusProtocol" },
+      defaultValue: false,
+    },
+    {
+      key: "closeAction",
+      type: "select",
+      binding: { store: "settings", path: "appearance.closeAction" },
+      options: [
+        { value: "quit", labelKey: "settings.closeAction.quit" },
+        { value: "hide", labelKey: "settings.closeAction.hide" },
+      ],
+      defaultValue: "hide",
+    },
+    {
+      key: "rememberCloseChoice",
+      type: "switch",
+      binding: { store: "settings", path: "appearance.rememberCloseChoice" },
+      defaultValue: false,
+    },
+  ],
+};
+
+const updateSection: SettingSection = {
+  id: "update",
+  items: [
+    {
+      key: "updateChannel",
+      type: "select",
+      binding: { store: "settings", path: "system.update.channel" },
+      options: [
+        { value: "stable", labelKey: "settings.updateChannel.stable" },
+        { value: "beta", labelKey: "settings.updateChannel.beta" },
+        { value: "alpha", labelKey: "settings.updateChannel.alpha" },
+      ],
+      defaultValue: "stable",
+      confirm: {
+        when: (next) => next === "beta" || next === "alpha",
+        titleKey: "settings.confirm.testChannelTitle",
+        contentKey: "settings.confirm.testChannelContent",
+        type: "warning",
+      },
+    },
+    {
+      key: "autoCheckUpdate",
+      type: "switch",
+      binding: { store: "settings", path: "system.update.autoCheck" },
+      defaultValue: true,
+    },
+    {
+      key: "checkUpdate",
+      type: "button",
+      action: () => useUpdateStore().checkManually(),
+    },
+  ],
+};
+
+const backupResetSection: SettingSection = {
+  id: "backupReset",
+  items: [
+    {
+      key: "storageManager",
+      type: "custom",
+      component: StorageManager,
+      fullWidth: true,
+      keywords: ["backup.label", "restore.label", "resetSettings.label", "resetAll.label"],
+    },
+  ],
+};
 
 const generalCategory: SettingCategory = {
   id: "general",
@@ -20,101 +131,8 @@ const generalCategory: SettingCategory = {
         },
       ],
     },
-    {
-      id: "systemConfig",
-      items: [
-        {
-          key: "rememberWindowState",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.rememberWindowState" },
-          defaultValue: true,
-        },
-        {
-          key: "borderlessWindow",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.borderlessWindow" },
-          defaultValue: true,
-          confirm: {
-            titleKey: "settings.confirm.restartRequiredTitle",
-            contentKey: "settings.confirm.restartRequiredContent",
-            type: "warning",
-            confirmTextKey: "common.saveAndRelaunch",
-          },
-          action: async (next) => {
-            await window.api.config.set("system.borderlessWindow", next);
-            await window.api.system.relaunch();
-          },
-        },
-        {
-          key: "taskbarProgress",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.taskbarProgress" },
-          defaultValue: true,
-        },
-        {
-          key: "taskbarThumbnailCover",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.taskbarThumbnailCover" },
-          defaultValue: true,
-          visible: () => navigator.platform.startsWith("Win"),
-        },
-        {
-          key: "orpheusProtocol",
-          type: "switch",
-          binding: { store: "settings", path: "system.system.registerOrpheusProtocol" },
-          defaultValue: false,
-        },
-        {
-          key: "closeAction",
-          type: "select",
-          binding: { store: "settings", path: "appearance.closeAction" },
-          options: [
-            { value: "quit", labelKey: "settings.closeAction.quit" },
-            { value: "hide", labelKey: "settings.closeAction.hide" },
-          ],
-          defaultValue: "hide",
-        },
-        {
-          key: "rememberCloseChoice",
-          type: "switch",
-          binding: { store: "settings", path: "appearance.rememberCloseChoice" },
-          defaultValue: false,
-        },
-      ],
-    },
-    {
-      id: "update",
-      items: [
-        {
-          key: "updateChannel",
-          type: "select",
-          binding: { store: "settings", path: "system.update.channel" },
-          options: [
-            { value: "stable", labelKey: "settings.updateChannel.stable" },
-            { value: "beta", labelKey: "settings.updateChannel.beta" },
-            { value: "alpha", labelKey: "settings.updateChannel.alpha" },
-          ],
-          defaultValue: "stable",
-          confirm: {
-            when: (next) => next === "beta" || next === "alpha",
-            titleKey: "settings.confirm.testChannelTitle",
-            contentKey: "settings.confirm.testChannelContent",
-            type: "warning",
-          },
-        },
-        {
-          key: "autoCheckUpdate",
-          type: "switch",
-          binding: { store: "settings", path: "system.update.autoCheck" },
-          defaultValue: true,
-        },
-        {
-          key: "checkUpdate",
-          type: "button",
-          action: () => useUpdateStore().checkManually(),
-        },
-      ],
-    },
+    ...(hasHostCapability("windowControls") ? [systemConfigSection] : []),
+    ...(hasHostCapability("desktopUpdater") ? [updateSection] : []),
     {
       id: "debug",
       items: [
@@ -126,18 +144,7 @@ const generalCategory: SettingCategory = {
         },
       ],
     },
-    {
-      id: "backupReset",
-      items: [
-        {
-          key: "storageManager",
-          type: "custom",
-          component: StorageManager,
-          fullWidth: true,
-          keywords: ["backup.label", "restore.label", "resetSettings.label", "resetAll.label"],
-        },
-      ],
-    },
+    ...(hasHostCapability("nativeFileDialogs") ? [backupResetSection] : []),
   ],
 };
 

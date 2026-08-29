@@ -44,6 +44,7 @@ test("Core capability reports actual Diretta native metadata instead of a hard-c
 
     const info = getCoreInfo();
     assert.equal(info.protocol.version, CORE_PROTOCOL_VERSION);
+    assert.equal(info.capabilities.download, true);
     assert.equal(info.capabilities.diretta, true);
     assert.equal(info.capabilities.remoteOutput, false);
   } finally {

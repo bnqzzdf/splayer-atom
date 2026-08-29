@@ -3,6 +3,7 @@ import type { DownloadRequest, DownloadTagOptions, DownloadTask } from "@shared/
 import { QUALITY_LABELS, type QualityLevel } from "@/utils/quality";
 import { useSettingsStore } from "@/stores/settings";
 import { toast } from "@/composables/useToast";
+import { prepareDownloadLyrics } from "@/services/download/resolver";
 
 /** 下载选项 */
 interface EnqueueOptions {
@@ -38,7 +39,10 @@ export const useDownload = () => {
    * 构建不含网络解析的下载请求
    * @returns 本地曲目返回 null
    */
-  const prepareRequest = (track: Track, opts: EnqueueOptions): DownloadRequest | null => {
+  const prepareRequest = async (
+    track: Track,
+    opts: EnqueueOptions,
+  ): Promise<DownloadRequest | null> => {
     if (track.source === "local") return null;
     const download = useSettingsStore().system.download;
     const level = opts.quality ?? download.quality;
@@ -49,7 +53,7 @@ export const useDownload = () => {
       writeLrc: download.writeLrc,
       saveTtml: download.saveTtml,
     };
-    return {
+    const req: DownloadRequest = {
       taskId: opts.taskId ?? crypto.randomUUID(),
       track,
       qualityLevel: level,
@@ -58,6 +62,8 @@ export const useDownload = () => {
       usePlaybackForDownload: download.usePlaybackForDownload,
       lyricFileFormat: download.lyricFileFormat,
     };
+    Object.assign(req, await prepareDownloadLyrics(req));
+    return req;
   };
 
   /**
@@ -65,7 +71,7 @@ export const useDownload = () => {
    * @returns 是否成功入队
    */
   const enqueue = async (track: Track, opts: EnqueueOptions = {}): Promise<boolean> => {
-    const req = prepareRequest(track, opts);
+    const req = await prepareRequest(track, opts);
     if (!req) return false;
     const res = opts.taskId
       ? await window.api.download.retry(req)
@@ -82,9 +88,11 @@ export const useDownload = () => {
 
   /** 批量下载 */
   const enqueueMany = async (tracks: Track[]): Promise<void> => {
-    const requests = tracks
-      .map((track) => prepareRequest(track, {}))
-      .filter((req): req is DownloadRequest => req !== null);
+    const requests: DownloadRequest[] = [];
+    for (const track of tracks) {
+      const req = await prepareRequest(track, {});
+      if (req) requests.push(req);
+    }
     const results = await window.api.download.startMany(requests).catch(() => []);
     const count = results.filter((result) => result?.ok).length;
     if (count > 0) toast.success(t("download.enqueued", { count }));

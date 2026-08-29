@@ -9,6 +9,8 @@ const controlSource = readFileSync(
   "utf8",
 );
 const routesSource = readFileSync(new URL("../atom/headless/routes.ts", import.meta.url), "utf8");
+const playerControlSource = readFileSync(new URL("./playerControl.ts", import.meta.url), "utf8");
+const webApiSource = readFileSync(new URL("../../../src/web/api.ts", import.meta.url), "utf8");
 
 test("Desktop transport delegates play pause stop and seek to the Core session", () => {
   assert.match(ipcSource, /await playbackSession\.play\(\)/);
@@ -49,4 +51,16 @@ test("Desktop system media controls also use Core transport", () => {
 test("Headless Web exposes the same Core reload-current command", () => {
   assert.match(routesSource, /api\.post\("\/session\/reload"/);
   assert.match(routesSource, /await reloadCurrent\(body\?\.forcePlay\)/);
+});
+
+test("Desktop and Web rebuild the same Core audio output", () => {
+  assert.match(
+    playerControlSource,
+    /reinitOutput: \(\): Promise<void> => getPlayer\(\)\.reinitOutput\(\)/,
+  );
+  assert.match(ipcSource, /await playerControl\.reinitOutput\(\)/);
+  assert.match(routesSource, /api\.post\("\/player\/reinit"/);
+  assert.match(routesSource, /await playerControl\.reinitOutput\(\)/);
+  assert.match(webApiSource, /reinit: \(\) => asCommand\(\(\) => request\("\/player\/reinit"/);
+  assert.doesNotMatch(webApiSource, /WEB_REINIT_UNSUPPORTED/);
 });

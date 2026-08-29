@@ -12,6 +12,7 @@ import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
 import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
 import { loadPlayerSource } from "@main/services/playerLoad";
+import { playerControl } from "@main/services/playerControl";
 import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
 import {
   cancelPendingReinit,
@@ -473,7 +474,7 @@ export const registerPlayerIpc = (): void => {
   // 重建音频输出设备
   ipcMain.handle("player:reinit", async () => {
     try {
-      await getPlayer().reinitOutput();
+      await playerControl.reinitOutput();
       return { success: true };
     } catch (error) {
       return fail(

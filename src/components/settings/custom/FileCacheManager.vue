@@ -13,10 +13,13 @@ import IconLucideImagePlus from "~icons/lucide/image-plus";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDatabase from "~icons/lucide/database";
 import { useCacheStats } from "@/composables/useCacheStats";
+import { hasHostCapability } from "@/runtime";
 
 defineOptions({ inheritAttrs: false });
 
 const { t } = useI18n();
+const canPickCorePathFromHost = hasHostCapability("nativeFileDialogs");
+const canOpenCorePathOnHost = hasHostCapability("hostFileExplorer");
 const { stats, cacheDir, loading, clearingId, clearingKind, load, refresh, setCacheDir } =
   useCacheStats();
 
@@ -113,7 +116,13 @@ const requestClearAll = async (): Promise<void> => {
         </div>
       </div>
       <div class="shrink-0 flex items-center gap-2">
-        <SButton variant="ghost" circle :title="t('settings.cacheDir.open')" @click="handleOpenDir">
+        <SButton
+          v-if="canOpenCorePathOnHost"
+          variant="ghost"
+          circle
+          :title="t('settings.cacheDir.open')"
+          @click="handleOpenDir"
+        >
           <template #icon><IconLucideFolderOpen /></template>
         </SButton>
         <SButton
@@ -124,7 +133,7 @@ const requestClearAll = async (): Promise<void> => {
         >
           <template #icon><IconLucideRotateCcw /></template>
         </SButton>
-        <SButton variant="secondary" @click="handlePickDir">
+        <SButton v-if="canPickCorePathFromHost" variant="secondary" @click="handlePickDir">
           {{ t("settings.cacheDir.change") }}
         </SButton>
       </div>

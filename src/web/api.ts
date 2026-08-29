@@ -1,10 +1,19 @@
 import type { ApiCallResponse, ApiPlatform, ProviderSessionsSnapshot } from "@shared/types/apis";
+import type { CoreInfo } from "@shared/types/core";
+import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
+import type {
+  DownloadProgress,
+  DownloadRequest,
+  DownloadTask,
+  EnqueueResult,
+} from "@shared/types/download";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
-import type { LibraryApi, AlbumSummary, ArtistSummary } from "@shared/types/library";
+import type { LibraryApi, AlbumSummary, ArtistSummary, ScanProgress } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
 import type { StatsApi } from "@shared/types/stats";
+import type { TrackTags, TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type {
   AudioDevice,
   IpcResponse,
@@ -90,6 +99,17 @@ const filterSystemOutputs = (devices: AudioDevice[]): AudioDevice[] => {
 const mapQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
   ...item,
   track: mapTrack(item.track),
+});
+
+const mapDownloadTask = (task: DownloadTask): DownloadTask => ({
+  ...task,
+  track: mapTrack(task.track),
+});
+
+const toServerDownloadRequest = (req: DownloadRequest): DownloadRequest => ({
+  ...req,
+  track: toServerTrack(req.track),
+  coverUrl: serverAssetUrl(req.coverUrl),
 });
 
 const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot => ({
@@ -360,7 +380,7 @@ const playerApi: PlayerApi = {
           })
         ).data,
     ),
-  reinit: async () => ({ success: false, error: "WEB_REINIT_UNSUPPORTED" }),
+  reinit: () => asCommand(() => request("/player/reinit", { method: "POST" })),
   setNormalizationEnabled: (enabled) =>
     asCommand(() =>
       request("/player/normalization", { method: "POST", body: JSON.stringify({ enabled }) }),
@@ -492,9 +512,8 @@ const libraryApi: LibraryApi = {
     ),
   isScanning: () =>
     asIpc(async () => (await request<{ data: boolean }>("/library/is-scanning")).data),
-  addScanDir: () => {
-    const dir = window.prompt("请输入主机上的音乐目录路径", "/media/music")?.trim();
-    if (!dir) return Promise.resolve({ success: false, error: "SCAN_DIR_NOT_SELECTED" });
+  addScanDir: (dir) => {
+    if (!dir?.trim()) return Promise.resolve({ success: false, error: "CORE_DIRECTORY_REQUIRED" });
     return request<IpcResponse<string>>("/library/scan-dirs/add", {
       method: "POST",
       body: JSON.stringify({ dir }),
@@ -506,12 +525,21 @@ const libraryApi: LibraryApi = {
     ),
   getScanDirs: () =>
     asIpc(async () => (await request<{ data: string[] }>("/library/scan-dirs")).data),
-  deleteTracks: async (paths) => ({
-    success: false,
-    error: `Web 文件删除尚未开放 (${paths.length})`,
-  }),
-  readTags: async () => ({ success: false, error: "WEB_TAG_EDIT_UNSUPPORTED" }),
-  writeTags: async () => ({ success: false, error: "WEB_TAG_EDIT_UNSUPPORTED" }),
+  deleteTracks: (paths) =>
+    request<IpcResponse<{ deleted: number; failed: number }>>("/library/files", {
+      method: "DELETE",
+      body: JSON.stringify({ paths }),
+    }).catch((error) => ({ success: false, error: errorText(error) })),
+  readTags: (path) =>
+    request<IpcResponse<TrackTags>>("/library/tags/read", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }).catch((error) => ({ success: false, error: errorText(error) })),
+  writeTags: (edits: TagEditRequest[]) =>
+    request<IpcResponse<TagWriteOutcome[]>>("/library/tags/write", {
+      method: "POST",
+      body: JSON.stringify({ edits }),
+    }).catch((error) => ({ success: false, error: errorText(error) })),
   pickCoverImage: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
   fetchArtistAvatar: (artistName) =>
     request<IpcResponse<string | null>>(
@@ -539,16 +567,16 @@ const libraryApi: LibraryApi = {
     const poll = async (): Promise<void> => {
       if (disposed || document.visibilityState !== "visible") return;
       try {
-        const scanning = (await request<{ data: boolean }>("/library/is-scanning")).data;
+        const progress = (await request<{ data: ScanProgress }>("/library/scan-progress")).data;
         const requestCompleted = observedGeneration !== scanRequestGeneration;
         observedGeneration = scanRequestGeneration;
-        if (scanning) {
+        if (progress.phase === "scanning") {
           seenScanning = true;
-          callback({ phase: "scanning", total: 0, scanned: 0 });
+          callback(progress);
         } else if (seenScanning || requestCompleted) {
           // 增量扫描可能在一次轮询间隔内完成，仍需显式结束 renderer 的 scanning 状态。
           seenScanning = false;
-          callback({ phase: "done", total: 0, scanned: 0 });
+          callback(progress);
         }
       } catch {
         // 下一轮轮询继续恢复；HTTP snapshot 仍是权威。
@@ -702,7 +730,7 @@ const statsApi: StatsApi = {
 
 /** 安装远程浏览器使用的最小 Electron API 兼容面。 */
 export const installWebApi = async (): Promise<void> => {
-  const info = await request<{ platform: NodeJS.Platform }>("/info");
+  const info = await request<CoreInfo>("/info");
   const api = {
     config: configApi,
     player: playerApi,
@@ -714,7 +742,7 @@ export const installWebApi = async (): Promise<void> => {
     system: {
       installType: "portable" as const,
       platform: info.platform,
-      osInfo: { type: "", arch: "", release: "" },
+      osInfo: { type: info.platform, arch: info.arch, release: "" },
       toggleDevTools: () => window.open("/debug", "_blank", "noopener,noreferrer"),
       showInExplorer: async () => {
         window.alert("Web 远程模式无法在主机文件管理器中显示文件。");
@@ -731,7 +759,8 @@ export const installWebApi = async (): Promise<void> => {
         throw new Error("Web runtime does not expose host file saving");
       },
       relaunch: async () => window.location.reload(),
-      testNetworkProxy: async () => ({ success: false, error: "WEB_NETWORK_PROXY_UNSUPPORTED" }),
+      testNetworkProxy: async () =>
+        (await request<{ ok: boolean }>("/system/network-proxy/test", { method: "POST" })).ok,
       onProtocolUrl: () => noopSubscription(),
       consumePendingProtocolUrl: async () => null,
     },
@@ -796,20 +825,97 @@ export const installWebApi = async (): Promise<void> => {
       openDownloadPage: async () => {},
       onEvent: () => noopSubscription(),
     },
+    cache: {
+      getStats: () => request("/cache/stats"),
+      clear: async (id: string) => {
+        await request("/cache/clear", { method: "POST", body: JSON.stringify({ id }) });
+      },
+      clearAllByKind: async (kind: "file" | "db") => {
+        await request("/cache/clear-all", { method: "POST", body: JSON.stringify({ kind }) });
+      },
+      getDir: async () => (await request<{ dir: string }>("/cache/dir")).dir,
+      pickDir: async () => {
+        throw new Error("Web Control does not provide a Core filesystem picker");
+      },
+      resetDir: async () =>
+        (await request<{ dir: string }>("/cache/reset-dir", { method: "POST" })).dir,
+      song: {
+        lookup: async () => {
+          throw new Error("Core owns song-cache lookup in Web Control");
+        },
+        fetch: async () => {
+          throw new Error("Core owns song-cache scheduling in Web Control");
+        },
+        cancel: async () => {
+          throw new Error("Core owns song-cache cancellation in Web Control");
+        },
+      },
+    },
     comments: {
-      sources: async () => [],
-      get: async () => ({ comments: [], total: 0, hasMore: false }),
+      sources: () => request<CommentSource[]>("/comments/sources"),
+      get: (args: MusicCommentQuery) =>
+        request<MusicCommentResponse>("/comments/music", {
+          method: "POST",
+          body: JSON.stringify({ ...args, track: toServerTrack(args.track) }),
+        }).catch((error) => ({ ok: false as const, error: errorText(error) })),
     },
     download: {
-      list: async () => [],
-      onProgress: () => noopSubscription(),
-      onState: () => noopSubscription(),
-      onResolve: () => noopSubscription(),
-      cancel: async () => {},
-      remove: async () => {},
-      clearFinished: async () => {},
-      submitResolution: async () => {},
-      failResolution: async () => {},
+      start: (req: DownloadRequest) =>
+        request<EnqueueResult>("/download/start", {
+          method: "POST",
+          body: JSON.stringify(toServerDownloadRequest(req)),
+        }),
+      startMany: (reqs: DownloadRequest[]) =>
+        request<EnqueueResult[]>("/download/start-many", {
+          method: "POST",
+          body: JSON.stringify(reqs.map(toServerDownloadRequest)),
+        }),
+      retry: (req: DownloadRequest) =>
+        request<EnqueueResult>("/download/start", {
+          method: "POST",
+          body: JSON.stringify(toServerDownloadRequest(req)),
+        }),
+      list: async () => (await request<DownloadTask[]>("/download/tasks")).map(mapDownloadTask),
+      getDir: async () => (await request<{ dir: string }>("/download/dir")).dir,
+      pickDir: async () => {
+        throw new Error("Web Control uses the shared Core directory browser");
+      },
+      setDir: async (dir: string) =>
+        (
+          await request<{ dir: string }>("/download/dir", {
+            method: "POST",
+            body: JSON.stringify({ dir }),
+          })
+        ).dir,
+      resetDir: async () =>
+        (await request<{ dir: string }>("/download/reset-dir", { method: "POST" })).dir,
+      onProgress: (callback: (progress: DownloadProgress) => void) =>
+        subscribeEvent((event) => {
+          if (event.type === "downloadProgress" && event.data) {
+            callback(event.data as DownloadProgress);
+          }
+        }),
+      onState: (callback: (task: DownloadTask) => void) =>
+        subscribeEvent((event) => {
+          if (event.type === "downloadState" && event.data) {
+            callback(mapDownloadTask(event.data as DownloadTask));
+          }
+        }),
+      cancel: async (taskId: string) => {
+        await request("/download/cancel", {
+          method: "POST",
+          body: JSON.stringify({ taskId }),
+        });
+      },
+      remove: async (taskId: string) => {
+        await request("/download/remove", {
+          method: "POST",
+          body: JSON.stringify({ taskId }),
+        });
+      },
+      clearFinished: async () => {
+        await request("/download/clear-finished", { method: "POST" });
+      },
     },
     apis: {
       call: async (platform: ApiPlatform, name: string, params?: Record<string, unknown>) => {

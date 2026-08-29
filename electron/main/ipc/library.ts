@@ -6,7 +6,6 @@ import {
   searchTracks,
   getTrackCount,
   deleteTracksByDir,
-  deleteTracksByPaths,
   getAlbumList,
   getArtistList,
   getAlbumTracks,
@@ -14,17 +13,15 @@ import {
   getTracksByIds,
   getRandomTrack,
   getRandomTracks,
-  upsertTracks,
 } from "@main/database";
-import { startScan, cancelScan, isScanning, scannedToUpsert } from "@main/services/scanner";
+import { startScan, cancelScan, isScanning } from "@main/services/scanner";
 import { getEngine } from "@main/services/engine";
 import { fetchArtistAvatar, prefetchArtistAvatars } from "@main/apis/musicbrainz";
-import { fetchBytes } from "@main/utils/fetchBytes";
-import { getCoverCacheDir } from "@main/utils/config";
 import { libraryLog } from "@main/utils/logger";
+import { resolveCoreDirectory } from "@main/services/coreFilesystem";
+import { deleteLibraryFiles, readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
 import { ErrorCode } from "@shared/types/errors";
-import type { JsTagWriteRequest } from "@splayer/audio-engine";
-import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
+import type { TagEditRequest } from "@shared/types/tagEditor";
 
 /** 注册音乐库相关 IPC */
 export const registerLibraryIpc = (): void => {
@@ -150,16 +147,25 @@ export const registerLibraryIpc = (): void => {
     return { success: true, data: isScanning() };
   });
 
-  // 弹出目录选择器，添加扫描目录
-  ipcMain.handle("library:addScanDir", async () => {
-    const result = await dialog.showOpenDialog({
-      title: "选择音乐文件夹",
-      properties: ["openDirectory"],
-    });
-    if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: ErrorCode.SCAN_DIR_NOT_SELECTED };
+  // 添加 Core 扫描目录；Desktop 省略路径时使用同机 native picker。
+  ipcMain.handle("library:addScanDir", async (_event, requestedDir?: string) => {
+    let dir: string;
+    if (requestedDir?.trim()) {
+      try {
+        dir = await resolveCoreDirectory(requestedDir);
+      } catch {
+        return { success: false, error: ErrorCode.SCAN_DIR_NOT_FOUND };
+      }
+    } else {
+      const result = await dialog.showOpenDialog({
+        title: "选择音乐文件夹",
+        properties: ["openDirectory"],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: ErrorCode.SCAN_DIR_NOT_SELECTED };
+      }
+      dir = await resolveCoreDirectory(result.filePaths[0]);
     }
-    const dir = result.filePaths[0];
     const dirs = store.get("library.scanDirs") as string[];
     if (dirs.includes(dir)) {
       return { success: false, error: ErrorCode.SCAN_DIR_EXISTS };
@@ -223,8 +229,7 @@ export const registerLibraryIpc = (): void => {
   // 读取本地文件的可编辑标签
   ipcMain.handle("library:readTags", async (_event, path: string) => {
     try {
-      const tags = await getEngine().readTrackTags(path);
-      return { success: true, data: tags };
+      return { success: true, data: await readLibraryTags(path) };
     } catch (error) {
       libraryLog.error(`读取标签失败 [${path}]:`, error);
       return { success: false, error: ErrorCode.TAG_READ_FAILED };
@@ -234,44 +239,7 @@ export const registerLibraryIpc = (): void => {
   // 批量写入文件标签并写回数据库
   ipcMain.handle("library:writeTags", async (_event, edits: TagEditRequest[]) => {
     try {
-      const requests: JsTagWriteRequest[] = [];
-      // 实际带封面写入的路径集合
-      const replacedCovers = new Set<string>();
-      for (const edit of edits) {
-        const { coverPath, coverUrl, ...fields } = edit;
-        let cover: Buffer | undefined;
-        if (coverPath) {
-          cover = await fs.readFile(coverPath);
-        } else if (coverUrl) {
-          cover = (await fetchBytes(coverUrl, { requireImage: true })) ?? undefined;
-          if (!cover) libraryLog.warn(`封面下载失败，跳过封面只写文本: ${coverUrl}`);
-        }
-        if (cover) replacedCovers.add(edit.path);
-        requests.push({ ...fields, cover });
-      }
-      const results = await getEngine().writeTrackTags(requests, getCoverCacheDir());
-      // 写回数据库：有封面更新的曲目需要刷新封面缓存 URL（?v=mtime）以触发前端更新
-      const upserts = results
-        .filter((r) => r.success && r.track)
-        .map((r) => {
-          const upsert = scannedToUpsert(r.track!);
-          if (upsert.cover && replacedCovers.has(upsert.path)) {
-            upsert.cover = `${upsert.cover}?v=${upsert.mtime}`;
-          }
-          return upsert;
-        });
-      if (upserts.length > 0) upsertTracks(upserts);
-
-      const tracks = getTracksByIds(upserts.map((u) => u.id));
-      const byPath = new Map(tracks.map((t) => [t.path, t]));
-      const data: TagWriteOutcome[] = results.map((r) => ({
-        path: r.path,
-        success: r.success,
-        error: r.error ?? undefined,
-        track: byPath.get(r.path),
-      }));
-      libraryLog.info(`标签写入完成: ${upserts.length}/${results.length} 成功`);
-      return { success: true, data };
+      return { success: true, data: await writeLibraryTags(edits) };
     } catch (error) {
       libraryLog.error("写入标签失败:", error);
       return { success: false, error: ErrorCode.TAG_WRITE_FAILED };
@@ -309,20 +277,7 @@ export const registerLibraryIpc = (): void => {
   // 删除曲目文件并从数据库移除
   ipcMain.handle("library:deleteTracks", async (_event, paths: string[]) => {
     try {
-      const failed: string[] = [];
-      for (const filePath of paths) {
-        try {
-          await fs.unlink(filePath);
-        } catch {
-          failed.push(filePath);
-        }
-      }
-      const deleted = paths.filter((p) => !failed.includes(p));
-      if (deleted.length > 0) {
-        deleteTracksByPaths(deleted);
-      }
-      libraryLog.info(`删除 ${deleted.length} 个文件，${failed.length} 个失败`);
-      return { success: true, data: { deleted: deleted.length, failed: failed.length } };
+      return { success: true, data: await deleteLibraryFiles(paths) };
     } catch (error) {
       libraryLog.error("批量删除文件失败:", error);
       return { success: false, error: ErrorCode.UNKNOWN };

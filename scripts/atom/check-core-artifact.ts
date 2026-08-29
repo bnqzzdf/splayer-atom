@@ -135,6 +135,9 @@ try {
 
   await waitForJson(`${baseUrl}/api/session`);
   await waitForJson(`${baseUrl}/api/library/count`);
+  await waitForJson(`${baseUrl}/api/cache/stats`);
+  const cacheDir = await waitForJson<{ dir?: string }>(`${baseUrl}/api/cache/dir`);
+  if (!cacheDir.dir) fail("Core cache dir smoke 失败");
   const web = await fetch(`${baseUrl}/`);
   if (!web.ok || !(await web.text()).includes("<html")) fail("Web Control 根页 smoke 失败");
 
@@ -164,7 +167,9 @@ try {
   }
 
   console.log(`[CoreArtifact] PASS ${archiveFile}`);
-  console.log(JSON.stringify({ node: info.node, port, web: true, session: true, library: true }));
+  console.log(
+    JSON.stringify({ node: info.node, port, web: true, session: true, library: true, cache: true }),
+  );
 } finally {
   if (child && child.exitCode === null) child.kill("SIGKILL");
   rmSync(tempDir, { recursive: true, force: true });

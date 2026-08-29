@@ -169,27 +169,34 @@ export const useLibraryStore = defineStore("library", () => {
     scanProgress.value = null;
   };
 
-  /** 添加扫描目录 */
-  const addScanDir = async (path?: string): Promise<{ success: boolean; error?: string }> => {
-    const res = await window.api.library.addScanDir(path);
-    if (res.success) {
-      const newDir = (res.data as string) || path;
-      if (newDir) {
-        const nested = scanDirs.value.some(
-          (d) =>
-            newDir.startsWith(d + "\\") ||
-            newDir.startsWith(d + "/") ||
-            d.startsWith(newDir + "\\") ||
-            d.startsWith(newDir + "/"),
-        );
-        if (nested) {
-          await window.api.library.removeScanDir(newDir);
-          return { success: false, error: "nested" };
-        }
-        if (!scanDirs.value.includes(newDir)) {
-          scanDirs.value = [...scanDirs.value, newDir];
-        }
-      }
+  /** 判断两个 Core 扫描根目录是否互相包含。 */
+  const conflictsWithScanDir = (dir: string): boolean =>
+    scanDirs.value.some(
+      (existing) =>
+        dir.startsWith(existing + "\\") ||
+        dir.startsWith(existing + "/") ||
+        existing.startsWith(dir + "\\") ||
+        existing.startsWith(dir + "/"),
+    );
+
+  /** 添加扫描目录；远程 Control 传入 Core 路径，Desktop 可省略并使用同机 picker。 */
+  const addScanDir = async (
+    requestedDir?: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (requestedDir && conflictsWithScanDir(requestedDir)) {
+      return { success: false, error: "nested" };
+    }
+    const res = await window.api.library.addScanDir(requestedDir);
+    if (!res.success) return res;
+
+    const newDir = (res.data as string | undefined) ?? requestedDir;
+    if (!newDir) return res;
+    if (conflictsWithScanDir(newDir)) {
+      await window.api.library.removeScanDir(newDir);
+      return { success: false, error: "nested" };
+    }
+    if (!scanDirs.value.includes(newDir)) {
+      scanDirs.value = [...scanDirs.value, newDir];
     }
     return res;
   };

@@ -153,7 +153,8 @@
   "directMode": {
     "title": "Source Direct",
     "entryBlocked": "进入 Diretta Source Direct 前，请将软件音量恢复为 100%，关闭音量均衡和 EQ，并恢复 1.0x 原速、0 半音。现有设置不会被自动修改。",
-    "processingUnavailable": "Diretta Source Direct 会保持原始音频数据。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调控制在 Direct 模式下不可用；普通输出的原设置会保留。"
+    "processingUnavailable": "Diretta Source Direct 会保持原始音频数据。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调控制在 Direct 模式下不可用；普通输出的原设置会保留。",
+    "preparingSource": "正在准备 Source Direct 在线音源…"
   },
   "autoClose": {
     "title": "定时关闭",
@@ -184,6 +185,14 @@
     "title": "界面缩放",
     "range": "可调节范围：50% - 200%",
     "reset": "恢复默认"
+  },
+  "coreDirectory": {
+    "parent": "上一级目录",
+    "open": "打开",
+    "current": "当前 Core 目录",
+    "selectCurrent": "选择当前目录",
+    "empty": "此目录没有可浏览的子目录",
+    "pathPlaceholder": "输入 Core 主机上的目录路径"
   },
   "nav": {
     "home": "首页",

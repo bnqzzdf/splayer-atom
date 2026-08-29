@@ -1,4 +1,5 @@
 import type { SettingCategory } from "@/types/settings-schema";
+import { hasHostCapability } from "@/runtime";
 import generalCategory from "./categories/general";
 import appearanceCategory from "./categories/appearance";
 import playerCategory from "./categories/player";
@@ -20,8 +21,8 @@ export const settingsSchema: SettingCategory[] = [
   appearanceCategory,
   playerCategory,
   lyricCategory,
-  externalLyricCategory,
-  hotkeysCategory,
+  ...(hasHostCapability("desktopLyric") ? [externalLyricCategory] : []),
+  ...(hasHostCapability("globalHotkeys") ? [hotkeysCategory] : []),
   servicesCategory,
   aiIntegrationCategory,
   mediaSourceCategory,
