@@ -1,9 +1,8 @@
 import type { Track, PlayerState } from "./player";
 import type { LyricLine, LyricData } from "./lyrics";
 
-/** 渲染进程 → 主进程：同步当前播放状态（track + 歌词 + 源） */
+/** Control → Core：临时同步 renderer 解析后的歌词 presentation，不得覆盖当前 Track。 */
 export interface NowPlayingUpdatePayload {
-  track: Track | null;
   lyric: LyricLine[];
   source: LyricData;
 }

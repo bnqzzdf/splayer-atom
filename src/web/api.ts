@@ -385,10 +385,7 @@ const nowPlayingApi: NowPlayingApi = {
   update: (payload) => {
     void request("/now-playing", {
       method: "POST",
-      body: JSON.stringify({
-        ...payload,
-        track: payload.track ? toServerTrack(payload.track) : payload.track,
-      }),
+      body: JSON.stringify(payload),
     });
   },
   requestSnapshot: nowPlayingClient.requestSnapshot,

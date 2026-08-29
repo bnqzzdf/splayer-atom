@@ -5,9 +5,9 @@ import * as nowPlaying from "@main/services/nowPlaying";
 import type { NowPlayingUpdatePayload } from "@shared/types/nowPlaying";
 
 export const registerNowPlayingIpc = (): void => {
-  // 渲染进程同步当前播放状态到主进程
+  // renderer 仍临时同步歌词 presentation，但不能覆盖 Core 当前 Track。
   ipcMain.on("nowPlaying:update", (_event, payload: NowPlayingUpdatePayload) => {
-    nowPlaying.update(payload.track, payload.lyric, payload.source);
+    nowPlaying.updateLyrics(payload.lyric, payload.source);
   });
 
   // 渲染进程写入指定曲目的歌词偏移

@@ -485,12 +485,10 @@ export const buildHeadlessRoutes = (): Hono => {
   api.get("/lyrics", (c) => c.json(nowPlaying.lyricSnapshot()));
   api.post("/now-playing", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
-      track?: Track | null;
       lyric?: unknown[];
       source?: unknown;
     } | null;
-    nowPlaying.update(
-      body?.track ?? null,
+    nowPlaying.updateLyrics(
       Array.isArray(body?.lyric) ? (body.lyric as never[]) : [],
       (body?.source ?? null) as never,
     );

@@ -44,11 +44,10 @@ export const useMediaStore = defineStore("media", () => {
   /** 当前歌词文件制作者列表 */
   const lyricAuthors = ref<string[]>([]);
 
-  /** 同步当前歌词源到主进程 */
+  /** 临时同步 renderer 解析后的歌词 presentation；当前 Track 仍由 Core playback lifecycle 持有。 */
   const syncToMain = (): void => {
     try {
       const payload = {
-        track: track.value ? toRaw(track.value) : null,
         lyric: toRaw(parsedLyric.value),
         source: activeLyric.value ? toRaw(activeLyric.value) : null,
       };

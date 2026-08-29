@@ -10,6 +10,9 @@ const nowPlayingIpc = read("electron/main/ipc/nowPlaying.ts");
 const playerControl = read("src/core/player/index.ts");
 const lyricActions = read("src/components/player/FullPlayer/LyricActions.vue");
 const webApi = read("src/web/api.ts");
+const mediaStore = read("src/stores/media.ts");
+const nowPlayingTypes = read("shared/types/nowPlaying.ts");
+const headlessRoutes = read("electron/main/atom/headless/routes.ts");
 
 test("lyric offset snapshot command and event use the shared Core transport", () => {
   assert.match(nowPlayingService, /publishCoreControlEvent\(\{ type: "lyricOffset", data \}\)/);
@@ -25,7 +28,22 @@ test("lyric offset snapshot command and event use the shared Core transport", ()
   assert.match(webApi, /subscribeCoreControlEvent\("lyricOffset", callback\)/);
 });
 
-test("renderer update remains an explicit temporary lyrics authority seam", () => {
-  assert.match(read("src/stores/media.ts"), /window\.api\.nowPlaying\.update\(payload\)/);
-  assert.match(nowPlayingIpc, /ipcMain\.on\("nowPlaying:update"/);
+test("temporary renderer lyric enrichment cannot replace the Core current Track", () => {
+  const updatePayload = nowPlayingTypes
+    .split("export interface NowPlayingUpdatePayload {")[1]
+    ?.split("}")[0];
+  assert.ok(updatePayload);
+  assert.doesNotMatch(updatePayload, /track:/);
+  assert.match(mediaStore, /window\.api\.nowPlaying\.update\(payload\)/);
+  const syncSection = mediaStore.split("const syncToMain = (): void => {")[1]?.split("};")[0];
+  assert.ok(syncSection);
+  assert.doesNotMatch(syncSection, /track:/);
+  assert.match(nowPlayingIpc, /nowPlaying\.updateLyrics\(payload\.lyric, payload\.source\)/);
+  assert.doesNotMatch(nowPlayingIpc, /nowPlaying\.update\(payload\.track/);
+  const routeSection = headlessRoutes
+    .split('api.post("/now-playing", async (c) => {')[1]
+    ?.split('api.post("/now-playing/lyric-offset"')[0];
+  assert.ok(routeSection);
+  assert.match(routeSection, /nowPlaying\.updateLyrics\(/);
+  assert.doesNotMatch(routeSection, /track\?:|nowPlaying\.update\(/);
 });

@@ -104,6 +104,26 @@ export const update = (track: Track | null, lyric: LyricLine[], source: LyricDat
 };
 
 /**
+ * 临时接收 Control 解析后的歌词 presentation；当前 Track 仍只由 Core playback lifecycle 更新。
+ * @param lyric - 已解析歌词行
+ * @param source - 当前歌词源
+ */
+export const updateLyrics = (lyric: LyricLine[], source: LyricData): void => {
+  currentLyric = lyric;
+  currentSource = source;
+  const key = currentTrack?.id ? offsetKey(currentTrack.id, source) : "";
+  if (key !== currentOffsetKey) {
+    currentOffsetKey = key;
+    currentLyricOffsetMs = readOffset(currentTrack?.id, source);
+    emitLyricOffsetChange({
+      trackId: currentTrack?.id ?? null,
+      offsetMs: currentLyricOffsetMs,
+    });
+  }
+  emitter.emit("lyric-change", snapshot());
+};
+
+/**
  * 同步播放位置
  * @param positionMs - 播放位置（毫秒）
  * @param isPlaying - 是否处于播放态
