@@ -538,10 +538,10 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ### 待开发
 
-- [ ] Atom-owned Qobuz 账户设置 UI。
-- [ ] 用户输入 `user_auth_token` 后验证并安全持久化。
-- [ ] 登录状态展示与退出。
-- [ ] 正式 Web 搜索入口恢复 Qobuz。
+- [x] Atom-owned Qobuz 账户设置 UI 已接入现有 Services settings schema，Desktop/Web 共用同一组件。
+- [x] 用户输入 `user_auth_token` 后复用现有 `auth_login → user/get` 验证，再由 Core 安全持久化；Control 不持久化 token。
+- [x] 登录状态展示与退出复用 Core `ProviderSessionsSnapshot` / `clearSession`。
+- [x] 正式 Web provider/search surface 已恢复 Qobuz，并继续与 QQ/KG 冻结边界分离。
 - [ ] 真实账号 search → queue → playback 验收。
 - [ ] 普通输出与 Diretta 双路径验收。
 - [ ] main-authority 自动下一首验收。
@@ -567,10 +567,10 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ### 待开发
 
-- [ ] Atom-owned TIDAL 账户设置 UI。
-- [ ] access token / optional refresh token import。
-- [ ] auth status / logout UI。
-- [ ] 正式 Web 搜索入口恢复 TIDAL。
+- [x] Atom-owned TIDAL 账户设置 UI 已接入现有 Services settings schema，Desktop/Web 共用同一组件。
+- [x] access token / optional refresh token + client id import 复用现有 `auth_import → /sessions` 验证后由 Core 持久化；Control 不持久化 token。
+- [x] auth status / logout UI 复用 Core `ProviderSessionsSnapshot` / `clearSession`。
+- [x] 正式 Web provider/search surface 已恢复 TIDAL；未登录时由既有 API 错误语义返回，不由 Control 伪造会话。
 - [ ] 真实账号 entitlement 验收。
 - [ ] JSON/BTS 与 DASH 两种真实播放路径验收。
 - [ ] 普通输出与 Diretta 双路径验收。

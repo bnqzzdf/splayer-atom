@@ -1,5 +1,14 @@
 # SPlayer Atom — Progress
 
+## 2026-08-29 — Provider product surface and account projection closed
+
+- Froze QQ Music/Kugou out of Atom's formal Desktop/Web search surface while preserving inherited upstream search/collection/lyric/plugin playback compatibility.
+- Added one Core-owned token-free `ProviderSessionsSnapshot` for Netease/Qobuz/TIDAL and projected it to both Desktop IPC and Headless WebSocket/HTTP. Netease `user.isLoggedIn` now reads Core authority rather than inferring auth from renderer profile state.
+- Added shared Desktop/Web Qobuz/TIDAL account settings using the existing Services schema: Qobuz reuses `auth_login → user/get`; TIDAL reuses `auth_import → /sessions`; tokens stay only in transient input state and are persisted only by Core after validation.
+- Restored Qobuz/TIDAL to the formal Web provider/search surface and removed QQ/Kugou from the Headless provider-call allowlist. An isolated Core smoke proved Qobuz/TIDAL `auth_status` succeeds through the Web route while QQ is rejected with `WEB_PROVIDER_UNSUPPORTED`.
+- Full gates pass at Node 161/161 and Web 52/52 with Node/Web typecheck, ESLint, Core build audit and Web production build. The explicit upstream touch budgets are now 38 business / 20 runtime-neutral / 13 Core-authority; the sole new business touch is the existing Services settings mount point for the Atom-owned account panel.
+- Real Qobuz/TIDAL credentials, entitlement playback, Diretta playback and online auto-next remain external acceptance gates. The next unblocked software task is Core Protocol + capability metadata/compatibility checking.
+
 ## 2026-08-29 — Node 24 system-runtime Core artifact closed
 
 - Reworked the roadmap Node strategy after review: Core requires Node but bundled Node is optional. The supported range is `>=24.18.0 <25`, while release/runtime automation uses exact reference Node `24.18.0`; no second Node 24 patch smoke is maintained.
