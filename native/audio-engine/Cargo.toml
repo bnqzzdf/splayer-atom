@@ -6,8 +6,17 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["desktop-audio"]
+desktop-audio = [
+  "audio-engine-core/fft",
+  "audio-engine-core/midi",
+  "audio-engine-core/desktop-audio",
+]
+core-audio = ["audio-engine-core/fft", "audio-engine-core/midi", "audio-engine-core/headless"]
+
 [dependencies]
-audio-engine-core = { path = "../audio-engine-core", features = ["napi"] }
+audio-engine-core = { path = "../audio-engine-core", default-features = false, features = ["napi"] }
 napi = { version = "3.12.1", features = ["napi9", "serde-json", "tokio_rt"] }
 napi-derive = "3.6.3"
 ffmpeg_audio = { version = "0.3.1", default-features = false, features = [

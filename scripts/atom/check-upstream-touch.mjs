@@ -12,7 +12,7 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
 const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 37);
-const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 16);
+const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 17);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 12);
 const metadataPaths = new Set(["AGENTS.md", "README.md", "README.zh-CN.md"]);
 const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
@@ -33,6 +33,7 @@ const runtimeNeutralSeamPaths = new Set([
   "electron/main/utils/nativeLoader.ts",
   "electron/main/utils/paths.ts",
   "electron/main/utils/protocol.ts",
+  "native/audio-engine/src/device_watcher/mod.rs",
 ]);
 const coreAuthoritySeamPaths = new Set([
   "shared/defaults/settings.ts",

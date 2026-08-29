@@ -1,19 +1,25 @@
 use anyhow::Result;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "desktop-audio"))]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+#[cfg(any(
+    all(target_os = "linux", not(feature = "desktop-audio")),
+    not(any(target_os = "windows", target_os = "linux", target_os = "macos"))
+))]
 mod unsupported;
 #[cfg(target_os = "windows")]
 mod windows;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "desktop-audio"))]
 use linux::Backend as SelectedBackend;
 #[cfg(target_os = "macos")]
 use macos::Backend as SelectedBackend;
-#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+#[cfg(any(
+    all(target_os = "linux", not(feature = "desktop-audio")),
+    not(any(target_os = "windows", target_os = "linux", target_os = "macos"))
+))]
 use unsupported::Backend as SelectedBackend;
 #[cfg(target_os = "windows")]
 use windows::Backend as SelectedBackend;
@@ -63,8 +69,8 @@ mod tests {
             is_supported(),
             cfg!(any(
                 target_os = "windows",
-                target_os = "linux",
-                target_os = "macos"
+                target_os = "macos",
+                all(target_os = "linux", feature = "desktop-audio")
             ))
         );
     }
