@@ -7,6 +7,7 @@ import type {
   NowPlayingLyricOffsetSync,
 } from "@shared/types/nowPlaying";
 import { store } from "@main/store";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 
 type NowPlayingEvents = {
   /** 歌曲切换 */
@@ -40,6 +41,11 @@ let currentLyricOffsetMs = 0;
 
 /** 内部事件总线 */
 const emitter = new EventEmitter<NowPlayingEvents>();
+
+const emitLyricOffsetChange = (data: NowPlayingLyricOffsetSync): void => {
+  emitter.emit("lyric-offset-change", data);
+  publishCoreControlEvent({ type: "lyricOffset", data });
+};
 
 /**
  * 偏移存储 key：按（曲目, 歌词源）区分，各来源时间轴独立，在线歌词按平台再分
@@ -89,7 +95,7 @@ export const update = (track: Track | null, lyric: LyricLine[], source: LyricDat
   if (trackChanged || key !== currentOffsetKey) {
     currentOffsetKey = key;
     currentLyricOffsetMs = readOffset(track?.id, source);
-    emitter.emit("lyric-offset-change", {
+    emitLyricOffsetChange({
       trackId: track?.id ?? null,
       offsetMs: currentLyricOffsetMs,
     });
@@ -175,7 +181,7 @@ export const setLyricOffset = (trackId: string, offsetMs: number): void => {
   // 影响当前曲目则更新运行时缓存并广播
   if (currentTrack && currentTrack.id === trackId) {
     currentLyricOffsetMs = value;
-    emitter.emit("lyric-offset-change", { trackId, offsetMs: value });
+    emitLyricOffsetChange({ trackId, offsetMs: value });
   }
 };
 
@@ -222,7 +228,7 @@ export const clear = (): void => {
   currentLyricOffsetMs = 0;
   currentOffsetKey = "";
   emitter.emit("lyric-change", snapshot());
-  emitter.emit("lyric-offset-change", { trackId: null, offsetMs: 0 });
+  emitLyricOffsetChange({ trackId: null, offsetMs: 0 });
 };
 
 /** 订阅歌曲切换 */

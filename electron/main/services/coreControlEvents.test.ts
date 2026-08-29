@@ -32,6 +32,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
     "libraryScanProgress",
     "downloadState",
     "downloadProgress",
+    "lyricOffset",
   ]) {
     assert.match(eventTypesSource, new RegExp(`type: "${type}"`));
   }

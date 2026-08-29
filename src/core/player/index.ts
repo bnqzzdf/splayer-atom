@@ -36,10 +36,14 @@ import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
-import { subscribeCorePlayerProjection } from "@/core/controlEventClient";
+import {
+  subscribeCoreControlEvent,
+  subscribeCorePlayerProjection,
+} from "@/core/controlEventClient";
 import { sessionClient } from "@/core/sessionClient";
 import { playerClient } from "@/core/playerClient";
 import { libraryClient } from "@/core/libraryClient";
+import { nowPlayingClient } from "@/core/nowPlayingClient";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
 const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
@@ -679,6 +683,7 @@ export const moveInQueue = async (fromIndex: number, toIndex: number): Promise<v
 
 let unsubscribe: (() => void) | null = null;
 let unsubscribeCoreProjection: (() => void) | null = null;
+let unsubscribeLyricOffset: (() => void) | null = null;
 let initialized = false;
 
 /** 初始化播放器 */
@@ -736,6 +741,16 @@ export const initPlayer = async (): Promise<void> => {
 
   unsubscribeCoreProjection?.();
   unsubscribeCoreProjection = subscribeCorePlayerProjection(handleEvent);
+  unsubscribeLyricOffset?.();
+  unsubscribeLyricOffset = subscribeCoreControlEvent("lyricOffset", ({ offsetMs }) => {
+    status.lyricOffsetMs = offsetMs;
+    useMediaStore().updateLyricIndex(playback.getCurrentTime() + offsetMs);
+  });
+  try {
+    status.lyricOffsetMs = await nowPlayingClient.getLyricOffset();
+  } catch (error) {
+    console.error("[player] getLyricOffset failed", error);
+  }
 
   if (webRemote) {
     await refreshDevices();
@@ -801,7 +816,6 @@ export const initPlayer = async (): Promise<void> => {
   // Desktop legacy event 只承载 Host directive 与 Core 未消费的 recovery fallback。
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
-  // 订阅主进程下发的歌词偏移变化
   const media = useMediaStore();
   // 当前歌曲喜欢状态变化时同步到托盘菜单
   const fav = useFavorite();
@@ -810,17 +824,6 @@ export const initPlayer = async (): Promise<void> => {
     (liked) => window.api.player.syncLikeState(liked),
     { immediate: true },
   );
-  window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
-    status.lyricOffsetMs = offsetMs;
-    media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
-  });
-  // 获取歌曲偏移
-  try {
-    const snap = await window.api.nowPlaying.requestSnapshot();
-    status.lyricOffsetMs = snap.lyricOffsetMs;
-  } catch (error) {
-    console.error("[player] requestSnapshot failed", error);
-  }
   // 检查服务端当前是否已经在播放或暂停状态（如 Headless 后台守护进程持续播放中）
   let isServerActive = false;
   try {
@@ -876,5 +879,9 @@ export const disposePlayer = (): void => {
   if (unsubscribeCoreProjection) {
     unsubscribeCoreProjection();
     unsubscribeCoreProjection = null;
+  }
+  if (unsubscribeLyricOffset) {
+    unsubscribeLyricOffset();
+    unsubscribeLyricOffset = null;
   }
 };

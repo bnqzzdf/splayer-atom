@@ -3,6 +3,7 @@ import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { formatSignedSec } from "@/utils/time";
+import { nowPlayingClient } from "@/core/nowPlayingClient";
 
 defineProps<{
   /** 是否处于沉浸模式 */
@@ -35,7 +36,7 @@ const songOffset = computed(() => status.lyricOffsetMs);
 const writeOffset = (offsetMs: number): void => {
   const id = media.track?.id;
   if (!id) return;
-  window.api.nowPlaying.setLyricOffset(id, offsetMs);
+  nowPlayingClient.setLyricOffset(id, offsetMs);
 };
 
 /** 弹层里直接编辑（ms） */

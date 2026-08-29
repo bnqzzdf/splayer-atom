@@ -2,6 +2,7 @@ import type { ProviderSessionsSnapshot } from "./apis";
 import type { DownloadProgress, DownloadTask } from "./download";
 import type { ScanProgress } from "./library";
 import type { PlayerEvent } from "./player";
+import type { NowPlayingLyricOffsetSync } from "./nowPlaying";
 
 /** 已确认不携带 Host command/recovery 语义的 Player projection。 */
 export type CorePlayerProjectionEvent = Extract<
@@ -17,6 +18,7 @@ export type CoreControlEvent =
   | { type: "libraryScanProgress"; data: ScanProgress }
   | { type: "downloadState"; data: DownloadTask }
   | { type: "downloadProgress"; data: DownloadProgress }
+  | { type: "lyricOffset"; data: NowPlayingLyricOffsetSync }
   | CorePlayerProjectionEvent;
 
 /** Desktop preload 只负责承载统一 Core event envelope。 */

@@ -31,6 +31,5 @@ export const registerNowPlayingIpc = (): void => {
   nowPlaying.onPositionSync((data) => broadcast("nowPlaying:position-sync", data, true));
   nowPlaying.onLyricOffsetChange((data) => {
     broadcast("nowPlaying:lyric-offset-change", data);
-    wsBroadcast({ type: "lyricOffset", data });
   });
 };

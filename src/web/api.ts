@@ -5,7 +5,7 @@ import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@sh
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
-import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
+import type { NowPlayingApi } from "@shared/types/nowPlaying";
 import type {
   AudioDevice,
   IpcResponse,
@@ -22,6 +22,7 @@ import {
   isCoreControlEvent,
   isCorePlayerProjectionEvent,
   subscribeControlEvent,
+  subscribeCoreControlEvent,
 } from "@/core/controlEventClient";
 import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
@@ -30,6 +31,7 @@ import { downloadClient } from "@/core/downloadClient";
 import { playlistClient } from "@/core/playlistClient";
 import { statsClient } from "@/core/statsClient";
 import { cacheClient } from "@/core/cacheClient";
+import { nowPlayingClient } from "@/core/nowPlayingClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -389,28 +391,8 @@ const nowPlayingApi: NowPlayingApi = {
       }),
     });
   },
-  requestSnapshot: async () => {
-    const [light, lyric] = await Promise.all([
-      request<Omit<NowPlayingSnapshot, "lyric" | "source"> & { track: Track | null }>(
-        "/now-playing",
-      ),
-      request<{ lyric: NowPlayingSnapshot["lyric"]; source: NowPlayingSnapshot["source"] }>(
-        "/lyrics",
-      ),
-    ]);
-    return {
-      ...light,
-      track: light.track ? mapTrack(light.track) : null,
-      lyric: lyric.lyric,
-      source: lyric.source,
-    } as NowPlayingSnapshot;
-  },
-  setLyricOffset: (trackId, offsetMs) => {
-    void request("/now-playing/lyric-offset", {
-      method: "POST",
-      body: JSON.stringify({ trackId, offsetMs }),
-    });
-  },
+  requestSnapshot: nowPlayingClient.requestSnapshot,
+  setLyricOffset: nowPlayingClient.setLyricOffset,
   onTrackChange: (callback) =>
     subscribeEvent((event) => {
       if (event.type !== "session") return;
@@ -419,7 +401,7 @@ const nowPlayingApi: NowPlayingApi = {
     }),
   onLyricChange: () => () => {},
   onPositionSync: () => () => {},
-  onLyricOffsetChange: () => () => {},
+  onLyricOffsetChange: (callback) => subscribeCoreControlEvent("lyricOffset", callback),
 };
 
 const lyricsApi: Partial<LyricsApi> = {
