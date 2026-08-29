@@ -20,6 +20,9 @@ process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js",
 let shuttingDown = false;
 
 const start = async (): Promise<void> => {
+  const { prepareCoreDataMigration } = await import("@main/atom/runtime/dataMigration");
+  const migrationBackup = prepareCoreDataMigration();
+
   const [
     { initLogger, coreLog },
     database,
@@ -41,6 +44,7 @@ const start = async (): Promise<void> => {
   ]);
 
   initLogger();
+  if (migrationBackup) coreLog.info(`Core 数据迁移备份已创建: ${migrationBackup}`);
   database.initDatabase();
   await songCache.init();
   pluginRegistry.init();

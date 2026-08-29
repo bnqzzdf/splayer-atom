@@ -36,6 +36,7 @@ run("构建 Core native release", bin("tsx"), [
   ...(requireDiretta ? ["--require-diretta"] : []),
 ]);
 run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.config.ts"]);
+run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);
 run("构建 Web Control", bin("vite"), ["build", "-c", "scripts/atom/vite.web.config.ts"]);
 run("审计 Core build", process.execPath, ["scripts/atom/check-core-build.mjs"]);
 run("生成 system-runtime tar.gz", bin("tsx"), ["scripts/atom/stage-core-system.ts", "--archive"]);

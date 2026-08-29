@@ -11,8 +11,11 @@ import {
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { CONFIG_SCHEMA_VERSION } from "../../electron/main/atom/runtime/configSchema";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
+import { DATABASE_SCHEMA_VERSION } from "../../electron/main/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
+import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const outputDir = path.join(root, "out", "core-system");
@@ -58,6 +61,7 @@ const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   platform?: string;
   arch?: string;
   diretta?: boolean;
+  direttaSdkRelease?: number | null;
 };
 if (nativeBuild.profile !== "release" || nativeBuild.flavor !== "core-audio") {
   fail(
@@ -66,6 +70,14 @@ if (nativeBuild.profile !== "release" || nativeBuild.flavor !== "core-audio") {
 }
 if (nativeBuild.platform !== "linux" || nativeBuild.arch !== "x64") {
   fail(`Core native build metadata 与 linux-x64 staging 不一致`);
+}
+if (nativeBuild.diretta === true && nativeBuild.direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
+  fail(
+    `Diretta Core artifact 必须使用 SDK ${DIRETTA_SDK_RELEASE}，当前为 ${nativeBuild.direttaSdkRelease ?? "unknown"}`,
+  );
+}
+if (nativeBuild.diretta !== true && nativeBuild.direttaSdkRelease != null) {
+  fail(`no-Diretta Core native metadata 不应携带 SDK release`);
 }
 
 const betterSqlitePackageFile = require.resolve("better-sqlite3/package.json");
@@ -95,6 +107,16 @@ cpSync(
   path.join(root, "scripts", "atom", "core-system", "splayer-atom-core.service"),
   path.join(outputDir, "service", "splayer-atom-core.service"),
 );
+cpSync(
+  path.join(root, "scripts", "atom", "core-system", "install-systemd.sh"),
+  path.join(outputDir, "service", "install-systemd.sh"),
+);
+chmodSync(path.join(outputDir, "service", "install-systemd.sh"), 0o755);
+mkdirSync(path.join(outputDir, "docs"), { recursive: true });
+cpSync(
+  path.join(root, "docs", "core-deployment.md"),
+  path.join(outputDir, "docs", "core-deployment.md"),
+);
 
 const stagedBetterSqlite = path.join(outputDir, "node_modules", "better-sqlite3");
 mkdirSync(path.join(stagedBetterSqlite, "prebuilds"), { recursive: true });
@@ -115,6 +137,10 @@ writeFileSync(
       nodeReference: CORE_NODE_REFERENCE,
       betterSqlite3: betterSqlitePackage.version ?? "unknown",
       protocolVersion: CORE_PROTOCOL_VERSION,
+      dataSchema: {
+        database: DATABASE_SCHEMA_VERSION,
+        config: CONFIG_SCHEMA_VERSION,
+      },
       capabilities: {
         library: true,
         playback: true,
@@ -125,6 +151,7 @@ writeFileSync(
         remoteOutput: false,
       },
       diretta: nativeBuild.diretta === true,
+      direttaSdkRelease: nativeBuild.direttaSdkRelease ?? null,
     },
     null,
     2,

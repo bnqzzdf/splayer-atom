@@ -1,5 +1,5 @@
 import path from "node:path";
-import { runtimeEnvironment } from "@main/atom/runtime/environment";
+import { runtimeEnvironment } from "../atom/runtime/environment";
 
 /**
  * 统一数据根目录

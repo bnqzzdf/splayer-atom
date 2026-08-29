@@ -7,6 +7,7 @@ import type { ConfigPath, PathValue } from "./types";
 import { deepMerge, getByPath, setByPath } from "./utils";
 import { migrations } from "./migrations";
 import { configDir } from "@main/utils/paths";
+import { CONFIG_SCHEMA_VERSION } from "@main/atom/runtime/configSchema";
 
 /** 配置文件路径 */
 const configPath = path.join(configDir, "settings.json");
@@ -64,7 +65,17 @@ const init = (): SystemConfig => {
   const raw = readFile();
   const data = deepMerge(defaultSystemConfig, raw);
 
-  let currentVersion: number = (raw[META_KEY] as number) ?? 0;
+  const rawVersion = raw[META_KEY] ?? 0;
+  if (!Number.isInteger(rawVersion) || Number(rawVersion) < 0) {
+    throw new Error(`Invalid config schema version: ${String(rawVersion)}`);
+  }
+  let currentVersion = Number(rawVersion);
+  if (currentVersion > CONFIG_SCHEMA_VERSION) {
+    throw new Error(
+      `Config schema ${currentVersion} is newer than supported ${CONFIG_SCHEMA_VERSION}`,
+    );
+  }
+
   const pending = migrations
     .filter((m) => m.version > currentVersion)
     .sort((a, b) => a.version - b.version);
@@ -72,9 +83,8 @@ const init = (): SystemConfig => {
     m.migrate(data);
     currentVersion = m.version;
   }
-  if (pending.length > 0) {
-    (data as unknown as Record<string, unknown>)[META_KEY] = currentVersion;
-  }
+  if (currentVersion < CONFIG_SCHEMA_VERSION) currentVersion = CONFIG_SCHEMA_VERSION;
+  (data as unknown as Record<string, unknown>)[META_KEY] = currentVersion;
 
   // 初始化立即落盘
   flushImmediate(data);

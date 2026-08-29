@@ -108,6 +108,23 @@ test("final tar artifact smoke starts the extracted Core on an isolated port", (
   assert.match(artifactCheckSource, /child\.kill\("SIGTERM"\)/);
 });
 
+test("Core runtime metadata keeps database and config schema versions", () => {
+  assert.match(
+    stageSource,
+    /dataSchema:\s*\{\s*database: DATABASE_SCHEMA_VERSION,\s*config: CONFIG_SCHEMA_VERSION,/s,
+  );
+  assert.match(artifactCheckSource, /runtime\.dataSchema\?\.database !== DATABASE_SCHEMA_VERSION/);
+  assert.match(artifactCheckSource, /runtime\.dataSchema\.config !== CONFIG_SCHEMA_VERSION/);
+  assert.match(artifactCheckSource, /runtime\.json data schema metadata 与当前构建不一致/);
+});
+
+test("Core runtime metadata records and validates the Diretta SDK release", () => {
+  assert.match(stageSource, /direttaSdkRelease: nativeBuild\.direttaSdkRelease \?\? null/);
+  assert.match(stageSource, /nativeBuild\.direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
+  assert.match(artifactCheckSource, /runtime\.direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
+  assert.match(artifactCheckSource, /no-Diretta artifact 不应携带 SDK release/);
+});
+
 test("Core artifact paths are bundle-relative and scanner stays Electron-free", () => {
   assert.match(coreEntrySource, /ATOM_RENDERER_DIR.*\.\.\/renderer/);
   assert.match(coreEntrySource, /ATOM_NATIVE_DIR.*\.\.\/native/);

@@ -1,13 +1,17 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import net, { type AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
+import { CONFIG_SCHEMA_VERSION } from "../../electron/main/atom/runtime/configSchema";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
+import { DATABASE_SCHEMA_VERSION } from "../../electron/main/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 import type { CoreInfo } from "../../shared/types/core";
+import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const archiveFile = path.join(root, "out", "core-system-linux-x64.tar.gz");
@@ -66,13 +70,33 @@ try {
     nodeRange?: string;
     nodeReference?: string;
     protocolVersion?: number;
+    dataSchema?: { database?: number; config?: number };
     capabilities?: CoreInfo["capabilities"];
+    direttaSdkRelease?: number | null;
   };
   if (runtime.nodeRange !== CORE_NODE_RANGE || runtime.nodeReference !== CORE_NODE_REFERENCE) {
     fail("runtime.json 与 Core Node contract 不一致");
   }
-  if (runtime.protocolVersion !== CORE_PROTOCOL_VERSION || !runtime.capabilities) {
-    fail("runtime.json 缺少 Core Protocol/capability metadata");
+  if (runtime.protocolVersion !== CORE_PROTOCOL_VERSION) {
+    fail("runtime.json 缺少 Core Protocol metadata");
+  }
+  if (!runtime.capabilities) {
+    fail("runtime.json 缺少 Core capability metadata");
+  }
+  const capabilities = runtime.capabilities!;
+  if (
+    runtime.dataSchema?.database !== DATABASE_SCHEMA_VERSION ||
+    runtime.dataSchema.config !== CONFIG_SCHEMA_VERSION
+  ) {
+    fail("runtime.json data schema metadata 与当前构建不一致");
+  }
+  if (capabilities.diretta === true && runtime.direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
+    fail(
+      `runtime.json Diretta SDK release 与正式构建不一致: ${runtime.direttaSdkRelease ?? "unknown"}`,
+    );
+  }
+  if (capabilities.diretta !== true && runtime.direttaSdkRelease != null) {
+    fail("runtime.json no-Diretta artifact 不应携带 SDK release");
   }
 
   const port = await reservePort();
@@ -104,7 +128,7 @@ try {
     info.nodeRange !== CORE_NODE_RANGE ||
     info.nodeReference !== CORE_NODE_REFERENCE ||
     info.protocol.version !== CORE_PROTOCOL_VERSION ||
-    JSON.stringify(info.capabilities) !== JSON.stringify(runtime.capabilities)
+    JSON.stringify(info.capabilities) !== JSON.stringify(capabilities)
   ) {
     fail(`Core info runtime/protocol contract 不一致: ${JSON.stringify(info)}`);
   }
@@ -118,6 +142,26 @@ try {
   const [code, signal] = (await once(child, "exit")) as [number | null, NodeJS.Signals | null];
   if (signal || code !== 0) fail(`Core SIGTERM 退出异常: code=${code} signal=${signal}\n${output}`);
   child = null;
+
+  const settings = JSON.parse(
+    readFileSync(path.join(installRoot, "data", "config", "settings.json"), "utf8"),
+  ) as { __configVersion?: number };
+  if (settings.__configVersion !== CONFIG_SCHEMA_VERSION) {
+    fail(`Core settings schema 未初始化到 ${CONFIG_SCHEMA_VERSION}`);
+  }
+  const stagedRequire = createRequire(path.join(installRoot, "app", "index.js"));
+  const StagedDatabase = stagedRequire("better-sqlite3") as typeof import("better-sqlite3");
+  const database = new StagedDatabase(path.join(installRoot, "data", "database", "library.db"), {
+    readonly: true,
+  });
+  try {
+    const schemaVersion = database.pragma("user_version", { simple: true }) as number;
+    if (schemaVersion !== DATABASE_SCHEMA_VERSION) {
+      fail(`Core database schema 未初始化到 ${DATABASE_SCHEMA_VERSION}: ${schemaVersion}`);
+    }
+  } finally {
+    database.close();
+  }
 
   console.log(`[CoreArtifact] PASS ${archiveFile}`);
   console.log(JSON.stringify({ node: info.node, port, web: true, session: true, library: true }));

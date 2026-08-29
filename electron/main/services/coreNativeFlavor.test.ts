@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { DIRETTA_SDK_RELEASE, readDirettaSdkRelease } from "../../../scripts/atom/diretta-sdk";
 
 const cargoSource = readFileSync(
   new URL("../../../native/audio-engine/Cargo.toml", import.meta.url),
@@ -48,13 +51,34 @@ test("Core native builder emits only the ALSA-only audio-engine addon", () => {
   assert.match(buildSource, /CARGO_HOME/);
   assert.match(buildSource, /build\.json/);
   assert.match(buildSource, /profile: isDev \? "debug" : "release"/);
+  assert.match(buildSource, /direttaSdkRelease/);
   assert.match(buildSource, /lib\(\?:pipewire\|pulse\)/);
   assert.doesNotMatch(buildSource, /audio-capture|media-ctrl|taskbar-lyric|opencc/);
 });
 
-test("Core system staging refuses debug native addons", () => {
+test("Core Diretta build pins the verified SDK release from Release.hpp", () => {
+  assert.equal(DIRETTA_SDK_RELEASE, 149);
+  const sdkRoot = mkdtempSync(path.join(tmpdir(), "atom-diretta-sdk-"));
+  try {
+    mkdirSync(path.join(sdkRoot, "Host"));
+    writeFileSync(
+      path.join(sdkRoot, "Host", "Release.hpp"),
+      "namespace DIRETTA { static constexpr unsigned ReleaseNo = 149; }\n",
+    );
+    assert.equal(readDirettaSdkRelease(sdkRoot), DIRETTA_SDK_RELEASE);
+  } finally {
+    rmSync(sdkRoot, { recursive: true, force: true });
+  }
+  assert.match(buildSource, /requireDiretta && !direttaSdkRoot/);
+  assert.match(buildSource, /direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
+  assert.match(buildSource, /Core Diretta 构建固定使用 SDK/);
+});
+
+test("Core system staging refuses debug or mismatched Diretta native addons", () => {
   assert.match(stageSource, /nativeBuild\.profile !== "release"/);
   assert.match(stageSource, /nativeBuild\.flavor !== "core-audio"/);
+  assert.match(stageSource, /nativeBuild\.direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
+  assert.match(stageSource, /no-Diretta Core native metadata 不应携带 SDK release/);
 });
 
 test("Node Core loads native addons from the Core flavor directory", () => {

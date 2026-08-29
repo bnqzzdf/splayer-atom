@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { DIRETTA_SDK_RELEASE, readDirettaSdkRelease } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const crateDir = path.join(root, "native", "audio-engine");
@@ -28,8 +29,15 @@ if (args.size > 0) {
 if (process.platform !== "linux") {
   throw new Error("Core native flavor 当前只支持 Linux");
 }
-if (requireDiretta && !process.env.DIRETTA_SDK_ROOT?.trim()) {
+const direttaSdkRoot = process.env.DIRETTA_SDK_ROOT?.trim() || null;
+if (requireDiretta && !direttaSdkRoot) {
   throw new Error("正式 Diretta Core 构建要求设置 DIRETTA_SDK_ROOT");
+}
+const direttaSdkRelease = direttaSdkRoot ? readDirettaSdkRelease(direttaSdkRoot) : null;
+if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
+  throw new Error(
+    `Core Diretta 构建固定使用 SDK ${DIRETTA_SDK_RELEASE}，当前为 ${direttaSdkRelease}`,
+  );
 }
 
 rmSync(outputDir, { recursive: true, force: true });
@@ -71,7 +79,8 @@ writeFileSync(
       flavor: "core-audio",
       platform: process.platform,
       arch: process.arch,
-      diretta: Boolean(process.env.DIRETTA_SDK_ROOT?.trim()),
+      diretta: direttaSdkRoot !== null,
+      direttaSdkRelease,
     },
     null,
     2,

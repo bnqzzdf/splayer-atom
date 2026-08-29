@@ -6,8 +6,9 @@
 - Official upstream transport: `splayer/dev`
 - Accepted Atom upstream baseline: `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`
 - Pure upstream mirror: `vendor/splayer`
-- Current automated Atom baseline: Node 75/75, Web 52/52, no-SDK audio-engine 105/105, SDK 149 audio-engine 100/100, typecheck, ESLint and production build green
+- Current automated Atom baseline: Node/Web tests, typecheck, ESLint, touch audit, Linux native gates and the Core system artifact pipeline are green; exact evolving test counts are recorded in `progress.md` rather than frozen here
 - Upstream synchronization, accepted-baseline updates and integration gates are documented in [`upstream-sync.md`](./upstream-sync.md)
+- Desktop/Core build flavor boundaries are documented in [`build-flavors.md`](./build-flavors.md); Core installation, upgrade and rollback are documented in [`core-deployment.md`](./core-deployment.md)
 
 The accepted baseline is intentionally fixed. A normal `git fetch splayer` may move `splayer/dev` and `vendor/splayer` may be fast-forwarded to a newer official commit, but the touch audit continues to compare against the last fully integrated and accepted baseline until that candidate has been merged and validated.
 
@@ -39,7 +40,7 @@ ATOM_USER_DATA_DIR=/tmp/splayer-atom-core-smoke \
   node out/core/index.js
 ```
 
-With `ELECTRON_RENDERER_URL` set, the development Core listens on port `14559`; `/api/info`, `/api/session` and `/api/library/count` are the current minimal process-level smoke endpoints. This is a migration bootstrap, not the final bundled-runtime release artifact.
+With `ELECTRON_RENDERER_URL` set, the development Core listens on port `14559`; `/api/info`, `/api/session` and `/api/library/count` are the minimal development process smoke endpoints. Formal local Core artifact validation uses `pnpm exec tsx scripts/atom/build-core-system.ts` on reference Node `24.18.0`; see `docs/build-flavors.md` for the complete flavor/release boundary.
 
 ## Linux native toolchain
 

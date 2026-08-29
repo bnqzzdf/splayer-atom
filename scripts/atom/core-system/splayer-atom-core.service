@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# @ATOM_SERVICE_USER@
 WorkingDirectory=/opt/splayer-atom-core
 ExecStart=/opt/splayer-atom-core/bin/splayer-atom-core
 Restart=on-failure
