@@ -1,12 +1,13 @@
 /**
  * 下载任务镜像 store
  *
- * 权威态在主进程；本 store 拉取全量后订阅 onState/onProgress 增量更新，供下载页与侧边栏角标使用。
+ * 权威态在 Core；本 store 拉取全量后订阅统一 Core event 增量更新，供下载页与侧边栏角标使用。
  * 用 shallowRef 持有任务数组，进度更新只替换对应元素。
  */
 
 import type { DownloadTask, DownloadProgress, DownloadStatus } from "@shared/types/download";
 import { subscribeCoreControlEvent } from "@/core/controlEventClient";
+import { downloadClient } from "@/core/downloadClient";
 
 export const useDownloadStore = defineStore("download", () => {
   /** 是否尚未结束 */
@@ -57,24 +58,24 @@ export const useDownloadStore = defineStore("download", () => {
   const init = async (): Promise<void> => {
     if (initialized.value) return;
     initialized.value = true;
-    const tasks = await window.api.download.list();
+    const tasks = await downloadClient.list();
     activeTasks.value = tasks.filter((task) => isActive(task.status)).sort(compareActive);
     historyTasks.value = tasks.filter((task) => !isActive(task.status)).sort(compareHistory);
     unsubscribers.push(subscribeCoreControlEvent("downloadState", applyTask));
     unsubscribers.push(subscribeCoreControlEvent("downloadProgress", applyProgress));
   };
 
-  const cancel = (taskId: string): void => void window.api.download.cancel(taskId);
+  const cancel = (taskId: string): void => void downloadClient.cancel(taskId);
 
   const remove = (taskId: string): void => {
     activeTasks.value = activeTasks.value.filter((item) => item.taskId !== taskId);
     historyTasks.value = historyTasks.value.filter((item) => item.taskId !== taskId);
-    void window.api.download.remove(taskId);
+    void downloadClient.remove(taskId);
   };
 
   const clearFinished = (): void => {
     historyTasks.value = [];
-    void window.api.download.clearFinished();
+    void downloadClient.clearFinished();
   };
 
   onScopeDispose(() => {

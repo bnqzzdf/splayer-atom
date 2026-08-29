@@ -10,6 +10,10 @@ const resolverSource = readFileSync(
 const coreNodeSource = readFileSync(new URL("../core-node/index.ts", import.meta.url), "utf8");
 const routesSource = readFileSync(new URL("../atom/headless/routes.ts", import.meta.url), "utf8");
 const webApiSource = readFileSync(new URL("../../../src/web/api.ts", import.meta.url), "utf8");
+const downloadClientSource = readFileSync(
+  new URL("../../../src/core/downloadClient.ts", import.meta.url),
+  "utf8",
+);
 const ipcDownloadSource = readFileSync(new URL("../ipc/download.ts", import.meta.url), "utf8");
 const preloadSource = readFileSync(new URL("../../preload/index.ts", import.meta.url), "utf8");
 const downloadTypesSource = readFileSync(
@@ -22,6 +26,10 @@ const downloadStoreSource = readFileSync(
 );
 const downloadDirSource = readFileSync(
   new URL("../../../src/components/settings/custom/DownloadDirConfig.vue", import.meta.url),
+  "utf8",
+);
+const downloadComposableSource = readFileSync(
+  new URL("../../../src/composables/useDownload.ts", import.meta.url),
   "utf8",
 );
 
@@ -69,8 +77,9 @@ test("Headless Control exposes real Core download queue management", () => {
   ]) {
     assert.match(routesSource, new RegExp(route.replaceAll("/", "\\/")));
   }
-  assert.match(webApiSource, /request<EnqueueResult>\("\/download\/start"/);
-  assert.match(webApiSource, /request<DownloadTask\[]>\("\/download\/tasks"\)/);
+  assert.match(downloadClientSource, /request<EnqueueResult>\("\/download\/start"/);
+  assert.match(downloadClientSource, /request<DownloadTask\[]>\("\/download\/tasks"\)/);
+  assert.match(webApiSource, /\.\.\.downloadClient/);
   assert.match(downloadStoreSource, /subscribeCoreControlEvent\("downloadState", applyTask\)/);
   assert.match(
     downloadStoreSource,
@@ -88,14 +97,27 @@ test("obsolete renderer download-resolution protocol is removed end to end", () 
   assert.doesNotMatch(downloadTypesSource, /DownloadResolution|DownloadResolvePayload/);
 });
 
+test("Desktop and Web Download requests share one Core client while picker stays Host-only", () => {
+  assert.match(downloadStoreSource, /downloadClient\.list\(\)/);
+  assert.match(downloadStoreSource, /downloadClient\.cancel\(taskId\)/);
+  assert.match(downloadComposableSource, /downloadClient\.start\(req\)/);
+  assert.match(downloadComposableSource, /downloadClient\.startMany\(requests\)/);
+  assert.match(downloadDirSource, /downloadClient\.getDir\(\)/);
+  assert.match(downloadDirSource, /downloadClient\.setDir\(selectedDir\)/);
+  assert.match(downloadDirSource, /window\.api\.download\.pickDir\(\)/);
+  assert.doesNotMatch(downloadStoreSource, /window\.api\.download\./);
+  assert.doesNotMatch(downloadComposableSource, /window\.api\.download\./);
+
+  const picker = ipcDownloadSource.split('ipcMain.handle("download:pickDir"')[1] ?? "";
+  assert.match(picker, /dialog\.showOpenDialog/);
+  assert.match(picker, /resolveCoreDirectory/);
+  assert.doesNotMatch(picker, /store\.set/);
+});
+
 test("Download jobs capture Control lyric preferences before entering Core", () => {
   assert.doesNotMatch(downloadStoreSource, /initDownloadResolver/);
-  const composableSource = readFileSync(
-    new URL("../../../src/composables/useDownload.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(composableSource, /prepareDownloadLyrics\(req\)/);
-  assert.match(composableSource, /const req = await prepareRequest\(track, opts\)/);
+  assert.match(downloadComposableSource, /prepareDownloadLyrics\(req\)/);
+  assert.match(downloadComposableSource, /const req = await prepareRequest\(track, opts\)/);
 });
 
 test("Web uses the Core directory browser instead of a browser-local picker or explorer", () => {
@@ -104,5 +126,6 @@ test("Web uses the Core directory browser instead of a browser-local picker or e
   assert.match(downloadDirSource, /canChangeCoreDir = canBrowseLocalCore \|\| isWebRemote\(\)/);
   assert.match(downloadDirSource, /CoreDirectoryPicker/);
   assert.match(downloadDirSource, /v-if="canOpenLocalCoreDir"/);
+  assert.match(downloadDirSource, /downloadClient\.setDir\(selectedDir\)/);
   assert.match(webApiSource, /Web Control uses the shared Core directory browser/);
 });

@@ -42,7 +42,6 @@ export const registerDownloadIpc = (): void => {
       return { ok: false, dir: getDownloadDir(), reason: "canceled" as const };
     }
     const dir = await resolveCoreDirectory(result.filePaths[0]);
-    store.set("download.dir", dir);
     return { ok: true, dir };
   });
 };

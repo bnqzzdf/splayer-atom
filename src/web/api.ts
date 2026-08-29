@@ -2,7 +2,6 @@ import { isManagedProviderPlatform, type ApiPlatform } from "@shared/types/apis"
 import type { CoreInfo } from "@shared/types/core";
 import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
-import type { DownloadRequest, DownloadTask, EnqueueResult } from "@shared/types/download";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { PlaylistApi } from "@shared/types/playlist";
@@ -29,6 +28,7 @@ import {
 import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
 import { libraryClient } from "@/core/libraryClient";
+import { downloadClient } from "@/core/downloadClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -77,17 +77,6 @@ const toServerQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
 const mapQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
   ...item,
   track: mapTrack(item.track),
-});
-
-const mapDownloadTask = (task: DownloadTask): DownloadTask => ({
-  ...task,
-  track: mapTrack(task.track),
-});
-
-const toServerDownloadRequest = (req: DownloadRequest): DownloadRequest => ({
-  ...req,
-  track: toServerTrack(req.track),
-  coverUrl: serverAssetUrl(req.coverUrl),
 });
 
 const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot => ({
@@ -664,49 +653,9 @@ export const installWebApi = async (): Promise<void> => {
         }).catch((error) => ({ ok: false as const, error: errorText(error) })),
     },
     download: {
-      start: (req: DownloadRequest) =>
-        request<EnqueueResult>("/download/start", {
-          method: "POST",
-          body: JSON.stringify(toServerDownloadRequest(req)),
-        }),
-      startMany: (reqs: DownloadRequest[]) =>
-        request<EnqueueResult[]>("/download/start-many", {
-          method: "POST",
-          body: JSON.stringify(reqs.map(toServerDownloadRequest)),
-        }),
-      retry: (req: DownloadRequest) =>
-        request<EnqueueResult>("/download/start", {
-          method: "POST",
-          body: JSON.stringify(toServerDownloadRequest(req)),
-        }),
-      list: async () => (await request<DownloadTask[]>("/download/tasks")).map(mapDownloadTask),
-      getDir: async () => (await request<{ dir: string }>("/download/dir")).dir,
+      ...downloadClient,
       pickDir: async () => {
         throw new Error("Web Control uses the shared Core directory browser");
-      },
-      setDir: async (dir: string) =>
-        (
-          await request<{ dir: string }>("/download/dir", {
-            method: "POST",
-            body: JSON.stringify({ dir }),
-          })
-        ).dir,
-      resetDir: async () =>
-        (await request<{ dir: string }>("/download/reset-dir", { method: "POST" })).dir,
-      cancel: async (taskId: string) => {
-        await request("/download/cancel", {
-          method: "POST",
-          body: JSON.stringify({ taskId }),
-        });
-      },
-      remove: async (taskId: string) => {
-        await request("/download/remove", {
-          method: "POST",
-          body: JSON.stringify({ taskId }),
-        });
-      },
-      clearFinished: async () => {
-        await request("/download/clear-finished", { method: "POST" });
       },
     },
     apis: {

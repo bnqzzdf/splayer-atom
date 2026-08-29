@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { hasHostCapability, isWebRemote } from "@/runtime";
+import { downloadClient } from "@/core/downloadClient";
 import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
 import IconLucideFolderOpen from "~icons/lucide/folder-open";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
@@ -15,7 +16,7 @@ const canOpenLocalCoreDir = hasHostCapability("hostFileExplorer");
 const canChangeCoreDir = canBrowseLocalCore || isWebRemote();
 
 const load = async (): Promise<void> => {
-  dir.value = await window.api.download.getDir();
+  dir.value = await downloadClient.getDir();
 };
 
 const change = async (): Promise<void> => {
@@ -24,15 +25,15 @@ const change = async (): Promise<void> => {
     return;
   }
   const result = await window.api.download.pickDir();
-  if (result.ok) dir.value = result.dir;
+  if (result.ok) await setCoreDir(result.dir);
 };
 
 const setCoreDir = async (selectedDir: string): Promise<void> => {
-  dir.value = await window.api.download.setDir(selectedDir);
+  dir.value = await downloadClient.setDir(selectedDir);
 };
 
 const reset = async (): Promise<void> => {
-  dir.value = await window.api.download.resetDir();
+  dir.value = await downloadClient.resetDir();
 };
 
 const openDir = (): void => {

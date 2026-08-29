@@ -23,6 +23,10 @@ const libraryClientSource = readFileSync(
   new URL("../../../src/core/libraryClient.ts", import.meta.url),
   "utf8",
 );
+const downloadClientSource = readFileSync(
+  new URL("../../../src/core/downloadClient.ts", import.meta.url),
+  "utf8",
+);
 const pickerSource = readFileSync(
   new URL("../../../src/web/CoreDirectoryPicker.vue", import.meta.url),
   "utf8",
@@ -83,13 +87,10 @@ test("Download directory selection writes a validated Core path in both Controls
   assert.match(headlessRoutesSource, /const dir = await resolveCoreDirectory\(body\.dir\)/);
   assert.match(downloadIpcSource, /ipcMain\.handle\("download:setDir"/);
   assert.match(downloadIpcSource, /await resolveCoreDirectory\(requestedDir\)/);
-  assert.match(
-    preloadSource,
-    /setDir: \(dir: string\) => ipcRenderer\.invoke\("download:setDir", dir\)/,
-  );
-  assert.match(webApiSource, /request<\{ dir: string \}>\("\/download\/dir"/);
+  assert.match(downloadClientSource, /request<\{ dir: string \}>\("\/download\/dir"/);
+  assert.match(webApiSource, /\.\.\.downloadClient/);
   assert.match(downloadDirSource, /CoreDirectoryPicker/);
-  assert.match(downloadDirSource, /window\.api\.download\.setDir\(selectedDir\)/);
+  assert.match(downloadDirSource, /downloadClient\.setDir\(selectedDir\)/);
 });
 
 test("Web Core directory picker supports navigation and explicit Core path entry", () => {

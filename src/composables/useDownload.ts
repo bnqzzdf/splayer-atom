@@ -4,6 +4,7 @@ import { QUALITY_LABELS, type QualityLevel } from "@/utils/quality";
 import { useSettingsStore } from "@/stores/settings";
 import { toast } from "@/composables/useToast";
 import { prepareDownloadLyrics } from "@/services/download/resolver";
+import { downloadClient } from "@/core/downloadClient";
 
 /** 下载选项 */
 interface EnqueueOptions {
@@ -73,9 +74,7 @@ export const useDownload = () => {
   const enqueue = async (track: Track, opts: EnqueueOptions = {}): Promise<boolean> => {
     const req = await prepareRequest(track, opts);
     if (!req) return false;
-    const res = opts.taskId
-      ? await window.api.download.retry(req)
-      : await window.api.download.start(req);
+    const res = opts.taskId ? await downloadClient.retry(req) : await downloadClient.start(req);
     if (!res.ok) {
       toast.warning(
         res.reason === "downloaded" ? t("download.alreadyDownloaded") : t("download.alreadyQueued"),
@@ -93,7 +92,7 @@ export const useDownload = () => {
       const req = await prepareRequest(track, {});
       if (req) requests.push(req);
     }
-    const results = await window.api.download.startMany(requests).catch(() => []);
+    const results = await downloadClient.startMany(requests).catch(() => []);
     const count = results.filter((result) => result?.ok).length;
     if (count > 0) toast.success(t("download.enqueued", { count }));
   };
