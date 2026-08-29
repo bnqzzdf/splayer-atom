@@ -19,6 +19,18 @@ const controlClientSource = readFileSync(
   new URL("../../../src/core/controlClient.ts", import.meta.url),
   "utf8",
 );
+const sessionClientSource = readFileSync(
+  new URL("../../../src/core/sessionClient.ts", import.meta.url),
+  "utf8",
+);
+const queueStoreSource = readFileSync(
+  new URL("../../../src/stores/queue.ts", import.meta.url),
+  "utf8",
+);
+const fmDialogSource = readFileSync(
+  new URL("../../../src/components/modals/FmModeDialog.vue", import.meta.url),
+  "utf8",
+);
 const coreMainSource = readFileSync(new URL("../core/index.ts", import.meta.url), "utf8");
 const autoCloseSource = readFileSync(
   new URL("../../../src/services/autoClose.ts", import.meta.url),
@@ -67,6 +79,30 @@ test("Desktop renderer play pause stop and seek use the same Core Protocol route
   assert.match(routesSource, /api\.post\("\/pause"/);
   assert.match(routesSource, /api\.post\("\/stop"/);
   assert.match(routesSource, /api\.post\("\/seek"/);
+});
+
+test("Desktop renderer session and queue commands use the shared Core Protocol client", () => {
+  assert.match(sessionClientSource, /coreResult<PlaybackSessionSnapshot>\("\/session"\)/);
+  assert.match(sessionClientSource, /"\/session\/migrate-legacy"/);
+  assert.match(sessionClientSource, /"\/session\/queue\/select"/);
+  assert.match(sessionClientSource, /"\/session\/personal-fm"/);
+  assert.match(sessionClientSource, /"\/session\/auto-close"/);
+  assert.match(
+    sessionClientSource,
+    /`\/session\/queue\/\$\{index\}\?loadCurrent=\$\{loadCurrent \? "1" : "0"\}`/,
+  );
+
+  assert.match(routesSource, /api\.post\("\/session\/migrate-legacy"/);
+  assert.match(routesSource, /migrateLegacyQueue\(/);
+  assert.match(routesSource, /c\.req\.query\("loadCurrent"\) !== "0"/);
+  assert.match(routesSource, /removeQueueIndex\(index, loadCurrent\)/);
+
+  const sessionIpc =
+    /window\.api\.player\.(getSession|reloadSessionCurrent|migrateLegacySessionQueue|replaceSessionQueue|appendSessionQueue|insertSessionQueue|removeSessionQueueIndex|selectSessionIndex|nextSession|prevSession|updateSessionQueueItem|moveSessionQueue|removeSessionServerTracks|updateSessionQueueTracks|clearSessionQueue|setSessionRepeat|setSessionShuffle|startPersonalFm|dislikePersonalFm|setSessionAutoClose|cancelSessionAutoClose)/;
+  assert.doesNotMatch(controlSource, sessionIpc);
+  assert.doesNotMatch(queueStoreSource, sessionIpc);
+  assert.doesNotMatch(autoCloseSource, sessionIpc);
+  assert.doesNotMatch(fmDialogSource, sessionIpc);
 });
 
 test("Core reload-current captures native position and play state before fresh loading", () => {

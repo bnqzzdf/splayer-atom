@@ -42,6 +42,7 @@ import { toast } from "@/composables/useToast";
 import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
+import { sessionClient } from "@/core/sessionClient";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
 const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
@@ -121,7 +122,7 @@ export const reloadCurrentTrack = async (forcePlay?: boolean): Promise<boolean> 
   const status = useStatusStore();
   if (!status.currentTrack) return false;
   status.trackLoading = true;
-  const result = await window.api.player.reloadSessionCurrent(forcePlay);
+  const result = await sessionClient.reloadSessionCurrent(forcePlay);
   if (!result.success || result.data !== true) {
     status.trackLoading = false;
     if (!result.success) handleError(result.error ?? "UNKNOWN");
@@ -388,7 +389,7 @@ export const playFrom = async (
   const idx = Math.max(0, Math.min(startIndex, items.length - 1));
   const isSameTrack = media.track?.id === items[idx]?.id;
   const session = applySessionResult(
-    await window.api.player.replaceSessionQueue(
+    await sessionClient.replaceSessionQueue(
       toQueueItems(items, context),
       idx,
       !isSameTrack,
@@ -401,7 +402,7 @@ export const playFrom = async (
 
 /** 标签写入后由 Core 从 canonical current Track 重新加载，再恢复原进度/播放态。 */
 const resumeAfterTagWrite = async (resumeMs: number, wasPlaying: boolean): Promise<void> => {
-  const reloaded = await window.api.player.reloadSessionCurrent(false);
+  const reloaded = await sessionClient.reloadSessionCurrent(false);
   if (!reloaded.success || reloaded.data !== true) return;
   if (resumeMs > 0) await seek(resumeMs);
   if (wasPlaying) await play();
@@ -443,7 +444,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     .map((outcome) => outcome.track!);
   if (updated.length > 0) {
     useLibraryStore().applyTrackUpdates(updated);
-    applySessionResult(await window.api.player.updateSessionQueueTracks(updated));
+    applySessionResult(await sessionClient.updateSessionQueueTracks(updated));
   }
 
   if (touchesCurrent && current) {
@@ -459,11 +460,9 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
 export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => {
   if (tracks.length === 0) return;
   const status = useStatusStore();
-  applySessionResult(
-    await window.api.player.replaceSessionQueue(toQueueItems(tracks), 0, true, true),
-  );
+  applySessionResult(await sessionClient.replaceSessionQueue(toQueueItems(tracks), 0, true, true));
   if (status.shuffleMode !== "off") {
-    applySessionResult(await window.api.player.setSessionShuffle("off"));
+    applySessionResult(await sessionClient.setSessionShuffle("off"));
   }
   status.heartMode = true;
   // 心动 / FM 互斥
@@ -483,7 +482,7 @@ export const exitHeartMode = (): void => {
  */
 export const playPersonalFm = async (options?: PersonalFmOptions): Promise<boolean> => {
   const status = useStatusStore();
-  const session = applySessionResult(await window.api.player.startPersonalFm(options, true));
+  const session = applySessionResult(await sessionClient.startPersonalFm(options, true));
   if (!session?.current || session.mode !== "personalFm") return false;
   // 心动 / FM 互斥；FM authority 由 Core session.mode 投影。
   status.heartMode = false;
@@ -496,7 +495,7 @@ export const playPersonalFm = async (options?: PersonalFmOptions): Promise<boole
 export const dislikeFmTrack = async (): Promise<void> => {
   if (!useStatusStore().fmMode) return;
   const playedSec = Math.max(0, Math.round(playback.getCurrentTime() / 1000));
-  applySessionResult(await window.api.player.dislikePersonalFm(playedSec));
+  applySessionResult(await sessionClient.dislikePersonalFm(playedSec));
 };
 
 /**
@@ -508,7 +507,7 @@ export const reloadCurrentQueueTrack = async (): Promise<void> => {
 
 export const nextTrack = async (): Promise<void> => {
   if (queue.queueLength.value === 0) return;
-  applySessionResult(await window.api.player.nextSession(true));
+  applySessionResult(await sessionClient.nextSession(true));
 };
 
 /**
@@ -525,7 +524,7 @@ export const playAtIndex = async (index: number): Promise<void> => {
   }
   // 退出 FM
   status.fmMode = false;
-  applySessionResult(await window.api.player.selectSessionIndex(index, true, true));
+  applySessionResult(await sessionClient.selectSessionIndex(index, true, true));
 };
 
 /** 播放上一首，首位时回绕到末尾 */
@@ -533,7 +532,7 @@ export const prevTrack = async (): Promise<void> => {
   const status = useStatusStore();
   if (status.fmMode) return;
   if (queue.queueLength.value === 0) return;
-  applySessionResult(await window.api.player.prevSession(true));
+  applySessionResult(await sessionClient.prevSession(true));
 };
 
 /** 队列播放结束，通知主进程停止并更新状态 */
@@ -561,7 +560,7 @@ const syncPlayMode = (): void => {
 export const setRepeatMode = (mode: RepeatMode): void => {
   const status = useStatusStore();
   if (status.repeatMode === mode) return;
-  void window.api.player.setSessionRepeat(mode).then((result) => {
+  void sessionClient.setSessionRepeat(mode).then((result) => {
     if (!applySessionResult(result)) return;
     syncPlayMode();
     toast.info(i18n.global.t(`player.repeatMode.${mode}`), { icon: false });
@@ -590,7 +589,7 @@ export const setShuffleMode = (mode: ShuffleMode): void => {
   const status = useStatusStore();
   // 心动模式下忽略
   if (status.heartMode || status.shuffleMode === mode) return;
-  void window.api.player.setSessionShuffle(mode).then((result) => {
+  void sessionClient.setSessionShuffle(mode).then((result) => {
     if (!applySessionResult(result)) return;
     syncPlayMode();
     toast.info(i18n.global.t(`player.shuffleMode.${mode}`), { icon: false });
@@ -599,7 +598,7 @@ export const setShuffleMode = (mode: ShuffleMode): void => {
 
 /** 清空权威播放队列并停止当前播放。 */
 export const clearQueue = async (): Promise<void> => {
-  const session = applySessionResult(await window.api.player.clearSessionQueue(true));
+  const session = applySessionResult(await sessionClient.clearSessionQueue(true));
   if (!session) return;
   const status = useStatusStore();
   status.state = "stopped";
@@ -616,7 +615,7 @@ export const removeFromQueue = async (index: number): Promise<void> => {
   if (index < 0 || index >= queue.queueLength.value) return;
   const isCurrentPlaying = index === status.playIndex;
   const session = applySessionResult(
-    await window.api.player.removeSessionQueueIndex(index, isCurrentPlaying),
+    await sessionClient.removeSessionQueueIndex(index, isCurrentPlaying),
   );
   if (!session) return;
   if (session.queue.length === 0) {
@@ -662,18 +661,18 @@ export const insertToQueue = async (
   const existingIdx = queue.findTrackIndex(item.id);
   const entry = toQueueItems([item], context)[0];
   if (existingIdx !== -1) {
-    if (!applySessionResult(await window.api.player.updateSessionQueueItem(existingIdx, entry))) {
+    if (!applySessionResult(await sessionClient.updateSessionQueueItem(existingIdx, entry))) {
       return existingIdx;
     }
     const safeAt = Math.max(0, Math.min(raw, len - 1));
     if (existingIdx === safeAt) return existingIdx;
-    if (!applySessionResult(await window.api.player.moveSessionQueue(existingIdx, safeAt))) {
+    if (!applySessionResult(await sessionClient.moveSessionQueue(existingIdx, safeAt))) {
       return existingIdx;
     }
     return safeAt;
   }
   const safeAt = Math.max(0, Math.min(raw, len));
-  if (!applySessionResult(await window.api.player.insertSessionQueue([entry], safeAt))) {
+  if (!applySessionResult(await sessionClient.insertSessionQueue([entry], safeAt))) {
     return -1;
   }
   return safeAt;
@@ -726,7 +725,7 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
   status.fmMode = false;
   const insertedIndex = await insertToQueue(item, undefined, context);
   if (insertedIndex < 0) return;
-  applySessionResult(await window.api.player.selectSessionIndex(insertedIndex, true, true));
+  applySessionResult(await sessionClient.selectSessionIndex(insertedIndex, true, true));
 };
 
 /**
@@ -735,7 +734,7 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
  * @param toIndex - 目标位置
  */
 export const moveInQueue = async (fromIndex: number, toIndex: number): Promise<void> => {
-  applySessionResult(await window.api.player.moveSessionQueue(fromIndex, toIndex));
+  applySessionResult(await sessionClient.moveSessionQueue(fromIndex, toIndex));
 };
 
 let unsubscribe: (() => void) | null = null;
@@ -908,7 +907,7 @@ export const initPlayer = async (): Promise<void> => {
     media.setPlaybackContext(status.currentPlaybackContext);
     lyricLoader.beginLoad();
     if (!isServerActive) {
-      const loaded = await window.api.player.reloadSessionCurrent(settings.system.player.autoPlay);
+      const loaded = await sessionClient.reloadSessionCurrent(settings.system.player.autoPlay);
       if (loaded.success && loaded.data === true) {
         if (settings.system.player.rememberLastTrack && lastPosition > 0) {
           await seek(lastPosition);

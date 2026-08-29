@@ -28,7 +28,7 @@ test("tag writes release the current file before mutation and refresh Core queue
   const body = save.split("/**\n * 进入心动模式")[0] ?? save;
   const stopIndex = body.indexOf('await coreCommand("/stop")');
   const writeIndex = body.indexOf("window.api.library.writeTags(edits)");
-  const updateIndex = body.indexOf("window.api.player.updateSessionQueueTracks(updated)");
+  const updateIndex = body.indexOf("sessionClient.updateSessionQueueTracks(updated)");
   const resumeIndex = body.lastIndexOf("resumeAfterTagWrite(resumeMs, wasPlaying)");
   assert.ok(stopIndex >= 0);
   assert.ok(writeIndex > stopIndex);

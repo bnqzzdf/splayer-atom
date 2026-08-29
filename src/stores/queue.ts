@@ -1,5 +1,6 @@
 import localforage from "localforage";
 import { isWebRemote } from "@/runtime";
+import { sessionClient } from "@/core/sessionClient";
 import type {
   PlaybackQueueItem,
   PlaybackSessionSnapshot,
@@ -56,7 +57,7 @@ export const restoreQueue = async (
   legacyState: LegacyQueueState,
 ): Promise<PlaybackSessionSnapshot | null> => {
   try {
-    const current = await window.api.player.getSession();
+    const current = await sessionClient.getSession();
     if (!current.success || !current.data) return null;
     if (current.data.queue.length > 0 || isWebRemote()) {
       applySession(current.data);
@@ -73,7 +74,7 @@ export const restoreQueue = async (
       return current.data;
     }
 
-    const result = await window.api.player.migrateLegacySessionQueue(
+    const result = await sessionClient.migrateLegacySessionQueue(
       list.map(restoreQueueItem),
       original?.map(restoreQueueItem) ?? null,
       legacyState.index,
@@ -103,7 +104,7 @@ export const findTrackIndex = (trackId: string): number =>
 
 /** 清空主进程权威队列；renderer 只在响应后应用快照。 */
 export const clearQueue = (): void => {
-  void window.api.player
+  void sessionClient
     .clearSessionQueue(true)
     .then((result) => {
       if (!result.success) console.error("[queue] 清空权威队列失败:", result.error);
@@ -118,7 +119,7 @@ export const clearQueue = (): void => {
  * @param serverId - 流媒体服务器 ID
  */
 export const removeServerTracks = (serverId: string): void => {
-  void window.api.player
+  void sessionClient
     .removeSessionServerTracks(serverId)
     .then((result) => {
       if (!result.success) console.error("[queue] 移除流媒体服务器队列失败:", result.error);

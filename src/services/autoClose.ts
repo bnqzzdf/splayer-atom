@@ -7,6 +7,7 @@
 import type { PlaybackAutoCloseSnapshot } from "@shared/types/player";
 import { useStatusStore } from "@/stores/status";
 import { coreCommand } from "@/core/controlClient";
+import { sessionClient } from "@/core/sessionClient";
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
@@ -60,14 +61,14 @@ export const applySnapshot = (snapshot?: PlaybackAutoCloseSnapshot): void => {
 /** 启动或更新 Core 定时关闭。 */
 export const start = (durationMin: number, waitSongEnd: boolean): void => {
   const duration = Math.max(1, Math.round(durationMin));
-  void window.api.player.setSessionAutoClose(duration, waitSongEnd).then((result) => {
+  void sessionClient.setSessionAutoClose(duration, waitSongEnd).then((result) => {
     if (result.success && result.data) applySnapshot(result.data.autoClose);
   });
 };
 
 /** 取消 Core 定时关闭。 */
 export const cancel = (): void => {
-  void window.api.player.cancelSessionAutoClose().then((result) => {
+  void sessionClient.cancelSessionAutoClose().then((result) => {
     if (result.success && result.data) applySnapshot(result.data.autoClose);
   });
 };

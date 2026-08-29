@@ -56,6 +56,15 @@ export const request = async <T>(path: string, init?: RequestInit): Promise<T> =
   return rawRequest<T>(path, init);
 };
 
+/** 将任意 Core Protocol 请求投影成现有 IpcResponse 形状。 */
+export const coreResult = async <T>(path: string, init?: RequestInit): Promise<IpcResponse<T>> => {
+  try {
+    return { success: true, data: await request<T>(path, init) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
 /** 将无返回值的 Core Protocol POST 命令投影成现有 IpcResponse 形状。 */
 export const coreCommand = async (path: string, body?: unknown): Promise<IpcResponse> => {
   try {

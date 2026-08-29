@@ -45,6 +45,7 @@ import {
   getSelectedOutputDevice,
   insertQueue,
   moveQueue,
+  migrateLegacyQueue,
   next,
   pause,
   play,
@@ -565,6 +566,28 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.get("/session", (c) => c.json(getPlaybackSession()));
+  api.post("/session/migrate-legacy", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      items?: PlaybackQueueItem[];
+      originalItems?: PlaybackQueueItem[] | null;
+      index?: number;
+      repeat?: RepeatMode;
+      shuffle?: ShuffleMode;
+    } | null;
+    const index = Number(body?.index);
+    if (
+      !Array.isArray(body?.items) ||
+      !Number.isInteger(index) ||
+      (body?.originalItems !== null && !Array.isArray(body?.originalItems)) ||
+      (body?.repeat !== "list" && body?.repeat !== "one") ||
+      (body?.shuffle !== "off" && body?.shuffle !== "on")
+    ) {
+      return c.json({ error: "valid legacy queue snapshot required" }, 400);
+    }
+    return c.json(
+      migrateLegacyQueue(body.items, body.originalItems ?? null, index, body.repeat, body.shuffle),
+    );
+  });
   api.post("/session/reload", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { forcePlay?: boolean } | null;
     return c.json({ reloaded: await reloadCurrent(body?.forcePlay) });
@@ -664,7 +687,8 @@ export const buildHeadlessRoutes = (): Hono => {
   api.delete("/session/queue/:index", async (c) => {
     const index = Number(c.req.param("index"));
     if (!Number.isInteger(index)) return c.json({ error: "valid queue index required" }, 400);
-    return c.json(await removeQueueIndex(index));
+    const loadCurrent = c.req.query("loadCurrent") !== "0";
+    return c.json(await removeQueueIndex(index, loadCurrent));
   });
   api.delete("/session/queue", async (c) => {
     await clearQueue(true);
