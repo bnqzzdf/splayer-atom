@@ -84,7 +84,7 @@ test("switching any remote HTTP track into Diretta prepares local input in Core"
     controlSwitch,
     /prepareDirectTrackSource|materializeDirectInput|player\.stop/,
   );
-  assert.match(controlSwitch, /window\.api\.player\.setOutputDevice\(deviceId\)/);
+  assert.match(controlSwitch, /playerClient\.setOutputDevice\(deviceId\)/);
 
   const coreSwitch = coreSessionSource.split("export const setOutputDevice = async (")[1];
   assert.ok(coreSwitch);

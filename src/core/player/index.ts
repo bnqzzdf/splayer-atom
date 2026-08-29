@@ -328,15 +328,9 @@ export const setPitchSync = async (on: boolean): Promise<void> => {
 
 /** 刷新音频输出设备列表 */
 export const refreshDevices = async (): Promise<void> => {
-  const [systemResult, direttaResult] = await Promise.all([
-    window.api.player.getOutputDevices(),
-    window.api.player.scanDirettaDevices(),
-  ]);
-  if (!systemResult.success || !systemResult.data) return;
-  useStatusStore().outputDevices = [
-    ...systemResult.data,
-    ...(direttaResult.success && direttaResult.data ? direttaResult.data : []),
-  ];
+  const result = await playerClient.getOutputDevices();
+  if (!result.success || !result.data) return;
+  useStatusStore().outputDevices = result.data;
   const settings = useSettingsStore();
   await settings.syncSystem();
   settings.player.outputDevice = settings.system.player.outputDevice;
@@ -357,7 +351,7 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
     ? toast.loading(i18n.global.t("directMode.preparingSource"), { duration: 0 })
     : null;
   try {
-    const result = await window.api.player.setOutputDevice(deviceId);
+    const result = await playerClient.setOutputDevice(deviceId);
     if (!result.success) {
       if (result.error) handleError(result.error);
       return;

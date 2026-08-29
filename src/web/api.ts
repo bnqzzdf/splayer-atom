@@ -26,6 +26,7 @@ import type {
   Track,
 } from "@shared/types/player";
 import { connectWebEvents, request, serverAssetUrl, webAssetUrl } from "./client";
+import { filterWebSystemOutputs } from "@/core/outputDevices";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -76,25 +77,6 @@ const toServerQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
   ...item,
   track: toServerTrack(item.track),
 });
-
-/** Linux Web 只展示系统默认、真实 ALSA hw 声卡；插件/转换/重复数字别名不暴露给用户。 */
-const filterSystemOutputs = (devices: AudioDevice[]): AudioDevice[] => {
-  const seen = new Set<string>();
-  return devices.filter((device) => {
-    if (device.id.startsWith("diretta:")) return false;
-    if (
-      device.id.startsWith("alsa:") &&
-      !device.isDefault &&
-      !/^alsa:hw:CARD=[A-Za-z_][^,]*,DEV=\d+$/.test(device.id)
-    ) {
-      return false;
-    }
-    const key = device.isDefault ? `default:${device.id}` : device.name.trim().toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
 
 const mapQueueItem = (item: PlaybackQueueItem): PlaybackQueueItem => ({
   ...item,
@@ -408,7 +390,9 @@ const playerApi: PlayerApi = {
       request("/player/pitch-sync", { method: "POST", body: JSON.stringify({ enabled }) }),
     ),
   getOutputDevices: () =>
-    asIpc(async () => filterSystemOutputs((await request<OutputSnapshot>("/output/devices")).data)),
+    asIpc(async () =>
+      filterWebSystemOutputs((await request<OutputSnapshot>("/output/devices")).data),
+    ),
   scanDirettaDevices: () =>
     asIpc(async () =>
       (await request<OutputSnapshot>("/output/devices")).data

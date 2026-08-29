@@ -1,5 +1,7 @@
-import type { PlayerApi, PlayerStatus } from "@shared/types/player";
+import type { AudioDevice, IpcResponse, PlayerApi, PlayerStatus } from "@shared/types/player";
+import { isWebRemote } from "@/runtime";
 import { coreCommand, coreResult } from "./controlClient";
+import { projectOutputDevices } from "./outputDevices";
 
 type PlayerControlApi = Pick<
   PlayerApi,
@@ -13,7 +15,23 @@ type PlayerControlApi = Pick<
   | "setSpeed"
   | "setPitch"
   | "setPitchSync"
+  | "getOutputDevices"
+  | "setOutputDevice"
 >;
+
+interface OutputSnapshot {
+  selected: string | null;
+  data: AudioDevice[];
+}
+
+const mapOutputResult = async (
+  result: Promise<IpcResponse<OutputSnapshot>>,
+): Promise<IpcResponse<AudioDevice[]>> => {
+  const resolved = await result;
+  if (!resolved.success) return { success: false, error: resolved.error };
+  if (!resolved.data) return { success: false, error: "CORE_RESPONSE_MISSING_DATA" };
+  return { success: true, data: projectOutputDevices(resolved.data.data, isWebRemote()) };
+};
 
 /**
  * renderer 对 Core player processing/status command 的协议投影。
@@ -30,4 +48,6 @@ export const playerClient: PlayerControlApi = {
   setSpeed: (speed) => coreCommand("/player/speed", { speed }),
   setPitch: (semitones) => coreCommand("/player/pitch", { semitones }),
   setPitchSync: (enabled) => coreCommand("/player/pitch-sync", { enabled }),
+  getOutputDevices: () => mapOutputResult(coreResult<OutputSnapshot>("/output/devices")),
+  setOutputDevice: (deviceId) => coreCommand("/output/select", { deviceId }),
 };

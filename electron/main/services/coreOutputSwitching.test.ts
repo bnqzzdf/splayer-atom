@@ -41,7 +41,7 @@ test("Desktop Control only sends the output id and never prepares or reloads a s
   const controlSwitch =
     controlSource.split("export const switchDevice = async (")[1]?.split("/**\n * 设置队列")[0] ??
     "";
-  assert.match(controlSwitch, /window\.api\.player\.setOutputDevice\(deviceId\)/);
+  assert.match(controlSwitch, /playerClient\.setOutputDevice\(deviceId\)/);
   assert.doesNotMatch(
     controlSwitch,
     /prepareDirectTrackSource|materializeDirectInput|\.load\(|\.stop\(/,

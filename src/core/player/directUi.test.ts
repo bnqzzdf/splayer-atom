@@ -93,7 +93,7 @@ test("Direct device selection refuses incompatible state before sending the Core
     "/**\n * 设置队列并从指定位置开始播放",
   );
   const preflightIndex = switchFlow.indexOf("getCurrentDirectEntryBlockers().length > 0");
-  const commandIndex = switchFlow.indexOf("window.api.player.setOutputDevice(deviceId)");
+  const commandIndex = switchFlow.indexOf("playerClient.setOutputDevice(deviceId)");
   assert.ok(preflightIndex >= 0);
   assert.ok(commandIndex > preflightIndex);
   assert.doesNotMatch(switchFlow, /prepareDirectTrackSource|materializeDirectInput|player\.stop/);
@@ -236,7 +236,7 @@ test("shared Control output switch reports online Source Direct preparation", ()
   assert.match(switchFlow, /toast\.loading\(i18n\.global\.t\("directMode\.preparingSource"\)/);
   assert.match(switchFlow, /duration: 0/);
   assert.match(switchFlow, /preparingToast\?\.close\(\)/);
-  assert.match(switchFlow, /await window\.api\.player\.setOutputDevice\(deviceId\)/);
+  assert.match(switchFlow, /await playerClient\.setOutputDevice\(deviceId\)/);
   assert.doesNotMatch(switchFlow, /materializeDirectInput|prepareDirectTrackSource/);
 });
 
