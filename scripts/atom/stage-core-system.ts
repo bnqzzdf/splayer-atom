@@ -12,6 +12,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
+import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const outputDir = path.join(root, "out", "core-system");
@@ -113,6 +114,16 @@ writeFileSync(
       nodeRange: CORE_NODE_RANGE,
       nodeReference: CORE_NODE_REFERENCE,
       betterSqlite3: betterSqlitePackage.version ?? "unknown",
+      protocolVersion: CORE_PROTOCOL_VERSION,
+      capabilities: {
+        library: true,
+        playback: true,
+        diretta: nativeBuild.diretta === true,
+        netease: true,
+        qobuz: true,
+        tidal: true,
+        remoteOutput: false,
+      },
       diretta: nativeBuild.diretta === true,
     },
     null,

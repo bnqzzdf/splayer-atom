@@ -6,6 +6,8 @@ import { once } from "node:events";
 import net, { type AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
+import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
+import type { CoreInfo } from "../../shared/types/core";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const archiveFile = path.join(root, "out", "core-system-linux-x64.tar.gz");
@@ -63,9 +65,14 @@ try {
   const runtime = JSON.parse(readFileSync(path.join(installRoot, "runtime.json"), "utf8")) as {
     nodeRange?: string;
     nodeReference?: string;
+    protocolVersion?: number;
+    capabilities?: CoreInfo["capabilities"];
   };
   if (runtime.nodeRange !== CORE_NODE_RANGE || runtime.nodeReference !== CORE_NODE_REFERENCE) {
     fail("runtime.json 与 Core Node contract 不一致");
+  }
+  if (runtime.protocolVersion !== CORE_PROTOCOL_VERSION || !runtime.capabilities) {
+    fail("runtime.json 缺少 Core Protocol/capability metadata");
   }
 
   const port = await reservePort();
@@ -89,19 +96,17 @@ try {
   });
 
   const baseUrl = `http://127.0.0.1:${port}`;
-  const info = await waitForJson<{
-    node?: string;
-    nodeRange?: string;
-    nodeReference?: string;
-  }>(`${baseUrl}/api/info`).catch((error) =>
+  const info = await waitForJson<CoreInfo>(`${baseUrl}/api/info`).catch((error) =>
     fail(`Core 未能通过 /api/info 启动验收: ${String(error)}\n${output}`),
   );
   if (
     info.node !== CORE_NODE_REFERENCE ||
     info.nodeRange !== CORE_NODE_RANGE ||
-    info.nodeReference !== CORE_NODE_REFERENCE
+    info.nodeReference !== CORE_NODE_REFERENCE ||
+    info.protocol.version !== CORE_PROTOCOL_VERSION ||
+    JSON.stringify(info.capabilities) !== JSON.stringify(runtime.capabilities)
   ) {
-    fail(`Core info runtime contract 不一致: ${JSON.stringify(info)}`);
+    fail(`Core info runtime/protocol contract 不一致: ${JSON.stringify(info)}`);
   }
 
   await waitForJson(`${baseUrl}/api/session`);

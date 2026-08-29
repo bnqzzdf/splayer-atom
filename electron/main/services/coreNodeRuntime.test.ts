@@ -8,8 +8,8 @@ import {
   isSupportedCoreNodeRuntime,
 } from "../atom/runtime/nodeRuntime";
 
-const headlessRoutesSource = readFileSync(
-  new URL("../atom/headless/routes.ts", import.meta.url),
+const coreInfoSource = readFileSync(
+  new URL("../atom/runtime/coreInfo.ts", import.meta.url),
   "utf8",
 );
 
@@ -28,9 +28,11 @@ test("Core accepts the supported Node 24.x range without a second-patch smoke po
 });
 
 test("Core info exposes the actual Node runtime contract", () => {
-  assert.match(headlessRoutesSource, /node: process\.versions\.node/);
-  assert.match(headlessRoutesSource, /nodeRange: CORE_NODE_RANGE/);
-  assert.match(headlessRoutesSource, /nodeReference: CORE_NODE_REFERENCE/);
+  assert.match(coreInfoSource, /node: process\.versions\.node/);
+  assert.match(coreInfoSource, /nodeRange: CORE_NODE_RANGE/);
+  assert.match(coreInfoSource, /nodeReference: CORE_NODE_REFERENCE/);
+  assert.match(coreInfoSource, /protocol: \{ version: CORE_PROTOCOL_VERSION \}/);
+  assert.match(coreInfoSource, /capabilities: getCoreCapabilities\(\)/);
 });
 
 test("Core rejects unsupported or malformed Node versions before startup", () => {

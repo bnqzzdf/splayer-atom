@@ -1,3 +1,5 @@
+import { assertCoreProtocolCompatible } from "@shared/constants/coreProtocol";
+import type { CoreInfo } from "@shared/types/core";
 import type {
   AudioDevice,
   PlaybackQueueItem,
@@ -17,12 +19,14 @@ export interface OutputSnapshot {
 
 const host = window.location.hostname || "127.0.0.1";
 const dev = import.meta.env.DEV;
-export const apiOrigin = dev ? `${window.location.protocol}//${host}:14559` : window.location.origin;
+export const apiOrigin = dev
+  ? `${window.location.protocol}//${host}:14559`
+  : window.location.origin;
 export const wsOrigin = dev
   ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14559`
   : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
-export const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+const rawRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${apiOrigin}/api${path}`, {
     ...init,
     headers: {
@@ -36,6 +40,29 @@ export const request = async <T>(path: string, init?: RequestInit): Promise<T> =
     throw new Error(message || `HTTP ${response.status}`);
   }
   return data as T;
+};
+
+let coreInfoPromise: Promise<CoreInfo> | null = null;
+
+/** 获取并缓存 Core 兼容信息；网络失败允许下一次请求重新探测。 */
+export const getCoreInfo = (): Promise<CoreInfo> => {
+  coreInfoPromise ??= rawRequest<CoreInfo>("/info").catch((error) => {
+    coreInfoPromise = null;
+    throw error;
+  });
+  return coreInfoPromise;
+};
+
+/** Web Control 在任何 domain 请求前先验证 Core Protocol。 */
+export const ensureCoreProtocolCompatible = async (): Promise<CoreInfo> => {
+  const info = await getCoreInfo();
+  assertCoreProtocolCompatible(info);
+  return info;
+};
+
+export const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  if (path !== "/info") await ensureCoreProtocolCompatible();
+  return rawRequest<T>(path, init);
 };
 
 export const connectWebEvents = (
@@ -68,7 +95,8 @@ export const connectWebEvents = (
 
   /** 高频 position 不走 WS；正式 Web 用轻量 status snapshot 驱动进度。 */
   const syncStatus = async (): Promise<void> => {
-    if (disposed || document.visibilityState !== "visible" || ws?.readyState !== WebSocket.OPEN) return;
+    if (disposed || document.visibilityState !== "visible" || ws?.readyState !== WebSocket.OPEN)
+      return;
     try {
       const status = await request<PlayerStatus>("/status");
       if (disposed || ws?.readyState !== WebSocket.OPEN) return;
@@ -93,7 +121,24 @@ export const connectWebEvents = (
     if (document.visibilityState === "visible") void syncStatus();
   };
 
-  const connect = (): void => {
+  const scheduleReconnect = (): void => {
+    if (disposed || reconnectTimer !== null) return;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      void connect();
+    }, 1000);
+  };
+
+  const connect = async (): Promise<void> => {
+    if (disposed) return;
+    try {
+      await ensureCoreProtocolCompatible();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      onEvent({ type: "coreCompatibilityError", data: { error: message } });
+      if (!message.startsWith("CORE_PROTOCOL_UNSUPPORTED:")) scheduleReconnect();
+      return;
+    }
     if (disposed) return;
     ws = new WebSocket(`${wsOrigin}/ws`);
     ws.onopen = () => {
@@ -117,16 +162,12 @@ export const connectWebEvents = (
     };
     ws.onclose = () => {
       stopStatusPolling();
-      if (disposed || reconnectTimer !== null) return;
-      reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = null;
-        connect();
-      }, 1000);
+      scheduleReconnect();
     };
   };
 
   document.addEventListener("visibilitychange", handleVisibility);
-  connect();
+  void connect();
   return () => {
     disposed = true;
     document.removeEventListener("visibilitychange", handleVisibility);

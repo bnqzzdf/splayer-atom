@@ -12,7 +12,7 @@ import type {
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { materializeDirectInput } from "@main/atom/directInput";
-import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "@main/atom/runtime/nodeRuntime";
+import { getCoreInfo } from "@main/atom/runtime/coreInfo";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   callProviderApi,
@@ -68,7 +68,6 @@ import {
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
 import { toMs } from "@main/utils/time";
-import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -93,16 +92,7 @@ const boundedInt = (
 export const buildHeadlessRoutes = (): Hono => {
   const api = new Hono();
 
-  api.get("/info", (c) =>
-    c.json({
-      name: runtimeEnvironment.appName,
-      version: runtimeEnvironment.appVersion,
-      platform: process.platform,
-      node: process.versions.node,
-      nodeRange: CORE_NODE_RANGE,
-      nodeReference: CORE_NODE_REFERENCE,
-    }),
-  );
+  api.get("/info", (c) => c.json(getCoreInfo()));
 
   api.get("/status", (c) => {
     const raw = getPlayer().getStatus();
