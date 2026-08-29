@@ -735,10 +735,11 @@ export const initPlayer = async (): Promise<void> => {
     }
   }
 
+  unsubscribeCoreProjection?.();
+  unsubscribeCoreProjection = subscribeCorePlayerProjection(handleEvent);
+
   if (webRemote) {
     await refreshDevices();
-    if (unsubscribe) unsubscribe();
-    unsubscribe = window.api.player.onEvent(handleEvent);
     const media = useMediaStore();
     const current = status.currentTrack;
     if (current) {
@@ -798,11 +799,9 @@ export const initPlayer = async (): Promise<void> => {
       await switchDevice(migratedOutput);
     }
   }
-  // 先订阅事件，确保 load 触发播放后 projection / position 事件都能被接收。
+  // Desktop legacy event 只承载 Host directive 与 Core 未消费的 recovery fallback。
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
-  unsubscribeCoreProjection?.();
-  unsubscribeCoreProjection = subscribeCorePlayerProjection(handleEvent);
   // 安装播放统计累加器
   installPlayStats();
   // 订阅主进程下发的歌词偏移变化

@@ -4,7 +4,6 @@ import { useStatusStore } from "@/stores/status";
 import { useHistoryStore } from "@/stores/history";
 import * as queue from "@/stores/queue";
 import { useFavorite } from "@/composables/useFavorite";
-import { isWebRemote } from "@/runtime";
 import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
@@ -138,14 +137,13 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       handleError(event.data.error);
       break;
     case "ended": {
-      // Headless main session 已经消费自然结束；远程 Web 只等待 session 快照更新。
-      if (!isWebRemote()) await finishCurrentTrack();
+      // 只有 Core 未消费自然结束时，Desktop legacy fallback 才会进入这里。
+      await finishCurrentTrack();
       break;
     }
     case "directTrackBoundary": {
       // Core 正常消费 staged boundary；只有未消费的异常边界才会到 Desktop renderer。
       // renderer 不再持有 Direct generation/source 第二状态机，只按当前队列语义安全恢复。
-      if (isWebRemote()) break;
       const stopByTimer = autoClose.onTrackEnded();
       const repeatOne = status.repeatMode === "one" && !status.fmMode;
       playStats.onTrackEnded(repeatOne && !stopByTimer);
@@ -159,8 +157,8 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       break;
     }
     case "sourceError":
-      // Headless main session 会在音源失败时自行推进权威队列。
-      if (!isWebRemote()) await recoverFromSourceFailure();
+      // 只有 Core 未消费音源失败时，Desktop legacy fallback 才会进入这里。
+      await recoverFromSourceFailure();
       break;
     case "play":
       await play();

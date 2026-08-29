@@ -9,6 +9,7 @@ const preloader = read("electron/main/services/playbackPreloader.ts");
 const session = read("electron/main/services/playbackSession.ts");
 const coreEvents = read("electron/main/services/corePlayerEvents.ts");
 const webEvents = read("src/core/player/events.ts");
+const playerControl = read("src/core/player/index.ts");
 
 test("Core preload prepares Diretta input and stages through the shared main service", () => {
   assert.match(preloader, /stageDirectPlaybackNext/);
@@ -29,8 +30,15 @@ test("Node Core consumes Direct boundary into the authoritative session", () => 
   assert.match(session, /scheduleNextPlaybackPreload\(\)/);
 });
 
-test("remote Web never owns a Core-consumed Direct boundary", () => {
-  const boundary = webEvents.split('case "directTrackBoundary": {')[1]?.split('case "sourceError":')[0];
+test("Direct recovery fallback stays Desktop-only after Web leaves legacy player events", () => {
+  const boundary = webEvents
+    .split('case "directTrackBoundary": {')[1]
+    ?.split('case "sourceError":')[0];
   assert.ok(boundary, "directTrackBoundary handler should exist");
-  assert.match(boundary, /if \(isWebRemote\(\)\) break/);
+  assert.doesNotMatch(webEvents, /isWebRemote\(\)/);
+  assert.equal(playerControl.match(/window\.api\.player\.onEvent\(handleEvent\)/g)?.length, 1);
+  assert.ok(
+    playerControl.indexOf("window.api.player.onEvent(handleEvent)") >
+      playerControl.indexOf("if (webRemote) {"),
+  );
 });

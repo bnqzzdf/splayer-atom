@@ -52,7 +52,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
   );
 });
 
-test("Player projections use core:event while legacy player:event keeps Host and recovery semantics", () => {
+test("Player projections use core:event while legacy player:event keeps Desktop Host and recovery semantics", () => {
   assert.match(playerIpcSource, /publishCoreControlEvent\(statusEvent\)/);
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "status"/s);
   assert.match(playerLoadSource, /publishCoreControlEvent\(loadingEvent\)/);
@@ -64,6 +64,18 @@ test("Player projections use core:event while legacy player:event keeps Host and
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "position"/s);
   assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["fftData", "position"\]\)/);
   assert.match(playerControlSource, /subscribeCorePlayerProjection\(handleEvent\)/);
+  assert.equal(
+    playerControlSource.match(/window\.api\.player\.onEvent\(handleEvent\)/g)?.length,
+    1,
+  );
+  assert.ok(
+    playerControlSource.indexOf("subscribeCorePlayerProjection(handleEvent)") <
+      playerControlSource.indexOf("if (webRemote) {"),
+  );
+  assert.ok(
+    playerControlSource.indexOf("window.api.player.onEvent(handleEvent)") >
+      playerControlSource.indexOf("if (webRemote) {"),
+  );
   assert.match(
     webApiSource,
     /isCoreControlEvent\(event\) && !isCorePlayerProjectionEvent\(event\)/,
