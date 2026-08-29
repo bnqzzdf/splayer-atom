@@ -138,12 +138,11 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         const posMs = toDisplayPositionMs(toMs(event.position ?? 0));
         const durMs = toDisplayDurationMs(toMs(event.duration ?? 0));
         const positionEvent = {
-          type: "position",
+          type: "position" as const,
           data: { position: posMs, duration: durMs },
         };
-        // 主窗口隐藏时跳过高频推送
-        if (getMainWindow()?.isVisible()) sendToMain("player:event", positionEvent);
-        wsBroadcast(positionEvent);
+        // 主窗口隐藏时跳过高频 projection；Web WS 也由统一 broadcaster 的高频门禁过滤。
+        if (getMainWindow()?.isVisible()) publishCoreControlEvent(positionEvent);
         mediaService.setTimeline({ currentMs: posMs, totalMs: durMs });
         nowPlaying.onPosition(posMs, true);
         lastfm.onPosition();
@@ -152,9 +151,11 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "fftData": {
-        const fftEvent = { type: "fftData", data: event.fftData ?? { ldata: [], rdata: [] } };
-        if (getMainWindow()?.isVisible()) sendToMain("player:event", fftEvent);
-        wsBroadcast(fftEvent);
+        const fftEvent = {
+          type: "fftData" as const,
+          data: event.fftData ?? { ldata: [], rdata: [] },
+        };
+        if (getMainWindow()?.isVisible()) publishCoreControlEvent(fftEvent);
         break;
       }
       case "outputFailed": {

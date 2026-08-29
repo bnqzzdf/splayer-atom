@@ -14,6 +14,7 @@ const playerLoadSource = read(new URL("./playerLoad.ts", import.meta.url));
 const deviceSource = read(new URL("./device.ts", import.meta.url));
 const playerControlSource = read(new URL("../../../src/core/player/index.ts", import.meta.url));
 const webApiSource = read(new URL("../../../src/web/api.ts", import.meta.url));
+const wsBroadcastSource = read(new URL("../server/broadcast.ts", import.meta.url));
 
 test("Core Domain projections use one event envelope on Desktop and Web", () => {
   assert.match(publisherSource, /publishDesktopEvent\("core:event", event\)/);
@@ -34,7 +35,15 @@ test("shared Core event contract stays limited to pure domain projections", () =
   ]) {
     assert.match(eventTypesSource, new RegExp(`type: "${type}"`));
   }
-  for (const type of ["status", "trackLoaded", "error", "deviceChanged", "session"]) {
+  for (const type of [
+    "status",
+    "trackLoaded",
+    "position",
+    "fftData",
+    "error",
+    "deviceChanged",
+    "session",
+  ]) {
     assert.match(eventTypesSource, new RegExp(type));
   }
   assert.doesNotMatch(
@@ -43,13 +52,17 @@ test("shared Core event contract stays limited to pure domain projections", () =
   );
 });
 
-test("low-frequency Player projections use core:event while legacy player:event keeps Host semantics", () => {
+test("Player projections use core:event while legacy player:event keeps Host and recovery semantics", () => {
   assert.match(playerIpcSource, /publishCoreControlEvent\(statusEvent\)/);
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "status"/s);
   assert.match(playerLoadSource, /publishCoreControlEvent\(loadingEvent\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(\{ type: "session", data \}\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(event\)/);
   assert.match(deviceSource, /publishCoreControlEvent\(\{\s*type: "deviceChanged"/s);
+  assert.match(playerIpcSource, /publishCoreControlEvent\(positionEvent\)/);
+  assert.match(playerIpcSource, /publishCoreControlEvent\(fftEvent\)/);
+  assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "position"/s);
+  assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["fftData", "position"\]\)/);
   assert.match(playerControlSource, /subscribeCorePlayerProjection\(handleEvent\)/);
   assert.match(
     webApiSource,
@@ -63,7 +76,7 @@ test("low-frequency Player projections use core:event while legacy player:event 
     /publishDesktopEvent\("player:event", \{ type: "session"/,
   );
   assert.match(playerIpcSource, /sendToMain\("player:event", \{ type: "next" \}\)/);
-  assert.match(playerIpcSource, /sendToMain\("player:event", positionEvent\)/);
-  assert.match(playerIpcSource, /sendToMain\("player:event", fftEvent\)/);
+  assert.doesNotMatch(playerIpcSource, /sendToMain\("player:event", positionEvent\)/);
+  assert.doesNotMatch(playerIpcSource, /sendToMain\("player:event", fftEvent\)/);
   assert.match(playerIpcSource, /sendToMain\("player:event", \{ type: "sourceError" \}\)/);
 });

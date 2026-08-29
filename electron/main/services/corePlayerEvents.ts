@@ -65,7 +65,10 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         const durationMs = toDisplayDurationMs(toMs(event.duration ?? 0));
         nowPlaying.onPosition(positionMs, true);
         neteaseScrobble.onPosition(positionMs);
-        wsBroadcast({ type: "position", data: { position: positionMs, duration: durationMs } });
+        publishCoreControlEvent({
+          type: "position",
+          data: { position: positionMs, duration: durationMs },
+        });
         break;
       }
       case "outputFailed":

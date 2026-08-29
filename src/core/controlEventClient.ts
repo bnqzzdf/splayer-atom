@@ -42,6 +42,8 @@ export const isCorePlayerProjectionEvent = (
   event.data !== undefined &&
   (event.type === "status" ||
     event.type === "trackLoaded" ||
+    event.type === "position" ||
+    event.type === "fftData" ||
     event.type === "error" ||
     event.type === "deviceChanged" ||
     event.type === "session");
@@ -233,7 +235,7 @@ export const subscribeCoreControlEvent = <T extends CoreEventType>(
     }
   });
 
-/** 订阅已从 Host directive/recovery event 中拆出的低频 Player projection。 */
+/** 订阅已从 Host directive/recovery event 中拆出的 Player projection。 */
 export const subscribeCorePlayerProjection = (
   callback: (event: CorePlayerProjectionEvent) => void,
 ): (() => void) =>
