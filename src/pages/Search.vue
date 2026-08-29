@@ -18,8 +18,10 @@ const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
 const webRemote = isWebRemote();
-const webSearchPlatforms = new Set<Platform>(["netease", "qqmusic", "kugou"]);
-if (webRemote && !webSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
+const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
+const webSearchPlatforms = new Set<Platform>(["netease"]);
+const availableSearchPlatforms = webRemote ? webSearchPlatforms : atomSearchPlatforms;
+if (!availableSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 
 type SearchSource = Platform | "local";
 type TabKey = "songs" | "albums" | "artists" | "playlists";
@@ -51,10 +53,10 @@ const tabs = computed(() => {
 });
 
 const platformTabs = computed(() => {
-  const online = (webRemote
-    ? ALL_PLATFORMS.filter((key) => webSearchPlatforms.has(key))
-    : ALL_PLATFORMS
-  ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+  const online = ALL_PLATFORMS.filter((key) => availableSearchPlatforms.has(key)).map((key) => ({
+    key,
+    label: PLATFORM_SHORT_NAME[key],
+  }));
   return webRemote ? [{ key: "local", label: t("search.source.local") }, ...online] : online;
 });
 
@@ -183,7 +185,9 @@ const syncFromRoute = (): void => {
       ? (route.query.tab as TabKey)
       : "songs";
   const tab: TabKey =
-    searchSource.value === "local" || searchSource.value === "qobuz" || searchSource.value === "tidal"
+    searchSource.value === "local" ||
+    searchSource.value === "qobuz" ||
+    searchSource.value === "tidal"
       ? "songs"
       : requestedTab;
   if (tab !== requestedTab) void router.replace({ query: { ...route.query, tab } });
