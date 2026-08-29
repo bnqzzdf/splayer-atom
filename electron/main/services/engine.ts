@@ -1,3 +1,4 @@
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { loadNativeModule } from "@main/utils/nativeLoader";
 import { getCoverCacheDir, isDev } from "@main/utils/config";
 import { playerLog, nativeLogsDir } from "@main/utils/logger";
@@ -18,7 +19,7 @@ export const getEngine = (): AudioEngineModule => {
     if (!audioEngine) {
       throw new Error("Failed to load audio-engine.node");
     }
-    audioEngine.initLogger(nativeLogsDir, isDev);
+    if (!runtimeEnvironment.stdioOnlyLogs) audioEngine.initLogger(nativeLogsDir, isDev);
   }
   return audioEngine;
 };

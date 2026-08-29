@@ -65,7 +65,7 @@ const betterSqlitePrebuild = path.join(betterSqliteDir, "prebuilds", "linux-x64.
 requireFile(betterSqlitePrebuild, "better-sqlite3 linux-x64 N-API prebuild");
 
 rmSync(outputDir, { recursive: true, force: true });
-mkdirSync(outputDir, { recursive: true });
+mkdirSync(path.join(outputDir, "data"), { recursive: true });
 cpSync(coreDir, path.join(outputDir, "app"), { recursive: true });
 cpSync(rendererDir, path.join(outputDir, "renderer"), { recursive: true });
 mkdirSync(path.join(outputDir, "native"), { recursive: true });

@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { assertSupportedCoreNodeRuntime } from "@main/atom/runtime/nodeRuntime";
 
 assertSupportedCoreNodeRuntime();
@@ -7,6 +8,11 @@ process.env.ATOM_HEADLESS = "1";
 process.env.ATOM_APP_NAME ??= "SPlayer Atom Core";
 process.env.ATOM_APP_VERSION ??= "1.0.0";
 process.env.ATOM_APP_PACKAGED ??= process.env.NODE_ENV === "production" ? "1" : "0";
+if (process.env.ATOM_APP_PACKAGED === "1") {
+  process.env.ATOM_DATA_DIR ??= fileURLToPath(new URL("../data", import.meta.url));
+}
+process.env.ATOM_CACHE_DIR ??= runtimeEnvironment.defaultCoreCacheDir;
+process.env.ATOM_LOG_STDIO_ONLY ??= "1";
 process.env.ATOM_RENDERER_DIR ??= fileURLToPath(new URL("../renderer", import.meta.url));
 process.env.ATOM_NATIVE_DIR ??= fileURLToPath(new URL("../native", import.meta.url));
 process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js", import.meta.url));

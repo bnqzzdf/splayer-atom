@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import log from "electron-log";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { isDev } from "./config";
 import { logsDir as logsBaseDir } from "./paths";
 
@@ -39,21 +40,20 @@ const autoCleanLogs = (dir: string, daysToKeep: number = 30): void => {
  * - console.log/warn/error/info 重绑到 logger
  */
 export const initLogger = (): void => {
-  // 确保日志目录存在
-  if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+  const stdioOnly = runtimeEnvironment.stdioOnlyLogs;
+  if (!stdioOnly) {
+    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+    const dateString = new Date().toISOString().slice(0, 10);
+    const logFilePath = path.join(logsDir, `${dateString}.log`);
+    log.transports.file.resolvePathFn = () => logFilePath;
+    log.transports.file.maxSize = 2 * 1024 * 1024;
+    log.transports.file.level = "info";
+  } else {
+    log.transports.file.level = false;
+  }
 
-  // 按日期命名日志文件
-  const dateString = new Date().toISOString().slice(0, 10);
-  const logFilePath = path.join(logsDir, `${dateString}.log`);
-
-  // 文件输出配置
-  log.transports.file.resolvePathFn = () => logFilePath;
-  log.transports.file.maxSize = 2 * 1024 * 1024; // 2MB 单文件上限
-  log.transports.file.level = "info";
-
-  // 控制台输出配置
   log.transports.console.useStyles = true;
-  log.transports.console.level = isDev ? "debug" : "warn";
+  log.transports.console.level = stdioOnly ? (isDev ? "debug" : "info") : isDev ? "debug" : "warn";
 
   // 捕获未处理的异常和 rejection
   log.errorHandler.startCatching();
@@ -65,11 +65,10 @@ export const initLogger = (): void => {
   console.warn = defaultLog.warn;
   console.error = defaultLog.error;
 
-  // 自动清理旧日志
-  autoCleanLogs(logsDir, isDev ? 7 : 30);
+  if (!stdioOnly) autoCleanLogs(logsDir, isDev ? 7 : 30);
 
   log.info(`日志系统已初始化 (${isDev ? "development" : "production"})`);
-  log.info(`日志目录: ${logsDir}`);
+  log.info(stdioOnly ? "日志输出: stdout/stderr" : `日志目录: ${logsDir}`);
 };
 
 // 分作用域导出

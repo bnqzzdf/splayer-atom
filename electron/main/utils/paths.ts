@@ -8,7 +8,8 @@ import { runtimeEnvironment } from "@main/atom/runtime/environment";
  * 与 Chromium 自建的 Cache/ GPUCache/ 等隔开，便于备份与后续便携版整体迁移。
  * 仅需改这一处即可整体改变数据落点（如便携版指向 exe 同级目录）。
  */
-export const dataRoot = path.join(runtimeEnvironment.userDataDir, "app-data");
+export const dataRoot =
+  runtimeEnvironment.dataDir ?? path.join(runtimeEnvironment.userDataDir, "app-data");
 
 /** 配置目录：settings.json / streaming.json / lastfm.json */
 export const configDir = path.join(dataRoot, "config");
@@ -17,7 +18,7 @@ export const configDir = path.join(dataRoot, "config");
 export const databaseDir = path.join(dataRoot, "database");
 
 /** 默认缓存根目录：covers / artists / backgrounds / songs */
-export const defaultCacheDir = path.join(dataRoot, "cache");
+export const defaultCacheDir = runtimeEnvironment.cacheDir ?? path.join(dataRoot, "cache");
 
 /** 日志根目录：应用日志 + native/ */
 export const logsDir = path.join(dataRoot, "logs");

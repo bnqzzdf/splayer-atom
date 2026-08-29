@@ -33,6 +33,27 @@ export const runtimeEnvironment = {
   get userDataDir(): string {
     return envText("ATOM_USER_DATA_DIR") ?? defaultUserDataDir();
   },
+  get dataDir(): string | null {
+    return envText("ATOM_DATA_DIR");
+  },
+  get cacheDir(): string | null {
+    return envText("ATOM_CACHE_DIR");
+  },
+  get defaultCoreCacheDir(): string {
+    if (process.platform === "linux") {
+      return path.join(
+        envText("XDG_CACHE_HOME") ?? path.join(os.homedir(), ".cache"),
+        "splayer-atom",
+      );
+    }
+    if (process.platform === "darwin") {
+      return path.join(os.homedir(), "Library", "Caches", "SPlayer Atom");
+    }
+    return path.join(envText("LOCALAPPDATA") ?? os.homedir(), "SPlayer Atom", "Cache");
+  },
+  get stdioOnlyLogs(): boolean {
+    return process.env.ATOM_LOG_STDIO_ONLY === "1";
+  },
   get musicDir(): string {
     return envText("ATOM_MUSIC_DIR") ?? path.join(os.homedir(), "Music");
   },
