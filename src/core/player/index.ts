@@ -43,6 +43,7 @@ import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
 import { sessionClient } from "@/core/sessionClient";
+import { playerClient } from "@/core/playerClient";
 
 /** 将 upstream Track 列表包装成共享队列项。 */
 const toQueueItems = (items: readonly Track[], context?: PlaybackContext): PlaybackQueueItem[] =>
@@ -284,7 +285,7 @@ export const markSeek = (posMs: number): void => {
  */
 export const setVolume = async (vol: number): Promise<void> => {
   if (isDirectOutputSelected()) return;
-  const result = await window.api.player.setVolume(vol);
+  const result = await playerClient.setVolume(vol);
   if (result.success) {
     useStatusStore().volume = vol;
   }
@@ -297,7 +298,7 @@ export const setVolume = async (vol: number): Promise<void> => {
 export const setSpeed = async (v: number): Promise<void> => {
   if (isDirectOutputSelected()) return;
   const safe = Number.isFinite(v) ? Math.max(0.5, Math.min(2.0, v)) : 1.0;
-  const result = await window.api.player.setSpeed(safe);
+  const result = await playerClient.setSpeed(safe);
   if (result.success) {
     useStatusStore().speed = safe;
     // 同步给 playback 时间源，让墙钟插值正确换算到源时间
@@ -311,7 +312,7 @@ export const setSpeed = async (v: number): Promise<void> => {
 export const setPitch = async (n: number): Promise<void> => {
   if (isDirectOutputSelected()) return;
   const safe = Number.isFinite(n) ? Math.max(-12, Math.min(12, Math.round(n))) : 0;
-  const result = await window.api.player.setPitch(safe);
+  const result = await playerClient.setPitch(safe);
   if (result.success) useStatusStore().pitch = safe;
 };
 
@@ -321,7 +322,7 @@ export const setPitch = async (n: number): Promise<void> => {
  */
 export const setPitchSync = async (on: boolean): Promise<void> => {
   if (isDirectOutputSelected()) return;
-  const result = await window.api.player.setPitchSync(on);
+  const result = await playerClient.setPitchSync(on);
   if (result.success) useStatusStore().pitchSync = on;
 };
 
@@ -803,7 +804,7 @@ export const initPlayer = async (): Promise<void> => {
       media.setTrack(current);
       media.setPlaybackContext(status.currentPlaybackContext);
     }
-    const currentStatus = await window.api.player.getStatus();
+    const currentStatus = await playerClient.getStatus();
     if (currentStatus.success && currentStatus.data) {
       status.state =
         current && currentStatus.data.state === "idle" ? "stopped" : currentStatus.data.state;
@@ -829,18 +830,18 @@ export const initPlayer = async (): Promise<void> => {
   }
 
   // 恢复上次的音量和播放模式到主进程
-  await window.api.player.setVolume(status.volume);
+  await playerClient.setVolume(status.volume);
   syncPlayMode();
   // 应用渐入渐出配置
   const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
-  await window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0);
+  await playerClient.setFadeDuration(fadeEnabled ? fadeDuration : 0);
   // 应用音量均衡配置
-  await window.api.player.setNormalizationEnabled(loudnessNormalization ?? false);
+  await playerClient.setNormalizationEnabled(loudnessNormalization ?? false);
   // 应用均衡器配置
   if (equalizer) {
-    await window.api.player.setEqualizerBands([...equalizer.bands]);
-    await window.api.player.setPreampGain(equalizer.preamp);
-    await window.api.player.setEqualizerEnabled(equalizer.enabled);
+    await playerClient.setEqualizerBands([...equalizer.bands]);
+    await playerClient.setPreampGain(equalizer.preamp);
+    await playerClient.setEqualizerEnabled(equalizer.enabled);
   }
   // Core 启动时已恢复自己的 output preference；renderer 本地旧值只允许做一次兼容迁移。
   await refreshDevices();

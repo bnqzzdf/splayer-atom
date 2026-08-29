@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const playerSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+const playerClientSource = readFileSync(new URL("../playerClient.ts", import.meta.url), "utf8");
+const settingsSource = readFileSync(new URL("../../stores/settings.ts", import.meta.url), "utf8");
 
 const between = (start: string, end: string): string => {
   const afterStart = playerSource.split(start)[1];
@@ -37,6 +39,21 @@ test("queue replacement/removal and play-now no longer reload through renderer",
   const playNow = between("export const playNow = async (", "/**\n * 移动队列中的歌曲位置");
   assert.match(playNow, /selectSessionIndex\(insertedIndex, true, true\)/);
   assert.doesNotMatch(playNow, /loadTrack\(/);
+});
+
+test("renderer processing and status controls use Core Protocol instead of Player IPC", () => {
+  assert.match(playerClientSource, /coreResult<PlayerStatus>\("\/status"\)/);
+  assert.match(playerClientSource, /coreCommand\("\/volume", \{ volume \}\)/);
+  assert.match(playerClientSource, /coreCommand\("\/player\/speed", \{ speed \}\)/);
+  assert.match(playerClientSource, /coreCommand\("\/player\/pitch-sync", \{ enabled \}\)/);
+  assert.match(playerClientSource, /coreCommand\("\/player\/normalization", \{ enabled \}\)/);
+  assert.match(playerClientSource, /coreCommand\("\/player\/equalizer"/);
+  assert.match(playerClientSource, /coreCommand\("\/player\/fade", \{ durationMs \}\)/);
+
+  const processingIpc =
+    /window\.api\.player\.(getStatus|setVolume|setSpeed|setPitch|setPitchSync|setFadeDuration|setNormalizationEnabled|setEqualizerBands|setPreampGain|setEqualizerEnabled)/;
+  assert.doesNotMatch(playerSource, processingIpc);
+  assert.doesNotMatch(settingsSource, processingIpc);
 });
 
 test("next always delegates playback advancement to the Core session", () => {

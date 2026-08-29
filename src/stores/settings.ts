@@ -15,6 +15,7 @@ import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
 import { hasHostCapability } from "@/runtime";
+import { playerClient } from "@/core/playerClient";
 
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
@@ -246,7 +247,7 @@ export const useSettingsStore = defineStore(
         console.error("[settings] config.set failed", keyPath, err);
       }
       if (keyPath === "player.fadeEnabled" || keyPath === "player.fadeDuration") {
-        await window.api.player.setFadeDuration(
+        await playerClient.setFadeDuration(
           system.player.fadeEnabled ? system.player.fadeDuration : 0,
         );
       }
