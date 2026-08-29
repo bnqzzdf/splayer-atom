@@ -23,7 +23,7 @@ Roadmap P3 — Core release gates plus §16 capability-driven Control convergenc
 - [~] Finish the remaining no-op Host-surface audit only where a shared UI can still reach a fake facade; known updater/window/desktop-lyric/protocol shims are already capability-hidden compatibility shape.
 - [x] Split the validated working tree into ownership-coherent Conventional Commits: `12214ae` (Control Action Model), `223c18e` (Core release/migration chain), and `fb77991` (§16 Core/Control convergence); this documentation cleanup is the final local-clean checkpoint.
 - [x] Push the reviewed `dev` commits to `origin` and obtain the first GitHub-hosted clean `Core System Gate` result; run `33245921866` passed for commit `fd5671f` on 2026-08-29.
-- [~] Secure Diretta SDK CI provisioning is now defined as a manual `Core Diretta Release Gate` on a controlled self-hosted `diretta-sdk-149` runner with SDK 149 pre-provisioned outside the checkout; registering/protecting that runner environment and executing the first remote SDK-enabled gate remain pending.
+- [~] Secure Diretta SDK CI provisioning is defined as a manual `Core Diretta Release Gate`; the `diretta-release` Environment now exists with a `dev`-only deployment policy. Registering a trusted self-hosted `diretta-sdk-149` runner with SDK 149 pre-provisioned outside the checkout, then executing the first remote SDK-enabled gate, remain pending.
 - [ ] Complete live-account Qobuz/TIDAL and genuinely manual DAC/bitstream acceptance when user-owned credentials and hardware confirmation are available.
 
 ## Git Access

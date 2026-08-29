@@ -68,7 +68,7 @@ That mode fails if `DIRETTA_SDK_ROOT` is absent. Core Diretta release builds are
 
 The proprietary SDK remains external to the repository. SDK-enabled release validation uses the separate manual `Core Diretta Release Gate` on a controlled self-hosted Ubuntu 24.04 x86-64 runner labeled `diretta-sdk-149`. The runner administrator provisions SDK 149 read-only at `/opt/diretta/HostSDK_149`, outside `GITHUB_WORKSPACE`; the workflow never stores the SDK in GitHub Secrets, the repository, Actions artifacts or release uploads. The existing `Release.hpp` check and `--require-diretta` build gate remain authoritative.
 
-The Diretta release runner is intentionally not used for pull requests or ordinary `dev` pushes. It is a privileged release resource: only an explicit `workflow_dispatch` on `dev`, behind the `diretta-release` GitHub Environment, may consume it. The runner image must provide Ubuntu 24.04 x86-64, ALSA development headers, `pkg-config` and `clang`; Node 24.18.0, Rust 1.98.0 and pnpm are still pinned by the workflow itself. Until such a runner is registered and the environment protection is configured, the SDK-enabled remote gate is defined but not executable.
+The Diretta release runner is intentionally not used for pull requests or ordinary `dev` pushes. It is a privileged release resource: only an explicit `workflow_dispatch` on `dev`, behind the `diretta-release` GitHub Environment, may consume it. The environment exists and has a custom deployment branch policy allowing only `dev`. The runner image must provide Ubuntu 24.04 x86-64, ALSA development headers, `pkg-config` and `clang`; Node 24.18.0, Rust 1.98.0 and pnpm are still pinned by the workflow itself. Until a trusted runner with the `diretta-sdk-149` label is registered, the SDK-enabled remote gate is defined and protected but not executable.
 
 ### Core deployment
 
@@ -94,7 +94,7 @@ Existing upstream-oriented workflows continue to validate Desktop behavior. Atom
 - Node/Web tests, typecheck, lint and upstream-touch audit;
 - the same `build-core-system.ts` artifact pipeline used locally.
 
-The Core workflow is a validation gate, not a release publisher. The first GitHub-hosted `Core System Gate` for commit `fd5671f` completed successfully on 2026-08-29 as Actions run `33245921866`, proving the ordinary no-SDK Core path on a clean hosted runner. Formal Atom artifact naming, updater/feed identity and release channels remain blocked on the product-identity roadmap work.
+The Core workflow is a validation gate, not a release publisher. The first GitHub-hosted `Core System Gate` for commit `fd5671f` completed successfully on 2026-08-29 as Actions run `33245921866`; the follow-up CI/provisioning commit `6aac815` also passed as run `33246384095`, proving the ordinary no-SDK Core path remains green after the Diretta release-gate addition. Formal Atom artifact naming, updater/feed identity and release channels remain blocked on the product-identity roadmap work.
 
 ## Shared architecture contract
 
