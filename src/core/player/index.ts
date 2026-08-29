@@ -30,7 +30,6 @@ import {
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
 } from "@/services/nextTrackPreloader";
-import { installPlayStats } from "./stats";
 import { useFavorite } from "@/composables/useFavorite";
 import { handleError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
@@ -802,8 +801,6 @@ export const initPlayer = async (): Promise<void> => {
   // Desktop legacy event 只承载 Host directive 与 Core 未消费的 recovery fallback。
   if (unsubscribe) unsubscribe();
   unsubscribe = window.api.player.onEvent(handleEvent);
-  // 安装播放统计累加器
-  installPlayStats();
   // 订阅主进程下发的歌词偏移变化
   const media = useMediaStore();
   // 当前歌曲喜欢状态变化时同步到托盘菜单

@@ -13,7 +13,7 @@ import { fetchBytes } from "@main/utils/fetchBytes";
 import { formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
-import { beginHeadlessPlayStats } from "@main/services/headlessPlayStats";
+import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 
 /** 使用现有 native Direct runtime 预备同 wire-format 下一首。 */
 export const stageDirectPlaybackNext = async (
@@ -93,7 +93,7 @@ export const commitDirectPlaybackBoundary = (
     ...display,
     artist: track.artists?.[0]?.name ?? artist,
   });
-  beginHeadlessPlayStats({ ...track, duration: track.duration || durationMs }, true);
+  beginCorePlayStats({ ...track, duration: track.duration || durationMs }, true);
   neteaseScrobble.onTrackLoaded(track, context, durationMs, true);
 
   if (coverUrl) {

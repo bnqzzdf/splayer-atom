@@ -30,6 +30,7 @@ const start = async (): Promise<void> => {
     playbackSession,
     corePlayerEvents,
     downloadManager,
+    corePlayStats,
     server,
     { store },
     { pluginRegistry },
@@ -40,6 +41,7 @@ const start = async (): Promise<void> => {
     import("@main/services/playbackSession"),
     import("@main/services/corePlayerEvents"),
     import("@main/services/downloadManager"),
+    import("@main/services/headlessPlayStats"),
     import("@main/server"),
     import("@main/store"),
     import("@main/plugins/registry"),
@@ -66,6 +68,7 @@ const start = async (): Promise<void> => {
     store.flushImmediate();
     songCache.shutdown();
     downloadManager.shutdown();
+    corePlayStats.shutdownCorePlayStats();
     await pluginRegistry.shutdown();
     await server.stopServer();
     database.closeDatabase();

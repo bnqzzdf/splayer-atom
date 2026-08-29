@@ -1,6 +1,5 @@
 import { ipcMain } from "electron";
 import {
-  insertPlayEvent,
   insertFavoriteEvent,
   getStatsSummary,
   getTopTracks,
@@ -10,13 +9,10 @@ import {
   getTopArtists,
 } from "@main/database/playStats";
 import { getLibraryStats } from "@main/database";
-import type { PlayEventInput, FavoriteEventInput } from "@shared/types/stats";
+import type { FavoriteEventInput } from "@shared/types/stats";
 
 /** 播放统计 IPC */
 export const registerStatsIpc = (): void => {
-  ipcMain.on("stats:recordPlay", (_event, payload: PlayEventInput) => {
-    insertPlayEvent(payload);
-  });
   ipcMain.on("stats:recordFavorite", (_event, payload: FavoriteEventInput) => {
     insertFavoriteEvent(payload);
   });

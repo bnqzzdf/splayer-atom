@@ -9,7 +9,7 @@ import type { LyricFormat } from "@shared/types/lyrics";
 import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player";
 import { cancelPendingReinit } from "@main/services/device";
 import { getPlayer } from "@main/services/engine";
-import { beginHeadlessPlayStats } from "@main/services/headlessPlayStats";
+import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import {
   clearActiveCueRange,
@@ -209,7 +209,7 @@ export const loadPlayerSource = async (
       },
     };
     if (authoritative) {
-      beginHeadlessPlayStats(
+      beginCorePlayStats(
         {
           ...authoritative,
           duration: authoritative.duration || durationMs,

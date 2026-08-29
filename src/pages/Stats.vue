@@ -10,6 +10,7 @@ import type {
   TopTrack,
 } from "@shared/types/stats";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
+import { statsClient } from "@/core/statsClient";
 
 const { isFloatingBar } = useFloatingPlayerBar();
 
@@ -24,12 +25,12 @@ const loading = ref(true);
 onMounted(async () => {
   try {
     const [library, history, hourlyHistory, songs, albums, artists] = await Promise.all([
-      window.api.stats.getLibraryStats(),
-      window.api.stats.getPlayHistoryDaily(90),
-      window.api.stats.getPlayHistoryHourly(),
-      window.api.stats.getTopTracks(10),
-      window.api.stats.getTopAlbums(10),
-      window.api.stats.getTopArtists(10),
+      statsClient.getLibraryStats(),
+      statsClient.getPlayHistoryDaily(90),
+      statsClient.getPlayHistoryHourly(),
+      statsClient.getTopTracks(10),
+      statsClient.getTopAlbums(10),
+      statsClient.getTopArtists(10),
     ]);
     libraryStats.value = library;
     daily.value = history;

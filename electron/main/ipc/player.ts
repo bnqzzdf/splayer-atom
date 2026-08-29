@@ -11,7 +11,7 @@ import * as lastfm from "@main/services/lastfm";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import { getPlayer, resetPlayer, onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
-import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
+import { onCorePlayerEnded, onCorePlayerState } from "@main/services/headlessPlayStats";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import { playerControl } from "@main/services/playerControl";
 import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
@@ -60,7 +60,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
     switch (event.type) {
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
-        onHeadlessPlayerState(state);
+        onCorePlayerState(state);
         // 更新缩略图工具栏和托盘菜单
         getThumbar()?.updateThumbar(state === "playing");
         setTrayPlayState(state === "playing" ? "playing" : "paused");
@@ -95,7 +95,7 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "ended": {
-        onHeadlessPlayerEnded();
+        onCorePlayerEnded();
         const consumedBySession = playbackSession.onNativeEnded();
         if (!consumedBySession) sendToMain("player:event", { type: "ended" });
         wsBroadcast({ type: "ended", data: { consumedBySession } });

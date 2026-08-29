@@ -1,4 +1,5 @@
 import type { TopTrack } from "@shared/types/stats";
+import { statsClient } from "@/core/statsClient";
 
 /** 区域展示曲目数上限 */
 const MAX_ITEMS = 6;
@@ -37,7 +38,7 @@ export const useContinueListening = () => {
   /** 拉取最常播放曲目 */
   const load = async (): Promise<void> => {
     try {
-      const top = await window.api.stats.getTopTracks(MAX_ITEMS);
+      const top = await statsClient.getTopTracks(MAX_ITEMS);
       items.value = top;
       isRepeat.value = (top[0]?.playCount ?? 0) >= REPEAT_TITLE_THRESHOLD;
     } catch (error) {

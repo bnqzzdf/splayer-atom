@@ -1,6 +1,7 @@
 import type { PlayStatsSummary } from "@shared/types/stats";
 import { useUserStore } from "@/stores/user";
 import { useHistoryStore } from "@/stores/history";
+import { statsClient } from "@/core/statsClient";
 
 /** 单个统计卡片 */
 export interface HeaderStat {
@@ -132,7 +133,7 @@ export const useHomeHeader = () => {
   const load = async (): Promise<void> => {
     await history.load();
     try {
-      stats.value = await window.api.stats.getStatsSummary();
+      stats.value = await statsClient.getStatsSummary();
     } catch (error) {
       console.warn("[home] getStatsSummary failed:", error);
     }

@@ -4,6 +4,7 @@ import { useUserStore } from "@/stores/user";
 import { useSettingsStore } from "@/stores/settings";
 import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
+import { statsClient } from "@/core/statsClient";
 
 /**
  * 记一次收藏变更
@@ -11,7 +12,7 @@ import i18n from "@/i18n";
  * @param liked 是否已收藏
  */
 const recordFavoriteChange = (track: Track, liked: boolean): void => {
-  window.api.stats.recordFavorite({ track, action: liked ? "add" : "remove" });
+  statsClient.recordFavorite({ track, action: liked ? "add" : "remove" });
 };
 
 /**

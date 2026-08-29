@@ -18,6 +18,7 @@ import { initGlobalHotkey } from "@main/services/globalHotkey";
 import { initDatabase, closeDatabase } from "@main/database";
 import { init as initSongCache, shutdown as shutdownSongCache } from "@main/services/songCache";
 import { init as initDownload, shutdown as shutdownDownload } from "@main/services/downloadManager";
+import { shutdownCorePlayStats } from "@main/services/headlessPlayStats";
 import { pluginRegistry } from "@main/plugins/registry";
 import { isHeadless } from "./mode";
 import {
@@ -179,6 +180,7 @@ export const initApp = (): void => {
     store.flushImmediate();
     shutdownSongCache();
     shutdownDownload();
+    shutdownCorePlayStats();
     shutdownMedia();
     closeDatabase();
     void stopServer();

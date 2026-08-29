@@ -6,7 +6,6 @@ import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
-import type { StatsApi } from "@shared/types/stats";
 import type {
   AudioDevice,
   IpcResponse,
@@ -29,6 +28,7 @@ import { providerClient } from "@/core/providerClient";
 import { libraryClient } from "@/core/libraryClient";
 import { downloadClient } from "@/core/downloadClient";
 import { playlistClient } from "@/core/playlistClient";
+import { statsClient } from "@/core/statsClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -429,39 +429,6 @@ const lyricsApi: Partial<LyricsApi> = {
     }),
 };
 
-const statsApi: StatsApi = {
-  // Headless 播放统计由唯一主进程会话写入，避免多浏览器重复计数。
-  recordPlay: () => {},
-  recordFavorite: (event) => {
-    void request("/stats/favorite", {
-      method: "POST",
-      body: JSON.stringify({ ...event, track: toServerTrack(event.track) }),
-    });
-  },
-  getStatsSummary: () => request("/stats/summary"),
-  getTopTracks: async (limit) =>
-    (
-      await request<Awaited<ReturnType<StatsApi["getTopTracks"]>>>(
-        `/stats/top-tracks?limit=${limit}`,
-      )
-    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
-  getLibraryStats: () => request("/stats/library"),
-  getPlayHistoryDaily: (days) => request(`/stats/daily?days=${days}`),
-  getPlayHistoryHourly: () => request("/stats/hourly"),
-  getTopAlbums: async (limit) =>
-    (
-      await request<Awaited<ReturnType<StatsApi["getTopAlbums"]>>>(
-        `/stats/top-albums?limit=${limit}`,
-      )
-    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
-  getTopArtists: async (limit) =>
-    (
-      await request<Awaited<ReturnType<StatsApi["getTopArtists"]>>>(
-        `/stats/top-artists?limit=${limit}`,
-      )
-    ).map((item) => ({ ...item, track: mapTrack(item.track) })),
-};
-
 /** 安装远程浏览器使用的最小 Electron API 兼容面。 */
 export const installWebApi = async (): Promise<void> => {
   const info = await request<CoreInfo>("/info");
@@ -478,7 +445,7 @@ export const installWebApi = async (): Promise<void> => {
     playlist: playlistClient,
     nowPlaying: nowPlayingApi,
     lyrics: lyricsApi,
-    stats: statsApi,
+    stats: statsClient,
     system: {
       installType: "portable" as const,
       platform: info.platform,

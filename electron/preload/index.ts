@@ -14,7 +14,7 @@ import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { LoadOptions, TrackSource } from "@shared/types/player";
 import type { StreamingServerInput } from "@shared/types/streaming";
 import type { RecognitionConfig, RecognitionEvent } from "@shared/types/recognition";
-import type { PlayEventInput, FavoriteEventInput } from "@shared/types/stats";
+import type { FavoriteEventInput } from "@shared/types/stats";
 import type { TagEditRequest } from "@shared/types/tagEditor";
 import type { UpdateEvent } from "@shared/types/update";
 import type { CloudUploadProgress } from "@shared/types/cloudUpload";
@@ -774,8 +774,6 @@ const api = {
     onEvent: (callback: (event: UpdateEvent) => void) => subscribe("update:event", callback),
   },
   stats: {
-    // 记录一次播放
-    recordPlay: (event: PlayEventInput) => ipcRenderer.send("stats:recordPlay", event),
     // 记录一次收藏变更
     recordFavorite: (event: FavoriteEventInput) => ipcRenderer.send("stats:recordFavorite", event),
     // 取播放统计汇总

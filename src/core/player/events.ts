@@ -12,7 +12,6 @@ import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
 import { handleError } from "@/utils/errors";
-import * as playStats from "./stats";
 import {
   hasReachedSeekTarget,
   insertManyToQueue,
@@ -44,8 +43,6 @@ const finishCurrentTrack = async (): Promise<void> => {
     const stopByTimer = autoClose.onTrackEnded();
     // FM 模式跳过
     const repeatOne = status.repeatMode === "one" && !status.fmMode;
-    // 结算播放统计
-    playStats.onTrackEnded(repeatOne && !stopByTimer);
     // 定时关闭"等本曲结束"模式
     if (stopByTimer) return;
     // 单曲循环：seek 回开头继续播放
@@ -146,7 +143,6 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       // renderer 不再持有 Direct generation/source 第二状态机，只按当前队列语义安全恢复。
       const stopByTimer = autoClose.onTrackEnded();
       const repeatOne = status.repeatMode === "one" && !status.fmMode;
-      playStats.onTrackEnded(repeatOne && !stopByTimer);
       await stop();
       if (stopByTimer) break;
       if (repeatOne) {

@@ -104,8 +104,6 @@ export interface TopArtist {
 
 /** preload 暴露的统计 API */
 export interface StatsApi {
-  /** 记录一次播放 */
-  recordPlay: (event: PlayEventInput) => void;
   /** 记录一次收藏变更 */
   recordFavorite: (event: FavoriteEventInput) => void;
   /** 取播放统计汇总 */

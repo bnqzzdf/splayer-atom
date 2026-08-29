@@ -4,7 +4,7 @@ import { onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
-import { onHeadlessPlayerEnded, onHeadlessPlayerState } from "@main/services/headlessPlayStats";
+import { onCorePlayerEnded, onCorePlayerState } from "@main/services/headlessPlayStats";
 import { requestReinit } from "@main/services/device";
 import { wsBroadcast } from "@main/server/broadcast";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
@@ -21,7 +21,7 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
     switch (event.type) {
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
-        onHeadlessPlayerState(state);
+        onCorePlayerState(state);
         nowPlaying.onPlayStateChange(state);
         neteaseScrobble.onState(state === "playing");
         publishCoreControlEvent({
@@ -38,7 +38,7 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         break;
       }
       case "ended": {
-        onHeadlessPlayerEnded();
+        onCorePlayerEnded();
         const consumedBySession = playbackSession.onNativeEnded();
         wsBroadcast({ type: "ended", data: { consumedBySession } });
         neteaseScrobble.onEnded();
