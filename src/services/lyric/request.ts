@@ -2,6 +2,7 @@ import type { Track } from "@shared/types/player";
 import type { LyricMatchResult } from "@shared/types/lyrics";
 import type { Platform } from "@shared/types/platform";
 import { lyricsClient } from "@/core/lyricsClient";
+import { streamingClient } from "@/core/streamingClient";
 
 /**
  * 向指定平台请求歌词
@@ -30,7 +31,7 @@ export const requestPlatformLyric = async (
 export const requestStreamingLyric = async (track: Track): Promise<string | null> => {
   if (track.source !== "streaming" || !track.serverId || !track.originalId) return null;
   try {
-    return await window.api.streaming.getLyrics(track.serverId, track.originalId, {
+    return await streamingClient.getLyrics(track.serverId, track.originalId, {
       artist: track.artists[0]?.name,
       title: track.title,
     });

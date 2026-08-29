@@ -5,7 +5,7 @@ import { upsertAlbums, deleteStaleAlbums } from "@main/database/streaming/albums
 import { upsertArtists, deleteStaleArtists } from "@main/database/streaming/artists";
 import { deleteStalePlaylists, upsertPlaylists } from "@main/database/streaming/playlists";
 import { streamingLog } from "@main/utils/logger";
-import { sendToMain } from "@main/utils/broadcast";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import type { StreamingAdapter } from "./adapters/types";
 import { invalidateStreamingSession, resolveStreamingAdapter } from "./adapters/resolve";
 const FIRST_SONG_BATCH_SIZE = 100;
@@ -20,7 +20,7 @@ const pendingServers = new Map<string, StreamingRuntimeConfig>();
  * @param serverId - 服务器 ID
  */
 const notifyLibraryUpdated = (serverId: string): void => {
-  sendToMain("streaming:libraryUpdated", serverId);
+  publishCoreControlEvent({ type: "streamingLibraryUpdated", data: { serverId } });
 };
 
 /**

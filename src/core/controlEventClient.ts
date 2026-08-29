@@ -55,6 +55,7 @@ export const isCoreControlEvent = (event: ControlEvent): event is CoreControlEve
       event.type === "libraryScanProgress" ||
       event.type === "downloadState" ||
       event.type === "downloadProgress" ||
+      event.type === "streamingLibraryUpdated" ||
       event.type === "lyricOffset"));
 
 const projectCoreEvent = (event: CoreControlEvent): CoreControlEvent => {

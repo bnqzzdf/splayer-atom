@@ -31,6 +31,7 @@ import { playlistClient } from "@/core/playlistClient";
 import { statsClient } from "@/core/statsClient";
 import { cacheClient } from "@/core/cacheClient";
 import { nowPlayingClient } from "@/core/nowPlayingClient";
+import { streamingClient } from "@/core/streamingClient";
 import { commentsClient } from "@/core/commentsClient";
 import { lyricsClient } from "@/core/lyricsClient";
 
@@ -528,6 +529,12 @@ export const installWebApi = async (): Promise<void> => {
       },
     },
     comments: commentsClient,
+    streaming: {
+      ...streamingClient,
+      getStreamUrl: async () => {
+        throw new Error("Core owns final streaming playback URL resolution");
+      },
+    },
     download: {
       ...downloadClient,
       pickDir: async () => {

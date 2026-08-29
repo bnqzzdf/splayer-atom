@@ -7,6 +7,7 @@ import type {
   StreamingServerInput,
 } from "@shared/types/streaming";
 import * as session from "@/services/streaming/session";
+import { streamingClient } from "@/core/streamingClient";
 import { removeServerTracks } from "@/stores/queue";
 
 export const useStreamingStore = defineStore("streaming", () => {
@@ -53,7 +54,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    * @returns 不包含凭据的服务器视图
    */
   const addServer = async (input: StreamingServerInput): Promise<StreamingServerConfig> => {
-    const server = await window.api.streaming.addServer(toRaw(input));
+    const server = await streamingClient.addServer(toRaw(input));
     servers.value = [...servers.value, server];
     return server;
   };
@@ -68,7 +69,7 @@ export const useStreamingStore = defineStore("streaming", () => {
     id: string,
     input: StreamingServerInput,
   ): Promise<StreamingServerConfig> => {
-    const updated = await window.api.streaming.updateServer(id, toRaw(input));
+    const updated = await streamingClient.updateServer(id, toRaw(input));
     const idx = servers.value.findIndex((server) => server.id === id);
     if (idx < 0) return updated;
     const list = [...servers.value];
@@ -83,7 +84,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    * @returns 删除完成
    */
   const removeServer = async (id: string): Promise<void> => {
-    await window.api.streaming.removeServer(id);
+    await streamingClient.removeServer(id);
     removeServerTracks(id);
     servers.value = servers.value.filter((s) => s.id !== id);
     if (activeServerId.value === id) {
@@ -103,7 +104,7 @@ export const useStreamingStore = defineStore("streaming", () => {
     input: StreamingServerInput,
     serverId?: string,
   ): Promise<StreamingPingResult> => {
-    return window.api.streaming.testConnection(toRaw(input), serverId);
+    return streamingClient.testConnection(toRaw(input), serverId);
   };
 
   /** runConnect 返回值；ok=false 时把具体错误透传给调用方 */
@@ -123,7 +124,7 @@ export const useStreamingStore = defineStore("streaming", () => {
       if (isActive()) connectionStatus.value = next;
     };
     try {
-      const result = await window.api.streaming.connect(id);
+      const result = await streamingClient.connect(id);
       if (result.ok) {
         const index = servers.value.findIndex((server) => server.id === id);
         if (index >= 0) {
@@ -163,7 +164,7 @@ export const useStreamingStore = defineStore("streaming", () => {
       activeServerId.value = id;
       connectionStatus.value = { connected: false };
       clearMemoryLists();
-      await window.api.streaming.setActiveServer(id);
+      await streamingClient.setActiveServer(id);
     }
     if (!id) return;
     await connectToServer(id);
@@ -172,7 +173,7 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 断开当前激活服务器 */
   const disconnect = (): void => {
     const id = activeServerId.value;
-    if (id) void window.api.streaming.disconnect(id);
+    if (id) void streamingClient.disconnect(id);
     connectionStatus.value = { connected: false };
   };
 
@@ -183,7 +184,7 @@ export const useStreamingStore = defineStore("streaming", () => {
   const loadLibrarySnapshot = async (serverId: string): Promise<void> => {
     const seq = ++snapshotFetchSeq;
     try {
-      const snapshot = await window.api.streaming.getSnapshot(serverId);
+      const snapshot = await streamingClient.getSnapshot(serverId);
       if (seq !== snapshotFetchSeq || activeServerId.value !== serverId) return;
       songs.value = snapshot.songs;
       albums.value = snapshot.albums;
@@ -204,7 +205,7 @@ export const useStreamingStore = defineStore("streaming", () => {
     loading.value = true;
     try {
       await loadLibrarySnapshot(serverId);
-      const started = await window.api.streaming.sync(serverId, force);
+      const started = await streamingClient.sync(serverId, force);
       if (!started && activeServerId.value === serverId) loading.value = false;
     } catch (err) {
       if (activeServerId.value === serverId) loading.value = false;
@@ -219,7 +220,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const fetchAlbumSongs = (albumId: string): Promise<Track[]> =>
     activeServerId.value
-      ? window.api.streaming.getAlbumSongs(activeServerId.value, albumId)
+      ? streamingClient.getAlbumSongs(activeServerId.value, albumId)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
   /**
@@ -229,7 +230,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const fetchPlaylistSongs = (playlistId: string): Promise<Track[]> =>
     activeServerId.value
-      ? window.api.streaming.getPlaylistSongs(activeServerId.value, playlistId)
+      ? streamingClient.getPlaylistSongs(activeServerId.value, playlistId)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
   /**
@@ -239,7 +240,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const fetchArtistAlbums = (artistId: string): Promise<Album[]> =>
     activeServerId.value
-      ? window.api.streaming.getArtistAlbums(activeServerId.value, artistId)
+      ? streamingClient.getArtistAlbums(activeServerId.value, artistId)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
   /**
@@ -249,7 +250,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const fetchArtistSongs = (artistId: string): Promise<Track[]> =>
     activeServerId.value
-      ? window.api.streaming.getArtistSongs(activeServerId.value, artistId)
+      ? streamingClient.getArtistSongs(activeServerId.value, artistId)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
   /**
@@ -259,7 +260,7 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const search = (query: string): Promise<StreamingSearchResult> =>
     activeServerId.value
-      ? window.api.streaming.search(activeServerId.value, query)
+      ? streamingClient.search(activeServerId.value, query)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
   /**
@@ -286,12 +287,12 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 初始化服务器配置和媒体库更新订阅 */
   const init = async (): Promise<void> => {
     if (initialized) return;
-    window.api.streaming.onLibraryUpdated(async (serverId) => {
+    streamingClient.onLibraryUpdated(async (serverId) => {
       if (serverId !== activeServerId.value) return;
       await loadLibrarySnapshot(serverId);
       if (serverId === activeServerId.value) loading.value = false;
     });
-    const result = await window.api.streaming.loadServers();
+    const result = await streamingClient.loadServers();
     servers.value = result.servers;
     activeServerId.value = result.activeServerId;
     if (activeServerId.value && !servers.value.find((s) => s.id === activeServerId.value)) {

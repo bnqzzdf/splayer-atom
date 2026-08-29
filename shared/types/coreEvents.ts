@@ -18,6 +18,7 @@ export type CoreControlEvent =
   | { type: "libraryScanProgress"; data: ScanProgress }
   | { type: "downloadState"; data: DownloadTask }
   | { type: "downloadProgress"; data: DownloadProgress }
+  | { type: "streamingLibraryUpdated"; data: { serverId: string } }
   | { type: "lyricOffset"; data: NowPlayingLyricOffsetSync }
   | CorePlayerProjectionEvent;
 

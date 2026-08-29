@@ -6,6 +6,7 @@ import type { MusicCommentQuery } from "@shared/types/comment";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type { DownloadRequest } from "@shared/types/download";
 import type { Platform } from "@shared/types/platform";
+import type { StreamingServerInput } from "@shared/types/streaming";
 import type {
   LoadOptions,
   PlaybackQueueItem,
@@ -36,6 +37,7 @@ import {
 } from "@main/services/providerApi";
 import { getCommentSources, getMusicComments } from "@main/services/comments";
 import * as nowPlaying from "@main/services/nowPlaying";
+import { streamingControl } from "@main/services/streaming/control";
 import {
   fetchLyricTTMLOverlay,
   matchCoreLocalTTML,
@@ -543,6 +545,142 @@ export const buildHeadlessRoutes = (): Hono => {
     const body = (await c.req.json().catch(() => null)) as { track?: Track } | null;
     if (!body?.track) return c.json({ ok: false, error: "track_required" }, 400);
     return c.json(await matchCoreLocalTTML(body.track));
+  });
+
+  api.get("/streaming/config", (c) => c.json(streamingControl.loadServers()));
+  api.post("/streaming/server", async (c) => {
+    const input = (await c.req.json().catch(() => null)) as StreamingServerInput | null;
+    if (!input) return c.json({ error: "server_input_required" }, 400);
+    try {
+      return c.json(streamingControl.addServer(input));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.patch("/streaming/server/:serverId", async (c) => {
+    const input = (await c.req.json().catch(() => null)) as StreamingServerInput | null;
+    if (!input) return c.json({ error: "server_input_required" }, 400);
+    try {
+      return c.json(streamingControl.updateServer(c.req.param("serverId"), input));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.delete("/streaming/server/:serverId", (c) => {
+    try {
+      streamingControl.removeServer(c.req.param("serverId"));
+      return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/streaming/active", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { serverId?: string | null } | null;
+    try {
+      streamingControl.setActiveServer(body?.serverId ?? null);
+      return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/streaming/test", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      input?: StreamingServerInput;
+      serverId?: string;
+    } | null;
+    if (!body?.input) return c.json({ error: "server_input_required" }, 400);
+    return c.json(await streamingControl.testConnection(body.input, body.serverId));
+  });
+  api.post("/streaming/connect", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { serverId?: string } | null;
+    if (!body?.serverId) return c.json({ error: "server_id_required" }, 400);
+    return c.json(await streamingControl.connect(body.serverId));
+  });
+  api.post("/streaming/disconnect", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { serverId?: string } | null;
+    if (!body?.serverId) return c.json({ error: "server_id_required" }, 400);
+    streamingControl.disconnect(body.serverId);
+    return c.json({ ok: true });
+  });
+  api.get("/streaming/snapshot", (c) => {
+    const serverId = c.req.query("serverId");
+    if (!serverId) return c.json({ error: "server_id_required" }, 400);
+    try {
+      return c.json(streamingControl.getSnapshot(serverId));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/streaming/sync", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      serverId?: string;
+      force?: boolean;
+    } | null;
+    if (!body?.serverId) return c.json({ error: "server_id_required" }, 400);
+    try {
+      return c.json({ started: streamingControl.sync(body.serverId, body.force === true) });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.get("/streaming/search", (c) => {
+    const serverId = c.req.query("serverId");
+    if (!serverId) return c.json({ error: "server_id_required" }, 400);
+    return c.json(streamingControl.search(serverId, c.req.query("query") ?? ""));
+  });
+  api.get("/streaming/album-songs", async (c) => {
+    const serverId = c.req.query("serverId");
+    const albumId = c.req.query("albumId");
+    if (!serverId || !albumId) return c.json({ error: "server_and_album_required" }, 400);
+    return c.json(await streamingControl.getAlbumSongs(serverId, albumId));
+  });
+  api.get("/streaming/playlist-songs", async (c) => {
+    const serverId = c.req.query("serverId");
+    const playlistId = c.req.query("playlistId");
+    if (!serverId || !playlistId) return c.json({ error: "server_and_playlist_required" }, 400);
+    return c.json(await streamingControl.getPlaylistSongs(serverId, playlistId));
+  });
+  api.get("/streaming/artist-albums", async (c) => {
+    const serverId = c.req.query("serverId");
+    const artistId = c.req.query("artistId");
+    if (!serverId || !artistId) return c.json({ error: "server_and_artist_required" }, 400);
+    return c.json(await streamingControl.getArtistAlbums(serverId, artistId));
+  });
+  api.get("/streaming/artist-songs", async (c) => {
+    const serverId = c.req.query("serverId");
+    const artistId = c.req.query("artistId");
+    if (!serverId || !artistId) return c.json({ error: "server_and_artist_required" }, 400);
+    return c.json(await streamingControl.getArtistSongs(serverId, artistId));
+  });
+  api.post("/streaming/lyrics", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      serverId?: string;
+      trackId?: string;
+      hint?: { artist?: string; title?: string };
+    } | null;
+    if (!body?.serverId || !body.trackId) {
+      return c.json({ error: "server_and_track_required" }, 400);
+    }
+    return c.json({
+      lyric: await streamingControl.getLyrics(body.serverId, body.trackId, body.hint),
+    });
+  });
+  api.get("/streaming/cover", async (c) => {
+    const serverId = c.req.query("serverId");
+    const coverId = c.req.query("coverId");
+    if (!serverId || !coverId) return c.body(null, 400);
+    const bytes = await streamingControl.getCover(
+      serverId,
+      coverId,
+      Number(c.req.query("size")) || 300,
+    );
+    if (!bytes) return c.body(null, 204);
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Cache-Control": "private, max-age=300",
+        "Content-Type": "application/octet-stream",
+      },
+    });
   });
 
   api.post("/play", async (c) => {
