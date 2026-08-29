@@ -95,8 +95,3 @@ export interface StreamingLibrarySnapshot {
   /** 全量歌单列表 */
   playlists: Playlist[];
 }
-
-/** Renderer 仅暂留最终 playable URL 的 legacy compatibility seam。 */
-export interface StreamingApi {
-  getStreamUrl: (serverId: string, trackId: string, playSessionId?: string) => Promise<string>;
-}

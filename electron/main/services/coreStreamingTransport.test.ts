@@ -15,6 +15,9 @@ const eventTypes = read("shared/types/coreEvents.ts");
 const storeSource = read("src/stores/streaming.ts");
 const lyricRequestSource = read("src/services/lyric/request.ts");
 const webApiSource = read("src/web/api.ts");
+const audioSource = read("src/services/audioSource.ts");
+const downloadSource = read("src/services/download/source.ts");
+const playbackResolver = read("electron/main/services/playbackSourceResolver.ts");
 
 const migratedIpcMethods = [
   "loadServers",
@@ -71,15 +74,19 @@ test("Desktop and Web Streaming Controls share Core Protocol while playable URLs
   );
   assert.match(storeSource, /from "@\/core\/streamingClient"/);
   assert.match(lyricRequestSource, /streamingClient\.getLyrics/);
-  assert.match(webApiSource, /streaming:\s*\{\s*\.\.\.streamingClient/s);
+  assert.doesNotMatch(webApiSource, /streaming:\s*\{/);
 
   for (const method of migratedIpcMethods) {
     assert.doesNotMatch(ipcSource, new RegExp(`streaming:${method}`));
     assert.doesNotMatch(preloadSource, new RegExp(`streaming:${method}`));
   }
-  assert.match(ipcSource, /streaming:getStreamUrl/);
-  assert.match(preloadSource, /streaming:getStreamUrl/);
-  assert.doesNotMatch(sharedTypes, /loadServers:|onLibraryUpdated:|getLyrics:/);
+  assert.doesNotMatch(ipcSource, /ipcMain|streaming:getStreamUrl/);
+  assert.doesNotMatch(preloadSource, /streaming:getStreamUrl|streaming:\s*\{/);
+  assert.doesNotMatch(sharedTypes, /interface StreamingApi/);
+  assert.doesNotMatch(storeSource, /window\.api\.streaming|getStreamUrl/);
+  assert.doesNotMatch(audioSource, /useStreamingStore|store\.getStreamUrl|window\.api\.streaming/);
+  assert.doesNotMatch(downloadSource, /useStreamingStore|getStreamUrl|window\.api\.streaming/);
+  assert.match(playbackResolver, /adapter\.getStreamUrl/);
 });
 
 test("Streaming library refresh uses the shared Core event envelope", () => {

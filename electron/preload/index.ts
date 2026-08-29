@@ -596,11 +596,6 @@ const api = {
         ipcRenderer.invoke("cache:song:cancel", cacheKey),
     },
   },
-  streaming: {
-    /** legacy renderer compatibility；正式播放源解析由 Core PlaybackSourceResolver 持有 */
-    getStreamUrl: (serverId: string, trackId: string, playSessionId?: string) =>
-      ipcRenderer.invoke("streaming:getStreamUrl", serverId, trackId, playSessionId),
-  },
   recognition: {
     /** 当前平台是否支持听歌识曲 */
     isSupported: () => ipcRenderer.invoke("recognition:isSupported"),

@@ -2,7 +2,6 @@ import type { Track, TrackSource } from "@shared/types/player";
 import type { Platform } from "@shared/types/platform";
 import { buildPluginPlaybackMusicInfo, pluginPlaybackSource } from "@shared/utils/pluginPlayback";
 import type { QualityLevel } from "@/utils/quality";
-import { useStreamingStore } from "@/stores/streaming";
 import { useSettingsStore } from "@/stores/settings";
 import { usePluginsStore } from "@/stores/plugins";
 import { useUserStore } from "@/stores/user";
@@ -23,8 +22,6 @@ export interface ResolveTrackSourceOptions {
   skipOfficialOnline?: boolean;
   /** 是否静默解析 */
   silent?: boolean;
-  /** 流媒体 PlaySessionId，用于预载时隔离当前播放会话 */
-  streamingPlaySessionId?: string;
 }
 
 /**
@@ -253,39 +250,10 @@ export const resolveTrackSource = async (
     const cached = await window.api.cache.song.lookup(cacheKey!);
     if (cached) return { source: cached, fromCache: true, provider: "cache" };
   }
-  // 流媒体
+  // Streaming 最终播放地址只允许由 Core PlaybackSourceResolver 解析。
   if (track.source === "streaming") {
-    try {
-      const store = useStreamingStore();
-      const streamUrl = await store.getStreamUrl(
-        track,
-        options.streamingPlaySessionId
-          ? { playSessionId: options.streamingPlaySessionId }
-          : undefined,
-      );
-      const result: ResolvedTrackSource = {
-        source: streamUrl,
-        fromCache: false,
-        provider: "streaming",
-      };
-      if (cacheEnabled && settings.system.cache.songCache.cacheStreaming) {
-        // 缓存下载用独立 PlaySessionId
-        result.cacheRequest = async () => {
-          try {
-            const cacheUrl = await store.getStreamUrl(track, {
-              playSessionId: crypto.randomUUID(),
-            });
-            void window.api.cache.song.fetch(cacheKey, "streaming", cacheUrl);
-          } catch (err) {
-            console.warn("[cache] streaming getStreamUrl failed", err);
-          }
-        };
-      }
-      return result;
-    } catch (err) {
-      reportLoadError(err instanceof Error ? err.message : String(err), options.silent);
-      return null;
-    }
+    reportLoadError("流媒体播放地址由 Core 解析", options.silent);
+    return null;
   }
   // 在线源
   if (isOnlinePlatform(track.source)) {

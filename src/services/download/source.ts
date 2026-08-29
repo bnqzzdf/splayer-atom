@@ -1,7 +1,6 @@
 import type { Track } from "@shared/types/player";
 import type { QualityLevel } from "@/utils/quality";
 import { isPlatform } from "@shared/types/platform";
-import { useStreamingStore } from "@/stores/streaming";
 import { resolveByPlugin } from "@/services/audioSource";
 import { resolveNeteaseDownloadUrl } from "@/apis/song/netease";
 
@@ -25,17 +24,8 @@ export const resolveDownloadSource = async (
   level: QualityLevel,
   usePlaybackForDownload: boolean,
 ): Promise<DownloadSource | null> => {
-  // 流媒体
-  if (track.source === "streaming") {
-    try {
-      const url = await useStreamingStore().getStreamUrl(track, {
-        playSessionId: crypto.randomUUID(),
-      });
-      return { url };
-    } catch {
-      return null;
-    }
-  }
+  // Streaming 下载源由 Core Download manager 直接解析，不回退到 renderer URL。
+  if (track.source === "streaming") return null;
   // 官方接口
   if (track.source === "netease") {
     try {

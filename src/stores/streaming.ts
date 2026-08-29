@@ -6,7 +6,6 @@ import type {
   StreamingServerConfig,
   StreamingServerInput,
 } from "@shared/types/streaming";
-import * as session from "@/services/streaming/session";
 import { streamingClient } from "@/core/streamingClient";
 import { removeServerTracks } from "@/stores/queue";
 
@@ -263,27 +262,6 @@ export const useStreamingStore = defineStore("streaming", () => {
       ? streamingClient.search(activeServerId.value, query)
       : Promise.reject(new Error("没有激活的流媒体服务器"));
 
-  /**
-   * 取流播放 URL
-   * 非激活服务器静默重连
-   * @param track - source="streaming" 的 Track（必须带 serverId/originalId）
-   * @param opts.playSessionId - 覆盖默认 PlaySessionId；用于背景缓存下载与播放流并发时区分会话
-   * @returns 当前会话可用的播放地址
-   */
-  const getStreamUrl = async (track: Track, opts?: { playSessionId?: string }): Promise<string> => {
-    if (track.source !== "streaming" || !track.serverId || !track.originalId) {
-      throw new Error("非流媒体 Track");
-    }
-    const cfg = servers.value.find((server) => server.id === track.serverId);
-    if (!cfg) throw new Error("找不到服务器配置");
-    if (cfg.id === activeServerId.value && !connectionStatus.value.connected) {
-      const result = await runConnect(cfg.id, () => cfg.id === activeServerId.value);
-      if (!result.ok) throw new Error(result.error);
-    }
-    const sessionId = opts?.playSessionId ?? session.sessionIdForTrack(track.id);
-    return window.api.streaming.getStreamUrl(cfg.id, track.originalId!, sessionId);
-  };
-
   /** 初始化服务器配置和媒体库更新订阅 */
   const init = async (): Promise<void> => {
     if (initialized) return;
@@ -328,6 +306,5 @@ export const useStreamingStore = defineStore("streaming", () => {
     fetchArtistAlbums,
     fetchArtistSongs,
     search,
-    getStreamUrl,
   };
 });

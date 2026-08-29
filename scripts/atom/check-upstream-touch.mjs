@@ -47,10 +47,11 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 另有 2 个 NowPlaying authority seam（shared update payload 与 media store），移除 Control 覆盖当前 Track 的写权，仅暂留 lyric/source enrichment；
 // Comments 弹窗 1 个调用面改走 shared Core client，复用既有 comments service/routes；
 // Lyrics 再用 2 个 seam（薄 IPC 与 renderer lyric request）复用 runtime-neutral matching service/Core routes，目录 picker 保持 Host-only；
-// Streaming 再用 4 个 seam（薄 IPC、sync event、shared preload contract、唯一 renderer store）把管理/query/lyrics/event 统一到 Core Protocol，最终 playable URL 仅暂留 legacy compatibility。
+// Streaming 再用 4 个 seam（薄 IPC、sync event、shared preload contract、唯一 renderer store）把管理/query/lyrics/event 统一到 Core Protocol；
+// 随后再用 2 个 seam（手工 preload 声明与旧 renderer download-source）端到端删除 `streaming:getStreamUrl`，最终 playable URL 只留在 Core resolver/adapter。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 103);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 105);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);
