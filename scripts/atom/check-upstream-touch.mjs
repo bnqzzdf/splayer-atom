@@ -44,10 +44,11 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // 共用 Core native lifecycle 计时，删除 renderer 第二统计会话与 `stats:recordPlay` 写入口，查询/favorite 统一走 Core client；
 // Cache stats/clear/dir mutation 同样走 shared Core client，Desktop picker 只返回已验证的 Core 路径，song-cache 播放内部 seam 不扩成 Web API；
 // NowPlaying lyric offset 则在 Core service 事实变化点统一投影，Desktop IPC 不再重复 WS 广播，Control command/snapshot 走 shared client；
-// 另有 2 个 NowPlaying authority seam（shared update payload 与 media store），移除 Control 覆盖当前 Track 的写权，仅暂留 lyric/source enrichment。
+// 另有 2 个 NowPlaying authority seam（shared update payload 与 media store），移除 Control 覆盖当前 Track 的写权，仅暂留 lyric/source enrichment；
+// Comments 弹窗 1 个调用面改走 shared Core client，复用既有 comments service/routes。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 96);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 97);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);

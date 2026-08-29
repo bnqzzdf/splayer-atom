@@ -1,7 +1,6 @@
 import { isManagedProviderPlatform, type ApiPlatform } from "@shared/types/apis";
 import type { CoreInfo } from "@shared/types/core";
 import type { CoreControlEvent } from "@shared/types/coreEvents";
-import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
@@ -32,6 +31,7 @@ import { playlistClient } from "@/core/playlistClient";
 import { statsClient } from "@/core/statsClient";
 import { cacheClient } from "@/core/cacheClient";
 import { nowPlayingClient } from "@/core/nowPlayingClient";
+import { commentsClient } from "@/core/commentsClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -529,14 +529,7 @@ export const installWebApi = async (): Promise<void> => {
         },
       },
     },
-    comments: {
-      sources: () => request<CommentSource[]>("/comments/sources"),
-      get: (args: MusicCommentQuery) =>
-        request<MusicCommentResponse>("/comments/music", {
-          method: "POST",
-          body: JSON.stringify({ ...args, track: toServerTrack(args.track) }),
-        }).catch((error) => ({ ok: false as const, error: errorText(error) })),
-    },
+    comments: commentsClient,
     download: {
       ...downloadClient,
       pickDir: async () => {

@@ -3,6 +3,7 @@ import type { CommentSource, CommentTab, MusicCommentPage } from "@shared/types/
 import { useStatusStore } from "@/stores/status";
 import { toast } from "@/composables/useToast";
 import { formatDate } from "@/utils/time";
+import { commentsClient } from "@/core/commentsClient";
 import IconLucideThumbsUp from "~icons/lucide/thumbs-up";
 
 const { t } = useI18n();
@@ -51,7 +52,7 @@ const makeContextKey = (track: { id: string; extId?: string; source: string }, s
   `${track.source}\n${track.id}\n${track.extId ?? ""}\n${source}`;
 
 const loadSources = async (): Promise<void> => {
-  sources.value = await window.api.comments.sources();
+  sources.value = await commentsClient.sources();
   const track = status.commentsTrack;
   const preferred = sources.value.find((source) => source.platform === track?.source);
   const nextSource =
@@ -84,7 +85,7 @@ const loadPage = async (type: "hot" | "new", pageNo = 1): Promise<void> => {
   loadingCount.value += 1;
   error.value = "";
   try {
-    const result = await window.api.comments.get({
+    const result = await commentsClient.get({
       sourceId: sourceId.value,
       track: toRaw(track),
       type,
