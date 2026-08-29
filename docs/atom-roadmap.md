@@ -2,7 +2,7 @@
 
 > 状态日期：2026-08-28
 >
-> 本文是 SPlayer Atom 当前唯一正式的“待开发 / 待验收 / 发布前工作”路线图。历史过程记录见 `progress.md` 与 `docs/handoff-*`，它们不作为当前优先级与完成状态的唯一事实来源。
+> 本文是 SPlayer Atom 当前唯一正式的“待开发 / 待验收 / 发布前工作”路线图。当前执行记录见根目录的 `task_plan.md`、`findings.md` 与 `progress.md`；本地历史快照归档于 Git 忽略的 `history/`，不作为当前优先级与完成状态的事实来源。
 
 ## 1. 产品定位与长期约束
 
@@ -617,7 +617,7 @@ Atom Commit:       <commit>
 
 - [~] Core `/api/info` 已提供 shared Core Protocol v1 与 capability contract，Node/runtime 信息也已纳入；正式 Atom 产品 version/commit/SPlayer baseline identity 仍待产品身份工作补齐。
 - [~] Web Control 已在所有 domain HTTP/WS 工作前按 shared protocol range 拒绝不兼容 Core，不再用产品版本号猜 API；Desktop/remote-Control capability-driven UI 仍待后续统一 Control 工作。
-- [x] Core 已声明 `library`、`playback`、`diretta`、`netease`、`qobuz`、`tidal`、`remoteOutput` capability；其中 Diretta 从当前 native `build.json` 读取，no-SDK artifact 明确报告 false。
+- [x] Core 已声明 `library`、`playback`、`download`、`diretta`、`netease`、`qobuz`、`tidal`、`remoteOutput` capability；其中 Diretta 从当前 native `build.json` 读取，no-SDK artifact 明确报告 false。
 - [ ] 第一阶段 release channel 只保留 `beta` 与 `stable`；nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
 
 ### 更新策略
@@ -670,21 +670,21 @@ Atom Commit:       <commit>
 
 ### systemd
 
-- [~] artifact 已携带 systemd unit 示例与统一启动 wrapper，取代 transient service 作为正式部署骨架；安装辅助脚本与完整运维文档尚未完成。
+- [x] artifact 已携带 systemd unit、统一启动 wrapper、显式 ALSA-user / Diretta-root 安装 helper 与完整 Core 运维指南；helper 根据实际解压目录生成 unit，不自动 enable/start 服务。
 - [x] 同一 launcher 支持 system-runtime 的系统 Node / `ATOM_NODE_BIN`，并预留 `runtime/bin/node` 给未来 bundled-runtime；两种方式最终执行同一个 `app/index.js`，Core `/api/info` 暴露实际 Node 版本与支持范围。
-- [~] systemd unit 已明确标注 Diretta Host 的 root 运行要求与普通 ALSA Core 的非特权用户建议；正式部署文档仍待补齐。
-- [~] Core durable state 已固定到安装根 `data/`，程序 staging 不覆盖该语义；正式升级/回滚流程与自动备份仍归后续 schema migration 工作。
+- [x] systemd 安装要求显式选择普通 ALSA Core 的既有非特权服务用户或 Diretta Host root 模式；部署文档记录对应权限与诊断边界。
+- [x] Core durable state 固定到安装根 `data/`；升级流程完整保留上一安装目录并复制旧 `data/` 到新 release，回滚恢复上一 binary + pre-upgrade data，不要求旧 Core 读取已迁移 schema。
 
 ### Schema Migration / Backup / Rollback
 
 从第一版正式发行前就建立数据 schema version 与 migration 策略：
 
-- [ ] database / durable config 具有明确 schema version。
-- [ ] migration 只能由 Core 在已知旧版本 → 新版本路径上执行，并有自动化测试。
-- [ ] 升级前至少自动创建一份可恢复的关键数据库 / durable config 备份。
-- [ ] 失败 migration 不允许通过“删数据库重建”作为正式恢复路径。
-- [ ] release 文档说明升级与回滚步骤，并保留上一版本 Core binary / release 的人工回滚能力。
-- [ ] 对不可向下兼容的数据升级，必须在迁移前保留旧版本可恢复副本。
+- [x] database / durable config 具有明确 schema version，并写入 `runtime.json` 由最终 artifact gate 验证。
+- [x] migration 只能由 Core 在已知旧版本 → 新版本路径上执行；未知未来版本在 store/database 加载前拒绝，已知 SQLite migration 有事务回滚测试。
+- [x] 既有 durable state 需要 schema migration 时，Core 在迁移前自动创建可恢复数据库 / durable config snapshot；SQLite 使用 `VACUUM INTO` 保留 WAL 已提交状态，新安装不创建空备份。
+- [x] 失败 migration 不允许通过“删数据库重建”作为正式恢复路径；事务失败保持旧 schema/version，运维指南明确禁止删除数据库绕过迁移失败。
+- [x] release 运维指南说明安装、升级与回滚步骤，并要求保留上一完整 Core 安装目录直到新 release 验收通过。
+- [x] 对不可向下兼容的数据升级，升级流程先保留旧 binary + pre-upgrade `data/`，Core 迁移前再创建 schema snapshot；旧 release 回滚不读取新 schema。
 
 ### 验收标准
 
@@ -701,11 +701,11 @@ Atom Commit:       <commit>
 
 ### 固定构建环境
 
-- [ ] 建立干净 CI / container release 环境。
-- [~] reference Node 已固定为 `24.18.0`，pnpm 与 lockfile 也已有固定来源；Rust toolchain、Linux build image 与正式 Diretta SDK 版本仍待 release CI 固定。Core 的 Node 24.x compatibility range 与 reference build runtime 已分离。
-- [ ] lockfile + 干净 package store 可重复构建。
-- [ ] CI 中分别执行 Desktop / Core flavor 构建；Core runtime、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke 固定在 reference Node `24.18.0` 上执行。
-- [~] 本地 Core artifact pipeline 已串联 native release build、Core JS/Web build、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch 全量门禁仍待接入正式 release CI。
+- [~] 已新增独立 `Core System Gate`，在干净 GitHub `ubuntu-24.04` runner 上执行 Core system artifact 全链；首次远端运行需在当前 checkpoint commit/push 后确认，通过前不标记 complete。
+- [~] Core CI 已固定 reference Node `24.18.0`、Rust `1.98.0`、Ubuntu 24.04，并由 `packageManager` / frozen lockfile 固定 pnpm 依赖来源；正式 Diretta SDK 版本/provisioning 仍属于 §15 release gate。Core 的 Node 24.x compatibility range 与 reference build runtime 保持分离。
+- [~] Core CI 使用 ephemeral runner + `pnpm install --frozen-lockfile` 从干净 package store 构建；配置与本地静态门禁已完成，首次远端成功运行后再提升为 complete。
+- [~] upstream Desktop CI 保持原流程，Atom `Core System Gate` 独立构建 Core flavor；Core runtime、`audio-engine.node`、`better-sqlite3` 与真实 plugin-host `hostReady → ping → pong` smoke 全部固定在 reference Node `24.18.0` artifact pipeline，待首次远端运行确认。
+- [~] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch 全量门禁也已接入 `Core System Gate`，当前仅缺 commit/push 后的首次 clean-run 证据。
 - [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
 
 ### Core Artifact
@@ -738,7 +738,7 @@ Web Control load
 library fixture / queue / playback smoke
 ```
 
-当前自动化已对最终 `tar.gz` 执行 `extract → launcher → /api/info → /api/session → /api/library/count → Web root → SIGTERM`，并验证重复 staging 生成相同 SHA256；真实 playback 与硬件仍不由该 smoke 代替。
+当前自动化在打包前以 reference Node 对 production `plugin-host.js` 执行 `hostReady → ping → pong` IPC smoke，再对最终 `tar.gz` 执行 `extract → launcher → /api/info → /api/session → /api/library/count → Web root → SIGTERM`。artifact 同时携带 deployment guide/systemd installer；重复 staging 的 deterministic archive 约束仍保留。真实 playback 与硬件仍不由这些 smoke 代替。
 
 之后在真实音频主机执行 Hardware Release Gate：
 
@@ -761,10 +761,10 @@ library fixture / queue / playback smoke
 Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能否分发”转为确保 release build 的 SDK 来源、版本和能力一致。
 
 - [x] Diretta SDK 支持公开 release。
-- [ ] 明确并固定正式 release 使用的 SDK 版本 / 支持架构。
+- [x] 首个正式 Core release 固定 **Diretta Host SDK 149 + Linux x86-64**。构建从 SDK 自带 `Host/Release.hpp` 读取 `ReleaseNo` 并在编译前拒绝非 149；AArch64 只保留当前 native compile capability，不在真实机器 release gate 完成前声明正式支持。
 - [ ] 明确 CI 中 SDK 的安全供应方式，不把 SDK binary / archive 误提交到公开源码仓库。
-- [ ] 正式 Core release 要求包含 Diretta 时，缺少 SDK 必须构建失败，不允许静默生成同名 no-Diretta artifact。
-- [ ] release metadata 记录 Diretta capability；若 SDK 版本信息允许公开，也记录对应版本标识。
+- [x] 正式 Core release 要求包含 Diretta 时必须使用 `--require-diretta`；缺少 `DIRETTA_SDK_ROOT` 会在清理/编译前失败，不允许静默生成同名 no-Diretta artifact。
+- [x] native `build.json` 与最终 `runtime.json` 同时记录 Diretta capability 与 `direttaSdkRelease`；SDK-enabled artifact 已实构建记录 149，no-Diretta artifact 记录 `null`。
 
 ---
 
@@ -814,25 +814,25 @@ Web 可以使用浏览器自己的 notification、clipboard、download 等 Host 
 
 ### Capability-driven UI
 
-- [ ] Core 正式声明可用 domain capability；Control Host 另外声明本地 Host Capability。
-- [ ] UI 根据合并后的 capability set 决定显示 / 禁用项目，不在业务组件中散布大量 `isWeb` / `isElectron` 判断。
-- [ ] 逐步删除依靠 no-op facade 假装支持的 Desktop-only 设置；不支持的 Host Capability 应隐藏或明确禁用。
+- [x] Core 已通过 `/api/info` 正式声明 domain capability；Control renderer 另外用 Atom-owned `ControlHostCapability` 声明 window controls / desktop lyric / hotkey / tray / native file-dialog / protocol 与浏览器侧 Host 能力，不把这些能力混进 Core Domain。
+- [~] UI 开始按 capability 决定 Host-only presentation：播放器桌面歌词入口已从 `!webRemote` 分支改为 `desktopLyric` Host capability；Web 输出选择仍只是允许不同的 presentation。Settings 已在统一 schema 入口隐藏整个 Desktop-only External Lyric / Hotkeys 分类并归一 stale 分类 ID，General 也按 `windowControls` / `desktopUpdater` / `nativeFileDialogs` 隐藏 Desktop shell、updater 与配置文件 Host section；About 不再要求 Web 伪造 Electron runtime，并按 `desktopUpdater` / `hostLogDirectory` 隐藏 Desktop-only action。Netease Electron embedded-login 只在 `providerLoginWindow` 下展示；系统字体枚举只在 `systemFonts` 下启用，Web 仍可手动输入 CSS font-family。其他 Host surface 尚未全部迁移到合并 capability set。
+- [~] 逐步删除依靠 no-op facade 假装支持的 Desktop-only 设置；External Lyric / Hotkeys、General 的 Desktop window/taskbar/protocol/close、updater、Electron config import/export/reset，以及 About 的 Desktop updater/log-directory 行为已从 Web 普通能力面移除。Cache 已下沉为真实 Core service；Appearance 的 Desktop-managed 图片背景已按 `nativeFileDialogs` Host capability 从 Web 隐藏。Download 已复用上游单一 manager 收回 Core queue、source resolution 与 lifecycle，并通过真实 HTTP/WS 向 Web 提供 start/list/cancel/remove/progress；Library / Download 的远程路径选择也已改为共享 Core filesystem browser + Core-side directory validation。Library 文件删除与 tag read/write 已下沉为一份 Core service，Comments 直接投影既有 Core comments service，network proxy test 与 audio-output reinit 也已接到同一 Core 实现；Tag Editor 的本地封面 picker、Netease embedded-login window、系统字体枚举分别按真实 Host capability 隐藏/降级。Web 不再靠这些空 facade 假装拥有对应 Host 能力。不支持的 Host Capability 应继续隐藏或明确禁用。
 - [ ] Desktop 的音乐业务请求最终也通过与 Web 相同的 Core Protocol；Electron IPC 只服务 Desktop shell / Host Capability。
 
 ### 统一 Action Model：右键 / 长按 / `...`
 
 右键菜单允许不同 presentation，但业务语义只能有一份。
 
-- [ ] 建立统一 Track / Album / Artist / Playlist 等 Action Model，包括 action id、label、enabled / visible、danger、required capability 与 Core command。
-- [ ] Desktop 与 Web 使用同一 Action Model，不分别复制“播放、下一首播放、加入队列、查看专辑/艺术家、收藏、删除”等业务判断。
-- [ ] 普通业务菜单优先复用 Vue 自定义菜单以保持 Web / Desktop 一致；只有确实需要 OS native 行为时追加 Desktop-only action。
-- [ ] Web 的右键不是唯一入口：触摸设备必须通过 long-press 或 `...` 菜单访问相同 Action Model。
+- [x] 已建立共享 `ControlAction` 语义模型，包含 action id、label、enabled / visible、danger、required capability 与可选 Core command；Track、Collection detail（playlist/album）与 Artist 已接入，且共用一份 Action→Vue menu adapter。
+- [x] Track 的 Desktop / Web 右键与 `...` 入口消费同一 action list；Collection 的播放/收藏/管理/overflow 与 Artist 的播放/收藏/overflow 也分别由单一 action list 驱动，不再在 presentation 层复制 enabled / visible 判断。Favorites 的 playlist/album/artist cover card 也通过同一模型提供真实的取消收藏动作。
+- [x] 普通业务菜单复用现有 Vue `SContextMenu` / `SDropdownMenu` presentation；`showInExplorer` 仅以 `hostFileExplorer` Host action 出现。Track、Collection / Artist detail 与可选 CoverList card action 共用同一 Action→menu adapter，通用 cover 组件不拥有 provider 业务语义。
+- [x] Track 已提供行内 `...` 入口供触摸/无右键环境访问同一 Action Model，Collection / Artist detail 也已有共享 overflow 入口；Favorites 的 Album / Artist / Playlist CoverList 卡片在存在真实二级动作时显示同模型 `...`。纯导航 CoverList 调用保持 click-only，不为了形式完整制造空菜单。
 
 ### Core 文件系统与 Control 本地文件系统
 
 Core-centric 架构下必须明确文件属于哪台机器：
 
-- [ ] “添加媒体库目录”浏览和保存的是 **Core 文件系统路径**，Web / Desktop 行为一致，不使用 Desktop 本机 file picker 冒充 Core path。
+- [x] “添加媒体库目录”浏览和保存的是 **Core 文件系统路径**：Web 使用共享 Core directory browser，Desktop 同机 native picker 只是 Host presentation；两条路径最终都经 Core directory validation，不把 Control 本机路径冒充远端 Core path。
 - [ ] 若未来支持从 Control 本机导入文件，应作为独立的 Upload / Import 功能，由 Control 上传到 Core，而不是混入 Library Folder 设置。
 - [ ] “下载到 Core”与“下载到当前 Control 设备”在 UI 与 API 中明确区分。
 
@@ -854,11 +854,12 @@ Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capabili
 ### 现有 UX 待完善
 
 - [~] Web 本地曲库浏览 / 播放控制 / 搜索已基本可用。
+- [x] Web 的 Library 与 Download 路径选择使用共享 Core directory browser，可逐级浏览或显式输入 Core 路径；Core 只返回目录并验证真实目录存在，浏览器本地文件系统不会混入 Core path。
 - [x] Web 不显示桌面最小化 / 最大化 / 退出按钮。
 - [x] 输出列表已过滤大部分虚拟 / 无效 ALSA 项。
-- [ ] 扫描期间显示真实 `scanned / total` 进度，而不仅是最终完成状态。
-- [ ] Diretta 在线音源 materialize 时显示明确的“正在准备 Source Direct 音源”反馈。
-- [ ] 评估本地搜索扩展到专辑 / 艺术家结果，低于核心播放优先级。
+- [x] Web 扫描期间复用 Core scanner 的同一 `ScanProgress` 快照显示真实 `scanned / total / current`；不再用 0/0 合成进度，也不新增第二扫描状态机。
+- [x] Desktop/Web 共用的 `switchDevice()` Control 命令在在线 Track 切入 Diretta 且 Core 尚未完成时显示“正在准备 Source Direct 在线音源”loading 反馈；反馈复用现有已触碰命令层，Control 不直接调用 materialize，也不新增 selector 状态或上游 touch。
+- [x] Desktop/Web 搜索统一暴露本地来源，并复用现有 Library API 扩展到 songs / albums / artists；本地 playlist 搜索仍不伪造，Qobuz/TIDAL 继续按已实现能力保持 songs-only。
 
 ### 验收标准
 
@@ -874,17 +875,21 @@ Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capabili
 
 - [x] 建立本正式 Roadmap。
 - [x] 更新 `docs/atom-development.md` 中已经过时的 baseline / test count 描述。
-- [ ] 将 `handoff-*` 明确标记为历史阶段快照，不作为当前状态来源。
+- [x] `handoff-*` 已明确标记为历史阶段快照，不作为当前状态来源。
 - [x] 建立正式 upstream sync 操作说明。
-- [ ] 建立 Desktop / Headless build flavor 与发行说明。
+- [x] 建立 Desktop / Core build flavor、Core system-runtime artifact 与部署/升级/回滚说明；明确不建设 Electron Headless 中间发行产品。
 
 文档职责保持：
 
 ```text
 docs/atom-roadmap.md      当前未完成事项、优先级、验收标准
 docs/atom-development.md  开发环境、构建、维护规则
-progress.md               已完成工作的历史记录
-docs/handoff-*            阶段 / 会话交接快照
+docs/build-flavors.md     Desktop / Core flavor 与发行边界
+docs/core-deployment.md   Core 安装、升级、回滚与 systemd 运维
+task_plan.md              当前阶段、下一步与架构护栏
+findings.md               当前发现与决策
+progress.md               当前交付状态与最近进展
+history/                  本地历史阶段 / 会话交接快照（Git 忽略）
 ```
 
 ---

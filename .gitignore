@@ -6,6 +6,8 @@ build
 .eslintcache
 .claude
 .agents
+# 本地代理历史记录
+/history/
 docs/superpowers
 docs/.vitepress/cache
 docs/.vitepress/dist
