@@ -4,7 +4,6 @@ import type { CoreControlEvent } from "@shared/types/coreEvents";
 import type { CommentSource, MusicCommentQuery, MusicCommentResponse } from "@shared/types/comment";
 import type { ConfigApi, SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
-import type { PlaylistApi } from "@shared/types/playlist";
 import type { LyricsApi, LyricTTMLResponse } from "@shared/types/lyrics";
 import type { NowPlayingApi, NowPlayingSnapshot } from "@shared/types/nowPlaying";
 import type { StatsApi } from "@shared/types/stats";
@@ -29,6 +28,7 @@ import { filterWebSystemOutputs } from "@/core/outputDevices";
 import { providerClient } from "@/core/providerClient";
 import { libraryClient } from "@/core/libraryClient";
 import { downloadClient } from "@/core/downloadClient";
+import { playlistClient } from "@/core/playlistClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -378,59 +378,6 @@ const libraryApi: LibraryApi = {
   pickCoverImage: async () => ({ success: false, error: "WEB_FILE_PICKER_UNSUPPORTED" }),
 };
 
-const playlistApi: PlaylistApi = {
-  list: async () =>
-    (await request<Awaited<ReturnType<PlaylistApi["list"]>>>("/playlists")).map((item) => ({
-      ...item,
-      cover: webAssetUrl(item.cover),
-    })),
-  get: async (id) => {
-    const detail = await request<Awaited<ReturnType<PlaylistApi["get"]>>>(
-      `/playlists/${encodeURIComponent(id)}`,
-    );
-    return detail
-      ? {
-          ...detail,
-          cover: webAssetUrl(detail.cover),
-          tracks: detail.tracks.map(mapTrack),
-        }
-      : null;
-  },
-  create: (input) =>
-    request<Awaited<ReturnType<PlaylistApi["create"]>>>("/playlists", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  update: (id, input) =>
-    request<Awaited<ReturnType<PlaylistApi["update"]>>>(`/playlists/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    }),
-  remove: async (id) => {
-    await request(`/playlists/${encodeURIComponent(id)}`, { method: "DELETE" });
-  },
-  addTracks: async (id, trackIds) =>
-    (
-      await request<{ count: number }>(`/playlists/${encodeURIComponent(id)}/tracks`, {
-        method: "POST",
-        body: JSON.stringify({ trackIds }),
-      })
-    ).count,
-  removeTracks: async (id, trackIds) =>
-    (
-      await request<{ count: number }>(`/playlists/${encodeURIComponent(id)}/tracks`, {
-        method: "DELETE",
-        body: JSON.stringify({ trackIds }),
-      })
-    ).count,
-  importLegacy: async (records) => {
-    await request("/playlists/import-legacy", { method: "POST", body: JSON.stringify(records) });
-  },
-  clear: async () => {
-    await request("/playlists", { method: "DELETE" });
-  },
-};
-
 const nowPlayingApi: NowPlayingApi = {
   update: (payload) => {
     void request("/now-playing", {
@@ -528,7 +475,7 @@ export const installWebApi = async (): Promise<void> => {
     config: configApi,
     player: playerApi,
     library: libraryApi,
-    playlist: playlistApi,
+    playlist: playlistClient,
     nowPlaying: nowPlayingApi,
     lyrics: lyricsApi,
     stats: statsApi,

@@ -10,11 +10,25 @@ const legacyStorage = vi.hoisted(() => ({
   }),
 }));
 
+const playlistClient = vi.hoisted(() => ({
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+  addTracks: vi.fn(),
+  removeTracks: vi.fn(),
+  importLegacy: vi.fn(),
+  clear: vi.fn(),
+}));
+
 vi.mock("localforage", () => ({
   default: {
     createInstance: () => legacyStorage,
   },
 }));
+
+vi.mock("@/core/playlistClient", () => ({ playlistClient }));
 
 import { usePlaylistStore } from "./playlist";
 
@@ -28,27 +42,11 @@ const summary = (id: string): PlaylistSummary => ({
 });
 
 describe("playlist store", () => {
-  const playlistApi = {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-    addTracks: vi.fn(),
-    removeTracks: vi.fn(),
-    importLegacy: vi.fn(),
-    clear: vi.fn(),
-  };
-
   beforeEach(() => {
     setActivePinia(createPinia());
     legacyStorage.records = [];
     legacyStorage.clear.mockClear();
-    Object.values(playlistApi).forEach((mock) => mock.mockReset());
-    Object.defineProperty(window, "api", {
-      configurable: true,
-      value: { playlist: playlistApi },
-    });
+    Object.values(playlistClient).forEach((mock) => mock.mockReset());
   });
 
   it("加载时导入旧歌单并返回本地列表", async () => {
@@ -61,13 +59,13 @@ describe("playlist store", () => {
         updateTime: 2,
       },
     ];
-    playlistApi.importLegacy.mockResolvedValue(undefined);
-    playlistApi.list.mockResolvedValue([summary("local")]);
+    playlistClient.importLegacy.mockResolvedValue(undefined);
+    playlistClient.list.mockResolvedValue([summary("local")]);
 
     const store = usePlaylistStore();
     await store.load();
 
-    expect(playlistApi.importLegacy).toHaveBeenCalledWith([
+    expect(playlistClient.importLegacy).toHaveBeenCalledWith([
       expect.objectContaining({ id: "legacy", trackIds: ["track-1"] }),
     ]);
     expect(legacyStorage.clear).toHaveBeenCalledOnce();
@@ -76,7 +74,7 @@ describe("playlist store", () => {
   });
 
   it("将本地歌单转换为现有 Collection", async () => {
-    playlistApi.get.mockResolvedValueOnce({ ...summary("local"), tracks: [] });
+    playlistClient.get.mockResolvedValueOnce({ ...summary("local"), tracks: [] });
 
     const store = usePlaylistStore();
     await expect(store.get("local")).resolves.toMatchObject({

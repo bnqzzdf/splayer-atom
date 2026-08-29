@@ -2,6 +2,7 @@ import localforage from "localforage";
 import type { Track } from "@shared/types/player";
 import type { LegacyPlaylistRecord, PlaylistSummary } from "@shared/types/playlist";
 import type { Collection } from "@/types/collection";
+import { playlistClient } from "@/core/playlistClient";
 
 const legacyDb = localforage.createInstance({ name: "splayer", storeName: "playlists" });
 
@@ -25,20 +26,20 @@ export const usePlaylistStore = defineStore("playlist", () => {
       });
     });
     if (records.length === 0) return;
-    await window.api.playlist.importLegacy(records);
+    await playlistClient.importLegacy(records);
     await legacyDb.clear();
   };
 
   /** 加载全部类型的歌单列表 */
   const load = async (): Promise<void> => {
     await migrateLegacy();
-    playlists.value = await window.api.playlist.list();
+    playlists.value = await playlistClient.list();
     initialized.value = true;
   };
 
   /** 获取本地歌单完整数据 */
   const get = async (id: string): Promise<Collection | null> => {
-    const detail = await window.api.playlist.get(id);
+    const detail = await playlistClient.get(id);
     if (!detail || detail.type !== "local") return null;
     return {
       id: detail.id,
@@ -56,7 +57,7 @@ export const usePlaylistStore = defineStore("playlist", () => {
 
   /** 创建本地歌单 */
   const create = async (title: string, description?: string): Promise<Collection> => {
-    const created = await window.api.playlist.create({
+    const created = await playlistClient.create({
       type: "local",
       title,
       description,
@@ -81,20 +82,20 @@ export const usePlaylistStore = defineStore("playlist", () => {
     id: string,
     data: Partial<Pick<PlaylistSummary, "title" | "description">>,
   ): Promise<void> => {
-    const updated = await window.api.playlist.update(id, data);
+    const updated = await playlistClient.update(id, data);
     if (!updated) return;
     playlists.value = playlists.value.map((playlist) => (playlist.id === id ? updated : playlist));
   };
 
   /** 删除歌单 */
   const remove = async (id: string): Promise<void> => {
-    await window.api.playlist.remove(id);
+    await playlistClient.remove(id);
     playlists.value = playlists.value.filter((playlist) => playlist.id !== id);
   };
 
   /** 添加歌曲到本地歌单 */
   const addTracks = async (id: string, tracks: Track[]): Promise<number> => {
-    const count = await window.api.playlist.addTracks(
+    const count = await playlistClient.addTracks(
       id,
       tracks.map((track) => track.id),
     );
@@ -116,7 +117,7 @@ export const usePlaylistStore = defineStore("playlist", () => {
 
   /** 从本地歌单移除歌曲 */
   const removeTracks = async (id: string, trackIds: string[]): Promise<void> => {
-    const count = await window.api.playlist.removeTracks(id, trackIds);
+    const count = await playlistClient.removeTracks(id, trackIds);
     if (count === 0) return;
     playlists.value = playlists.value.map((playlist) => {
       if (playlist.id !== id) return playlist;
@@ -132,7 +133,7 @@ export const usePlaylistStore = defineStore("playlist", () => {
 
   /** 清空全部歌单 */
   const clear = async (): Promise<void> => {
-    await window.api.playlist.clear();
+    await playlistClient.clear();
     await legacyDb.clear();
     playlists.value = [];
   };
