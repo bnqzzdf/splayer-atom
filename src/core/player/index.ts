@@ -61,104 +61,6 @@ const applySessionResult = (
   return result.data;
 };
 
-/** 加载运行时选项 */
-interface LoadRuntimeOptions {
-  /** 是否抑制错误提示 */
-  suppressErrorToast?: boolean;
-  /** 本次播放的来源上下文 */
-  context?: PlaybackContext;
-}
-
-/** 引擎 load 竞态 token；仅保留给仍在迁移的 Desktop output/tag compatibility path。 */
-let loadToken = 0;
-/** Desktop output/tag compatibility path 的竞态 token。 */
-let trackToken = 0;
-
-
-/** load() 的结果；失败时附带错误码，跳曲决策交给调用方 */
-export type LoadOutcome = { ok: true; track: Track | null } | { ok: false; error?: string };
-
-/**
- * 切歌通用前置
- * @param duration 新歌时长（毫秒），未知时传 0
- */
-const resetForLoad = (duration: number): void => {
-  const status = useStatusStore();
-  status.trackLoading = true;
-  status.position = 0;
-  status.duration = duration;
-  playback.setCurrentTime(0, { force: true });
-  playback.setDuration(duration);
-  playback.setPlaying(false);
-  // 上一首未达到缓存触发阈值的请求丢弃
-  cacheScheduler.cancel();
-};
-
-/**
- * 加载音频源
- * @param source - 音频文件路径或网络地址
- * @param autoPlay - 是否自动播放
- * @param meta - 渲染层下发给主进程的权威 Track（用于 SMTC/托盘）
- * @param options - 加载时的内部控制项
- */
-export const load = async (
-  source: string,
-  autoPlay = true,
-  meta?: Track,
-  options: LoadRuntimeOptions = {},
-): Promise<LoadOutcome> => {
-  const status = useStatusStore();
-  const token = ++loadToken;
-  // 切歌即清空 AB 循环（per-song 状态）
-  abLoop.reset();
-  // 清除上一次 seek 残留
-  seekTarget = null;
-  playback.setSeeking(false);
-  resetForLoad(meta?.duration ?? 0);
-  // 非本地并行歌词与取色
-  const isOnline = meta?.source !== "local";
-  if (isOnline) {
-    void lyricLoader.loadForTrack(null);
-    extractColorFromUrl(meta?.cover ?? meta?.coverOriginal ?? null);
-    if (meta) void coverLoader.loadCoverForTrack(meta);
-  }
-  try {
-    const result = await window.api.player.load(source, {
-      autoPlay,
-      meta,
-      context: options.context,
-    });
-    // 竞态保护
-    if (token !== loadToken) return { ok: false };
-    if (result.success && result.data) {
-      const { detail, mediaInfo } = result.data;
-      const media = useMediaStore();
-      // 把引擎提取的 mediaInfo 与已有 Track 合并；身份字段保留
-      media.enrichTrack(mediaInfo, detail);
-      const enriched = media.track;
-      // 避免重复请求
-      if (!isOnline) {
-        lyricLoader.loadForTrack(detail);
-        extractColorFromUrl(enriched?.cover ?? null);
-        if (enriched) void coverLoader.loadCoverForTrack(enriched);
-      }
-      const dur = enriched?.duration ?? mediaInfo.duration;
-      status.duration = dur;
-      status.state = autoPlay ? "playing" : "paused";
-      status.currentSource = source;
-      playback.setDuration(dur);
-      playback.setPlaying(autoPlay);
-      return { ok: true, track: enriched };
-    }
-    status.state = "idle";
-    lyricLoader.loadForTrack(null);
-    if (result.error && !options.suppressErrorToast) handleError(result.error);
-    return { ok: false, error: result.error };
-  } finally {
-    if (token === loadToken) status.trackLoading = false;
-  }
-};
-
 /**
  * Diretta 已在同一 connection 上跨过 track boundary 后，只提交 SPlayer 应用状态。
  * 这里绝不能再次调用 load/stop，否则会破坏已经成立的 sample-contiguous handoff。
@@ -178,7 +80,6 @@ export const commitDirectGaplessTrack = async (
   );
   if (!committed.success) return false;
 
-  ++trackToken;
   sourceRecoveryCount = 0;
   sourceRecoveryTrackId = null;
   seekTarget = null;
@@ -488,18 +389,10 @@ export const playFrom = async (
   if (isSameTrack && !status.isPlaying) await play();
 };
 
-/** 标签写入后恢复当前曲：暂停态加载 → seek 回原进度 → 视情况恢复播放 */
-const resumeAfterTagWrite = async (
-  track: Track,
-  resumeMs: number,
-  wasPlaying: boolean,
-): Promise<void> => {
-  if (!track.path) return;
-  const myToken = ++trackToken;
-  useMediaStore().setTrack(track);
-  lyricLoader.beginLoad();
-  const result = await load(track.path, false, track);
-  if (myToken !== trackToken || !result.ok) return;
+/** 标签写入后由 Core 从 canonical current Track 重新加载，再恢复原进度/播放态。 */
+const resumeAfterTagWrite = async (resumeMs: number, wasPlaying: boolean): Promise<void> => {
+  const reloaded = await window.api.player.reloadSessionCurrent(false);
+  if (!reloaded.success || reloaded.data !== true) return;
   if (resumeMs > 0) await seek(resumeMs);
   if (wasPlaying) await play();
 };
@@ -531,7 +424,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
   if (!result.success || !result.data) {
     if (result.error) handleError(result.error);
     // 写入失败也要恢复被停掉的当前曲
-    if (touchesCurrent && current) await resumeAfterTagWrite(current, resumeMs, wasPlaying);
+    if (touchesCurrent && current) await resumeAfterTagWrite(resumeMs, wasPlaying);
     return null;
   }
 
@@ -544,8 +437,7 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
   }
 
   if (touchesCurrent && current) {
-    const newTrack = updated.find((track) => track.path === currentPath) ?? current;
-    await resumeAfterTagWrite(newTrack, resumeMs, wasPlaying);
+    await resumeAfterTagWrite(resumeMs, wasPlaying);
   }
   return result.data;
 };
