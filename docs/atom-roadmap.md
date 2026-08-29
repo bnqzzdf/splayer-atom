@@ -615,9 +615,9 @@ Atom Commit:       <commit>
 
 另行维护独立的 **Core Protocol Version**，产品版本不直接等于协议版本。Control 连接 Core 时必须基于 protocol compatibility 判断是否可用，而不是要求 Core / Desktop 产品版本完全相等。
 
-- [ ] Core 提供正式 version / protocol / capability 信息接口。
-- [ ] Desktop / Web Control 根据协议范围与 capability 工作，不通过版本号猜测功能。
-- [ ] Core 声明 `diretta`、`netease`、`qobuz`、`tidal`、local library、remote output 等实际 capability。
+- [~] Core `/api/info` 已提供 shared Core Protocol v1 与 capability contract，Node/runtime 信息也已纳入；正式 Atom 产品 version/commit/SPlayer baseline identity 仍待产品身份工作补齐。
+- [~] Web Control 已在所有 domain HTTP/WS 工作前按 shared protocol range 拒绝不兼容 Core，不再用产品版本号猜 API；Desktop/remote-Control capability-driven UI 仍待后续统一 Control 工作。
+- [x] Core 已声明 `library`、`playback`、`diretta`、`netease`、`qobuz`、`tidal`、`remoteOutput` capability；其中 Diretta 从当前 native `build.json` 读取，no-SDK artifact 明确报告 false。
 - [ ] 第一阶段 release channel 只保留 `beta` 与 `stable`；nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
 
 ### 更新策略
@@ -715,7 +715,7 @@ Atom Commit:       <commit>
 - [ ] 可选发布 bundled-runtime `tar.gz`，其中 Node 固定为该 release 的 reference runtime；它只是自包含部署便利形式，与 system-runtime artifact 使用同一 Core JS / native compatibility contract。
 - [~] 当前 Core native、staging 与 artifact pipeline 均显式限定 Linux x86-64；提升为“正式支持平台”仍需真实 ALSA/Diretta/systemd/长时间播放 hardware gate。
 - [ ] ARM64 可构建不等于正式支持；完成真实机器上的 Node/native/ALSA/Diretta/systemd/长时间播放验收后再提升为正式支持平台。
-- [~] 当前 `runtime.json` 已记录 arch、Node range/reference、`better-sqlite3` 与 Diretta capability；Atom version/commit、SPlayer baseline 与 Core Protocol 尚待正式 release identity/protocol 工作补齐。
+- [~] 当前 `runtime.json` 已记录 arch、Node range/reference、`better-sqlite3`、Core Protocol 与完整 capability snapshot，并由 final-artifact gate 与 `/api/info` 做一致性校验；Atom version/commit、SPlayer baseline 尚待正式 release identity 工作补齐。
 
 ### Release Gate
 
