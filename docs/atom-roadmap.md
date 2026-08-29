@@ -238,11 +238,11 @@ Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 
 
 - [x] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
 - [x] Core JS 构建图已不依赖 Electron / BrowserWindow；production Core bundle 的 Electron import audit 为 0，进程级 HTTP/session/library smoke 通过。GTK / 最小 native 系统依赖仍由后续 Core-only native flavor 收口。
-- [ ] Core 正式支持 **Node 24.x LTS**；首个兼容范围定为 `>=24.18.0 <25`。CI / release 使用一个精确 reference runtime，初始为 `24.18.0`；reference patch 升级必须重新执行 Node/Web/native/Core process/plugin-host 与硬件相关门禁，不允许静默漂移。
-- [ ] 系统 Node 与 bundled Node 都使用同一 Core JS / native artifact contract。首阶段优先支持受验证的 system Node 部署；bundled Node 是可选的自包含发行形式，不作为 Core 架构、P1 功能或普通部署的硬前提。
-- [ ] 初期不以 Node SEA 为目标；Core 保持可审计、可调试的 JS bundle + native addon 结构。若发布 bundled-runtime artifact，也只是在外层附带 reference Node，不建立第二套 Core 产品。
-- [~] `audio-engine.node` 已在本机 Node `24.18.0` 完成 N-API 加载与 Core process smoke；正式 release 继续以 reference Node `24.18.0` 运行自动门禁，不额外维护第二个 Node 24 patch 的兼容 smoke。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
-- [ ] `better-sqlite3` 的 Core native 产物必须在 reference Node 24 runtime 下构建并验证；release staging 不允许被构建机上的任意 Node major 隐式重编。长期 Desktop Control 不应因 Core 数据库而继续依赖 Electron 版 `better-sqlite3`。
+- [~] Core 已定义并在启动前强制 **Node 24.x LTS** 兼容范围 `>=24.18.0 <25`，reference runtime 固定为 `24.18.0`；本地正式 artifact pipeline 已只接受该 reference Node。干净 CI / release workflow 尚未接入，reference patch 升级仍必须重新执行完整门禁。
+- [~] system-runtime artifact 已使用同一 Core JS / native contract；统一 launcher 同时支持系统 `node`、显式 `ATOM_NODE_BIN` 与未来 `runtime/bin/node`。bundled Node artifact 尚未实现，但它不是 Core 架构或 P1 功能前提。
+- [x] 初期不以 Node SEA 为目标；Core 已保持可审计、可调试的 JS bundle + native addon 结构，system-runtime staging 不依赖 SEA 或单文件封装。
+- [x] `audio-engine.node` 已在 reference Node `24.18.0` 下完成 release N-API load、Core process 与最终 tar artifact smoke；按当前决策不额外维护第二个 Node 24 patch smoke。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
+- [x] `better-sqlite3` 的 Core runtime 只在 reference Node `24.18.0` artifact pipeline 中验收；staging 直接携带已验证的 Linux x64 N-API prebuild，不执行 `pnpm/npm install` 或隐式 native rebuild。
 
 Node runtime 的来源属于部署策略，不属于 Core authority 边界：system Node 与 bundled Node 必须运行同一 Core domain、同一 protocol、同一 native compatibility contract，不能因为打包方式不同形成两个产品分支。
 
@@ -289,7 +289,7 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 6. [~] Web 播放链已成为 Core Control，浏览器不再拥有 queue / source / recovery / preload authority；完整产品面与长时间断连运行仍待验收。
 7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 local-Core / remote-Core 产品形态。
 8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam；各 Control 的 provider 登录状态统一投影仍待收口。
-9. [ ] 建立支持 Node 24.x LTS 的 Linux Core `tar.gz` 发行：首阶段优先 system Node，随后可增加 bundled Node 自包含变体；二者必须复用同一 Core artifact contract。
+9. [~] 已建立 Node 24.x LTS system-runtime Linux x64 `tar.gz` 技术 artifact、统一 launcher 与 final-artifact smoke；正式 release identity / CI 发布链、硬件 gate 与可选 bundled Node 变体仍待完成。
 10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
 11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
 
@@ -664,16 +664,16 @@ Atom Commit:       <commit>
 
 ### Cache 与日志
 
-- [ ] 可重新生成的 song cache、cover cache、临时 Direct materialization 等使用系统默认 cache 目录，不进入安装目录 `data/`。
-- [ ] Linux 优先遵循 `XDG_CACHE_HOME`；未设置时使用当前服务用户的系统默认 cache 位置。
-- [ ] 日志优先输出到 stdout/stderr，由 systemd / journald 管理，不在安装目录长期维护独立 log rotation。
+- [x] Core production 的 song cache、cover cache、临时 Direct materialization 等可重建数据使用独立 cache 根，不进入安装目录 `data/`；staged-process smoke 已验证 `data/` 下无 `cache/`。
+- [x] Linux Core 优先遵循 `XDG_CACHE_HOME`；未设置时默认使用当前服务用户的 `~/.cache/splayer-atom`。
+- [x] Core production 的 JS logger 与 native audio logger 已切为 stdout/stderr-only，不在安装目录创建 `logs/`；Desktop 原文件日志行为保持不变。
 
 ### systemd
 
-- [ ] 提供正式 systemd unit / 示例安装脚本，而不是开发阶段 transient service。
-- [ ] systemd 明确支持两种等价启动方式：system-runtime 部署指向已验证的 Node 24.x 可执行文件；bundled-runtime 变体指向安装目录内 reference Node。两者启动同一个 Core entry，并在启动/健康信息中暴露实际 Node 版本。
-- [ ] 文档化 Diretta Host 的 root 运行要求。
-- [ ] service 更新不改变 `data/` 语义，用户替换程序文件时可保留原数据目录。
+- [~] artifact 已携带 systemd unit 示例与统一启动 wrapper，取代 transient service 作为正式部署骨架；安装辅助脚本与完整运维文档尚未完成。
+- [x] 同一 launcher 支持 system-runtime 的系统 Node / `ATOM_NODE_BIN`，并预留 `runtime/bin/node` 给未来 bundled-runtime；两种方式最终执行同一个 `app/index.js`，Core `/api/info` 暴露实际 Node 版本与支持范围。
+- [~] systemd unit 已明确标注 Diretta Host 的 root 运行要求与普通 ALSA Core 的非特权用户建议；正式部署文档仍待补齐。
+- [~] Core durable state 已固定到安装根 `data/`，程序 staging 不覆盖该语义；正式升级/回滚流程与自动备份仍归后续 schema migration 工作。
 
 ### Schema Migration / Backup / Rollback
 
@@ -702,20 +702,20 @@ Atom Commit:       <commit>
 ### 固定构建环境
 
 - [ ] 建立干净 CI / container release 环境。
-- [ ] 固定 **reference Node 24.x patch**（初始 `24.18.0`）、pnpm、Rust toolchain、lockfile、Linux build image 与 Diretta SDK 版本；同时单独维护 Core 的 Node 24.x compatibility range，不能把“支持范围”和“reference build runtime”混成一件事。
+- [~] reference Node 已固定为 `24.18.0`，pnpm 与 lockfile 也已有固定来源；Rust toolchain、Linux build image 与正式 Diretta SDK 版本仍待 release CI 固定。Core 的 Node 24.x compatibility range 与 reference build runtime 已分离。
 - [ ] lockfile + 干净 package store 可重复构建。
 - [ ] CI 中分别执行 Desktop / Core flavor 构建；Core runtime、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke 固定在 reference Node `24.18.0` 上执行。
-- [ ] Node / Web / native / touch audit 自动门禁。
+- [~] 本地 Core artifact pipeline 已串联 native release build、Core JS/Web build、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch 全量门禁仍待接入正式 release CI。
 - [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
 
 ### Core Artifact
 
-- [ ] 正式 Core 只发布 `tar.gz`。
-- [ ] 首阶段主 artifact 支持系统预装的 `>=24.18.0 <25` Node；启动前或启动时必须明确拒绝不受支持的 Node major/range，而不是带着未知 runtime 继续运行。
+- [~] 已能稳定生成 deterministic system-runtime `tar.gz` 技术 artifact；正式 release channel / artifact identity 尚未接入，因此不提前宣称正式发布完成。
+- [x] system-runtime artifact 支持系统预装 `>=24.18.0 <25` Node，Core 在加载 database/native/plugin 之前明确拒绝不受支持 runtime；artifact pipeline 本身固定在 reference Node `24.18.0`。
 - [ ] 可选发布 bundled-runtime `tar.gz`，其中 Node 固定为该 release 的 reference runtime；它只是自包含部署便利形式，与 system-runtime artifact 使用同一 Core JS / native compatibility contract。
-- [ ] 首个正式支持架构为 Linux x86-64。
+- [~] 当前 Core native、staging 与 artifact pipeline 均显式限定 Linux x86-64；提升为“正式支持平台”仍需真实 ALSA/Diretta/systemd/长时间播放 hardware gate。
 - [ ] ARM64 可构建不等于正式支持；完成真实机器上的 Node/native/ALSA/Diretta/systemd/长时间播放验收后再提升为正式支持平台。
-- [ ] release artifact 记录 Atom version、Atom commit、SPlayer baseline、Core Protocol、arch、实际/要求的 Node runtime 与 Diretta capability。
+- [~] 当前 `runtime.json` 已记录 arch、Node range/reference、`better-sqlite3` 与 Diretta capability；Atom version/commit、SPlayer baseline 与 Core Protocol 尚待正式 release identity/protocol 工作补齐。
 
 ### Release Gate
 
@@ -737,6 +737,8 @@ Web Control load
         ↓
 library fixture / queue / playback smoke
 ```
+
+当前自动化已对最终 `tar.gz` 执行 `extract → launcher → /api/info → /api/session → /api/library/count → Web root → SIGTERM`，并验证重复 staging 生成相同 SHA256；真实 playback 与硬件仍不由该 smoke 代替。
 
 之后在真实音频主机执行 Hardware Release Gate：
 

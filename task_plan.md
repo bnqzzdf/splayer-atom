@@ -7,7 +7,7 @@ Build SPlayer Atom as a continuously-updatable downstream of SPlayer-Next. Reuse
 Roadmap P1 — Node Core productization after Core-owned playback closure
 
 ## Next Step
-P0 upstream sync and roadmap section 5 Core-owned playback are now implementation-complete: Desktop/Web no longer own playable-source resolution, auto-next, recovery, preload, Direct staging, output switching, or raw player load; Node Core production bundles remain Electron-free and now include a runtime-neutral plugin host. Keep real provider/hardware acceptance separate. Resume roadmap section 4 at the first still-open software task: pin and bundle the project Node runtime, then split the Linux Core native build so it carries only required audio-engine capabilities/backends before packaging work proceeds.
+P0 upstream sync and roadmap section 5 Core-owned playback are implementation-complete. Node Core now has a Node 24.18.0 reference-runtime contract, ALSA-only `core-audio` native flavor, deterministic Linux x64 system-runtime tar pipeline, XDG cache/stdout logging deployment model, unified launcher/systemd skeleton, and final extracted-artifact HTTP/Web smoke; bundled Node remains optional and is not a Core/P1 prerequisite. Keep real provider/hardware acceptance separate. The first remaining roadmap work that does not require user-owned credentials or an exclusive audio-hardware window is to finish the frozen QQ Music/Kugou product-surface cleanup and then continue Core provider-session projection / Qobuz-TIDAL Control UI. Real Netease three-track/no-Control playback, ALSA/Diretta combinations, Qobuz/TIDAL account playback and physical bitstream checks remain explicit acceptance boundaries rather than reasons to rework the Core architecture.
 
 以下 Phase 16 内容保留为历史验收记录，不再决定当前执行顺序。
 

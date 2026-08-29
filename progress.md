@@ -1,5 +1,15 @@
 # SPlayer Atom — Progress
 
+## 2026-08-29 — Node 24 system-runtime Core artifact closed
+
+- Reworked the roadmap Node strategy after review: Core requires Node but bundled Node is optional. The supported range is `>=24.18.0 <25`, while release/runtime automation uses exact reference Node `24.18.0`; no second Node 24 patch smoke is maintained.
+- Committed `f2ed028 build: 增加 Linux Core 原生音频 flavor`: `audio-engine` now has a `core-audio` flavor that builds ALSA-only, excludes PipeWire/PulseAudio and unrelated Desktop native addons, emits release metadata, and can require `DIRETTA_SDK_ROOT` explicitly for SDK-enabled release work.
+- Committed `70545b1 build: 固定 Core Node 24 运行契约`: Node Core rejects unsupported runtime versions before loading database/native/plugin state; `/api/info` exposes actual Node, supported range and reference runtime; Core native location is bundle-relative.
+- Committed `6e1f457 build: 建立 Core system-runtime staging` and `946ab25 refactor: 分离 Core 数据缓存与日志路径`: Core build has zero Electron runtime refs and only `better-sqlite3` as an external package; staged production data lives under install-root `data/`, cache follows XDG, and Core JS/native logging is stdout/stderr-only while Desktop behavior remains unchanged.
+- Committed `221951c build: 建立 Core system-runtime 发行骨架`: formal local orchestrator rebuilds release native + Core JS + Web Control, audits the Core graph, creates deterministic `core-system-linux-x64.tar.gz`, then extracts that tar and starts its launcher on an isolated port. `/api/info`, `/api/session`, `/api/library/count`, Web root and SIGTERM shutdown all pass from the extracted artifact. Repeated staging produced identical SHA256; the current technical tar is about 9.5 MB. This is not yet a formal product release because release identity/CI/protocol metadata/schema migration/hardware gates remain open.
+- Current full gates: Node 155/155, Web 52/52, Node/Web typecheck, ESLint, Core build audit and final artifact smoke pass; touch audit is 37 business / 20 runtime-neutral / 12 Core-authority. Core Web packaging no longer mutates tracked Vue declaration files.
+- Next unblocked roadmap implementation is the frozen QQ Music/Kugou product-surface cleanup, followed by Core provider-session projection and Qobuz/TIDAL Control UI. Real provider/hardware playback acceptance stays separate and must not be faked by static tests.
+
 ## 2026-08-29 — P1 Core-owned playback implementation closed
 
 - Completed and committed the remaining Desktop→Core playback ownership migration through `b4489ac`: Core now owns transport, reload-current, tag-write recovery, output switching, system-media-control transport, native lifecycle and raw playable-source loading; Desktop renderer is a Control projection rather than a second player authority.
