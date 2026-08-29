@@ -178,7 +178,7 @@ Controls:
 
 因此 build flavor 决定的是产品角色与构建图：
 
-- `headless` → **Atom Core**：固定 Node runtime + Core services + Web UI + Core 本机 Output；
+- `headless` → **Atom Core**：受支持的 Node 24.x LTS runtime + Core services + Web UI + Core 本机 Output；
 - `desktop` → **Atom Control**：Electron UI + Desktop integration + 未来可选的本机 Output Agent，但不拥有 Core playback/domain state。
 
 不建设、也不发布一个长期存在的“Electron Headless”中间产品。当前已经验证的 Electron Headless 只在迁移期间作为行为 oracle；Node Core 完成等价验收后退出正式产品架构。
@@ -214,7 +214,7 @@ Desktop Electron 降级为控制器，并可在未来增加独立的 Output Agen
 
 Desktop Output Agent 即使实现，也只能执行 Core 下发的 `PlaybackJob`：load / play / pause / seek / stop / report status。它复用同一个 `audio-engine`，但不拥有 queue、provider、source fallback、next/prev policy 或 session authority，因此不构成第二套播放器。
 
-若未来提供“单机 Desktop”体验，也应由 Desktop 启动或连接一个 bundled local Core，而不是恢复 Electron renderer/main 自己成为播放 Core。
+若未来提供“单机 Desktop”体验，也应由 Desktop 启动或连接一个 local Core；该 Core 可使用受支持的系统 Node，也可由自包含发行物携带 Node runtime，但不得恢复 Electron renderer/main 自己成为播放 Core。
 
 ### Output 演进边界
 
@@ -238,10 +238,13 @@ Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 
 
 - [x] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
 - [x] Core JS 构建图已不依赖 Electron / BrowserWindow；production Core bundle 的 Electron import audit 为 0，进程级 HTTP/session/library smoke 通过。GTK / 最小 native 系统依赖仍由后续 Core-only native flavor 收口。
-- [ ] 正式 Headless 发行包自带项目固定版本的 Node runtime，不依赖用户系统预装的任意 Node 版本。
-- [ ] 初期不以 Node SEA 为目标；先使用可审计、可调试的 bundled Node runtime + JS bundle + native addon 结构，稳定后再评估单文件发行。
-- [ ] `audio-engine.node` 验证固定 Node runtime 的 N-API 加载；未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
-- [ ] `better-sqlite3` 的 Core 产物面向固定 Node runtime 构建；长期 Desktop Control 不应因 Core 数据库而继续依赖 Electron 版 `better-sqlite3`。
+- [ ] Core 正式支持 **Node 24.x LTS**；首个兼容范围定为 `>=24.18.0 <25`。CI / release 使用一个精确 reference runtime，初始为 `24.18.0`；reference patch 升级必须重新执行 Node/Web/native/Core process/plugin-host 与硬件相关门禁，不允许静默漂移。
+- [ ] 系统 Node 与 bundled Node 都使用同一 Core JS / native artifact contract。首阶段优先支持受验证的 system Node 部署；bundled Node 是可选的自包含发行形式，不作为 Core 架构、P1 功能或普通部署的硬前提。
+- [ ] 初期不以 Node SEA 为目标；Core 保持可审计、可调试的 JS bundle + native addon 结构。若发布 bundled-runtime artifact，也只是在外层附带 reference Node，不建立第二套 Core 产品。
+- [~] `audio-engine.node` 已在本机 Node `24.18.0` 完成 N-API 加载与 Core process smoke；正式支持矩阵仍需在 reference Node 及至少另一个兼容 Node 24 patch 上自动验证。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
+- [ ] `better-sqlite3` 的 Core native 产物必须在 reference Node 24 runtime 下构建并验证；release staging 不允许被构建机上的任意 Node major 隐式重编。长期 Desktop Control 不应因 Core 数据库而继续依赖 Electron 版 `better-sqlite3`。
+
+Node runtime 的来源属于部署策略，不属于 Core authority 边界：system Node 与 bundled Node 必须运行同一 Core domain、同一 protocol、同一 native compatibility contract，不能因为打包方式不同形成两个产品分支。
 
 ### Linux Core Local Output
 
@@ -284,21 +287,21 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 4. [ ] Node Core 完成本地 PCM / Native DSD 播放。
 5. [ ] Node Core 完成 ALSA hardware / Diretta 输出与设备切换。
 6. [~] Web 播放链已成为 Core Control，浏览器不再拥有 queue / source / recovery / preload authority；完整产品面与长时间断连运行仍待验收。
-7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 bundled-local-Core / remote-Core 产品形态。
+7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 local-Core / remote-Core 产品形态。
 8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam；各 Control 的 provider 登录状态统一投影仍待收口。
-9. [ ] 建立自带固定 Node runtime 的 Linux Core `.deb` / `tar.gz` 发行。
+9. [ ] 建立支持 Node 24.x LTS 的 Linux Core `tar.gz` 发行：首阶段优先 system Node，随后可增加 bundled Node 自包含变体；二者必须复用同一 Core artifact contract。
 10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
 11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
 
 ### 验收标准
 
 - 系统中无论同时打开多少 Web / Desktop Control，只有一个 Core queue / playback session / provider session / playback policy authority。
-- `headless` build 是固定 Node runtime 的 Core，而不是 Electron 的运行参数变体。
+- `headless` build 是运行于受支持 Node 24.x LTS 上的普通 Core，而不是 Electron 的运行参数变体。
 - `desktop` build 是 Control；即使未来带 Output Agent，也不复制 Core playback orchestration。
 - Core 正式运行时不需要 Electron / Chromium / GTK / PipeWire / PulseAudio。
-- Core 发行包自带并固定 Node runtime，用户不需要自行维护 Node 环境。
+- 使用 system Node 时，部署环境必须满足并验证 Atom 的 Node 24.x 支持范围；若发布 bundled Node 变体，则它必须使用同一 Core artifact 且固定到 release reference runtime。
 - Core Local Output 默认仅为真实 ALSA hardware 与 Diretta。
-- Desktop 可连接远程 Core；若提供本机独立使用方式，也通过 bundled local Core 保持相同架构。
+- Desktop 可连接远程 Core；若提供本机独立使用方式，也通过 local Core 保持相同架构，Node runtime 的来源不改变 Core/Control authority 边界。
 - 当前 Electron Headless 在 Node Core 完成前持续作为行为 oracle；最终产品不维护两个 Headless Core。
 
 ---
@@ -641,9 +644,9 @@ Atom Commit:       <commit>
 
 ```text
 <splayer-atom-core>/
-├─ node/ or node                 固定 Node runtime
 ├─ app/                          Core JS / Web 资源
 ├─ native/                       audio-engine / native dependencies
+├─ runtime/                      可选：bundled Node runtime 自包含变体
 ├─ data/                         需要长期保存的业务数据
 └─ service/                      systemd 示例 / 安装辅助文件
 ```
@@ -668,7 +671,7 @@ Atom Commit:       <commit>
 ### systemd
 
 - [ ] 提供正式 systemd unit / 示例安装脚本，而不是开发阶段 transient service。
-- [ ] systemd `ExecStart` 明确指向安装目录内固定 Node runtime 与 Core entry。
+- [ ] systemd 明确支持两种等价启动方式：system-runtime 部署指向已验证的 Node 24.x 可执行文件；bundled-runtime 变体指向安装目录内 reference Node。两者启动同一个 Core entry，并在启动/健康信息中暴露实际 Node 版本。
 - [ ] 文档化 Diretta Host 的 root 运行要求。
 - [ ] service 更新不改变 `data/` 语义，用户替换程序文件时可保留原数据目录。
 
@@ -699,19 +702,20 @@ Atom Commit:       <commit>
 ### 固定构建环境
 
 - [ ] 建立干净 CI / container release 环境。
-- [ ] 固定 Node runtime、pnpm、Rust toolchain、lockfile、Linux build image 与 Diretta SDK 版本。
+- [ ] 固定 **reference Node 24.x patch**（初始 `24.18.0`）、pnpm、Rust toolchain、lockfile、Linux build image 与 Diretta SDK 版本；同时单独维护 Core 的 Node 24.x compatibility range，不能把“支持范围”和“reference build runtime”混成一件事。
 - [ ] lockfile + 干净 package store 可重复构建。
-- [ ] CI 中分别执行 Desktop / Core flavor 构建。
+- [ ] CI 中分别执行 Desktop / Core flavor 构建，并至少在 reference Node 与另一个受支持 Node 24 patch 上运行 Core runtime/native load smoke。
 - [ ] Node / Web / native / touch audit 自动门禁。
 - [ ] SDK-enabled Diretta build 使用受控的 SDK provisioning。
 
 ### Core Artifact
 
 - [ ] 正式 Core 只发布 `tar.gz`。
-- [ ] `tar.gz` 自带固定 Node runtime，不依赖目标主机系统 Node。
+- [ ] 首阶段主 artifact 支持系统预装的 `>=24.18.0 <25` Node；启动前或启动时必须明确拒绝不受支持的 Node major/range，而不是带着未知 runtime 继续运行。
+- [ ] 可选发布 bundled-runtime `tar.gz`，其中 Node 固定为该 release 的 reference runtime；它只是自包含部署便利形式，与 system-runtime artifact 使用同一 Core JS / native compatibility contract。
 - [ ] 首个正式支持架构为 Linux x86-64。
 - [ ] ARM64 可构建不等于正式支持；完成真实机器上的 Node/native/ALSA/Diretta/systemd/长时间播放验收后再提升为正式支持平台。
-- [ ] release artifact 记录 Atom version、Atom commit、SPlayer baseline、Core Protocol、arch、Node version 与 Diretta capability。
+- [ ] release artifact 记录 Atom version、Atom commit、SPlayer baseline、Core Protocol、arch、实际/要求的 Node runtime 与 Diretta capability。
 
 ### Release Gate
 
@@ -720,11 +724,14 @@ Atom Commit:       <commit>
 ```text
 clean Linux environment
         ↓
+provide supported system Node
+or select bundled-runtime artifact
+        ↓
 extract tar.gz
         ↓
 start Core / systemd
         ↓
-version + protocol health check
+version + protocol + Node runtime health check
         ↓
 Web Control load
         ↓
@@ -741,7 +748,8 @@ library fixture / queue / playback smoke
 ### 验收标准
 
 - 同一 commit 在干净构建环境可稳定生成等价 Core release。
-- 用户拿到 `tar.gz` 后无需预装 Node 即可运行。
+- system-runtime `tar.gz` 在受支持的 Node 24.x 环境可按文档直接运行；若发布 bundled-runtime 变体，则该变体在无系统 Node 的干净环境也必须可运行。
+- reference Node 与兼容范围内的第二个 Node 24 patch 均通过 Core process、`audio-engine.node`、`better-sqlite3` 与 plugin-host smoke。
 - release 判断以最终 artifact smoke + hardware gate 为准，不以“开发目录 build 成功”代替。
 
 ---
@@ -907,7 +915,7 @@ docs/handoff-*            阶段 / 会话交接快照
 4. **以网易作为 reference provider 完成完整 Core 播放闭环回归。**
 5. **冻结 QQ Music / 酷狗 Atom 开发：从正式搜索 UI 移除并默认关闭，仅继承和兼容上游能力。**
 6. **实现 Qobuz / TIDAL Core 账户能力、Control UI 与真实账号播放验收。**
-7. **建立 Atom 独立 release identity、Core Protocol、固定 Node runtime、安装目录数据模型与正式 Core systemd / `tar.gz` artifact。**
+7. **建立 Atom 独立 release identity、Core Protocol、Node 24.x LTS 支持矩阵 + 精确 reference runtime、安装目录数据模型与正式 Core systemd / `tar.gz` artifact；首阶段优先 system Node，bundled Node 作为可选自包含变体。**
 8. **建立统一 Atom Control UI：Web / Desktop Core Domain 能力对等、capability-driven Settings、统一 Action Model，并完善扫描进度与 Direct materialize loading 等 UX。**
 9. **Headless 安全增强保留为 P4；仅在产品网络边界发生变化时提前。**
 
