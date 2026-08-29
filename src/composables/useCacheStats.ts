@@ -1,11 +1,5 @@
-type CacheKind = "file" | "db";
-
-interface CacheStat {
-  id: string;
-  kind: CacheKind;
-  path: string;
-  size: number;
-}
+import type { CacheKind, CacheStat } from "@shared/types/cache";
+import { cacheClient } from "@/core/cacheClient";
 
 const stats = ref<CacheStat[]>([
   { id: "covers", kind: "file", path: "", size: 0 },
@@ -25,7 +19,7 @@ let initialized = false;
 const refresh = async (): Promise<void> => {
   loading.value = true;
   try {
-    const [list, dir] = await Promise.all([window.api.cache.getStats(), window.api.cache.getDir()]);
+    const [list, dir] = await Promise.all([cacheClient.getStats(), cacheClient.getDir()]);
     stats.value = list;
     cacheDir.value = dir;
   } finally {

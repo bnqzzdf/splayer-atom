@@ -9,6 +9,8 @@ import IconLucideFileText from "~icons/lucide/file-text";
 import IconLucideSearch from "~icons/lucide/search";
 import IconLucideDatabase from "~icons/lucide/database";
 import { useCacheStats } from "@/composables/useCacheStats";
+import { cacheClient } from "@/core/cacheClient";
+import type { CacheCategory } from "@shared/types/cache";
 
 defineOptions({ inheritAttrs: false });
 
@@ -26,7 +28,7 @@ const totalSize = computed(() => dbStats.value.reduce((sum, stat) => sum + stat.
 
 onMounted(load);
 
-const requestClear = async (id: string): Promise<void> => {
+const requestClear = async (id: CacheCategory): Promise<void> => {
   const confirmed = await dialog.confirm({
     title: t("settings.cacheCategoryClear.confirmTitle", {
       name: t(`settings.cacheCategory.${id}`),
@@ -37,7 +39,7 @@ const requestClear = async (id: string): Promise<void> => {
   if (!confirmed) return;
   clearingId.value = id;
   try {
-    await window.api.cache.clear(id);
+    await cacheClient.clear(id);
     await refresh();
   } finally {
     clearingId.value = null;
@@ -53,7 +55,7 @@ const requestClearAll = async (): Promise<void> => {
   if (!confirmed) return;
   clearingKind.value = "db";
   try {
-    await window.api.cache.clearAllByKind("db");
+    await cacheClient.clearAllByKind("db");
     await refresh();
   } finally {
     clearingKind.value = null;

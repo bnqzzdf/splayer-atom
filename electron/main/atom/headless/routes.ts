@@ -21,6 +21,7 @@ import {
   getCacheDir,
   getCacheStats,
   resetCacheDir,
+  switchCacheDir,
   type CacheCategory,
   type CacheKind,
 } from "@main/services/cache";
@@ -170,6 +171,16 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.get("/cache/stats", async (c) => c.json(await getCacheStats()));
   api.get("/cache/dir", (c) => c.json({ dir: getCacheDir() }));
+  api.post("/cache/dir", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { dir?: unknown } | null;
+    if (typeof body?.dir !== "string") return c.json({ error: "cache_dir_required" }, 400);
+    try {
+      const dir = await resolveCoreDirectory(body.dir);
+      return c.json(await switchCacheDir(dir));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
   api.post("/cache/clear", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
     if (typeof body?.id !== "string" || !CACHE_CATEGORIES.has(body.id as CacheCategory)) {

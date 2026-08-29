@@ -29,6 +29,7 @@ import { libraryClient } from "@/core/libraryClient";
 import { downloadClient } from "@/core/downloadClient";
 import { playlistClient } from "@/core/playlistClient";
 import { statsClient } from "@/core/statsClient";
+import { cacheClient } from "@/core/cacheClient";
 
 interface OutputSnapshot {
   selected: string | null;
@@ -533,19 +534,10 @@ export const installWebApi = async (): Promise<void> => {
       onEvent: () => noopSubscription(),
     },
     cache: {
-      getStats: () => request("/cache/stats"),
-      clear: async (id: string) => {
-        await request("/cache/clear", { method: "POST", body: JSON.stringify({ id }) });
-      },
-      clearAllByKind: async (kind: "file" | "db") => {
-        await request("/cache/clear-all", { method: "POST", body: JSON.stringify({ kind }) });
-      },
-      getDir: async () => (await request<{ dir: string }>("/cache/dir")).dir,
+      ...cacheClient,
       pickDir: async () => {
         throw new Error("Web Control does not provide a Core filesystem picker");
       },
-      resetDir: async () =>
-        (await request<{ dir: string }>("/cache/reset-dir", { method: "POST" })).dir,
       song: {
         lookup: async () => {
           throw new Error("Core owns song-cache lookup in Web Control");

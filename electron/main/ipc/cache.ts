@@ -5,12 +5,12 @@ import {
   getCacheDir,
   getCacheStats,
   resetCacheDir,
-  switchCacheDir,
   type CacheCategory,
   type CacheKind,
 } from "@main/services/cache";
 import * as songCache from "@main/services/songCache";
 import type { TrackSource } from "@shared/types/player";
+import { resolveCoreDirectory } from "@main/services/coreFilesystem";
 
 export type { CacheCategory, CacheKind, CacheStat } from "@main/services/cache";
 
@@ -30,7 +30,7 @@ export const registerCacheIpc = (): void => {
     if (result.canceled || result.filePaths.length === 0) {
       return { ok: false, dir: current, reason: "canceled" as const };
     }
-    return switchCacheDir(result.filePaths[0]);
+    return { ok: true, dir: await resolveCoreDirectory(result.filePaths[0]) };
   });
 
   ipcMain.handle("cache:resetDir", () => resetCacheDir());

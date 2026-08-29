@@ -17,18 +17,9 @@ import { clearLyricMatchCache } from "@main/database/lyricMatchCache";
 import * as songCache from "@main/services/songCache";
 import { systemLog } from "@main/utils/logger";
 import { defaultCacheDir } from "@main/utils/paths";
+import type { CacheCategory, CacheKind, CacheStat, CacheSwitchResult } from "@shared/types/cache";
 
-export type CacheCategory =
-  "covers" | "artists" | "backgrounds" | "songs" | "lyric" | "lyricTTML" | "lyricMatch";
-
-export type CacheKind = "file" | "db";
-
-export interface CacheStat {
-  id: CacheCategory;
-  kind: CacheKind;
-  path: string;
-  size: number;
-}
+export type { CacheCategory, CacheKind, CacheStat } from "@shared/types/cache";
 
 /**
  * 递归累计目录占用。
@@ -179,9 +170,7 @@ export const getCacheDir = (): string => getAppCacheDir();
  * 切换 Core cache 根目录；调用方负责取得 Core 主机上的真实目录路径。
  * @param next - Core 主机上的目标目录
  */
-export const switchCacheDir = async (
-  next: string,
-): Promise<{ ok: boolean; dir: string; reason?: "notEmpty" }> => {
+export const switchCacheDir = async (next: string): Promise<CacheSwitchResult> => {
   const current = getAppCacheDir();
   if (!(await isDirEmpty(next))) return { ok: false, dir: current, reason: "notEmpty" };
   await Promise.all(idsByKind("file").map((id) => categoryHandlers[id].clear()));

@@ -14,6 +14,8 @@ import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDatabase from "~icons/lucide/database";
 import { useCacheStats } from "@/composables/useCacheStats";
 import { hasHostCapability } from "@/runtime";
+import { cacheClient } from "@/core/cacheClient";
+import type { CacheCategory } from "@shared/types/cache";
 
 defineOptions({ inheritAttrs: false });
 
@@ -44,11 +46,13 @@ const handlePickDir = async (): Promise<void> => {
   });
   if (!confirmed) return;
   const result = await window.api.cache.pickDir();
-  if (!result.ok) {
-    if (result.reason === "notEmpty") toast.error(t("settings.cacheDir.notEmpty"));
+  if (!result.ok) return;
+  const switched = await cacheClient.setDir(result.dir);
+  if (!switched.ok) {
+    if (switched.reason === "notEmpty") toast.error(t("settings.cacheDir.notEmpty"));
     return;
   }
-  setCacheDir(result.dir);
+  setCacheDir(switched.dir);
   await refresh();
   toast.success(t("settings.cacheDir.changedHint"));
 };
@@ -60,7 +64,7 @@ const handleResetDir = async (): Promise<void> => {
     type: "warning",
   });
   if (!confirmed) return;
-  setCacheDir(await window.api.cache.resetDir());
+  setCacheDir(await cacheClient.resetDir());
   await refresh();
 };
 
@@ -68,7 +72,7 @@ const handleOpenDir = (): void => {
   if (cacheDir.value) void window.api.system.showInExplorer(cacheDir.value);
 };
 
-const requestClear = async (id: string): Promise<void> => {
+const requestClear = async (id: CacheCategory): Promise<void> => {
   const confirmed = await dialog.confirm({
     title: t("settings.cacheCategoryClear.confirmTitle", {
       name: t(`settings.cacheCategory.${id}`),
@@ -79,7 +83,7 @@ const requestClear = async (id: string): Promise<void> => {
   if (!confirmed) return;
   clearingId.value = id;
   try {
-    await window.api.cache.clear(id);
+    await cacheClient.clear(id);
     await refresh();
   } finally {
     clearingId.value = null;
@@ -95,7 +99,7 @@ const requestClearAll = async (): Promise<void> => {
   if (!confirmed) return;
   clearingKind.value = "file";
   try {
-    await window.api.cache.clearAllByKind("file");
+    await cacheClient.clearAllByKind("file");
     await refresh();
   } finally {
     clearingKind.value = null;
