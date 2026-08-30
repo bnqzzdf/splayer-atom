@@ -40,6 +40,7 @@
     "test:native": "cargo test --workspace",
     "test:all": "pnpm test && pnpm test:native",
     "build:native": "tsx scripts/build-native.ts",
+    "check:hardware-release": "tsx scripts/atom/check-hardware-release.ts",
     "start": "electron-vite preview",
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "build": "rimraf dist && pnpm build:native && pnpm typecheck && electron-vite build",

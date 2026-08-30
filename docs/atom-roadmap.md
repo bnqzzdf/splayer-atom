@@ -741,6 +741,8 @@ library fixture / queue / playback smoke
 
 当前自动化在打包前以 reference Node 对 production `plugin-host.js` 执行 `hostReady → ping → pong` IPC smoke，再对最终 `tar.gz` 执行 `extract → launcher → /api/info → /api/session → /api/library/count → Web root → SIGTERM`。artifact 同时携带 deployment guide/systemd installer；重复 staging 的 deterministic archive 约束仍保留。真实 playback 与硬件仍不由这些 smoke 代替。
 
+真实主机使用 `scripts/atom/check-hardware-release.ts` 采集默认只读、脱敏的 Core identity/output/session 诊断，并按 `docs/hardware-release-checklist.md` 记录人工 DAC/bitstream 证据；在线平台真实账号结果按 `docs/live-provider-acceptance.md` 记录。工具和模板就绪不改变下列 hardware/live 项的未完成状态。
+
 之后在真实音频主机执行 Hardware Release Gate：
 
 - [ ] 真实 ALSA hardware playback。
@@ -900,6 +902,8 @@ docs/atom-roadmap.md      当前未完成事项、优先级、验收标准
 docs/atom-development.md  开发环境、构建、维护规则
 docs/build-flavors.md     Desktop / Core flavor 与发行边界
 docs/core-deployment.md   Core 安装、升级、回滚与 systemd 运维
+docs/hardware-release-checklist.md  真实 ALSA/Diretta/DAC 发布验收
+docs/live-provider-acceptance.md    Netease/Qobuz/TIDAL 真实账号验收
 task_plan.md              当前阶段、下一步与架构护栏
 findings.md               当前发现与决策
 progress.md               当前交付状态与最近进展
