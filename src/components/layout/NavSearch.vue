@@ -9,6 +9,7 @@ import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/n
 import { parseMusicLink, type LinkType } from "@/utils/link";
 import type { TrackSource } from "@shared/types/player";
 import * as player from "@/core/player";
+import { hasHostCapability } from "@/runtime";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideUser from "~icons/lucide/user";
 import IconLucideDisc from "~icons/lucide/disc";
@@ -19,6 +20,7 @@ const { t, locale } = useI18n();
 const router = useRouter();
 const data = useDataStore();
 const status = useStatusStore();
+const recognitionAvailable = hasHostCapability("musicRecognition");
 
 /** 弹窗开关挂在 status store，便于快捷键打开 */
 const dialogOpen = computed({
@@ -290,6 +292,7 @@ onMounted(() => {
       </span>
     </div>
     <SButton
+      v-if="recognitionAvailable"
       class="app-no-drag shrink-0"
       variant="tertiary"
       circle
@@ -301,7 +304,7 @@ onMounted(() => {
     </SButton>
   </div>
   <!-- 听歌识曲 -->
-  <RecognitionDialog v-model:open="recognitionOpen" />
+  <RecognitionDialog v-if="recognitionAvailable" v-model:open="recognitionOpen" />
   <!-- 搜索 -->
   <SDialog
     v-model:open="dialogOpen"

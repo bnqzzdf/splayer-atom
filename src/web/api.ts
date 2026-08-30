@@ -1,7 +1,7 @@
 import { isManagedProviderPlatform, type ApiPlatform } from "@shared/types/apis";
 import type { CoreInfo } from "@shared/types/core";
 import type { CoreControlEvent } from "@shared/types/coreEvents";
-import type { ConfigApi, SystemConfig } from "@shared/types/settings";
+import { isCoreOwnedSettingPath, type ConfigApi, type SystemConfig } from "@shared/types/settings";
 import type { LibraryApi } from "@shared/types/library";
 import type { LyricsApi } from "@shared/types/lyrics";
 import type { NowPlayingApi } from "@shared/types/nowPlaying";
@@ -16,6 +16,8 @@ import type {
   PlayerStatus,
   Track,
 } from "@shared/types/player";
+import { defaultSystemConfig } from "@shared/defaults/settings";
+import { getByPath, setByPath } from "@shared/utils/path";
 import { request, serverAssetUrl, webAssetUrl } from "./client";
 import {
   isCoreControlEvent,
@@ -31,6 +33,7 @@ import { playlistClient } from "@/core/playlistClient";
 import { statsClient } from "@/core/statsClient";
 import { cacheClient } from "@/core/cacheClient";
 import { nowPlayingClient } from "@/core/nowPlayingClient";
+import { pluginClient } from "@/core/pluginClient";
 import { commentsClient } from "@/core/commentsClient";
 import { lyricsClient } from "@/core/lyricsClient";
 
@@ -95,20 +98,67 @@ const subscribeEvent = subscribeControlEvent;
 const sessionResponse = (loader: () => Promise<PlaybackSessionSnapshot>) =>
   asIpc(async () => mapSession(await loader()));
 
+const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
+const WEB_CONTROL_SETTING_PATHS = new Set([
+  "system.onboardingCompleted",
+  "system.agreedAgreementVersion",
+  "system.uiZoom",
+]);
+
+/** Web 仅持久化明确属于 This Control 的兼容 SystemConfig 字段。 */
+const assertWebControlSettingPath = (keyPath: string): void => {
+  if (isCoreOwnedSettingPath(keyPath)) {
+    throw new Error(`Core setting must use Core Protocol: ${keyPath}`);
+  }
+  if (!WEB_CONTROL_SETTING_PATHS.has(keyPath)) {
+    throw new Error(`Setting is not owned by Web Control: ${keyPath}`);
+  }
+};
+
+/** Web 仅持久化 This Control 路径；Core-owned 设置永远来自 Core snapshot。 */
+const loadWebControlEntries = (): Record<string, unknown> => {
+  try {
+    const raw = localStorage.getItem(WEB_CONTROL_CONFIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const applyWebControlEntry = (keyPath: string, value: unknown): void => {
+  if (keyPath === "system.uiZoom" && typeof value === "number" && Number.isFinite(value)) {
+    const percent = Math.max(50, Math.min(200, value));
+    document.documentElement.style.setProperty("zoom", `${percent}%`);
+  }
+};
+
+const saveWebControlEntry = (keyPath: string, value: unknown): void => {
+  assertWebControlSettingPath(keyPath);
+  const entries = loadWebControlEntries();
+  entries[keyPath] = value;
+  localStorage.setItem(WEB_CONTROL_CONFIG_KEY, JSON.stringify(entries));
+  applyWebControlEntry(keyPath, value);
+};
+
+const getWebControlConfig = (): SystemConfig => {
+  const config = structuredClone(defaultSystemConfig);
+  for (const [keyPath, value] of Object.entries(loadWebControlEntries())) {
+    if (WEB_CONTROL_SETTING_PATHS.has(keyPath)) setByPath(config, keyPath, value);
+  }
+  return config;
+};
+
 const configApi: ConfigApi = {
   get: async (keyPath) => {
-    const all = await request<SystemConfig>("/config");
-    let value: unknown = all;
-    for (const key of keyPath.split(".")) {
-      if (!value || typeof value !== "object") return undefined;
-      value = (value as Record<string, unknown>)[key];
-    }
-    return value;
+    assertWebControlSettingPath(keyPath);
+    return getByPath(getWebControlConfig(), keyPath);
   },
-  set: async (keyPath, value) => {
-    await request("/config", { method: "POST", body: JSON.stringify({ keyPath, value }) });
-  },
-  getAll: () => request<SystemConfig>("/config"),
+  set: async (keyPath, value) => saveWebControlEntry(keyPath, value),
+  getAll: async () => getWebControlConfig(),
   reset: async () => {
     throw new Error("Web runtime does not expose configuration reset");
   },
@@ -527,6 +577,14 @@ export const installWebApi = async (): Promise<void> => {
         },
       },
     },
+    plugins: {
+      ...pluginClient,
+      install: async () => ({
+        ok: false,
+        error: "Web Control cannot install a Core plugin by host path",
+      }),
+      pickAndInstall: async () => ({ ok: false, cancelled: true }),
+    },
     comments: commentsClient,
     download: {
       ...downloadClient,
@@ -549,4 +607,7 @@ export const installWebApi = async (): Promise<void> => {
     },
   };
   window.api = api as unknown as Window["api"];
+  for (const [keyPath, value] of Object.entries(loadWebControlEntries())) {
+    if (WEB_CONTROL_SETTING_PATHS.has(keyPath)) applyWebControlEntry(keyPath, value);
+  }
 };

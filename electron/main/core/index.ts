@@ -22,6 +22,10 @@ import { shutdownCorePlayStats } from "@main/services/headlessPlayStats";
 import { pluginRegistry } from "@main/plugins/registry";
 import { isHeadless } from "./mode";
 import {
+  registerPluginControlEvents,
+  unregisterPluginControlEvents,
+} from "@main/services/pluginControl";
+import {
   init as initPlaybackBridge,
   dispose as disposePlaybackBridge,
 } from "@main/plugins/playbackBridge";
@@ -137,6 +141,7 @@ export const initApp = (): void => {
     }
     // 初始化插件系统
     pluginRegistry.init();
+    registerPluginControlEvents();
     // 初始化播放事件桥（需在 pluginRegistry.init 之后，读 hasEnabledControlPlugin）
     initPlaybackBridge();
     if (!headless) {
@@ -185,6 +190,7 @@ export const initApp = (): void => {
     closeDatabase();
     void stopServer();
     void stopMcpServer();
+    unregisterPluginControlEvents();
     void pluginRegistry.shutdown();
     disposePlaybackBridge();
     disposeUpdater();

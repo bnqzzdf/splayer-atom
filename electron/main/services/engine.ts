@@ -87,6 +87,13 @@ export const setPreampGain = (preampDb: number): void => {
   }
 };
 
+/** 同步渐入渐出时长到已创建的播放器；实例尚未创建时由 session 初始化读取配置。 */
+export const setFadeDuration = (durationMs: number): void => {
+  if (playerInstance) {
+    playerInstance.setFadeDuration(durationMs);
+  }
+};
+
 /** 同步当前封面缓存目录到原生引擎（缓存路径切换时调用） */
 export const syncCoverCacheDir = (): void => {
   if (playerInstance) {

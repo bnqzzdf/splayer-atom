@@ -19,8 +19,9 @@ const wsBroadcastSource = read(new URL("../server/broadcast.ts", import.meta.url
 test("Core Domain projections use one event envelope on Desktop and Web", () => {
   assert.match(publisherSource, /publishDesktopEvent\("core:event", event\)/);
   assert.match(publisherSource, /wsBroadcast\(event\)/);
-  assert.match(preloadSource, /ipcRenderer\.removeAllListeners\("core:event"\)/);
+  assert.doesNotMatch(preloadSource, /ipcRenderer\.removeAllListeners\("core:event"\)/);
   assert.match(preloadSource, /subscribe<CoreControlEvent>\("core:event", callback\)/);
+  assert.match(preloadSource, /ipcRenderer\.removeListener\(channel, handler\)/);
   assert.match(eventClientSource, /coreEvents: CoreEventsApi/);
   assert.match(eventClientSource, /return coreEvents\.onEvent/);
   assert.match(eventClientSource, /new WebSocket\(`\$\{wsOrigin\}\/ws`\)/);
@@ -34,6 +35,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
     "downloadProgress",
     "streamingLibraryUpdated",
     "lyricOffset",
+    "pluginStatus",
   ]) {
     assert.match(eventTypesSource, new RegExp(`type: "${type}"`));
   }

@@ -312,7 +312,7 @@ export interface McpAgentApp {
   name: string;
   /** 配置文件路径 */
   configPath: string;
-  /** 是否已配置 splayer-next */
+  /** 是否已配置 SPlayer Atom MCP */
   configured: boolean;
   /** 是否支持自动写入配置 */
   injectable: boolean;
@@ -425,13 +425,13 @@ export interface WindowStates {
 }
 
 /** 应用更新通道 */
-export type UpdateChannel = "stable" | "beta" | "alpha";
+export type UpdateChannel = "stable" | "beta";
 
 /** 应用更新配置 */
 export interface AppUpdateSettings {
   /** 自动检查更新 */
   autoCheck: boolean;
-  /** 更新通道：stable 正式通道 / beta 预览通道 / alpha 内测通道 */
+  /** 更新通道：stable 正式通道 / beta 预览通道 */
   channel: UpdateChannel;
 }
 
@@ -504,6 +504,77 @@ export interface SystemConfig {
   /** 快捷键配置（独立于其他配置，由 hotkey 模块独占） */
   hotkeys: HotkeyConfig;
 }
+
+/** Core Settings 读取快照；Host / Control-local / Plugin 专属配置不在这里投影。 */
+export interface CoreSettingsSnapshot {
+  player: PlayerSettings;
+  library: LibrarySettings;
+  lyric: OnlineLyricSettings;
+  localLyric: LocalLyricSettings;
+  cache: CacheSettings;
+  download: DownloadSettings;
+  streaming: StreamingSettings;
+  system: Pick<
+    SystemConfig["system"],
+    "neteaseRealIp" | "networkProxy" | "neteaseScrobbleEnabled" | "neteaseScrobbleMode"
+  >;
+}
+
+/** Core Domain 持有的全部配置前缀；其中部分 mutation 由专用 domain client 负责。 */
+const CORE_OWNED_SETTING_PREFIXES = [
+  "player.",
+  "library.",
+  "lyric.",
+  "localLyric.",
+  "cache.",
+  "download.",
+  "streaming.",
+  "system.networkProxy.",
+] as const;
+
+/** 由 Core Domain 持有、允许通过共享 Core Settings Protocol 修改的配置路径。 */
+const CORE_SETTING_PREFIXES = [
+  "player.",
+  "lyric.",
+  "localLyric.",
+  "cache.songCache.",
+  "download.",
+  "system.networkProxy.",
+] as const;
+
+const CORE_SETTING_PATHS = new Set([
+  "streaming.enabled",
+  "system.neteaseRealIp",
+  "system.neteaseScrobbleEnabled",
+  "system.neteaseScrobbleMode",
+  "system.networkProxy",
+]);
+
+const CORE_OWNED_SETTING_PATHS = new Set(CORE_SETTING_PATHS);
+
+const DEDICATED_CORE_SETTING_PATHS = new Set([
+  "player.outputDevice",
+  "player.volume",
+  "player.lyricOffsets",
+  "cache.dir",
+  "download.dir",
+]);
+
+/** 判断配置读取/持久化的最终 authority 是否属于 Core Domain。 */
+export const isCoreOwnedSettingPath = (keyPath: string): boolean => {
+  if (CORE_OWNED_SETTING_PATHS.has(keyPath)) return true;
+  return CORE_OWNED_SETTING_PREFIXES.some((prefix) => keyPath.startsWith(prefix));
+};
+
+/**
+ * 判断配置是否属于 Core Domain 的通用 settings mutation。
+ * 专用 output/cache/download/NowPlaying 路径继续走各自 domain client，避免绕过校验与副作用。
+ */
+export const isCoreSettingPath = (keyPath: string): boolean => {
+  if (DEDICATED_CORE_SETTING_PATHS.has(keyPath)) return false;
+  if (CORE_SETTING_PATHS.has(keyPath)) return true;
+  return CORE_SETTING_PREFIXES.some((prefix) => keyPath.startsWith(prefix));
+};
 
 /** 配置 API */
 export interface ConfigApi {

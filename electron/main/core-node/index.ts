@@ -34,6 +34,7 @@ const start = async (): Promise<void> => {
     server,
     { store },
     { pluginRegistry },
+    { registerPluginControlEvents, unregisterPluginControlEvents },
   ] = await Promise.all([
     import("@main/utils/logger"),
     import("@main/database"),
@@ -45,6 +46,7 @@ const start = async (): Promise<void> => {
     import("@main/server"),
     import("@main/store"),
     import("@main/plugins/registry"),
+    import("@main/services/pluginControl"),
   ]);
 
   initLogger();
@@ -52,6 +54,7 @@ const start = async (): Promise<void> => {
   database.initDatabase();
   await songCache.init();
   pluginRegistry.init();
+  registerPluginControlEvents();
   corePlayerEvents.registerCorePlayerEvents();
   await downloadManager.init();
   await playbackSession.initPlaybackSession();
@@ -69,6 +72,7 @@ const start = async (): Promise<void> => {
     songCache.shutdown();
     downloadManager.shutdown();
     corePlayStats.shutdownCorePlayStats();
+    unregisterPluginControlEvents();
     await pluginRegistry.shutdown();
     await server.stopServer();
     database.closeDatabase();

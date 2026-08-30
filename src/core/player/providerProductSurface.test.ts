@@ -12,6 +12,14 @@ const pluginPlaybackSource = readFileSync(
   "utf8",
 );
 const statusStoreSource = readFileSync(new URL("../../stores/status.ts", import.meta.url), "utf8");
+const favoritesPageSource = readFileSync(
+  new URL("../../pages/Favorites.vue", import.meta.url),
+  "utf8",
+);
+const dailyPageSource = readFileSync(new URL("../../pages/Daily.vue", import.meta.url), "utf8");
+const cloudPageSource = readFileSync(new URL("../../pages/Cloud.vue", import.meta.url), "utf8");
+const userStoreSource = readFileSync(new URL("../../stores/user.ts", import.meta.url), "utf8");
+const neteaseApiSource = readFileSync(new URL("../../apis/netease.ts", import.meta.url), "utf8");
 
 test("Atom formal search surface freezes QQ Music and Kugou without deleting compatibility", () => {
   assert.match(
@@ -40,4 +48,20 @@ test("Desktop and Web reuse the library API for local song album and artist sear
   assert.match(searchPageSource, /source: searchSource, albumId: item\.id/);
   assert.match(searchPageSource, /source: searchSource, artistId: item\.id/);
   assert.doesNotMatch(searchPageSource, /webSearchPlatforms/);
+});
+
+test("Headless Web Netease account pages reuse the shared Core provider surface", () => {
+  assert.match(favoritesPageSource, /useUserStore\(\)/);
+  assert.match(dailyPageSource, /useUserStore\(\)/);
+  assert.match(dailyPageSource, /data\.ensureDailyRecommend\(true\)/);
+  assert.match(cloudPageSource, /useUserStore\(\)/);
+  assert.match(cloudPageSource, /hasHostCapability\("cloudUpload"\)/);
+  assert.match(cloudPageSource, /v-if="cloudUploadAvailable"/);
+  assert.match(userStoreSource, /useProviderSessionsStore\(\)/);
+  assert.match(userStoreSource, /providerSessions\.isAuthenticated\("netease"\)/);
+  assert.match(neteaseApiSource, /providerClient\.call\("netease", name, params\)/);
+  assert.match(neteaseApiSource, /providerClient\.clearSession\("netease"\)/);
+  assert.doesNotMatch(favoritesPageSource, /window\.api\.apis/);
+  assert.doesNotMatch(dailyPageSource, /window\.api\.apis/);
+  assert.doesNotMatch(cloudPageSource, /window\.api\.apis/);
 });

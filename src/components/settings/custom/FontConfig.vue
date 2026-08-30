@@ -191,11 +191,13 @@ const handleSave = async (): Promise<void> => {
   settings.lyric.fontFamilyJapanese = draft.lyricJapanese;
   settings.lyric.fontFamilyKorean = draft.lyricKorean;
   settings.lyric.fontFamilyLatin = draft.lyricLatin;
-  await Promise.all([
-    settings.setSystem("desktopLyric.fontFamily", draft.desktopLyric),
-    settings.setSystem("dynamicIsland.fontFamily", draft.dynamicIsland),
-    settings.setSystem("taskbarLyric.fontFamily", draft.taskbarLyric),
-  ]);
+  if (externalLyricFontsAvailable) {
+    await Promise.all([
+      settings.setSystem("desktopLyric.fontFamily", draft.desktopLyric),
+      settings.setSystem("dynamicIsland.fontFamily", draft.dynamicIsland),
+      settings.setSystem("taskbarLyric.fontFamily", draft.taskbarLyric),
+    ]);
+  }
   open.value = false;
 };
 </script>

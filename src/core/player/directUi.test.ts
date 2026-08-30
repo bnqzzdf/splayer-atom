@@ -33,14 +33,6 @@ const settingsDialogSource = readFileSync(
   new URL("../../settings/useSettingsDialog.ts", import.meta.url),
   "utf8",
 );
-const generalSettingsSource = readFileSync(
-  new URL("../../settings/categories/general.ts", import.meta.url),
-  "utf8",
-);
-const appearanceSettingsSource = readFileSync(
-  new URL("../../settings/categories/appearance.ts", import.meta.url),
-  "utf8",
-);
 const aboutSettingsSource = readFileSync(
   new URL("../../components/settings/custom/AboutSettings.vue", import.meta.url),
   "utf8",
@@ -67,6 +59,12 @@ const settingsStoreSource = readFileSync(
   new URL("../../stores/settings.ts", import.meta.url),
   "utf8",
 );
+const navSearchSource = readFileSync(
+  new URL("../../components/layout/NavSearch.vue", import.meta.url),
+  "utf8",
+);
+const cloudPageSource = readFileSync(new URL("../../pages/Cloud.vue", import.meta.url), "utf8");
+const mainSource = readFileSync(new URL("../../main.ts", import.meta.url), "utf8");
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -138,25 +136,49 @@ test("Host-only Settings categories follow Control capabilities", () => {
   assert.match(settingsDialogSource, /: settingsSchema\[0\]\.id/);
 });
 
-test("General Settings hides Desktop shell, updater and file-dialog surfaces by Host capability", () => {
-  assert.match(runtimeSource, /"desktopUpdater"/);
+test("Web Settings hides Desktop-only service scopes without fake facades", () => {
+  assert.match(settingsSchemaSource, /isDesktopRenderer\(\) \? \[aiIntegrationCategory\] : \[\]/);
+  assert.match(settingsSchemaSource, /desktopOnlyServiceSections/);
+  assert.match(settingsSchemaSource, /"media", "discord", "lastfm", "externalApi"/);
   assert.match(
-    generalSettingsSource,
-    /hasHostCapability\("windowControls"\) \? \[systemConfigSection\]/,
+    settingsSchemaSource,
+    /isDesktopRenderer\(\) \|\| !desktopOnlyServiceSections\.has\(section\.id\)/,
   );
-  assert.match(generalSettingsSource, /hasHostCapability\("desktopUpdater"\) \? \[updateSection\]/);
-  assert.match(
-    generalSettingsSource,
-    /hasHostCapability\("nativeFileDialogs"\) \? \[backupResetSection\]/,
-  );
+  assert.match(settingsSchemaSource, /component: ProviderAccounts/);
+  assert.match(fontConfigSource, /if \(externalLyricFontsAvailable\) \{/);
 });
 
-test("Appearance hides Desktop-managed background images without native file dialogs", () => {
+test("Settings schema centralizes Desktop shell and native-file presentation boundaries", () => {
+  assert.match(runtimeSource, /"desktopUpdater"/);
   assert.match(
-    appearanceSettingsSource,
-    /key: "appearanceStyle"[\s\S]*visible: \(\) => hasHostCapability\("nativeFileDialogs"\)/,
+    settingsSchemaSource,
+    /section\.id === "systemConfig"\) return hasHostCapability\("windowControls"\)/,
+  );
+  assert.match(
+    settingsSchemaSource,
+    /section\.id === "update"\) return hasHostCapability\("desktopUpdater"\)/,
+  );
+  assert.match(
+    settingsSchemaSource,
+    /section\.id === "backupReset"\) return hasHostCapability\("nativeFileDialogs"\)/,
+  );
+  assert.match(
+    settingsSchemaSource,
+    /section\.id !== "appearanceStyle" \|\| hasHostCapability\("nativeFileDialogs"\)/,
   );
   assert.doesNotMatch(webApiSource, /theme:\s*\{/);
+});
+
+test("Recognition, Cloud upload and native CJK conversion are explicit Host capabilities", () => {
+  for (const capability of ["musicRecognition", "cloudUpload", "nativeCjkTransform"]) {
+    assert.match(runtimeSource, new RegExp(`"${capability}"`));
+  }
+  assert.match(navSearchSource, /hasHostCapability\("musicRecognition"\)/);
+  assert.match(navSearchSource, /v-if="recognitionAvailable"/);
+  assert.match(cloudPageSource, /hasHostCapability\("cloudUpload"\)/);
+  assert.match(cloudPageSource, /v-if="cloudUploadAvailable"/);
+  assert.match(settingsSchemaSource, /hasHostCapability\("nativeCjkTransform"\)/);
+  assert.match(settingsSchemaSource, /item\.key !== "cjkTransform"/);
 });
 
 test("Font settings do not pretend Web can enumerate Desktop system fonts", () => {
@@ -210,6 +232,17 @@ test("About Settings does not require an Electron facade in Web Control", () => 
   assert.match(aboutSettingsSource, /v-if="logDirectoryAvailable"/);
   assert.match(webApiSource, /request<CoreInfo>\("\/info"\)/);
   assert.match(webApiSource, /osInfo: \{ type: info\.platform, arch: info\.arch, release: "" \}/);
+});
+
+test("production Web mounts the shared SPlayer Control while HeadlessApp stays debug-only", () => {
+  assert.match(mainSource, /if \(window\.location\.pathname === "\/debug"\)/);
+  assert.match(mainSource, /await mountDebugWeb\(\)/);
+  assert.match(mainSource, /await mountSPlayer\(true\)/);
+  assert.match(mainSource, /document\.documentElement\.dataset\.atomRuntime = "web"/);
+  assert.match(mainSource, /await installWebApi\(\)/);
+  assert.match(mainSource, /import\("\.\/App\.vue"\)/);
+  assert.match(mainSource, /import\("\.\/router"\)/);
+  assert.match(mainSource, /await router\.replace\("\/library"\)/);
 });
 
 test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {

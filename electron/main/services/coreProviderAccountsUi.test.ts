@@ -6,9 +6,7 @@ const read = (url: URL): string => readFileSync(url, "utf8");
 const panelSource = read(
   new URL("../../../src/components/settings/custom/ProviderAccounts.vue", import.meta.url),
 );
-const servicesSource = read(
-  new URL("../../../src/settings/categories/services.ts", import.meta.url),
-);
+const settingsSchemaSource = read(new URL("../../../src/settings/schema.ts", import.meta.url));
 const headlessRoutesSource = read(new URL("../atom/headless/routes.ts", import.meta.url));
 const webApiSource = read(new URL("../../../src/web/api.ts", import.meta.url));
 const loginDialogSource = read(
@@ -18,7 +16,7 @@ const runtimeSource = read(new URL("../../../src/runtime.ts", import.meta.url));
 const sharedApisSource = read(new URL("../../../shared/types/apis.ts", import.meta.url));
 
 test("Qobuz and TIDAL account UI reuses existing Core auth actions without persisting tokens", () => {
-  assert.match(servicesSource, /component: ProviderAccounts/);
+  assert.match(settingsSchemaSource, /component: ProviderAccounts/);
   assert.match(panelSource, /qobuzCall\("auth_login", \{ user_auth_token: token \}\)/);
   assert.match(panelSource, /tidalCall\("auth_import", \{/);
   assert.match(panelSource, /access_token: accessToken/);

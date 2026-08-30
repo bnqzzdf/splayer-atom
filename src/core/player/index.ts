@@ -699,9 +699,9 @@ export const initPlayer = async (): Promise<void> => {
   if (!webRemote) {
     // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
     await useStreamingStore().init();
-    // 插件 store 同理：在线歌曲 URL 兜底走插件，列表必须在 loadTrack 前就绪
-    void usePluginsStore().load();
   }
+  // 插件列表来自同一 Core registry；Desktop/Web 都要在 loadTrack 前建立 projection。
+  void usePluginsStore().load();
   const status = useStatusStore();
   let legacyIndex = status.playIndex;
   let legacyRepeat: RepeatMode = status.repeatMode;

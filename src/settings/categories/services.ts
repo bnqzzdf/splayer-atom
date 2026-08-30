@@ -4,7 +4,6 @@ import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
 import ExternalApiStatusCard from "@/components/settings/custom/ExternalApiStatusCard.vue";
 import LastfmPanel from "@/components/settings/custom/LastfmPanel.vue";
-import ProviderAccounts from "@/components/settings/custom/ProviderAccounts.vue";
 import IconLucideGlobe from "~icons/lucide/globe";
 
 const servicesCategory: SettingCategory = {
@@ -109,18 +108,6 @@ const servicesCategory: SettingCategory = {
               defaultValue: "name",
             },
           ],
-        },
-      ],
-    },
-    {
-      id: "providerAccounts",
-      items: [
-        {
-          key: "providerAccounts",
-          type: "custom",
-          component: ProviderAccounts,
-          fullWidth: true,
-          keywords: ["Qobuz", "TIDAL"],
         },
       ],
     },

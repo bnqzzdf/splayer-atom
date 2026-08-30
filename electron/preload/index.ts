@@ -34,6 +34,29 @@ const subscribe = <T>(channel: string, callback: (data: T) => void): (() => void
   return () => ipcRenderer.removeListener(channel, handler);
 };
 
+/** Desktop preload 中 legacy facade 转发到同进程 Core Protocol。 */
+const coreControlRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(`atom-core://control/api${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
+  if (!response.ok) {
+    const message = data && typeof data === "object" && "error" in data ? data.error : null;
+    throw new Error(message || `HTTP ${response.status}`);
+  }
+  return data as T;
+};
+
+const coreControlPost = <T>(path: string, body?: unknown): Promise<T> =>
+  coreControlRequest<T>(path, {
+    method: "POST",
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+
 /**
  * 推断安装类型
  * @returns nsis | portable | appx | dmg | appimage
@@ -49,10 +72,8 @@ const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => 
 // 暴露给渲染进程的自定义 API
 const api = {
   coreEvents: {
-    onEvent: (callback: (event: CoreControlEvent) => void) => {
-      ipcRenderer.removeAllListeners("core:event");
-      return subscribe<CoreControlEvent>("core:event", callback);
-    },
+    onEvent: (callback: (event: CoreControlEvent) => void) =>
+      subscribe<CoreControlEvent>("core:event", callback),
   },
   config: {
     get: (keyPath: string) => ipcRenderer.invoke("config:get", keyPath),
@@ -434,39 +455,29 @@ const api = {
       subscribe<TaskbarLyricSettings>("taskbarLyric:configChange", callback),
   },
   plugins: {
-    // 列出所有已安装插件
-    list: () => ipcRenderer.invoke("plugin:list"),
-    // 从指定路径导入插件
+    // 插件业务统一走 Core Protocol；只有本地文件路径/picker 仍是 Desktop Host action。
+    list: () => coreControlRequest("/plugins"),
     install: (filePath: string) => ipcRenderer.invoke("plugin:install", filePath),
-    // 弹出原生文件选择框导入插件
     pickAndInstall: () => ipcRenderer.invoke("plugin:pickAndInstall"),
-    // 从远端 URL 下载并导入
-    installFromUrl: (url: string) => ipcRenderer.invoke("plugin:installFromUrl", url),
-    // 卸载
-    uninstall: (id: string) => ipcRenderer.invoke("plugin:uninstall", id),
-    // 启用/禁用
-    setEnabled: (id: string, enabled: boolean) =>
-      ipcRenderer.invoke("plugin:setEnabled", id, enabled),
-    // 写入控制类插件配置项
-    setSetting: (id: string, key: string, value: unknown) =>
-      ipcRenderer.invoke("plugin:setSetting", id, key, value),
-    // 手动检查更新
-    checkUpdate: (id: string) => ipcRenderer.invoke("plugin:checkUpdate", id),
-    // 一键更新
-    applyUpdate: (id: string) => ipcRenderer.invoke("plugin:applyUpdate", id),
-    // 解析播放 URL
-    resolveUrl: (args: PluginResolveUrlArgs) => ipcRenderer.invoke("plugin:resolveUrl", args),
-    // 触发插件自定义菜单项
-    invokeMenu: (args: PluginInvokeMenuArgs) => ipcRenderer.invoke("plugin:invokeMenu", args),
-    // 经插件兜底匹配歌词
-    matchLyric: (args: PluginMatchLyricArgs) => ipcRenderer.invoke("plugin:matchLyric", args),
-    // 经插件兜底匹配封面
-    matchCover: (args: PluginMatchCoverArgs) => ipcRenderer.invoke("plugin:matchCover", args),
-    // 拉取插件市场列表
-    market: () => ipcRenderer.invoke("plugin:market"),
-    // 订阅插件状态变化
+    installFromUrl: (url: string) => coreControlPost("/plugins/install-url", { url }),
+    uninstall: (id: string) => coreControlPost(`/plugins/${encodeURIComponent(id)}/uninstall`),
+    setEnabled: async (id: string, enabled: boolean) => {
+      await coreControlPost(`/plugins/${encodeURIComponent(id)}/enabled`, { enabled });
+    },
+    setSetting: async (id: string, key: string, value: unknown) => {
+      await coreControlPost(`/plugins/${encodeURIComponent(id)}/setting`, { key, value });
+    },
+    checkUpdate: (id: string) => coreControlPost(`/plugins/${encodeURIComponent(id)}/check-update`),
+    applyUpdate: (id: string) => coreControlPost(`/plugins/${encodeURIComponent(id)}/apply-update`),
+    resolveUrl: (args: PluginResolveUrlArgs) => coreControlPost("/plugins/resolve-url", args),
+    invokeMenu: (args: PluginInvokeMenuArgs) => coreControlPost("/plugins/invoke-menu", args),
+    matchLyric: (args: PluginMatchLyricArgs) => coreControlPost("/plugins/match-lyric", args),
+    matchCover: (args: PluginMatchCoverArgs) => coreControlPost("/plugins/match-cover", args),
+    market: () => coreControlRequest("/plugins/market"),
     onStatus: (callback: (info: PluginInfo) => void) =>
-      subscribe<PluginInfo>("plugin:status", callback),
+      subscribe<CoreControlEvent>("core:event", (event) => {
+        if (event.type === "pluginStatus") callback(event.data);
+      }),
   },
   apis: {
     // QQ/酷狗 legacy provider 调用；Managed Provider 已走 Core Protocol。

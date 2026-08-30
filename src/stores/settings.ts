@@ -10,12 +10,12 @@ import {
   DEFAULT_LYRIC_SOURCE_ORDER,
   SPRING_PRESETS,
 } from "@/types/settings";
-import type { SystemConfig, LocaleCode } from "@shared/types/settings";
+import { isCoreSettingPath, type SystemConfig, type LocaleCode } from "@shared/types/settings";
 import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
 import { hasHostCapability } from "@/runtime";
-import { playerClient } from "@/core/playerClient";
+import { settingsClient } from "@/core/settingsClient";
 
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
@@ -173,12 +173,20 @@ export const useSettingsStore = defineStore(
       }
     };
 
-    /** 从主进程拉取后端配置 */
+    /** 同步 This Control 配置与 Core Settings；Core snapshot 最后覆盖同名 domain 路径。 */
     const syncSystem = async (): Promise<void> => {
       try {
+        const [controlConfig, coreSettings] = await Promise.all([
+          window.api.config.getAll(),
+          settingsClient.getSnapshot(),
+        ]);
         deepAssign(
           system as unknown as Record<string, unknown>,
-          (await window.api.config.getAll()) as unknown as Record<string, unknown>,
+          controlConfig as unknown as Record<string, unknown>,
+        );
+        deepAssign(
+          system as unknown as Record<string, unknown>,
+          coreSettings as unknown as Record<string, unknown>,
         );
       } catch {}
     };
@@ -242,14 +250,13 @@ export const useSettingsStore = defineStore(
     const setSystem = async (keyPath: string, value: unknown): Promise<void> => {
       setByPath(system, keyPath, value);
       try {
-        await window.api.config.set(keyPath, value);
+        if (isCoreSettingPath(keyPath)) {
+          await settingsClient.set(keyPath, value);
+        } else {
+          await window.api.config.set(keyPath, value);
+        }
       } catch (err) {
-        console.error("[settings] config.set failed", keyPath, err);
-      }
-      if (keyPath === "player.fadeEnabled" || keyPath === "player.fadeDuration") {
-        await playerClient.setFadeDuration(
-          system.player.fadeEnabled ? system.player.fadeDuration : 0,
-        );
+        console.error("[settings] setting write failed", keyPath, err);
       }
     };
 

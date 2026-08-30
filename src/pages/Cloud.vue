@@ -7,6 +7,7 @@ import { useUserStore } from "@/stores/user";
 import SongList from "@/components/list/SongList.vue";
 import { formatFileSize } from "@/utils/format";
 import * as player from "@/core/player";
+import { hasHostCapability } from "@/runtime";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideCloud from "~icons/lucide/cloud";
@@ -15,6 +16,7 @@ import IconLucideCloudUpload from "~icons/lucide/cloud-upload";
 
 const { t } = useI18n();
 const user = useUserStore();
+const cloudUploadAvailable = hasHostCapability("cloudUpload");
 
 const playbackContext = computed<PlaybackContext>(() => ({
   originId: "cloud",
@@ -114,6 +116,7 @@ watch(
             {{ t("common.playAll") }}
           </SButton>
           <SButton
+            v-if="cloudUploadAvailable"
             variant="secondary"
             round
             :disabled="!user.isLoggedIn"
@@ -188,6 +191,6 @@ watch(
         </div>
       </div>
     </Transition>
-    <CloudUploadDialog v-model:open="uploadDialogOpen" />
+    <CloudUploadDialog v-if="cloudUploadAvailable" v-model:open="uploadDialogOpen" />
   </div>
 </template>

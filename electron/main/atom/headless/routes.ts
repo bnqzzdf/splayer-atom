@@ -8,6 +8,12 @@ import type { DownloadRequest } from "@shared/types/download";
 import type { Platform } from "@shared/types/platform";
 import type { StreamingServerInput } from "@shared/types/streaming";
 import type {
+  PluginInvokeMenuArgs,
+  PluginMatchCoverArgs,
+  PluginMatchLyricArgs,
+  PluginResolveUrlArgs,
+} from "@shared/types/plugin";
+import type {
   LoadOptions,
   PlaybackQueueItem,
   RepeatMode,
@@ -45,6 +51,21 @@ import {
   matchLyricByQuery,
 } from "@main/services/lyricMatching";
 import { store } from "@main/store";
+import { getCoreSettingsSnapshot, setCoreSetting } from "@main/services/coreSettings";
+import {
+  applyPluginUpdate,
+  checkPluginUpdate,
+  getPluginMarket,
+  installPluginFromUrl,
+  invokePluginMenu,
+  listPlugins,
+  matchPluginCover,
+  matchPluginLyric,
+  resolvePluginUrl,
+  setPluginEnabled,
+  setPluginSetting,
+  uninstallPlugin,
+} from "@main/services/pluginControl";
 import {
   appendQueue,
   clearQueue,
@@ -62,7 +83,6 @@ import {
   removeQueueIndex,
   removeServerTracks,
   replaceQueue,
-  refreshPlaybackPreload,
   reloadCurrent,
   scanDirettaDevices,
   seek,
@@ -157,8 +177,8 @@ export const buildHeadlessRoutes = (): Hono => {
     });
   });
 
-  api.get("/config", (c) => c.json(store.store));
-  api.post("/config", async (c) => {
+  api.get("/settings/core", (c) => c.json(getCoreSettingsSnapshot()));
+  api.post("/settings/core", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       keyPath?: unknown;
       value?: unknown;
@@ -166,15 +186,92 @@ export const buildHeadlessRoutes = (): Hono => {
     if (typeof body?.keyPath !== "string" || !body.keyPath) {
       return c.json({ error: "keyPath_required" }, 400);
     }
-    store.set(body.keyPath, body.value);
-    if (
-      body.keyPath === "player.songLevel" ||
-      body.keyPath === "player.allowTrialPlay" ||
-      body.keyPath === "player.preloadNextTrack"
-    ) {
-      refreshPlaybackPreload();
+    try {
+      setCoreSetting(body.keyPath, body.value);
+      return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
     }
-    return c.json({ ok: true });
+  });
+
+  api.get("/plugins", (c) => c.json(listPlugins()));
+  api.get("/plugins/market", async (c) => c.json(await getPluginMarket()));
+  api.post("/plugins/install-url", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { url?: unknown } | null;
+    if (typeof body?.url !== "string" || !body.url) {
+      return c.json({ ok: false, error: "plugin_url_required" }, 400);
+    }
+    return c.json(await installPluginFromUrl(body.url));
+  });
+  api.post("/plugins/:id/uninstall", async (c) => c.json(await uninstallPlugin(c.req.param("id"))));
+  api.post("/plugins/:id/enabled", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { enabled?: unknown } | null;
+    if (typeof body?.enabled !== "boolean") return c.json({ error: "enabled_required" }, 400);
+    try {
+      await setPluginEnabled(c.req.param("id"), body.enabled);
+      return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/plugins/:id/setting", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      key?: unknown;
+      value?: unknown;
+    } | null;
+    if (typeof body?.key !== "string" || !body.key) return c.json({ error: "key_required" }, 400);
+    try {
+      await setPluginSetting(c.req.param("id"), body.key, body.value);
+      return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/plugins/:id/check-update", async (c) =>
+    c.json(await checkPluginUpdate(c.req.param("id"))),
+  );
+  api.post("/plugins/:id/apply-update", async (c) =>
+    c.json(await applyPluginUpdate(c.req.param("id"))),
+  );
+  api.post("/plugins/resolve-url", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as PluginResolveUrlArgs | null;
+    if (!body || typeof body.pluginId !== "string" || typeof body.source !== "string") {
+      return c.json({ error: "plugin_resolve_args_invalid" }, 400);
+    }
+    try {
+      return c.json(await resolvePluginUrl(body));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/plugins/invoke-menu", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as PluginInvokeMenuArgs | null;
+    if (!body || typeof body.pluginId !== "string" || typeof body.menuId !== "string") {
+      return c.json({ ok: false, error: "plugin_menu_args_invalid" }, 400);
+    }
+    return c.json(await invokePluginMenu(body));
+  });
+  api.post("/plugins/match-lyric", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as PluginMatchLyricArgs | null;
+    if (!body || typeof body.pluginId !== "string" || typeof body.source !== "string") {
+      return c.json({ ok: false, error: "plugin_lyric_args_invalid" }, 400);
+    }
+    try {
+      return c.json(await matchPluginLyric(body));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.post("/plugins/match-cover", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as PluginMatchCoverArgs | null;
+    if (!body || typeof body.pluginId !== "string" || typeof body.source !== "string") {
+      return c.json({ ok: false, error: "plugin_cover_args_invalid" }, 400);
+    }
+    try {
+      return c.json(await matchPluginCover(body));
+    } catch (error) {
+      return commandError(c, error);
+    }
   });
 
   api.get("/cache/stats", async (c) => c.json(await getCacheStats()));

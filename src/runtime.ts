@@ -15,6 +15,9 @@ export type ControlHostCapability =
   | "hostFileSave"
   | "providerLoginWindow"
   | "systemFonts"
+  | "musicRecognition"
+  | "cloudUpload"
+  | "nativeCjkTransform"
   | "browserClipboard"
   | "browserDownload"
   | "browserNotification";
@@ -32,6 +35,9 @@ const desktopHostCapabilities = new Set<ControlHostCapability>([
   "hostFileSave",
   "providerLoginWindow",
   "systemFonts",
+  "musicRecognition",
+  "cloudUpload",
+  "nativeCjkTransform",
 ]);
 const webHostCapabilities = new Set<ControlHostCapability>([
   "browserClipboard",
