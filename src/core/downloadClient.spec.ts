@@ -16,6 +16,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 const request: DownloadRequest = {
+  destination: "core",
   taskId: "task-1",
   track: {
     id: "remote:1",
@@ -87,6 +88,7 @@ describe("Download Core Protocol client", () => {
     const tasks = await downloadClient.list();
 
     const body = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as DownloadRequest;
+    expect(body.destination).toBe("core");
     expect(body.track.cover).toBe("cache://covers/a.jpg");
     expect(body.coverUrl).toBe("cache://covers/a.jpg");
     expect(tasks[0]?.track.cover).toMatch(/\/cache\/covers\/a\.jpg$/);

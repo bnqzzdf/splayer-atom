@@ -98,6 +98,9 @@ test("obsolete renderer download-resolution protocol is removed end to end", () 
 });
 
 test("Desktop and Web Download requests share one Core client while picker stays Host-only", () => {
+  assert.match(downloadTypesSource, /destination: "core"/);
+  assert.match(downloadComposableSource, /destination: "core"/);
+  assert.match(routesSource, /request\.destination === "core"/);
   assert.match(downloadStoreSource, /downloadClient\.list\(\)/);
   assert.match(downloadStoreSource, /downloadClient\.cancel\(taskId\)/);
   assert.match(downloadComposableSource, /downloadClient\.start\(req\)/);

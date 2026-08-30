@@ -30,8 +30,10 @@ export interface DownloadTagOptions {
   saveTtml: boolean;
 }
 
-/** Control → Core 的下载请求 */
+/** Control → Core 的下载请求；音乐下载只允许落到 Core 主机，不存在 Control-local destination。 */
 export interface DownloadRequest {
+  /** 固定下载目标；协议层不接受浏览器/Desktop Control 本地落盘。 */
+  destination: "core";
   /** Control 生成的 UUID */
   taskId: string;
   track: Track;

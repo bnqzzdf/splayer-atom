@@ -4,6 +4,7 @@ import { ErrorCode } from "../../../shared/types/errors";
 import { shouldSkipDjTrack } from "../../../shared/utils/djMode";
 import {
   isSkippablePlaybackError,
+  neteaseUnavailableErrorCode,
   nextPlaybackPreloadIndex,
   playbackSourceCacheKey,
   shouldRetryPlaybackSource,
@@ -46,6 +47,7 @@ describe("isSkippablePlaybackError", () => {
       ErrorCode.NETWORK_ERROR,
       ErrorCode.URL_RESOLVE_FAILED,
       ErrorCode.NETEASE_VIP_REQUIRED,
+      ErrorCode.NETEASE_PURCHASE_REQUIRED,
       ErrorCode.NETEASE_TRIAL_DISABLED,
     ]) {
       assert.equal(isSkippablePlaybackError(code), true);
@@ -56,6 +58,14 @@ describe("isSkippablePlaybackError", () => {
     assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_NOT_FOUND), false);
     assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_INIT_FAILED), false);
     assert.equal(isSkippablePlaybackError(ErrorCode.UNKNOWN), false);
+  });
+});
+
+describe("neteaseUnavailableErrorCode", () => {
+  it("distinguishes VIP entitlement from fee=4 digital purchase restriction", () => {
+    assert.equal(neteaseUnavailableErrorCode(1), ErrorCode.NETEASE_VIP_REQUIRED);
+    assert.equal(neteaseUnavailableErrorCode("4"), ErrorCode.NETEASE_PURCHASE_REQUIRED);
+    assert.equal(neteaseUnavailableErrorCode(0), ErrorCode.NETEASE_UNAVAILABLE);
   });
 });
 

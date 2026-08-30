@@ -34,6 +34,7 @@ const SKIPPABLE_PLAYBACK_ERRORS = new Set<string>([
   ErrorCode.NO_PLUGIN_AVAILABLE,
   ErrorCode.NETEASE_LOGIN_EXPIRED,
   ErrorCode.NETEASE_VIP_REQUIRED,
+  ErrorCode.NETEASE_PURCHASE_REQUIRED,
   ErrorCode.NETEASE_TRIAL_DISABLED,
   ErrorCode.NETEASE_UNAVAILABLE,
 ]);
@@ -41,6 +42,14 @@ const SKIPPABLE_PLAYBACK_ERRORS = new Set<string>([
 /** 单曲级失败可由 Core 有界跳过；设备类/全局错误必须留给用户处理。 */
 export const isSkippablePlaybackError = (code: string): boolean =>
   SKIPPABLE_PLAYBACK_ERRORS.has(code);
+
+/** 网易无 URL 时按 fee 区分会员权益与数字单曲购买限制。 */
+export const neteaseUnavailableErrorCode = (fee: unknown): ErrorCode => {
+  const value = Number(fee);
+  if (value === 1) return ErrorCode.NETEASE_VIP_REQUIRED;
+  if (value === 4) return ErrorCode.NETEASE_PURCHASE_REQUIRED;
+  return ErrorCode.NETEASE_UNAVAILABLE;
+};
 
 /** Native sourceError 只允许在线/流媒体输入对同一 canonical Track fresh resolve 一次。 */
 export const shouldRetryPlaybackSource = (

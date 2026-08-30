@@ -133,6 +133,7 @@ const isDownloadRequest = (value: unknown): value is DownloadRequest => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Partial<DownloadRequest>;
   return (
+    request.destination === "core" &&
     typeof request.taskId === "string" &&
     !!request.taskId &&
     !!request.track &&

@@ -55,6 +55,7 @@ export const useDownload = () => {
       saveTtml: download.saveTtml,
     };
     const req: DownloadRequest = {
+      destination: "core",
       taskId: opts.taskId ?? crypto.randomUUID(),
       track,
       qualityLevel: level,

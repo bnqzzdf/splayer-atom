@@ -3,7 +3,10 @@ import { ErrorCode } from "@shared/types/errors";
 import type { PluginQuality } from "@shared/types/plugin";
 import type { Track } from "@shared/types/player";
 import { buildPluginPlaybackMusicInfo, pluginPlaybackSource } from "@shared/utils/pluginPlayback";
-import { playbackSourceCacheKey } from "@main/services/playbackSourcePolicy";
+import {
+  neteaseUnavailableErrorCode,
+  playbackSourceCacheKey,
+} from "@main/services/playbackSourcePolicy";
 import { callNetease } from "@main/apis/netease";
 import { callQobuz } from "@main/apis/qobuz";
 import { callTidal } from "@main/apis/tidal";
@@ -205,14 +208,8 @@ const resolveNetease = async (
     { url?: unknown; freeTrialInfo?: unknown; fee?: unknown } | undefined;
   const source = typeof item?.url === "string" ? item.url : "";
   if (!source) {
-    const fee = Number(item?.fee ?? track.fee);
-    if (fee === 1 || fee === 4) {
-      throw sourceError(
-        ErrorCode.NETEASE_VIP_REQUIRED,
-        `Netease track requires entitlement: ${track.id}`,
-      );
-    }
-    throw sourceError(ErrorCode.NETEASE_UNAVAILABLE, `Netease track unavailable: ${track.id}`);
+    const code = neteaseUnavailableErrorCode(item?.fee ?? track.fee);
+    throw sourceError(code, `Netease track unavailable: ${track.id} (${code})`);
   }
   const isTrial = item?.freeTrialInfo != null;
   if (isTrial && store.get("player.allowTrialPlay") !== true) {

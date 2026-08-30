@@ -35,8 +35,10 @@ export enum ErrorCode {
   NO_PLUGIN_AVAILABLE = "NO_PLUGIN_AVAILABLE",
   /** 在线平台登录态已失效 */
   NETEASE_LOGIN_EXPIRED = "NETEASE_LOGIN_EXPIRED",
-  /** 在线歌曲需要会员或单独购买 */
+  /** 在线歌曲需要会员权益 */
   NETEASE_VIP_REQUIRED = "NETEASE_VIP_REQUIRED",
+  /** 在线歌曲需要单独购买数字单曲/专辑 */
+  NETEASE_PURCHASE_REQUIRED = "NETEASE_PURCHASE_REQUIRED",
   /** 在线歌曲仅有试听源且试听播放被禁用 */
   NETEASE_TRIAL_DISABLED = "NETEASE_TRIAL_DISABLED",
   /** 在线歌曲暂无可用官方音源 */
