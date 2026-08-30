@@ -16,16 +16,20 @@ origin:     https://github.com/bnqzzdf/splayer-atom.git
 splayer:    fetch-only https://github.com/SPlayer-Dev/SPlayer-Next.git
 ```
 
-随后依据实际 `git diff` 整理出四个本地代码 checkpoint：
+随后依据实际 `git diff` 整理出六个本地 checkpoint：
 
 ```text
 8e08583 refactor: 收口 Core Settings 与 Plugin Control 边界
 98b71ef test: 固化 Core 下载与在线续播策略
 191eefe build: 建立 SPlayer Atom 独立发布身份
 4192f8f build: 固化 Atom Core artifact 与发布溯源
+f768c97 docs: 更新 Atom 软件冻结点与发布路线
+f1614b8 test: 增加硬件与在线账号验收入口
 ```
 
-本文件与 `AGENTS.md`、Roadmap、planning memory 的收口属于紧随其后的 documentation checkpoint。以上提交没有 push；`origin/dev` 仍停在 `9823f41`。继续工作前仍必须以当前 `git log --oneline --decorate`、`git status --short --branch` 与 `git diff` 为准，不得用本文件猜测 HEAD。
+`f768c97` 是首轮 `AGENTS.md`、Roadmap、planning memory 与 HANDOFF 收口；`f1614b8` 是随后按 HANDOFF 实施并通过验证的验收基础设施。以上提交没有 push；`origin/dev` 仍停在 `9823f41`。继续工作前仍必须以当前 `git log --oneline --decorate`、`git status --short --branch` 与 `git diff` 为准，不得用本文件猜测 HEAD。
+
+本次 Git 状态修正本身会形成紧随 `f1614b8` 的 documentation-only checkpoint；文件不自写该提交的 hash，实际值仍只从 `git log` 读取。
 
 历史 planning memory 中的 `12214ae`、`223c18e`、`fb77991` 是 `9823f41` 之前已经落入 ancestry 的旧 checkpoint，不是本轮 Settings/release 工作树已经提交的证据。
 
@@ -66,9 +70,9 @@ Core system final tar smoke:                         PASS
 Core bundled final tar smoke:                        PASS
 ```
 
-documentation checkpoint 后的 clean-tree gate 已重新通过 Node 280/280、Web 84/84、Node/Web typecheck、ESLint、当前 `origin/dev..HEAD` 全部变更文件的 Prettier、touch audit 105 / 22 / 13 / 14 与 commit-range whitespace check。全仓 `prettier --check .` 另发现 11 个本轮范围外的继承格式问题；它们没有被顺手重写。Desktop production build 与 clean-HEAD artifact smoke 仍应单独记录实际运行结果，不得用旧结果冒充。
+`f1614b8` 后的完整软件 gate 已通过 Node 283/283、Web 84/84、Node/Web typecheck、ESLint、当前变更文件的 Prettier、touch audit 105 / 22 / 13 / 14 与 whitespace check。全仓 `prettier --check .` 另发现 11 个本轮范围外的继承格式问题；它们没有被顺手重写。
 
-本轮 artifact smoke 在提交整理过程中生成，因此其中 `sourceDirty=true` 是对当时工作树的正确记录，不是正式 release candidate。正式 clean release CI 必须产生 `sourceDirty=false`。
+Desktop production build 已通过。system/bundled Core artifact 在 clean `f768c97` 上重新构建并通过最终 tar smoke，`runtime.json` 正确记录 `atomCommit=f768c97ee6b0240d7292aba11b5c47382d8754c1` 与 `sourceDirty=false`。`f1614b8` 只新增仓库侧验收脚本/测试/文档和 package command，没有改 Core runtime graph；正式 release candidate 仍须从最终选定的 clean commit 重建，不得复用旧 tar。
 
 ## 3. 当前外部阻塞
 
@@ -96,13 +100,13 @@ documentation checkpoint 后的 clean-tree gate 已重新通过 Node 280/280、W
 - 在 checkout 外预置只读 Diretta SDK 149。
 - 首次执行远端 `Core Diretta Release Gate --require-diretta`。
 
-## 4. 无账号/硬件时可做的下一项工作
+## 4. 已就绪的验收基础设施
 
 主线软件功能已经接近冻结。不要继续泛化 IPC cleanup 或发明新架构；只做能缩短真实验收路径的基础设施。
 
 ### Hardware release diagnostic
 
-可以新增一个 Atom-owned、只做观测与编排的脚本，例如 `scripts/atom/check-hardware-release.ts`：
+已新增 Atom-owned、只做观测与编排的 `scripts/atom/check-hardware-release.ts`：
 
 - 读取 `/api/info` 的 Atom/Core release identity 与 capability。
 - 列出 Core 可见 outputs，并明确 ALSA 与 Diretta。
@@ -111,11 +115,11 @@ documentation checkpoint 后的 clean-tree gate 已重新通过 Node 280/280、W
 - 失败时采集结构化诊断，不自行修改 settings/database/session 绕过失败。
 - 不声称能自动判断 DAC 前面板是否显示原始采样率或 DSD；该项必须人工确认。
 
-优先复用现有 Core Control Protocol，不新增 debug-only 高权限 API。
+脚本默认只发 Core Control Protocol GET；`--select-output`、`--play-pcm-index` 与 `--play-dsd-index` 是仅有的显式状态动作。它不新增 debug-only 高权限 API，不写 queue/settings/database，并以结构化 JSON 输出脱敏结果。
 
 ### 验收记录模板
 
-可以增加简洁的 hardware/live-provider checklist，至少记录：
+验收模板已落实到 `docs/hardware-release-checklist.md` 与 `docs/live-provider-acceptance.md`，至少记录：
 
 - artifact SHA256、Atom version/commit/sourceDirty、SPlayer baseline。
 - distro、kernel、Node variant、DAC/ALSA device、Diretta Target 与 Host SDK release。
@@ -127,7 +131,7 @@ documentation checkpoint 后的 clean-tree gate 已重新通过 Node 280/280、W
 
 ### 只读诊断包
 
-若实现诊断 bundle，只收集 `/api/info`、runtime metadata、sanitized output list、无敏感 URL 的 session metadata 和用户指定日志。必须主动脱敏 provider credential、Authorization、cookie、playable URL 与不必要的私人路径。
+当前脚本只收集 `/api/info`、`/api/status`、sanitized output list、无敏感 URL/路径的 session metadata 与可选 artifact SHA256；不会自动读取日志。任何后续诊断 bundle 仍只能加入用户明确指定且已脱敏的日志，并必须排除 provider credential、Authorization、cookie、playable URL 与不必要的私人路径。
 
 ## 5. 明确不要做
 
