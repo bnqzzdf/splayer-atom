@@ -104,7 +104,7 @@ test("Desktop renderer session and queue commands use the shared Core Protocol c
   assert.match(routesSource, /removeQueueIndex\(index, loadCurrent\)/);
 
   const sessionIpc =
-    /window\.api\.player\.(getSession|reloadSessionCurrent|migrateLegacySessionQueue|replaceSessionQueue|appendSessionQueue|insertSessionQueue|removeSessionQueueIndex|selectSessionIndex|nextSession|prevSession|updateSessionQueueItem|moveSessionQueue|removeSessionServerTracks|updateSessionQueueTracks|clearSessionQueue|setSessionRepeat|setSessionShuffle|startPersonalFm|dislikePersonalFm|setSessionAutoClose|cancelSessionAutoClose)/;
+    /window\.api\.player\s*\.\s*(getSession|reloadSessionCurrent|migrateLegacySessionQueue|replaceSessionQueue|appendSessionQueue|insertSessionQueue|removeSessionQueueIndex|selectSessionIndex|nextSession|prevSession|updateSessionQueueItem|moveSessionQueue|removeSessionServerTracks|updateSessionQueueTracks|clearSessionQueue|setSessionRepeat|setSessionShuffle|startPersonalFm|dislikePersonalFm|setSessionAutoClose|cancelSessionAutoClose)/;
   assert.doesNotMatch(controlSource, sessionIpc);
   assert.doesNotMatch(queueStoreSource, sessionIpc);
   assert.doesNotMatch(autoCloseSource, sessionIpc);

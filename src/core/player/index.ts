@@ -646,7 +646,7 @@ export const insertManyToQueue = (
   }
   if (fresh.length === 0) return 0;
   const insertAt = position === "end" ? queue.queue.value.length : status.playIndex + 1;
-  void window.api.player
+  void sessionClient
     .insertSessionQueue(toQueueItems(fresh, context), insertAt)
     .then((result) => applySessionResult(result))
     .catch((error) => console.error("[player] 批量插入权威队列失败:", error));
