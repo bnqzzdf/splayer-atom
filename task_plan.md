@@ -2,80 +2,57 @@
 
 ## Goal
 
-Build SPlayer Atom as a continuously updated downstream of SPlayer-Next. Reuse upstream capabilities wherever possible and keep Atom-specific behavior limited to the smallest proven delta.
+Maintain SPlayer Atom as a minimal downstream of SPlayer-Next. Keep Node Core authoritative,
+Desktop/Web as Controls, and Diretta strictly Source Direct.
 
 ## Current Phase
 
-Roadmap P3 — formal SPlayer Atom release identity is software-complete; remaining release blockers are live-account, Diretta-runner, and real hardware gates.
+Repository cleanup after the software release-boundary freeze. Remaining product release blockers
+are real accounts, a controlled Diretta SDK runner, and genuine ALSA/Diretta hardware evidence.
 
-## Current Baseline
+## Git Ground Truth
 
-- P0 upstream sync, Core-owned playback, Node Core runtime/artifacts, Core Protocol v1, provider-session projection, durable schema migration/backup, and deployment/upgrade/rollback are software-complete at their current checkpoints.
-- The latest validated repository baseline is Node 283/283, Web 84/84, Node/Web typecheck, ESLint/current-change-set Prettier, `git diff --check`, touch audit at 105 business / 22 runtime-neutral / 13 Core-authority plus a separately bounded 14-file product/release-identity seam. Both renamed Core tar variants pass extracted final-artifact smoke; Desktop production packaging also produced a real `splayer-atom-0.1.0-x86_64.AppImage`, and its packaged asar metadata contains Atom version/commit/dirty state/SPlayer baseline/repository identity.
-- Core comments, filesystem paths, library file operations, cache, Download, network-proxy testing, and audio-output reinitialization are projected through existing Core services/commands rather than parallel Web-owned implementations.
-- The shared `ControlAction` model now covers Track, Collection detail (playlist/album), Artist, and optional CoverList card presentation. Track right-click/row `...`, Collection/Artist primary+overflow actions, and Favorites card unsubscribe all consume shared semantic lists; provider execution stays in existing stores/services.
-- Diretta Source Direct remains bound by the source-rate/channel/sample/DSD-sequence invariants in `AGENTS.md`; SDK release provenance is pinned to Diretta SDK 149 for the first Linux x86-64 Core release.
+- Cleanup started from clean `90a5bcc` on `dev`; `origin/dev` was `9823f41` and local `dev` was ahead
+  by seven commits.
+- No push is authorized or performed.
+- Historical commit/run descriptions are advisory only; always re-read `git log/status/diff`.
 
 ## Active Work
 
-- [x] Added `f1614b8` (`test: 增加硬件与在线账号验收入口`): a read-only-by-default hardware release diagnostic and credential-free hardware/live-provider acceptance checklists reuse only existing Core Control Protocol routes. Explicit output/PCM/Native-DSD actions require CLI flags and format/device preflight; reports exclude private paths/playable URLs, and failures never mutate queue/settings/database or retry ambiguous Diretta discovery.
-- [x] Organized the validated worktree from the real `9823f41` baseline into four ownership-coherent local code checkpoints: `8e08583` (Core Settings / Plugin Control), `98b71ef` (Core-only Download / online playback acceptance), `191eefe` (Atom release identity), and `4192f8f` (Core artifact provenance). Corrected planning/handoff statements from the resulting `git log/status/diff`; no push was performed.
-- [x] Research-only feasibility assessment: replace the current Netease Node.js API implementation with `bnqzzdf/ncm-api-rs`; mapped current call sites/contracts, verified the Rust server build/smoke, identified compatibility and packaging gaps, and produced a staged architecture plus effort estimate without changing product code or disturbing the in-progress Settings worktree.
+- [x] Inventory tracked, untracked, ignored, generated, cached, and historical files.
+- [x] Move the completed root handoff to `history/handoffs/`; keep no tracked `HANDOFF.md`.
+- [x] Archive obsolete agent guidance and replace only active integration entrypoints with concise
+      pointers to `AGENTS.md` and `docs/atom-roadmap.md`.
+- [x] Archive unreferenced migration analysis and resolved investigation notes; remove `demo/`.
+- [x] Move package/build/Rust/native/tool caches into dated `history/generated/` categories.
+- [x] Preserve `node_modules/` as the active ignored pnpm installation, not historical content.
+- [x] Snapshot and compact root planning memory while keeping `task_plan.md`, `findings.md`, and
+      `progress.md` as required current-state files.
+- [x] Validate references, formatting, Node 283/283, Web 84/84, Node/Web typecheck, no-cache ESLint,
+      touch budgets 105 / 22 / 13 / 14, and the final Git diff.
+- [x] Stage the exact cleanup diff and verify it as one ownership-coherent commit. The commit
+      containing this planning line is the cleanup checkpoint; read its actual hash from `git log`.
 
-- [x] Compressed `AGENTS.md` against the current `docs/atom-roadmap.md`: removed stale upstream snapshots and transport assumptions while retaining downstream minimalism, Core/Control ownership, Diretta Source Direct, memory, persistence, validation, and commit rules.
-- [x] Keep Action Model UX evidence-driven: Track, Collection/Artist detail, and Favorites playlist/album/artist cover cards now expose shared semantic actions where real secondary actions exist; purely navigational CoverList callers remain click-only rather than inventing meaningless menus.
-- [x] Classify the audited ambiguous surfaces: network proxy and audio-output reinitialization are Core Domain; the Electron provider-login window and system-font enumeration are Control Host capabilities.
-- [x] Finish the no-op Host-surface reachability audit: Web no longer reaches Desktop updater/window/lyric initialization, file-explorer actions are capability-hidden, and lyric poster export uses browser download rather than Desktop host save. Remaining no-op fields are compatibility shape or frozen unsupported provider surface, not exposed product capability.
-- [x] Earlier ownership checkpoints `12214ae` (Control Action Model), `223c18e` (Core release/migration chain), and `fb77991` (§16 Core/Control convergence) are confirmed ancestors of the `9823f41` resume baseline; they are not descriptions of the later uncommitted Settings/release worktree.
-- [x] Push the reviewed `dev` commits to `origin` and obtain the first GitHub-hosted clean `Core System Gate` result; run `33245921866` passed for commit `fd5671f` on 2026-08-29.
-- [~] Secure Diretta SDK CI provisioning is defined as a manual `Core Diretta Release Gate`; the `diretta-release` Environment exists with a `dev`-only deployment policy, and ordinary hosted Core gates remained green through `be96ad6` (run `33249130671`). The later `02d761d` and `a6df408` pushes could not start any GitHub-hosted runner because GitHub reported the same billing/spending-limit account block; this is external CI infrastructure, not a code failure. Registering a trusted self-hosted `diretta-sdk-149` runner with SDK 149 pre-provisioned outside the checkout, then executing the first remote SDK-enabled gate, remain pending.
-- [x] Finish §16 Desktop/Core Control convergence at the audited boundary. Player request/event convergence, Settings authority/transport, Plugin Core Control, and known Web no-op/missing-facade reachability are complete: Recognition is `musicRecognition`, local Cloud upload is `cloudUpload`, and native OpenCC presentation is `nativeCjkTransform`; Web hides unsupported presentation while preserving real Core/provider capabilities. Further §16 work requires a newly proven Core parity gap rather than generic IPC cleanup.
-- [x] Close software-verifiable online playback acceptance without external credentials/hardware: the default Node suite behaviorally drives the real `playbackSession` through a three-track playlist, single fresh-resolve/advance semantics, fake ALSA → Diretta materialize/reload plus auto-next, and distinct Netease `fee=4` purchase classification, all within the 105 / 22 / 13 touch budgets.
-- [x] Remove the obsolete Headless/Core generic `/config` GET/POST after confirming it has no production/debug/retained-legacy consumer; Core settings remain on `/settings/core` plus dedicated domain APIs, while Desktop Host config stays local IPC and Web This-Control state stays local allowlisted persistence.
-- [x] Add the optional bundled Node deployment variant without a second Core implementation: `--bundle-node` stages reference Node 24.18.0 + its license under `runtime/`, records `nodeBundled`, and the final tar smoke proves the launcher actually executes the packaged Node before running the normal Core health checks. The existing `Core System Gate` now stages/smokes this variant after the system artifact without repeating native/Core/Web builds; remote evidence will arrive on the next pushed hosted run.
-- [x] Make music download explicitly Core-only. `DownloadRequest.destination` is the fixed literal `"core"`, the Core route rejects any other destination, shared Desktop/Web download actions always send that value, and user-facing menu/page/toast copy names Core. Control-local music download is intentionally out of product scope rather than a deferred second destination.
-- [x] Close Headless Web software reachability for shared local Library/Search/playback and Netease Favorites/Daily/Cloud pages: production Web mounts the same SPlayer App/router while `HeadlessApp` stays `/debug`-only; account pages reuse provider-session/Core Provider clients and Web hides only local cloud upload. Real-account page acceptance remains external/live-data work.
-- [x] Establish the formal **SPlayer Atom** release identity: independent `splayer-atom` package/repository, `io.github.bnqzzdf.splayer-atom` Desktop appId/GUID, Atom-only updater/publish target, stable/beta channels, Atom CI/artifact naming, independent `0.1.0` product version line, and Core/Desktop release provenance carrying Atom commit + dirty state + accepted SPlayer baseline. Core system/bundled final-artifact smokes pass with the renamed archives and metadata contract; a real Desktop AppImage and its updater manifest also use only Atom identity, formal release workflow requires the Atom repository + clean source tree, and About now shows Core version/commit/baseline/protocol/source state.
-- [x] Resolve same-machine **Orpheus compatibility protocol** ownership without breaking upstream links: Atom installers no longer statically claim `orpheus://`; the compatibility feature remains default-off and registers the upstream scheme only when the user explicitly enables `registerOrpheusProtocol` at runtime.
-- [ ] Complete live-account Qobuz/TIDAL and genuinely manual DAC/bitstream acceptance when user-owned credentials and hardware confirmation are available.
+## Retained Repository Material
 
-## Git Access
+- `docs/atom-roadmap.md` remains authoritative for scope/status; operational docs remain current.
+- `compat/legacy-http-contracts.json` remains because `report-http-contracts.mjs` consumes it.
+- `auto-eslint.mjs`, `dev-app-update.yml`, generated declaration files, and lockfiles remain because
+  current build/type/test tooling consumes or validates them.
+- Upstream-owned user documentation stays tracked; stale content should be updated through the
+  normal upstream/minimal-delta process rather than bulk-archived during cleanup.
 
-- The workspace, `.git`, and `.git/index` are writable.
-- `origin` is `https://github.com/bnqzzdf/splayer-atom.git`; the authenticated GitHub account has administrator access.
-- Local staging/commit dry-runs and `git push --dry-run origin dev` were verified successfully on 2026-08-29.
-- The `splayer` upstream remote intentionally has push disabled to prevent accidental upstream writes.
-- `origin/dev` remains at the `9823f41` resume baseline. The six reviewed checkpoints through `f1614b8` and the subsequent planning-only closeout are local only; this task did not authorize or perform a push.
+## Pending External Gates
 
-## Architecture Guardrails
-
-- Default to no Atom abstraction until current upstream proves one is needed.
-- Prefer upstream types, stores, services, registries, plugin APIs, persistence, and native interfaces over Atom-owned mirrors.
-- Headless and Web must reuse the authoritative SPlayer runtime state rather than define parallel player, queue, library, settings, or media state.
-- Zones remain deferred until a concrete requirement cannot be represented by upstream state.
-- Diretta must bypass sample-altering upstream processing wherever required to guarantee Source Direct.
-- Widespread edits across upstream Home/Search/Queue/Player/Settings are a stop-and-redesign signal.
+- Netease/Qobuz/TIDAL real-account acceptance.
+- Real ALSA PCM/Native DSD and Diretta Target playback, switching, auto-next, and long-play.
+- Controlled `self-hosted, linux, x64, diretta-sdk-149` runner and first remote required-SDK gate.
 
 ## Errors Encountered
 
-| Error                                                                                                                        | Attempt | Resolution                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The first archive move used stale handoff headings                                                                           |       1 | The atomic patch made no changes; the exact headings were read and the corrected move succeeded.                                                                                                                                                                               |
-| The first whole-file AGENTS replacement used an unsupported delete-plus-add patch                                            |       1 | The patch made no changes; replaced the file with two supported patch operations and verified it immediately.                                                                                                                                                                  |
-| Focused Core Settings test used a tsconfig path alias that standalone `tsx --test` did not resolve                           |       1 | Switched the test-only import to a relative shared path; product imports keep the normal alias.                                                                                                                                                                                |
-| Focused Prettier check found two local formatting-only diffs                                                                 |       1 | Applied exactly the reported import wrapping/assert formatting without touching unrelated files.                                                                                                                                                                               |
-| First Settings enforcement pass increased upstream business touches from 105 to 106 by editing `electron/main/ipc/config.ts` |       1 | Reverted that upstream IPC file completely and, at that checkpoint, kept enforcement in the Atom `/config` route plus the already-touched Settings store; later P4 consumer audit removed the now-unused HTTP `/config` entirely while Desktop `config:set` stayed Host-local. |
-| Core Settings snapshot test added one overlong assertion rejected by focused Prettier                                        |       1 | Applied only the reported multiline assertion formatting.                                                                                                                                                                                                                      |
-| First Web service-section filter lost `SettingItem` literal inference after `.filter()`                                      |       1 | Added an explicit `SettingSection[]` helper boundary so TypeScript keeps the schema widget union intact.                                                                                                                                                                       |
-| First static-test patch for the new NavHeader assertion used a stale exact block                                             |       1 | Read the current test section and applied a smaller exact edit.                                                                                                                                                                                                                |
-| Gating Web UI Zoom in the previously untouched `NavHeader.vue` raised business touches to 106                                |       1 | Reverted `NavHeader.vue` completely; implemented UI Zoom as a real Web This-Control preference in the already-owned Web API seam, restoring the 105 budget.                                                                                                                    |
-| Plugin Core event multiplexing invalidated the old preload test that required `removeAllListeners("core:event")`             |       1 | Kept independent subscriptions with precise unsubscribe so Player/Plugin listeners can coexist, and updated the stale single-subscriber assertion.                                                                                                                             |
-| Initial broad Netease search included a nonexistent `packages/` path and produced truncated output                           |       1 | Switched to focused searches over the actual Netease API tree and named integration files.                                                                                                                                                                                     |
-| Browser open/search returned no content for `bnqzzdf/ncm-api-rs`                                                             |       1 | Use GitHub's Git transport to inspect a temporary read-only clone; cite stable repository/file URLs in the report.                                                                                                                                                             |
-| First cross-repository comparison used project-relative paths while running from the Rust clone                              |       1 | The affected local `sed`/`find` steps failed; subsequent comparisons will use absolute paths for both repositories.                                                                                                                                                            |
-| A later multi-file comparison accidentally repeated relative Atom paths from the Rust-clone working directory                |       2 | Stop cross-root relative reads entirely; use only absolute paths for any remaining comparisons.                                                                                                                                                                                |
-| Direct removal of the 3.5 GiB temporary Rust clone was rejected by the execution safety policy                               |       1 | Use `cargo clean` inside the validated temporary clone to remove build artifacts; leave only the small temporary source checkout.                                                                                                                                              |
-| Full-repository `prettier --check .` reported 11 inherited files outside `origin/dev..HEAD`                                  |       1 | Preserved unrelated files per repository rules and ran Prettier against the complete current change set instead; every file changed by this task passes.                                                                                                                       |
-| The new planning-memory error row exceeded Markdown table formatting width                                                   |       1 | Ran Prettier only on `task_plan.md`; no unrelated file was rewritten.                                                                                                                                                                                                          |
-| The package-script smoke forwarded pnpm's standalone `--` delimiter to the diagnostic                                        |       1 | Accepted a standalone delimiter as CLI syntax, then reran the real `pnpm check:hardware-release -- --help` command successfully.                                                                                                                                               |
-| A focused test patch used the pre-Prettier assertion layout                                                                  |       1 | Re-read the formatted test tail and applied the assertion against the exact current block.                                                                                                                                                                                     |
+| Error                                                       | Attempt | Resolution                                                                                        |
+| ----------------------------------------------------------- | ------: | ------------------------------------------------------------------------------------------------- |
+| `git log --follow` was called with multiple candidate paths |       1 | Switched to one history query per file; the failed command was read-only and changed nothing.     |
+| A residual-reference `rg` shell pattern contained backticks |       1 | The accidental command substitution changed no files; future searches use single-quoted patterns. |
+| Touch audit classified five upstream docs as business code  |       1 | Added the exact guidance/demo paths to the existing downstream-metadata classification.           |
+| A combined patch used the pre-Prettier table spacing        |       1 | Split the audit and plan edits, then patched the exact formatted blocks.                          |

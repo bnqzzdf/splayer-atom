@@ -56,7 +56,17 @@ const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22)
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 // 正式产品身份必须修改少量上游 packaging/updater/对外 product-identification 表面；单独计数，避免伪装成业务逻辑扩张。
 const releaseIdentitySeamBudget = Number(process.env.UPSTREAM_RELEASE_IDENTITY_SEAM_BUDGET || 14);
-const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);
+const metadataPaths = new Set([
+  ".gitignore",
+  ".github/copilot-instructions.md",
+  ".github/instructions/review.instructions.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "README.md",
+  "README.zh-CN.md",
+  "demo/audio-architecture.md",
+  "demo/desktop-lyric-drag.md",
+]);
 const releaseIdentitySeamPaths = new Set([
   ".github/scripts/prepare-release-assets.cjs",
   ".github/scripts/prepare-release-assets.test.cjs",

@@ -310,7 +310,7 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 
 ## 5. Core-Owned Playback & Output Architecture
 
-当前本地 Headless 已经让 main playback session 持有队列；但完整 source resolution、cache policy、在线登录状态判断、next-track preload 等仍有 renderer-owned orchestration。长期目标不是只修复“在线自动下一首”，而是让 **Core 从 canonical `Track` 开始直到 Output 执行播放为止，成为唯一 playback orchestration authority。**
+Core-owned playback 的软件边界已经收口：从 canonical `Track` 到 source resolution、cache policy、provider session、next-track preload 和 Output 执行均由 Core 持有。以下条目保留为完成证据；尚未完成的是明确单列的真实账号、真实 ALSA/Diretta hardware 与长时间运行验收。
 
 ### 已收口的原缺口
 
