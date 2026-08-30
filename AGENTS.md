@@ -1,253 +1,208 @@
 # AGENTS.md
 
-## SPlayer Atom mandatory downstream rules
+## Authority and current sources
 
-These rules have priority over downstream architectural preferences. Preserve the upstream engineering conventions below unless an Atom rule explicitly constrains the design.
+This file contains durable implementation rules. Do not use it as a roadmap or a snapshot of the
+current file layout.
 
-**SPlayer owns the architecture; Atom owns only the delta.** SPlayer Atom is a continuously updated downstream of SPlayer-Next. The default decision is always to reuse current upstream implementation, data models, stores, services, plugin hooks, and native interfaces. Atom must not create a parallel application architecture around SPlayer.
+- `docs/atom-roadmap.md` is authoritative for product scope, priorities, completion state, and
+  acceptance criteria.
+- If `AGENTS.md` and `docs/atom-roadmap.md` materially conflict, stop implementation immediately,
+  describe the conflict to the user, and wait for explicit clarification. Do not guess which rule
+  should win or silently reconcile the two documents.
+- `task_plan.md`, `findings.md`, and `progress.md` contain the current working state.
+- `docs/atom-development.md`, `docs/types.md`, `docs/upstream-sync.md`,
+  `docs/build-flavors.md`, and `docs/core-deployment.md` own their respective operational details.
+- When documentation and current source disagree, inspect the implementation and update the
+  stale document; do not preserve an obsolete architecture for compatibility with prose.
 
-1. **Reuse before abstraction.** Before adding an Atom interface, registry, adapter, model, service, store, or state machine, inspect current upstream for an existing capability that can be reused directly.
-2. **No speculative abstractions.** Add an Atom abstraction only when upstream lacks the capability, a real Atom requirement exists, and a concrete integration point cannot be served cleanly without it.
-3. **Prefer upstream types.** Do not duplicate SPlayer media, queue, library, player, lyric, settings, transport, or persistence models unless a proven incompatibility requires a small extension type.
-4. **Prefer thin integration over translation layers.** If Atom can call an upstream service/store/type directly, do that. Do not add ports/adapters merely for architectural symmetry.
-5. **One source of truth.** Never maintain a second player, queue, library, settings state, or media model alongside SPlayer. Headless and compatibility surfaces must use the same upstream runtime state as the desktop UI.
-6. **Delay domain creation.** Headless/Core, Zones, output-management layers, and similar concepts are not automatically first-class Atom domains. Promote them only after a real requirement proves upstream cannot represent them cleanly.
-7. **Concrete first, generic later.** Implement the first real provider/output integration concretely against current upstream. Generalize only after repeated real duplication appears.
-8. **No broad upstream surgery.** A feature requiring widespread edits across upstream pages, stores, services, or native modules is an architecture smell. Stop and redesign the seam before proceeding.
-9. **Minimize upstream-owned edits.** Track upstream touch count, but never add wrappers merely to satisfy a file-count target.
-10. **Legacy is an oracle, not architecture.** `/home/bnqzzdf/code/tinylms-next` and retained tinyLMS artifacts describe compatibility behavior; do not preserve recovered internal structure unless it remains a real Atom requirement.
+## Product architecture
 
-For every feature, decide in this order: reuse current upstream → use an existing upstream hook → confirm a true Atom-specific gap → implement the smallest concrete delta → generalize only after repeated need.
+**SPlayer owns the foundation; Atom owns only the proven delta.** Atom is a continuously updated
+downstream of SPlayer-Next. Its confirmed product deltas are Node Core/Headless Web, the unified
+Desktop/Web Control surface, Qobuz, TIDAL, and Diretta Source Direct.
 
-The only currently confirmed major Atom-owned product deltas are Qobuz and Tidal capabilities missing from current upstream, plus Diretta output integration. Current upstream already owns NetEase, QQ Music, and Kugou; Atom must reuse those implementations rather than fork or duplicate them. Everything else remains subject to upstream inspection and may be reduced or omitted.
+The long-term model is **Core / Control / Output**:
 
-### Diretta Source Direct invariants
+- Node Core is the only authority for database, settings, library, provider sessions, canonical
+  queue, playback policy, source resolution, cache, preload/recovery, play statistics, output
+  assignment, and Diretta input materialization.
+- Web and Desktop are Controls. They send high-level commands and consume Core snapshots/events;
+  local stores may cache projections but must never become a second domain authority.
+- Desktop-only window, tray, hotkey, updater, protocol, native-file, lyric-window, and future Output
+  Agent behavior is a Host Capability, not a Core Domain fork.
+- Desktop and Web music-business requests use the same Core Control Protocol. Keep Electron IPC for
+  shell/Host integration and temporarily retained event transport, not for a new parallel business
+  API when a Core contract exists.
+- Core Local Output is the first Output and uses the shared `audio-engine` through ALSA or Diretta.
+  A future Desktop Output Agent may execute Core jobs but must not own queue/provider/playback policy.
+- Do not publish or rebuild a permanent Electron Headless product. The supported Headless product
+  is the ordinary Node Core; transitional Electron Headless behavior is only an oracle.
+- Single active output is the current product scope. Do not introduce Zones, synchronized groups,
+  or Core-to-endpoint PCM transport without a concrete accepted requirement.
+- Headless currently targets one user on a trusted LAN. Authentication, pairing, CSRF, and public
+  zero-trust deployment remain P4 unless the product/network boundary explicitly changes.
 
-Diretta is not merely another SPlayer output backend. It is an Atom product-quality **Source Direct** path and may bypass upstream audio processing where that processing would alter source audio.
+Atom actively maintains Netease compatibility plus Qobuz and TIDAL product paths. QQ Music and
+Kugou remain frozen, inherited upstream compatibility surfaces: do not add Atom-owned login,
+entitlement, resolver, cache, Diretta, or product UI architecture for them.
 
-- Preserve the source sample rate, channel count, effective PCM bit depth/sample values, and native DSD one-bit sequence. DSF LSB-first vs DFF/MSB-first is a byte representation of that sequence: when a Target supports native DSD only in the opposite bit order, per-byte bit reversal is allowed as a lossless wire-format adaptation, provided rate/channels/bit sequence remain unchanged and the work stays outside the SDK real-time callback.
-- Do not route strict Diretta playback through SPlayer's normal `f32` player resampler/DSP path. No resampling, remixing, EQ, normalization, software volume, fade, tempo, pitch, or re-encoding is allowed in Source Direct mode.
-- Lossless codec decoding (for example FLAC/ALAC to the exact original PCM samples) is decoding, not transcoding. Padding into a wider integer transport slot is allowed only when sample bits remain unchanged. Native DSD must remain native DSD and must not be converted to PCM.
-- If the Target cannot accept the exact PCM format, or cannot accept native DSD at the source bit rate/channels in either losslessly equivalent LSB/MSB wire representation, do not silently fall back to processed audio. Fail the strict direct path or require an explicit non-direct mode outside the Source Direct claim.
-- While Source Direct is active, any operation that would alter samples must be explicitly rejected rather than silently applied or used to leave Direct mode. This includes software volume below unity, normalization/ReplayGain, EQ/preamp, fade processing, tempo, and pitch. The caller must receive a clear Direct-mode error instructing the user to exit Source Direct first.
-- The output hot path must avoid redundant sample copies. Prefer FFmpeg/Diretta-owned buffer borrowing or ref-counted frame ownership, with no heap allocation, mutex, logging, discovery, format negotiation, or business logic in the SDK real-time callback.
-- Diretta discovery and connection failures do not reveal whether a Target is already occupied by another Source or program. When real-hardware availability is ambiguous, stop further load/recovery attempts and ask the user to confirm that the Target is exclusively available before inferring a stale/orphaned session, requesting a reset or power cycle, or changing recovery behavior.
-- On Linux, live Diretta connection and playback validation must run the Host process as root. A normal desktop/user process can still discover a Target and complete preliminary queries but lacks the privileges required for the SDK connection path; never diagnose that resulting connection timeout as a Target fault. If a future packaged desktop design avoids root, prove an explicit supported capability or non-raw SDK mode first rather than assuming ordinary Electron privileges are sufficient.
-- `tinyLMS` is evidence, not the fidelity reference implementation. Reuse its proven Diretta protocol/lifecycle lessons, but reject its PCM normalization/resampling, whole-track RAM architecture, or unsafe buffer-lifetime assumptions when they conflict with these invariants.
+## Minimal downstream rules
 
-Before merging architecture-affecting work, ask: could upstream do this directly; did we abstract before a real need; did we create a second source of truth; did we modify more upstream than necessary; can any new Atom layer be deleted without losing required behavior? For Diretta also ask: did any PCM sample value/rate/channel layout or logical DSD one-bit sequence/rate/channel count change between source decode and Target? A proven LSB↔MSB byte-representation adaptation is acceptable only when that logical DSD sequence remains identical. If unnecessary structure or audio processing is found, simplify before continuing.
+For every change, decide in this order:
 
-## Upstream repository guidance
+1. Reuse the current upstream implementation or type.
+2. Use an existing upstream hook or the established Atom Core/Control seam.
+3. Confirm a real Atom-specific gap.
+4. Implement the smallest concrete delta.
+5. Generalize only after repeated real duplication appears.
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+Also enforce these constraints:
 
-## Project Overview
+- Never duplicate SPlayer media, queue, player, library, lyric, settings, transport, or persistence
+  models unless a proven incompatibility requires a small extension.
+- Do not add ports/adapters, registries, stores, state machines, or fallback layers for symmetry.
+- Do not create a second source of truth in a renderer, Web facade, compatibility router, provider,
+  or Output.
+- Broad edits across upstream pages/stores/services/native modules are an architecture smell. Stop
+  and redesign the seam before proceeding.
+- Track upstream-owned touches honestly. Never hide growth with wrappers or move logic merely to
+  satisfy a file-count budget.
+- `/home/bnqzzdf/code/tinyLMS`, `/home/bnqzzdf/code/tinylms-next`, and retained artifacts are behavior
+  or protocol oracles, not product architecture or fidelity references.
 
-SPlayer-Next — desktop music player on **Electron + Vue 3 + TypeScript**, with Rust native modules (NAPI-RS) for audio decoding, system media integration, and Windows taskbar lyric. Successor to SPlayer.
+## Upstream and Git discipline
 
-## Commands
+- `origin` is the Atom repository and the only default development/release push target.
+- `splayer` is fetch-only. `vendor/splayer` must equal an official SPlayer commit and contain no
+  Atom delta. Follow `docs/upstream-sync.md` for integration and accepted-baseline updates.
+- General upstream fixes must branch from `vendor/splayer` into a minimal `contrib/*` change; do not
+  submit Atom `dev` directly to SPlayer.
+- Preserve unrelated working-tree changes and keep ownership-oriented changes separable.
+- Commit titles use Conventional Commits with a one-line Chinese summary:
+  `<type>: <summary>`. Add a body only when explicitly requested.
+
+## Diretta Source Direct invariants
+
+Diretta is a strict Source Direct path, not another processed SPlayer output backend.
+
+- Preserve source sample rate, channel count, effective PCM bit depth/sample values, and the native
+  DSD one-bit sequence. Lossless codec decode is allowed; resampling, remixing, normalization,
+  ReplayGain, EQ/preamp, software volume below unity, fade, tempo, pitch, re-encoding, PCM fallback,
+  DoP, and DSD-to-PCM are not.
+- Never route strict Diretta playback through SPlayer's normal `f32` resampler/DSP pipeline.
+- Padding exact integer samples into a wider transport slot is allowed only when sample bits do not
+  change. DSF LSB-first and DFF/MSB-first may use per-byte bit reversal only as a lossless wire-order
+  adaptation that preserves the logical DSD sequence, rate, and channels.
+- If the Target cannot accept the exact PCM format or native DSD rate/channels in either equivalent
+  bit order, fail Direct explicitly. Never silently process audio or leave Direct mode.
+- Reject sample-altering controls with a clear Direct-mode error instructing the caller to exit
+  Source Direct first.
+- Keep allocation, mutexes, logging, discovery, negotiation, business logic, and avoidable sample
+  copies out of the SDK real-time callback. Prefer borrowed/ref-counted decode or SDK buffers with
+  producer-side preallocated adaptation.
+- Ambiguous discovery/connection failures do not prove a stale or occupied Target. Stop retries and
+  ask the user to confirm exclusive Target availability before recovery, reset, or power-cycle work.
+- Linux live Diretta connection/playback validation runs the Host process as root. User-mode
+  discovery success does not prove connection privileges, and its timeout must not be diagnosed as
+  a Target fault.
+- Reuse proven tinyLMS lifecycle/protocol lessons only when they satisfy these invariants; reject its
+  resampling, normalization, whole-track RAM, or unsafe buffer-lifetime patterns.
+
+## Runtime, build, and validation
+
+- Core supports Node `>=24.18.0 <25`; release/artifact gates use reference Node `24.18.0`.
+- The Linux x86-64 Core `core-audio` flavor builds only the required audio engine and must remain free
+  of Electron, Chromium, GTK, PipeWire/PulseAudio, and Desktop-only native modules at runtime.
+- A Diretta-branded Core release is pinned to Host SDK 149 and must use the required-SDK gate. Missing
+  or mismatched SDK provenance must fail before producing a same-named artifact.
+- The final `tar.gz` artifact, its runtime metadata, startup/termination, Core endpoints, Web root,
+  native addons, and plugin-host IPC are the release unit; a source-tree build alone is insufficient.
+- Real ALSA/Diretta/PCM/Native-DSD/long-run behavior remains a separate hardware gate. Never infer
+  hardware acceptance from compile or fixture tests.
+
+Common repository checks are:
 
 ```bash
-pnpm install              # Install deps
-pnpm dev                  # Build native (debug) + start Electron dev
-pnpm build                # Full build (rimraf → native → typecheck → electron-vite)
-pnpm build:{win,mac,linux}# Platform packages
-pnpm typecheck            # tsc + vue-tsc (node + web targets)
-pnpm lint / format        # ESLint / Prettier
-pnpm build:native         # Rust only; add `--dev` for debug
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm build:native --dev
+cargo test -p audio-engine
+node scripts/atom/check-upstream-touch.mjs
+git diff --check
 ```
 
-`SKIP_NATIVE_BUILD=true` skips Rust during dev.
-
-`audio-engine` static-links FFmpeg via the `ffmpeg_audio` crate (vendor zip + cc-built at compile time). Zero environment dependency — no `FFMPEG_DIR` / `PKG_CONFIG_PATH`, no system FFmpeg required.
-
-## Shell
-
-The development shell is Git Bash on Windows. Write all terminal commands in bash syntax (`&&`, `cd`, etc.) — no PowerShell-only constructs. File paths remain in Windows format (backslashes).
-
-## Architecture
-
-### Process Model
-
-- **Main** (`electron/main/`) — windows, IPC, native modules
-- **Preload** (`electron/preload/`) — `contextBridge` exposing `window.api` (player/config/system/library/streaming/lyrics)
-- **Renderer** (`src/`) — Vue 3 SPA
-- **Lyric windows** (`windows/desktop-lyric`, `dynamic-island`, `taskbar-lyric`) — independent Vue entries sharing `windows/shared/`
-
-### Native Modules (Rust + NAPI-RS)
-
-Four `.node` modules in `native/`, built via `scripts/build-native.ts`, lazy-loaded by `electron/main/utils/nativeLoader.ts`. NAPI-RS auto-generates `index.d.ts`, imported via path aliases `@splayer/audio-engine`, `@splayer/audio-capture`, `@splayer/media-ctrl`, `@splayer/taskbar-lyric`.
-
-- `audio-engine` — `ffmpeg_audio` decode (static FFmpeg) + rodio playback + FFT + cover extraction. URLs wrapped as `Read + Seek` via `ffmpeg_audio::HttpAudioSource` (using `HttpCancelHandle` for cancellation/reset) — TLS handled in Rust (`reqwest` + `rustls`), cross-platform with no system deps. Pushes events (state/position/ended/outputStalled) via ThreadsafeFunction. Has load_token race protection and an `HttpCancelHandle` handle injected into `HttpAudioSource` for instant stop and reset.
-- `audio-capture` — System sound / microphone capture for song recognition. Windows via WASAPI Loopback; Linux via PulseAudio (`libpulse-binding`, needs `libpulse-dev` at build time — CI `dev.yml`/`release.yml` install it). Collects 8 kHz mono f32 PCM.
-- `media-ctrl` — Cross-platform system media controls (Windows SMTC / Linux MPRIS / macOS MPNowPlaying) + Discord RPC.
-- `taskbar-lyric` — Windows taskbar lyric text rendering with RegistryWatcher / UiaWatcher / TrayWatcher.
-
-### Playback Data Flow
-
-```
-User action → status store → IPC (player:load/play/pause/seek)
-  → main process player.ts → audio-engine
-  → Rust events (stateChanged/position/ended/outputStalled)
-  → main broadcasts to renderer + syncs to media-ctrl
-  → status store updates reactive state
-  → playback.ts updates non-reactive time source
-```
-
-### State Management
-
-Two-tier position tracking — high-frequency animation vs. low-frequency UI:
-
-- `src/stores/status.ts` — Pinia reactive. `position / duration / state / volume`, pushed ~5Hz from main. Drives progress bar, time display, play button.
-- `src/services/playback.ts` — Non-reactive plain vars. `getCurrentTime()` interpolates between pushes; `usePlaybackTime()` reads in RAF loop for 60fps lyrics/spectrum without Vue reactivity.
-- `src/stores/media.ts` — Pinia + shallowRef. Current `Track` (lightweight) + `TrackDetail` (lyrics, quality). Only `track + activeLyric` persisted to sessionStorage; never persist `TrackDetail` (large lyric strings cause memory issues).
-
-### Streaming Subsystem
-
-Server protocol clients live in the main process (`electron/main/services/streaming/`): Subsonic / Jellyfin / Emby adapters, safeStorage-backed config, Jellyfin/Emby session management, SQLite synchronization, and the authenticated cover protocol. Subsonic family (Navidrome / OpenSubsonic / Airsonic / Gonic / LMS) shares one adapter; types differ only as UI labels.
-
-- `electron/main/services/streaming/config.ts` — encrypted config and secret-free renderer views.
-- `electron/main/services/streaming/connection.ts` — connection tests, connect, and authenticated adapter requests.
-- `electron/main/services/streaming/coverProtocol.ts` — `streaming-cover://` proxy registered for the default and `persist:main` sessions.
-- `electron/main/services/streaming/adapters/` — Server response → unified `Track / Album / Artist / Playlist`. Trusts server's artist field; no client-side splitting.
-- `services/streaming/session.ts` — Jellyfin/Emby `/Sessions/Playing` heartbeat + PlaySessionId state machine; called from `core/player.ts`.
-- `stores/streaming.ts` — Server list, active state, and complete shallowRef arrays; main-process update events trigger SQLite snapshot reloads, with no polling or direct media-server access.
-- Credentials — `electron/main/services/streaming/config.ts` encrypts via Electron `safeStorage` to `{userData}/app-data/config/streaming.json`. `accessToken / userId` remain in the bounded main-process session cache and are re-acquired on connect.
-
-### Lyric Windows
-
-`windows/desktop-lyric`, `dynamic-island`, `taskbar-lyric` are independent Vue entries. Always use shared composables from `@windows/shared/`:
-
-- `useNowPlayingSync` — playback sync, lyric index, anchor interpolation
-- `getNowPlayingCurrentMs()` — non-reactive current time for RAF char highlight
-- Line selection: `pickPrimaryIndex` (desktop, considers overlap) vs. `pickLatestStartedIndex` (dynamic island, immediate switch)
-
-Don't reimplement these inside individual windows.
-
-### Type System
-
-- `shared/types/player.ts` — `Track`, `TrackDetail`, `Artist`, `Album`, `AudioQuality`, `PlayerState`, `PlayerStatus`, `PlayerEvent`, `LoadOptions`, `LoadResult`, `IpcResponse`
-- `shared/types/lyrics.ts` — `LyricFormat`, `LyricSource (external | embedded | online)`, `LyricData`, `LyricLine`, `LyricWord`, `LyricSpan`
-- `shared/types/platform.ts` — `Platform (netease | qqmusic | kugou)`
-- `shared/types/streaming.ts` — `StreamingServerType`, `StreamingServerConfig`, `StreamingPingResult`, `StreamingAuthResult`, etc.
-
-`Track` is for queue storage (no heavy data); `TrackDetail` loads on demand.
-
-### Settings Schema
-
-Declarative — defined in `src/settings/schema.ts`, types in `src/types/settings-schema.ts` (`SettingCategory → SettingSection → SettingItem`). Items bind via `{ store: "settings"|"theme", path: "nested.path" }`; `system.*` paths route through IPC to main config. Tag support on section/item via `SettingTag = { text; type? }` for Beta/experimental badges. i18n keys: `settings.section.{id}` / `settings.{itemKey}.{label,description}`.
-
-### Data Storage
-
-```
-{userData}/app-data/        # Unified data directory, separate from Chromium cache data
-├── config/
-│   ├── settings.json       # Main config (electron/main/store/)
-│   ├── streaming.json      # Streaming credentials (safeStorage encrypted)
-│   └── lastfm.json         # Last.fm credentials (safeStorage encrypted)
-├── database/library.db     # Music library (better-sqlite3, WAL)
-├── cache/                  # covers/ (cover:// protocol) + artists/ backgrounds/ songs/
-├── logs/                   # App logs + native/
-└── plugins/                # scripts/ data/ logs/
-
-# All paths are defined centrally in electron/main/utils/paths.ts
-```
-
-Renderer IndexedDB (localforage): `splayer/library`, `splayer/queue`. Local playlists are stored in
-SQLite through the main-process playlist service; the old `splayer/playlists` store is migration-only.
-
-### Cover Image
-
-Rust extracts 300x300 JPEG thumbnail to `{userData}/app-data/cache/covers/` during decode; renderer reads via `cover://{filename}` protocol. Original via `getCoverRaw()` for SMTC, never cached. Authenticated streaming covers use the main-process `streaming-cover://` proxy.
-
-### Config Store (Main)
-
-`electron/main/store/` is custom (not electron-store). Reads/writes `{userData}/app-data/config/settings.json` (path via `electron/main/utils/paths.ts`), merges with defaults from `shared/defaults/settings.ts`. Supports dot-path access (`store.get("system.taskbarProgress")`), atomic writes, schema migrations.
-
-### i18n
-
-Renderer uses `vue-i18n` with `src/i18n/locales/{zh-CN,en-US}.json`. Main process has a lightweight translation table (`electron/main/utils/i18n.ts`) for tray/thumbar; locale synced via `system:setLocale` IPC.
-
-### Path Aliases
-
-```
-@/                     → src/                   (renderer, tsconfig.web.json)
-@shared/               → shared/                (both processes)
-@main/                 → electron/main/         (main, tsconfig.node.json)
-@windows/              → windows/               (lyric windows)
-@splayer/audio-engine  → native/audio-engine    (main)
-@splayer/media-ctrl    → native/media-ctrl      (main)
-@splayer/taskbar-lyric → native/taskbar-lyric   (main)
-```
-
-## Conventions
-
-### Comments — Chinese, with JSDoc
-
-All comments in Chinese. Methods use standard JSDoc with `@param name - description` and
-`@returns` when meaningful:
-
-```ts
-/**
- * <Chinese method description>
- * @param trackId - <Chinese parameter description>
- * @returns <Chinese return description>
- */
-```
-
-Forbidden: `// ───` separator lines (including ones with section titles), prose-style multi-paragraph comments, restating-the-obvious comments, numbered enumerations (`1. 2. 3.`) inside comments. Write comments only when the **why** is non-obvious.
-
-### Code Organization
-
-Split logic into files rather than separator comments. Don't extract a helper for one-place callers (3+ uses justify it). No "just in case" defensive code or fallbacks for impossible scenarios. No configurable knobs (timeouts / retries / buffer sizes) unless required — write constants. Don't break errors into per-case enums; `anyhow` or plain `Error` is usually enough.
-
-### Memory Discipline
-
-Memory is a hard requirement. The main process logs memory usage through `app.getAppMetrics()`
-60 seconds after launch and then every 10 minutes. When a change touches rendering, caching, or
-IPC, verify before and after with these samples.
-
-- **Images by display size** — anything blurred, sampled, or rendered small uses the 300px `cover` thumbnail (player blur background, color extraction, lists). `coverOriginal` only for the visible large cover and poster export. Large `<img>`: add `decoding="async"`; preload with `img.decode()` before fading in.
-- **Compositing layers are budgeted** — never put `will-change` in CSS on unbounded element collections; promote dynamically and only near the viewport (lyric engine `lineWillChange` pattern). New full-screen `filter: blur` / `backdrop-filter` layers need justification.
-- **Hidden = silent** — high-frequency pushes (`position` / `fftData` / `position-sync`) must not reach hidden windows: `broadcast(channel, data, true)` or an `isVisible()` gate; consumers recover from the next push (≤200ms), no resync needed. Low-frequency state events (`stateChanged` / `ended` / track-change) always go through. RAF loops and canvases must stop when their surface is hidden (engine `freeze()` / `visibilitychange` pattern).
-- **In-memory caches must be bounded** — every module-level Map/array cache needs an eviction rule (subsonic `viewAuthCache` evicts per-server). Never retain `TrackDetail`-sized data beyond the current track.
-
-### Units
-
-Frontend time is **milliseconds** everywhere. Rust engine uses seconds internally; `toMs()` in `electron/main/ipc/player.ts` converts.
-
-### Types & Persistence
-
-Never hand-write native module types — import from `@splayer/*`. Use `shallowRef` for `Track` arrays/collections (avoid deep proxy). Vue proxied objects can't be cloned by IDB (`DataCloneError`); use `toRaw` before persisting.
-
-### Auto-imports
-
-In Vue components, `vue / pinia / vue-router / @vueuse/core / vue-i18n` are auto-imported, and UI components in `src/components/` are auto-registered.
-Icon components used only in Vue templates are auto-imported. Do not manually import them in
-`<script setup>`; import an icon explicitly only when it is referenced by script code.
-
-### Logging (Main Process)
-
-Use scoped loggers from `@main/utils/logger` (`coreLog / playerLog / mediaLog / trayLog / taskbarLog / nativeLog`, etc.). Don't import `electron-log` directly.
-
-### IPC Listeners
-
-In preload's `onEvent`, always `ipcRenderer.removeAllListeners()` before adding a new listener (HMR accumulates otherwise). Renderer composables call the returned `unsubscribe` in `onBeforeUnmount`.
-
-### Prettier
-
-Double quotes, semicolons, 100-char width, trailing commas.
-
-Before committing, run Prettier on every file included in the commit and verify the formatted
-working tree before creating the commit. Do not leave formatting-only changes from the current task
-outside the commit.
-
-### Shared Types
-
-Put cross-process types (`LocaleCode / SystemConfig / StreamingServerType`, etc.) in `shared/types/`.
-
-### Commit Messages
-
-Use Conventional Commits with a Chinese summary: `<type>: <summary>`. Keep the title on one line;
-do not add a body or bullets unless explicitly requested. Use the type that matches the change,
-such as `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `build`, `ci`, `style`, or `chore`.
+Run checks proportional to the change. Use `docs/atom-development.md` and `docs/build-flavors.md`
+for Core artifact and platform-specific commands. On Linux, prefer `cargo test -p audio-engine` over
+the Windows-oriented full native workspace test. Do not format or rewrite unrelated dirty files.
+
+## Engineering conventions
+
+### Code and comments
+
+- Code comments are Chinese. Methods use concise JSDoc with `@param name - ...` and `@returns` when
+  meaningful. Comment only when the reason is non-obvious.
+- Do not use decorative separator comments, prose essays, obvious restatements, or numbered lists
+  inside comments.
+- Split real responsibilities into files, but do not extract a helper for a one-place caller; three
+  uses normally justify extraction.
+- Avoid speculative defensive paths, impossible fallbacks, per-case error enums, and configurable
+  timeout/retry/buffer knobs without a requirement. Prefer plain `Error`/`anyhow` and constants.
+
+### Types, units, and persistence
+
+- Cross-process/Core Protocol types live in `shared/types/`; do not hand-write native addon types—
+  import them from `@splayer/*`.
+- Frontend time is milliseconds. Convert native seconds at the main/Core boundary.
+- Use lightweight canonical `Track` values for queue/session persistence; load `TrackDetail` on
+  demand and never retain or persist large lyric/detail payloads unnecessarily.
+- Use `shallowRef` for Track collections and `toRaw` before IndexedDB persistence to avoid Vue proxy
+  clone failures.
+- Keep all durable path decisions centralized. Core durable `data/`, cache/log behavior, migration,
+  backup, and rollback follow `docs/core-deployment.md`; do not add hidden state roots.
+
+### Transport and runtime ownership
+
+- Reuse `buildCoreControlRoutes()` and existing Core clients. Do not duplicate Desktop/Web routes or
+  let Control resolve final playable URLs, own retry/skip, or manage Direct staging.
+- Core settings and provider credentials remain Core-owned. Desktop `safeStorage` is only for
+  Control-local secrets such as a Core connection credential.
+- Use scoped main-process loggers from `@main/utils/logger`; never import `electron-log` directly.
+- Preload `onEvent` registration must remove old listeners before adding one, and renderer consumers
+  must unsubscribe on unmount.
+- Lyric windows reuse `windows/shared/` synchronization/selection utilities; do not reimplement the
+  timing engine in each window.
+
+### Memory and rendering
+
+- Memory is a hard requirement. Rendering/cache/IPC changes must compare the existing periodic
+  `app.getAppMetrics()` samples before and after.
+- Use the 300 px cover for blurred, sampled, color-extraction, and list rendering. Use the original
+  only for the visible large cover/export; large images use `decoding="async"` and decode before fade.
+- Do not apply persistent `will-change` to unbounded collections or add full-screen blur/compositing
+  layers without justification.
+- Hidden surfaces are silent: gate high-frequency position/FFT/sync pushes, and stop RAF/canvas work
+  while hidden. Low-frequency state/track events still propagate.
+- Every module-level cache must have an eviction rule; never retain `TrackDetail`-sized data beyond
+  the current track.
+
+### Formatting
+
+- Prettier uses double quotes, semicolons, 100-character width, and trailing commas.
+- Vue/Pinia/router/VueUse/i18n APIs are auto-imported, and components under `src/components/` are
+  auto-registered; follow existing imports instead of adding redundant ones.
+
+## Final architecture review
+
+Before completing architecture-affecting work, ask:
+
+- Could upstream or an existing Core/Control seam do this directly?
+- Did this create a second authority, speculative domain, or translation layer?
+- Did it modify more upstream-owned code than necessary?
+- Can any new Atom layer be removed without losing required behavior?
+- For Diretta, did any PCM sample value/rate/channel layout or logical DSD sequence/rate/channel
+  count change between source decode and Target?
+
+Simplify before merging when the answer exposes unnecessary structure or audio processing.

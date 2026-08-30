@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> 状态日期：2026-08-29
+> 状态日期：2026-08-30
 >
 > 本文是 SPlayer Atom 当前唯一正式的“待开发 / 待验收 / 发布前工作”路线图。当前执行记录见根目录的 `task_plan.md`、`findings.md` 与 `progress.md`；本地历史快照归档于 Git 忽略的 `history/`，不作为当前优先级与完成状态的事实来源。
 
@@ -238,8 +238,8 @@ Remote Desktop Output 属于后续能力，不阻塞 Core 重构。未来远程 
 
 - [x] 建立独立 Node Core entry，直接启动 Core domain 与现有 HTTP / WebSocket server。
 - [x] Core JS 构建图已不依赖 Electron / BrowserWindow；production Core bundle 的 Electron import audit 为 0，进程级 HTTP/session/library smoke 通过。GTK / 最小 native 系统依赖仍由后续 Core-only native flavor 收口。
-- [~] Core 已定义并在启动前强制 **Node 24.x LTS** 兼容范围 `>=24.18.0 <25`，reference runtime 固定为 `24.18.0`；本地正式 artifact pipeline 已只接受该 reference Node。干净 CI / release workflow 尚未接入，reference patch 升级仍必须重新执行完整门禁。
-- [~] system-runtime artifact 已使用同一 Core JS / native contract；统一 launcher 同时支持系统 `node`、显式 `ATOM_NODE_BIN` 与未来 `runtime/bin/node`。bundled Node artifact 尚未实现，但它不是 Core 架构或 P1 功能前提。
+- [x] Core 已定义并在启动前强制 **Node 24.x LTS** 兼容范围 `>=24.18.0 <25`，reference runtime 固定为 `24.18.0`；本地 artifact pipeline 与 GitHub `Core System Gate` 都只在该 reference Node 构建/验收。reference patch 升级必须重新执行完整门禁。
+- [x] system-runtime 与 bundled-runtime artifact 使用同一 Core JS / native contract；统一 launcher 支持系统 `node`、显式 `ATOM_NODE_BIN` 与包内 `runtime/bin/node`。bundled 变体固定携带 reference Node `24.18.0`，最终 tar gate 已验证实际进程使用包内 Node。
 - [x] 初期不以 Node SEA 为目标；Core 已保持可审计、可调试的 JS bundle + native addon 结构，system-runtime staging 不依赖 SEA 或单文件封装。
 - [x] `audio-engine.node` 已在 reference Node `24.18.0` 下完成 release N-API load、Core process 与最终 tar artifact smoke；按当前决策不额外维护第二个 Node 24 patch smoke。未来 Desktop Output Agent 若使用同一 addon，再单独验证 Electron runtime 加载。
 - [x] `better-sqlite3` 的 Core runtime 只在 reference Node `24.18.0` artifact pipeline 中验收；staging 直接携带已验证的 Linux x64 N-API prebuild，不执行 `pnpm/npm install` 或隐式 native rebuild。
@@ -259,7 +259,7 @@ Diretta Source Direct
 - [x] Core native build 只构建 `audio-engine`，不构建 `audio-capture`、`media-ctrl`、taskbar/opencc 等 Desktop native addon。
 - [x] `audio-engine` 已使用 Cargo features 拆分 Desktop extras 与 Core `core-audio` flavor，使 Core build 只包含需要的 Linux audio backend。
 - [ ] 未来 Desktop Output Agent 可按桌面平台需要构建其 OS output backend，不影响 Core 的最小 Linux 依赖。
-- [ ] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包。
+- [x] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包；正式 SDK-enabled pipeline 使用 `--require-diretta` 并在编译前校验 SDK 149。
 
 ### Runtime-neutral 基础能力
 
@@ -289,7 +289,7 @@ Desktop `safeStorage` 最多用于 Control 自身的 Core 连接凭据等 Deskto
 6. [~] Web 播放链已成为 Core Control，浏览器不再拥有 queue / source / recovery / preload authority；完整产品面与长时间断连运行仍待验收。
 7. [~] Desktop renderer 已降级为 Core playback Control，但 Electron shell 与 Core 仍同进程组合，尚未完成最终 local-Core / remote-Core 产品形态。
 8. [~] Netease session、streaming credential、Qobuz/TIDAL secret 与 plugin runtime 已在 Core/runtime-neutral seam，Netease/Qobuz/TIDAL 登录状态也已统一由 Core snapshot/event 投影；Qobuz/TIDAL Account UI 与真实账号验收仍待完成。
-9. [~] 已建立 Node 24.x LTS system-runtime Linux x64 `tar.gz` 技术 artifact、统一 launcher 与 final-artifact smoke；正式 release identity / CI 发布链、硬件 gate 与可选 bundled Node 变体仍待完成。
+9. [~] 已建立 Node 24.x LTS system-runtime 与 bundled-runtime Linux x64 `tar.gz` 技术 artifact、统一 launcher 与 final-artifact smoke；正式 release identity / 发布链和硬件 gate 仍待完成。
 10. [ ] Node Core 完整验收后，当前 Electron Headless 退出正式产品架构。
 11. [ ] 后续按需求实现 Desktop Output Agent；再评估独立无 UI `atom-output` artifact。
 
@@ -447,7 +447,7 @@ Output 不拥有 playlist 或 provider 业务。概念上的 `PlaybackJob` 只�
 - [x] Web 设备选择以 main 实际 selected device 为权威。
 - [x] 多 Web 客户端可同步设备切换结果。
 - [x] 在线 HTTP 音源进入 Diretta 前可原字节 materialize 为本地 seekable 输入。
-- [ ] 在 main-authority online auto-next 完成后，补充“在线队列 + ALSA / Diretta 切换 + 自动下一首”的组合回归。
+- [x] 已补充确定性软件组合回归：真实 `playbackSession` 在在线 playlist queue 中经 fake ALSA → Diretta 切换、HTTP materialize/reload 后仍由 Core native-ended 自动下一首；真实 ALSA/Diretta hardware/bitstream 继续由 P3 手工 gate 覆盖。
 
 ---
 
@@ -468,11 +468,12 @@ Atom 主动开发和验收的在线平台范围收敛为：**网易云音乐、Q
 
 ### 待验收 / 待完善
 
-- [ ] main-authority 在线自动下一首。
-- [ ] 歌单连续播放。
-- [ ] 收藏页 / 日推 / 云盘等 upstream 在线页面的 Headless Web 完整验收。
-- [ ] URL 失效后的 main reload。
-- [ ] 明确区分真实 `fee=4` 数字单曲购买限制与 VIP 权益解析错误。
+- [x] main-authority 在线自动下一首：确定性 Node acceptance 直接驱动真实 `playbackSession`，三首在线 playlist queue 无 Control callback 连续推进 1 → 2 → 3。
+- [x] 歌单连续播放：同一 acceptance queue 带 playlist `PlaybackContext`，连续推进与 preload 均由 Core session 持有。
+- [x] 收藏页 / 日推 / 云盘的 Headless Web **软件可达性**已闭合：正常 Web 使用共享 SPlayer UI；三类页面复用 `useUserStore` / `useDataStore`，登录态来自共享 `providerSessions`，Netease 调用统一经 `providerClient` 进入 Core Provider Protocol；云盘浏览/播放保持 Core 能力，本地上传按 `cloudUpload` Host capability 在 Web 隐藏，不建立假 facade。
+- [ ] 使用真实登录账号完成收藏页 / 日推 / 云盘的 Headless Web 端到端数据验收（含收藏变更、日推刷新、云盘分页/删除/播放）；该项需要有效 Netease 账号状态，不以静态/模拟测试冒充 live acceptance。
+- [x] URL 失效后的 main reload：行为测试确认同 canonical Track 仅 fresh resolve 一次；再次 sourceError 或 fresh resolve 本身失败时由 Core 有界前进。
+- [x] 明确区分真实 `fee=4` 数字单曲购买限制与 VIP 权益解析错误：Core policy 现在映射 `fee=1 → NETEASE_VIP_REQUIRED`、`fee=4 → NETEASE_PURCHASE_REQUIRED`，并有独立用户提示与回归测试。
 
 ---
 
@@ -588,18 +589,18 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ## 12. 正式产品身份、版本与兼容协议
 
-当前部分 package / builder 元数据仍继承上游 SPlayer Next，仅适合开发阶段。正式发行时 Atom 必须拥有独立产品身份，但 Core / Desktop 继续来自同一 monorepo 与同一 release train。
+SPlayer Atom 已建立独立 package / builder / updater / repository 身份；Core / Desktop 继续来自同一 monorepo 与同一 release train。仍保留的上游品牌字符串必须属于明确的 compatibility / provenance surface，而不能作为 Atom runtime/release identity。
 
 ### 产品身份
 
-- [ ] 确定 Atom 正式产品名。
-- [ ] 独立 `appId` / package identity。
-- [ ] 独立 Git repository / bugs URL。
-- [ ] 独立 artifact name。
-- [ ] 独立 update feed / release channel。
-- [ ] 禁止 Atom release 错误指向 `SPlayer-Dev/SPlayer-Next` updater / publish。
-- [ ] Desktop 安装身份、配置与 updater 不得与 upstream SPlayer 冲突。
-- [ ] release metadata 明确记录对应的 `vendor/splayer` upstream baseline commit。
+- [x] 正式产品名确定为 **SPlayer Atom**，独立产品版本线从 `0.1.0` 开始。
+- [x] 独立 `appId` / package identity：package 为 `splayer-atom`，Desktop appId / NSIS GUID 为 `io.github.bnqzzdf.splayer-atom`，Linux desktop identity 为 `io.github.bnqzzdf.splayer_atom`。
+- [x] 独立 Git repository / bugs URL 指向 `bnqzzdf/splayer-atom`。
+- [x] 独立 artifact identity：Desktop package/CI label 使用 SPlayer Atom / `splayer-atom`，Core system/bundled tar 分别为 `splayer-atom-core-system-linux-x64.tar.gz` 与 `splayer-atom-core-bundled-linux-x64.tar.gz`。
+- [x] 独立 update feed / release channel 指向 `bnqzzdf/splayer-atom`，产品通道只保留 stable / beta；electron-updater 的 `latest.yml` 仅作为 stable 的技术 manifest 名。
+- [x] Atom release/updater/publish 已禁止回退到 `SPlayer-Dev/SPlayer-Next`，并有独立 release-identity 回归门禁。
+- [x] Desktop appId、package、userData 名称与 updater cache 已与 upstream 隔离；installer 不再静态注册 `orpheus://`，避免安装 Atom 时抢占 SPlayer-Next。Orpheus 继续作为明确的 upstream compatibility 功能保留，默认关闭，仅在用户显式开启时由 runtime 调用 `setAsDefaultProtocolClient()` 注册。
+- [x] release metadata 明确记录 `Atom version / Atom commit / sourceDirty / SPlayer accepted baseline`；最终 Core tar 与 `/api/info` 做一致性校验，Desktop packaged metadata 也注入同一 commit/baseline。
 
 ### 版本策略
 
@@ -615,16 +616,16 @@ Atom Commit:       <commit>
 
 另行维护独立的 **Core Protocol Version**，产品版本不直接等于协议版本。Control 连接 Core 时必须基于 protocol compatibility 判断是否可用，而不是要求 Core / Desktop 产品版本完全相等。
 
-- [~] Core `/api/info` 已提供 shared Core Protocol v1 与 capability contract，Node/runtime 信息也已纳入；正式 Atom 产品 version/commit/SPlayer baseline identity 仍待产品身份工作补齐。
-- [~] Web Control 已在所有 domain HTTP/WS 工作前按 shared protocol range 拒绝不兼容 Core，不再用产品版本号猜 API；Desktop/remote-Control capability-driven UI 仍待后续统一 Control 工作。
+- [x] Core `/api/info` 同时提供 Atom version/commit/sourceDirty/SPlayer baseline、shared Core Protocol v1、capability、arch 与 Node runtime；共享 About/环境信息直接消费 `getCoreInfo()` 展示 Core version/commit/baseline/protocol/source state/Node，且回归测试明确证明产品版本不同不会覆盖 protocol compatibility。
+- [x] Web Control 已在所有 domain HTTP/WS 工作前按 shared protocol range 拒绝不兼容 Core，不再用产品版本号猜 API；Desktop/Web capability-driven UI 已在 §16 完成当前已知 Core/Host 边界收口。
 - [x] Core 已声明 `library`、`playback`、`download`、`diretta`、`netease`、`qobuz`、`tidal`、`remoteOutput` capability；其中 Diretta 从当前 native `build.json` 读取，no-SDK artifact 明确报告 false。
-- [ ] 第一阶段 release channel 只保留 `beta` 与 `stable`；nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
+- [x] 第一阶段正式 release channel 只保留 `beta` 与 `stable`；Alpha 已从 builder、release workflow、manifest merge 与设置 UI 移除。nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
 
 ### 更新策略
 
-- [ ] Desktop 可使用 Atom 自有 updater，但不得消费 SPlayer upstream 更新通道。
-- [ ] Core 第一阶段不实现自更新；升级由用户替换新 `tar.gz` release 并按正式升级流程重启服务。
-- [ ] Desktop / Core 更新解耦，只要 Core Protocol 兼容即可交叉版本使用。
+- [x] Desktop 使用 Atom 自有 GitHub updater/release URL 与独立 updater cache，不消费 SPlayer upstream 更新通道。
+- [x] Core 第一阶段不实现自更新；升级继续由用户替换新 `tar.gz` release 并按正式升级流程重启服务。
+- [x] Desktop / Core 更新解耦，Control 只按 Core Protocol compatibility 判断可用性，不要求产品版本完全一致。
 
 ### 验收标准
 
@@ -705,17 +706,17 @@ Atom Commit:       <commit>
 - [x] Core CI 固定 reference Node `24.18.0`、Rust `1.98.0`、Ubuntu 24.04，并由 `packageManager` / frozen lockfile 固定 pnpm 依赖来源；Core 的 Node 24.x compatibility range 与 reference build runtime 保持分离。
 - [x] Core CI 使用 ephemeral runner + `pnpm install --frozen-lockfile` 从干净 package store 构建；首次 hosted clean run 已验证该环境与依赖策略可实际完成 artifact 全链。
 - [x] upstream Desktop CI 保持原流程，Atom `Core System Gate` 独立构建 Core flavor；Core runtime、`audio-engine.node`、`better-sqlite3` 与真实 plugin-host `hostReady → ping → pong` smoke 已在 reference Node `24.18.0` hosted artifact pipeline 通过。
-- [x] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch、部署面与 whitespace 门禁均在首次 GitHub-hosted run 通过。
+- [x] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch、部署面与 whitespace 门禁均在首次 GitHub-hosted run 通过。bundled-runtime 变体也已接入同一 `Core System Gate`：在 system build 后只重做 staging/tar/final smoke，不重复 native/Core/Web build；该新增 CI step 已本地静态/实构建验证，待下一次 hosted run 提供远端证据。
 - [~] SDK-enabled Diretta build 的受控 provisioning 已落实为独立手动 `Core Diretta Release Gate`：只运行在 `self-hosted/linux/x64/diretta-sdk-149` 受控 runner，SDK 149 只读预置在 checkout 外 `/opt/diretta/HostSDK_149`，不进入 GitHub Secrets / repository / Actions artifact / release upload。`diretta-release` Environment 已创建并仅允许 `dev` 部署；首次远端执行现在只缺受控 runner 注册。
 
 ### Core Artifact
 
-- [~] 已能稳定生成 deterministic system-runtime `tar.gz` 技术 artifact；正式 release channel / artifact identity 尚未接入，因此不提前宣称正式发布完成。
+- [~] 已能稳定生成具有正式 SPlayer Atom identity 的 deterministic system-runtime / bundled-runtime `tar.gz` 技术 artifact，并接入 Atom release naming；真实硬件 gate 与首次正式 GitHub Release 尚未完成，因此不提前宣称正式发布完成。
 - [x] system-runtime artifact 支持系统预装 `>=24.18.0 <25` Node，Core 在加载 database/native/plugin 之前明确拒绝不受支持 runtime；artifact pipeline 本身固定在 reference Node `24.18.0`。
-- [ ] 可选发布 bundled-runtime `tar.gz`，其中 Node 固定为该 release 的 reference runtime；它只是自包含部署便利形式，与 system-runtime artifact 使用同一 Core JS / native compatibility contract。
+- [x] 可选 bundled-runtime `tar.gz` 已实现：`--bundle-node` 将构建时已强制为 `24.18.0` 的 reference Node 放入 `runtime/bin/node`，`runtime.json.nodeBundled` 标识变体；final-artifact smoke 不注入 `ATOM_NODE_BIN` 并验证运行 executable 确实来自包内 Node。它仅是自包含部署便利形式，与 system-runtime 使用同一 Core JS / native compatibility contract。
 - [~] 当前 Core native、staging 与 artifact pipeline 均显式限定 Linux x86-64；提升为“正式支持平台”仍需真实 ALSA/Diretta/systemd/长时间播放 hardware gate。
 - [ ] ARM64 可构建不等于正式支持；完成真实机器上的 Node/native/ALSA/Diretta/systemd/长时间播放验收后再提升为正式支持平台。
-- [~] 当前 `runtime.json` 已记录 arch、Node range/reference、`better-sqlite3`、Core Protocol 与完整 capability snapshot，并由 final-artifact gate 与 `/api/info` 做一致性校验；Atom version/commit、SPlayer baseline 尚待正式 release identity 工作补齐。
+- [x] `runtime.json` 已记录 productName、Atom version/commit、`sourceDirty`、SPlayer accepted baseline、arch、Node range/reference、是否 bundled、`better-sqlite3`、Core Protocol、schema 与完整 capability snapshot，并由 final-artifact gate 与 `/api/info` 做一致性校验。clean release CI 应记录 `sourceDirty=false`；本地未提交构建会明确记录 true。
 
 ### Release Gate
 
@@ -816,9 +817,9 @@ Web 可以使用浏览器自己的 notification、clipboard、download 等 Host 
 ### Capability-driven UI
 
 - [x] Core 已通过 `/api/info` 正式声明 domain capability；Control renderer 另外用 Atom-owned `ControlHostCapability` 声明 window controls / desktop lyric / hotkey / tray / native file-dialog / protocol 与浏览器侧 Host 能力，不把这些能力混进 Core Domain。
-- [x] UI 已按 capability 决定已审计 Host-only presentation：播放器桌面歌词入口使用 `desktopLyric`；Settings 在统一 schema 入口隐藏 Desktop-only External Lyric / Hotkeys，General 按 `windowControls` / `desktopUpdater` / `nativeFileDialogs` 隐藏 Desktop shell、updater 与配置文件 Host section，About 按 `desktopUpdater` / `hostLogDirectory` 隐藏 Desktop-only action；Netease Electron embedded-login 只在 `providerLoginWindow` 下展示，系统字体枚举只在 `systemFonts` 下启用。Download 已完成文件位置 action 的 `hostFileExplorer` gating，歌词海报导出在 Web 使用 `browserDownload`，window/updater/settings store 也不会在 capability 缺失时初始化 Desktop facade。
-- [~] 共享 UI 的 no-op / missing-facade 可达性审计已覆盖既有 Host section，但终局审计确认仍有未收口入口：Web 共享 Settings 仍可进入 Plugins、Last.fm、External API、AI/MCP 等 Desktop facade 页面，Recognition / Cloud upload / OpenCC 也仍缺少明确的 Web Host/presentation capability 边界。已完成的 External Lyric / Hotkeys、General Desktop shell、updater、配置文件 import/export/reset、About host log/updater、Appearance native picker、embedded-login、系统字体与文件管理器 gating 保持有效；剩余入口不得通过补 no-op facade 掩盖，必须按下述终局边界分类处理。
-- [~] Desktop 的音乐业务请求逐步迁移到与 Web 相同的 Core Protocol；当前已完成二十二条 renderer transport / projection 切片：play / pause / stop / seek；authoritative session/queue（恢复、legacy migration、replace/append/insert/remove/select/move、repeat/shuffle、Personal FM、auto-close）；player processing/status（volume、speed/pitch、normalization、EQ、fade、status snapshot）；output discovery/selection；Atom-managed Provider（Netease/Qobuz/TIDAL call、session snapshot、logout、manual-cookie auth）；Library request（曲库读取/搜索/随机、scan/scan-root mutation、标签/文件 mutation、artist avatar）；分散 Player helper（FFT enable/read、当前高清封面、外部歌词文件读取）；首批统一 Core Domain event projection（Provider session、Library scan progress、Download state/progress）；低频 Player projection（status、trackLoaded、session、deviceChanged、error）；高频 Player projection（position、fftData）；Web 退出 legacy Player event transport（Web 仅订阅 CorePlayerProjectionEvent，legacy player:event 只保留 Desktop Host directive 与 recovery fallback）；Download request/mutation（start/retry/startMany/list/cancel/remove/clearFinished/getDir/setDir/resetDir）统一走 `downloadClient`；Playlist request/mutation（list/get/create/update/remove/addTracks/removeTracks/importLegacy/clear）统一走 `playlistClient`；Stats ownership/transport：Desktop/Node 的 play stats 由同一 Core native lifecycle 计时与 shutdown flush，renderer 第二统计会话及 `stats:recordPlay` 写入口已删除，summary/library/top/daily/hourly 与 favorite mutation 统一走 `statsClient`；Cache management（stats/clear/clearAll/getDir/setDir/resetDir）统一走 `cacheClient`，Desktop native picker 只返回经 Core path validation 的目录，不再直接执行 `switchCacheDir()`；NowPlaying lyric-offset snapshot/command/event：Control 通过 `nowPlayingClient` 读取/写入 offset，变化由 runtime-neutral NowPlaying service 在事实变化点统一发布 `CoreControlEvent.lyricOffset`，Desktop IPC 只保留 lyric-window legacy broadcast，不再重复 WS 投影；NowPlaying Track authority 收口：`NowPlayingUpdatePayload` 已删除 `track`，Desktop IPC/Web route 的临时 renderer enrichment 只允许调用 `updateLyrics(lyric, source)`，不能覆盖 Core playback lifecycle 持有的 `currentTrack`；Comments request：评论来源/分页查询统一走 `commentsClient`，Desktop/Web 共用已有 Core comments service 与 `/comments/*` routes，renderer 不再调用 `window.api.comments`；Lyrics request：`matchById` / `matchByQuery` / `fetchTTMLOverlay` / `matchLocalTTML` 的 dedup/匹配逻辑收进 Electron-free `lyricMatching` Core service，Desktop/Web 统一走 `lyricsClient` 与 `/lyrics/*` routes，`pickLyricRepoDir` 继续作为 Desktop Host picker；Streaming management/query/lyrics/event：server config、active server、connect/test/disconnect、SQLite snapshot/search、sync、album/playlist/artist query 与 streaming lyric 统一走 Electron-free `streamingControl` + `streamingClient`，`streamingLibraryUpdated` 纳入同一 `CoreControlEvent` envelope，Web 的 `streaming-cover://` 通过 Core `/streaming/cover` proxy 投影并在送回 Core 时还原 canonical URL；Streaming final playable URL authority 收口：renderer `streaming:getStreamUrl` / `StreamingApi` / store `getStreamUrl` 已端到端删除，旧 `audioSource` / `download-source` 不再回退到 renderer URL，最终播放/下载 URL 只允许由 Core `PlaybackSourceResolver` 与 streaming adapter 解析；以及 session batch insert 漏洞修复：批量队列插入已从 legacy `window.api.player.insertSessionQueue()` 改为既有 `sessionClient.insertSessionQueue()`，并加强静态断言防止链式换行绕过 request-style Player IPC 审计。Desktop 内部 `atom-core://control` 与 Headless Web 都挂载同一个 `buildCoreControlRoutes()`，该 router 组合现有 `buildHeadlessRoutes()` 与 retained thin `buildAtomCompatRoutes()`，不复制业务 route。共享 `CoreControlEvent` envelope 由 Desktop 单一 `core:event` IPC subscription 与 Web 现有单一 WS 承载；同一 `controlEventClient` 负责 typed subscription 与 Web asset projection。旧 `apis:sessions` / `library:scanProgress` / `download:state` / `download:progress` channel 与对应 domain callback 已从生产代码移除，Player projection（status、trackLoaded、session、deviceChanged、error、position、fftData）均不再从 `player:event` 生产；Desktop 继续在 native event source 对 position/FFT 做可见窗口 gating，Web WS 继续由现有高频事件门禁过滤 position/FFT，因此统一 envelope 不增加远端高频带宽。Library 的 `pickScanDir` / `pickCoverImage`、Download 的 `pickDir` 与 Cache 的 `pickDir` 继续明确保留为 Host action；Download `pickDir` 只负责 native directory picker 与 Core path validation，不再直接写 Core 配置，选择结果统一经 `downloadClient.setDir()` mutation。QQ/酷狗 `call` 只保留 frozen upstream compatibility IPC，Netease embedded-login 继续是 Host capability。Player renderer 侧 `syncPlayMode` / `syncLikeState` 已确认只是 tray/thumbar Host presentation；旧 `player:event` 现在只保留 Desktop tray/system-media Host command directive，以及 ended/sourceError/directTrackBoundary 未被 Core 消费时的 Desktop recovery fallback；Web 不再订阅该 legacy channel，recovery handler 因而不再需要 `isWebRemote()` 运行时分支。request-style Player IPC 已无 active renderer caller；终局审计发现的 batch insert 漏用已改走既有 `sessionClient.insertSessionQueue()`，且静态断言允许跨行链式调用后仍能拦截回归。Web 的 ALSA 过滤与 Diretta 显示名保留在 Control projection，不下沉成 Core policy。renderer-facing Direct stage/cancel/commit/materialize API 与 renderer Direct preload result/generation 第二状态机已删除，Direct input materialization、staging 与 gapless boundary commit 只剩 Core 内部实现。该内部协议不依赖默认关闭的 external API、不新增 LAN listener。Playlist 仍复用唯一的 upstream `usePlaylistStore`；旧 IndexedDB 只作为一次性迁移输入，导入 mutation 进入同一 Core contract，Web 不再维护第二份 route mapping。播放统计现在由 Core 单独拥有：同一曲目 source recovery 继续延续会话，自然结束/下一曲切换结算，Desktop 与 Node Core 退出前都会刷出最后一段有效统计，Control 数量不再影响 `play_history`。Cache 管理也只保留一个 Core mutation authority：`POST /cache/dir` 先验证真实 Core 目录再调用既有 `switchCacheDir()`，Web facade 复用同一 client；`audioSource.ts` 中仍存在的 song-cache lookup/fetch/cancel 仅属于冻结/兼容播放内部 seam，不扩成 Web Control API。第二十二条切片验证基线为 Node 255/255、Web 84/84、touch audit 105 / 22 / 13 与 Desktop production build PASS。Streaming 的管理/query/lyrics/event 与 final playable URL 均已无 renderer business IPC；Electron Streaming 注册只保留 Desktop `streaming-cover://` Host protocol，Core Control Protocol 不暴露最终 playable URL。renderer lyric/source presentation enrichment 仍是完整歌词解析 authority 迁移前的临时 seam。renderer `media.ts -> nowPlaying.update()` 仍只作为 lyric/source presentation enrichment 的临时反向 seam；Track/position/state/offset authority 已全部留在 Core，但歌词解析 ownership 尚未最终迁入 Core，本条未把它伪装成已完成。未被 Core 消费的 recovery fallback 保持 Desktop-only legacy resilience seam，不作为 Web/Core authority projection；Desktop shell / Host Capability directive 最终保留 IPC。完整歌词解析 authority 不再作为下一项惯性迁移；其 renderer lyric/source enrichment 保留为已知高成本 authority seam，只有在能复用 runtime-neutral canonical lyric resolver、且无需搬运 Vue/settings/presentation parser 时才继续。下一步按终局边界审计结果优先修复已有 Core client 漏用、Settings authority/transport 分层与 Plugin Core Control surface。
+- [x] UI 已按 capability 决定已审计 Host-only presentation：播放器桌面歌词入口使用 `desktopLyric`；Settings 在统一 schema 入口隐藏 Desktop-only External Lyric / Hotkeys，General 按 `windowControls` / `desktopUpdater` / `nativeFileDialogs` 隐藏 Desktop shell、updater 与配置文件 Host section，Appearance 的 native background picker 也在 schema 聚合层隐藏，About 按 `desktopUpdater` / `hostLogDirectory` 隐藏 Desktop-only action；Netease Electron embedded-login 只在 `providerLoginWindow` 下展示，系统字体枚举只在 `systemFonts` 下启用。Recognition 以 `musicRecognition`、Cloud 本地上传以 `cloudUpload`、native OpenCC 歌词转换以 `nativeCjkTransform` 明确为 Desktop Host/presentation capability：Web 隐藏识曲入口、云盘仍可浏览/播放但不显示上传、歌词设置不显示无等价实现的 OpenCC 选项。Download 已完成文件位置 action 的 `hostFileExplorer` gating，歌词海报导出在 Web 使用 `browserDownload`，window/updater/settings store 也不会在 capability 缺失时初始化 Desktop facade。
+- [x] 共享 UI 的 no-op / missing-facade 可达性审计已收口当前已知入口：Web 隐藏 AI/MCP、Last.fm、External API、system media / Discord 等 Desktop-only scope；Plugins 在建立真实 Core Control surface 后恢复已安装列表与市场，只隐藏本地脚本 picker/import；字体保存不再写 Desktop lyric Host 配置；UI Zoom 明确归为 This Control，并在 Web 通过本地持久化 + 浏览器 zoom 真正生效。External Lyric / Hotkeys、General Desktop shell、updater、配置文件 import/export/reset、About host log/updater、Appearance native picker、embedded-login、系统字体与文件管理器 gating 保持有效；Recognition / Cloud upload / OpenCC 也已分别以 `musicRecognition` / `cloudUpload` / `nativeCjkTransform` 收口。后续新入口仍不得通过补 no-op facade 掩盖，必须按终局边界分类。
+- [x] Desktop 当前已知音乐业务 request/projection 已迁移到与 Web 相同的 Core Protocol，并完成终局边界审计；已完成二十二条 renderer transport / projection 切片：play / pause / stop / seek；authoritative session/queue（恢复、legacy migration、replace/append/insert/remove/select/move、repeat/shuffle、Personal FM、auto-close）；player processing/status（volume、speed/pitch、normalization、EQ、fade、status snapshot）；output discovery/selection；Atom-managed Provider（Netease/Qobuz/TIDAL call、session snapshot、logout、manual-cookie auth）；Library request（曲库读取/搜索/随机、scan/scan-root mutation、标签/文件 mutation、artist avatar）；分散 Player helper（FFT enable/read、当前高清封面、外部歌词文件读取）；首批统一 Core Domain event projection（Provider session、Library scan progress、Download state/progress）；低频 Player projection（status、trackLoaded、session、deviceChanged、error）；高频 Player projection（position、fftData）；Web 退出 legacy Player event transport（Web 仅订阅 CorePlayerProjectionEvent，legacy player:event 只保留 Desktop Host directive 与 recovery fallback）；Download request/mutation（start/retry/startMany/list/cancel/remove/clearFinished/getDir/setDir/resetDir）统一走 `downloadClient`；Playlist request/mutation（list/get/create/update/remove/addTracks/removeTracks/importLegacy/clear）统一走 `playlistClient`；Stats ownership/transport：Desktop/Node 的 play stats 由同一 Core native lifecycle 计时与 shutdown flush，renderer 第二统计会话及 `stats:recordPlay` 写入口已删除，summary/library/top/daily/hourly 与 favorite mutation 统一走 `statsClient`；Cache management（stats/clear/clearAll/getDir/setDir/resetDir）统一走 `cacheClient`，Desktop native picker 只返回经 Core path validation 的目录，不再直接执行 `switchCacheDir()`；NowPlaying lyric-offset snapshot/command/event：Control 通过 `nowPlayingClient` 读取/写入 offset，变化由 runtime-neutral NowPlaying service 在事实变化点统一发布 `CoreControlEvent.lyricOffset`，Desktop IPC 只保留 lyric-window legacy broadcast，不再重复 WS 投影；NowPlaying Track authority 收口：`NowPlayingUpdatePayload` 已删除 `track`，Desktop IPC/Web route 的临时 renderer enrichment 只允许调用 `updateLyrics(lyric, source)`，不能覆盖 Core playback lifecycle 持有的 `currentTrack`；Comments request：评论来源/分页查询统一走 `commentsClient`，Desktop/Web 共用已有 Core comments service 与 `/comments/*` routes，renderer 不再调用 `window.api.comments`；Lyrics request：`matchById` / `matchByQuery` / `fetchTTMLOverlay` / `matchLocalTTML` 的 dedup/匹配逻辑收进 Electron-free `lyricMatching` Core service，Desktop/Web 统一走 `lyricsClient` 与 `/lyrics/*` routes，`pickLyricRepoDir` 继续作为 Desktop Host picker；Streaming management/query/lyrics/event：server config、active server、connect/test/disconnect、SQLite snapshot/search、sync、album/playlist/artist query 与 streaming lyric 统一走 Electron-free `streamingControl` + `streamingClient`，`streamingLibraryUpdated` 纳入同一 `CoreControlEvent` envelope，Web 的 `streaming-cover://` 通过 Core `/streaming/cover` proxy 投影并在送回 Core 时还原 canonical URL；Streaming final playable URL authority 收口：renderer `streaming:getStreamUrl` / `StreamingApi` / store `getStreamUrl` 已端到端删除，旧 `audioSource` / `download-source` 不再回退到 renderer URL，最终播放/下载 URL 只允许由 Core `PlaybackSourceResolver` 与 streaming adapter 解析；以及 session batch insert 漏洞修复：批量队列插入已从 legacy `window.api.player.insertSessionQueue()` 改为既有 `sessionClient.insertSessionQueue()`，并加强静态断言防止链式换行绕过 request-style Player IPC 审计。Desktop 内部 `atom-core://control` 与 Headless Web 都挂载同一个 `buildCoreControlRoutes()`，该 router 组合现有 `buildHeadlessRoutes()` 与 retained thin `buildAtomCompatRoutes()`，不复制业务 route。共享 `CoreControlEvent` envelope 由 Desktop 单一 `core:event` IPC subscription 与 Web 现有单一 WS 承载；同一 `controlEventClient` 负责 typed subscription 与 Web asset projection。旧 `apis:sessions` / `library:scanProgress` / `download:state` / `download:progress` channel 与对应 domain callback 已从生产代码移除，Player projection（status、trackLoaded、session、deviceChanged、error、position、fftData）均不再从 `player:event` 生产；Desktop 继续在 native event source 对 position/FFT 做可见窗口 gating，Web WS 继续由现有高频事件门禁过滤 position/FFT，因此统一 envelope 不增加远端高频带宽。Library 的 `pickScanDir` / `pickCoverImage`、Download 的 `pickDir` 与 Cache 的 `pickDir` 继续明确保留为 Host action；Download `pickDir` 只负责 native directory picker 与 Core path validation，不再直接写 Core 配置，选择结果统一经 `downloadClient.setDir()` mutation。QQ/酷狗 `call` 只保留 frozen upstream compatibility IPC，Netease embedded-login 继续是 Host capability。Player renderer 侧 `syncPlayMode` / `syncLikeState` 已确认只是 tray/thumbar Host presentation；旧 `player:event` 现在只保留 Desktop tray/system-media Host command directive，以及 ended/sourceError/directTrackBoundary 未被 Core 消费时的 Desktop recovery fallback；Web 不再订阅该 legacy channel，recovery handler 因而不再需要 `isWebRemote()` 运行时分支。request-style Player IPC 已无 active renderer caller；终局审计发现的 batch insert 漏用已改走既有 `sessionClient.insertSessionQueue()`，且静态断言允许跨行链式调用后仍能拦截回归。Web 的 ALSA 过滤与 Diretta 显示名保留在 Control projection，不下沉成 Core policy。renderer-facing Direct stage/cancel/commit/materialize API 与 renderer Direct preload result/generation 第二状态机已删除，Direct input materialization、staging 与 gapless boundary commit 只剩 Core 内部实现。该内部协议不依赖默认关闭的 external API、不新增 LAN listener。Playlist 仍复用唯一的 upstream `usePlaylistStore`；旧 IndexedDB 只作为一次性迁移输入，导入 mutation 进入同一 Core contract，Web 不再维护第二份 route mapping。播放统计现在由 Core 单独拥有：同一曲目 source recovery 继续延续会话，自然结束/下一曲切换结算，Desktop 与 Node Core 退出前都会刷出最后一段有效统计，Control 数量不再影响 `play_history`。Cache 管理也只保留一个 Core mutation authority：`POST /cache/dir` 先验证真实 Core 目录再调用既有 `switchCacheDir()`，Web facade 复用同一 client；`audioSource.ts` 中仍存在的 song-cache lookup/fetch/cancel 仅属于冻结/兼容播放内部 seam，不扩成 Web Control API。第二十二条切片验证基线为 Node 255/255、Web 84/84、touch audit 105 / 22 / 13 与 Desktop production build PASS。Streaming 的管理/query/lyrics/event 与 final playable URL 均已无 renderer business IPC；Electron Streaming 注册只保留 Desktop `streaming-cover://` Host protocol，Core Control Protocol 不暴露最终 playable URL。renderer lyric/source presentation enrichment 仍是完整歌词解析 authority 迁移前的临时 seam。renderer `media.ts -> nowPlaying.update()` 仍只作为 lyric/source presentation enrichment 的临时反向 seam；Track/position/state/offset authority 已全部留在 Core，但歌词解析 ownership 尚未最终迁入 Core，本条未把它伪装成已完成。未被 Core 消费的 recovery fallback 保持 Desktop-only legacy resilience seam，不作为 Web/Core authority projection；Desktop shell / Host Capability directive 最终保留 IPC。完整歌词解析 authority 不再作为下一项惯性迁移；其 renderer lyric/source enrichment 保留为已知高成本 authority seam，只有在能复用 runtime-neutral canonical lyric resolver、且无需搬运 Vue/settings/presentation parser 时才继续。终局边界审计发现的已有 Core client 漏用、Settings authority/transport、Plugin Core Control surface 与当前 Web Host capability 可达性均已收口；§16 后续不再以惯性 IPC 迁移为工作队列，只在出现新的真实 Core parity gap 时继续。
 
 ### §16 终局 IPC / Control 边界审计
 
@@ -827,8 +828,8 @@ Web 可以使用浏览器自己的 notification、clipboard、download 等 Host 
 - **Frozen / legacy compatibility，当前不扩权**：QQ Music / Kugou `apis.call`；已无 production import path 的 renderer `audioSource` / `download-source` URL/cache/plugin fallback；Desktop `externalApi` 是 Electron 本地 legacy server 管理，不等同于 Node Core Control server。除非 roadmap 单独提升为正式产品能力，不为这些 seam 新建 Core framework。
 - **Legitimate Desktop resilience / presentation，保持 IPC**：`player:event` 的 tray/system-media Host directive 与未被 Core 消费的 ended/sourceError/directTrackBoundary fallback，以及 `syncPlayMode` / `syncLikeState`。这些不属于 Web/Core authority projection。
 - [x] **小型 Core gap 已修复**：`src/core/player/index.ts` 批量队列插入已复用 `sessionClient.insertSessionQueue()`；没有新增 route/client，request-style Player IPC active renderer caller 重新归零。
-- **独立的真实 Core gap：Settings authority / transport**。当前 `system` store 同时包含 Core playback/provider/cache/network 设置与 Desktop-only media/window/updater/MCP/External API 设置；Desktop `config:set` 还承载大量 Host/Core side effect，而 Web `/config` 仅写 store + 少量 preload refresh。后续必须先拆清 `Core Settings` 与 `This Control` ownership，再让真正 Core Settings 的 Desktop/Web mutation 复用同一 runtime-neutral service/Protocol；P4 的“收窄通用 `/config`”仍是安全 API 形状优化，不应和本次 authority 分层混为一件事。
-- **独立的真实 Core gap：Plugin Control surface**。Node Core 已初始化唯一 `pluginRegistry`，因此 plugin list/status、enable/setting、URL/market install/update/uninstall，以及仍在使用的 match lyric / match cover / menu invoke 不应永久依赖 Desktop IPC。后续建立薄 Core routes/client/event；本地插件文件 picker 保留 Host action，不为插件再建第二 registry/store。
+- [x] **独立的真实 Core gap：Settings authority / transport**。mutation、snapshot 与 read split 已收口：共享 `isCoreSettingPath()` 区分当前可经通用 Settings mutation 修改的 Core playback/lyric/cache/download/network 路径与 Host / dedicated-domain 路径，`isCoreOwnedSettingPath()` 则覆盖 library/output/cache-dir/download-dir 等由专用 domain client 持有的全部 Core 配置 ownership；Desktop/Web 的共享 `settingsClient` 统一调用 `/settings/core`，runtime-neutral `coreSettings` service 持久化并执行 preload、normalization、EQ、fade 副作用；GET 只投影 `CoreSettingsSnapshot`（player/library/lyric/cache/download/streaming/network/scrobble），不把 window/updater/MCP/Last.fm/plugin/desktop-lyric 等 Host 或独立 scope 配置混入 Core contract。`syncSystem()` 现在并行读取当前 Control 配置与 Core snapshot，并让 Core snapshot 最终覆盖其 domain 路径；Web Control 不再请求 mixed `/config`，localStorage 只允许持久化 onboarding/agreement/UI Zoom 三个明确的 This Control 兼容字段，隐藏 scope 与 Host 路径不能落成第二份假状态。P4 审计进一步确认 Core/Headless 的通用 HTTP `/config` 已无 production、debug 或 retained legacy consumer，因此 GET/POST 均已删除；Core Settings 只暴露 `/settings/core` 与各 dedicated domain API。为保持 upstream touch 预算，旧 Desktop `config:set` 不新增修改，仅作为 Desktop Host/backup compatibility seam 保留；production 共享 Settings UI 已不再通过它读写 Core Settings。Plugin Core Control surface 也已在同一 §16 checkpoint 完成。
+- [x] **独立的真实 Core gap：Plugin Control surface**。Node/Desktop Core 继续只初始化唯一 `pluginRegistry`，其 list/status、enable/setting、URL/market install/update/uninstall、resolve URL、match lyric / match cover / menu invoke 已通过薄 `pluginControl` service、`/plugins/*` routes、共享 `pluginClient` 与统一 `CoreControlEvent.pluginStatus` 投影到 Desktop/Web。Desktop preload 的旧 `window.api.plugins` 仅作为兼容 facade：除本地路径 `install` 与原生 `pickAndInstall` 两个 Host action 外，其余业务方法全部转发 `atom-core://control`，状态也从 `core:event` 过滤；Web facade 直接复用 `pluginClient`。Web Settings 恢复已安装插件与市场管理，但过滤本地脚本 picker/import section；播放器启动时 Desktop/Web 都从同一 Core registry 加载插件 projection，因此歌词/封面/menu fallback 不依赖先打开设置页。旧 `electron/main/ipc/plugin.ts` 的非 picker handlers 只剩 legacy compatibility，不再是 production renderer 的 Plugin business transport；没有建立第二 registry/store。
 - **需要单独 scope 决策、不得在 §16 中自动扩张**：Last.fm 当前只在 Electron Desktop 初始化；MCP 当前也只在 Desktop runtime 启动且 agent detect/inject 明确操作 Control/host 文件系统；AI Model 设置本身标记“未实现”且没有产品消费者。若未来正式保留为 Node Core 能力，再建立独立 roadmap 项；在此之前 Web 共享 UI 必须隐藏/标 capability unavailable，而不是提供伪实现。
 - **已知高成本 authority seam，暂不强迁**：`media.ts -> nowPlaying.updateLyrics()` 仍使 renderer 参与 canonical lyric selection。现有 lyric loader/resolver 深度依赖 Vue settings、plugin projection 与 presentation parse result；若不能先形成小型 runtime-neutral canonical resolver，则保持已知例外并继续由 Core 持有 Track/position/state/offset，不为形式上的“0 reverse flow”大搬 upstream lyric architecture。
 
@@ -847,7 +848,7 @@ Core-centric 架构下必须明确文件属于哪台机器：
 
 - [x] “添加媒体库目录”浏览和保存的是 **Core 文件系统路径**：Web 使用共享 Core directory browser，Desktop 同机 native picker 只是 Host presentation；两条路径最终都经 Core directory validation，不把 Control 本机路径冒充远端 Core path。
 - [ ] 若未来支持从 Control 本机导入文件，应作为独立的 Upload / Import 功能，由 Control 上传到 Core，而不是混入 Library Folder 设置。
-- [ ] “下载到 Core”与“下载到当前 Control 设备”在 UI 与 API 中明确区分。
+- [x] 音乐下载只支持 **下载到 Core**，不提供 Control-local 下载目标：共享 `DownloadRequest.destination` 固定为字面量 `"core"`，Core route 拒绝其他 destination；Desktop/Web 共用 `downloadClient`，关键菜单、批量动作、下载页与 toast 均明确标注 Core。未来若出现浏览器文件导出需求，应作为独立 Export/Upload 类能力设计，不扩展当前音乐下载队列为第二个 Control-local authority。
 
 ### Settings 分层
 
@@ -866,7 +867,7 @@ Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capabili
 
 ### 现有 UX 待完善
 
-- [~] Web 本地曲库浏览 / 播放控制 / 搜索已基本可用。
+- [x] Web 本地曲库浏览 / 搜索 / 播放控制的软件链路已闭合：正常 Web runtime 挂载与 Desktop 相同的 `App`/router/Pinia Control UI（专用 `HeadlessApp` 仅保留 `/debug` 诊断页），本地 songs/albums/artists 搜索统一走 `libraryClient`，queue/playback 统一走 `sessionClient`/Core Protocol；共享 UI、Library/Search transport 与 session transport 均有确定性回归。真实 ALSA/DSD/Diretta 出声继续由 P3 hardware gate 单独验收。
 - [x] Web 的 Library 与 Download 路径选择使用共享 Core directory browser，可逐级浏览或显式输入 Core 路径；Core 只返回目录并验证真实目录存在，浏览器本地文件系统不会混入 Core path。
 - [x] Web 不显示桌面最小化 / 最大化 / 退出按钮。
 - [x] 输出列表已过滤大部分虚拟 / 无效 ALSA 项。
@@ -919,8 +920,8 @@ history/                  本地历史阶段 / 会话交接快照（Git 忽略�
 - [ ] HTTP session authentication。
 - [ ] WebSocket authentication。
 - [ ] CSRF / Origin policy。
-- [ ] 收窄通用 `/config` 为更明确的 capability API。
-- [ ] 将 Direct materialize 等内部操作进一步收敛到 main service 内部，减少浏览器可直接调用的高权限通用 endpoint。
+- [x] 移除无消费者的通用 `/config` GET/POST；Core Settings 只经 `/settings/core`，Library/Output/Cache/Download 等继续使用各自 dedicated API，Web This-Control 设置仅保存在 Control-local allowlist。
+- [x] Direct materialize/stage/commit 已收敛为 Core 内部 service：Headless 不暴露 `/player/direct-input/materialize`，renderer/preload 也无 stage/cancel/commit/materialize API；Control 只发送 output/playback 高层命令。
 - [ ] 若未来取消“可信 LAN”假设，再增加 TLS / reverse proxy 等部署方案。
 
 ---
