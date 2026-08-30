@@ -119,7 +119,7 @@ export const initApp = (): void => {
   // 其他初始化
   app.whenReady().then(async () => {
     const headless = isHeadless();
-    electronApp.setAppUserModelId("top.imsyy.splayer-next");
+    electronApp.setAppUserModelId("io.github.bnqzzdf.splayer-atom");
     // 注册 cache:// 与 Desktop 主 Control 的内部 Core Protocol 处理
     handleCacheProtocol();
     handleCoreControlProtocolOnPartition(MAIN_PARTITION);

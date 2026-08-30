@@ -1,17 +1,17 @@
 <div align="center">
 
-<img alt="SPlayer-Next logo" width="120" height="120" src="public/icons/favicon.png" />
+<img alt="SPlayer Atom logo" width="120" height="120" src="public/icons/favicon.png" />
 
-<h2>SPlayer-Next</h2>
+<h2>SPlayer Atom</h2>
 
-<p>🎵 Cross-platform desktop music player with rich lyric support and wide audio format compatibility.</p>
+<p>🎵 Core-centric SPlayer downstream with shared Desktop/Web Controls, Headless Core, and Source Direct playback.</p>
 
-<p>Successor to <a href="https://github.com/SPlayer-Dev/SPlayer">SPlayer</a>.</p>
+<p>Continuously rebased on <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a>.</p>
 
-[![Stars](https://img.shields.io/github/stars/SPlayer-Dev/SPlayer-Next?style=flat)](https://github.com/SPlayer-Dev/SPlayer-Next/stargazers)
-[![Release](https://img.shields.io/github/v/release/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/releases)
-[![License](https://img.shields.io/github/license/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/blob/main/LICENSE)
-[![Issues](https://img.shields.io/github/issues/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/issues)
+[![Stars](https://img.shields.io/github/stars/bnqzzdf/splayer-atom?style=flat)](https://github.com/bnqzzdf/splayer-atom/stargazers)
+[![Release](https://img.shields.io/github/v/release/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/releases)
+[![License](https://img.shields.io/github/license/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/blob/dev/LICENSE)
+[![Issues](https://img.shields.io/github/issues/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/issues)
 
 **English** | [简体中文](./README.zh-CN.md)
 

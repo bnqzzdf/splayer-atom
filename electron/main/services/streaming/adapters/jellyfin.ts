@@ -2,6 +2,7 @@ import type { Album, Artist, Playlist, Track } from "@shared/types/player";
 import type { StreamingPingResult } from "@shared/types/streaming";
 import type { StreamingRuntimeConfig } from "@shared/types/streaming";
 import type { StreamingAdapter } from "./types";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
 /** Jellyfin/Emby 主进程登录会话 */
 export interface StreamingAuthSession {
@@ -9,9 +10,9 @@ export interface StreamingAuthSession {
   userId: string;
 }
 
-const CLIENT_NAME = "SPlayer-Next";
-const CLIENT_VERSION = "1.0.0";
-const DEVICE_NAME = "SPlayer Desktop";
+const CLIENT_NAME = "SPlayer Atom";
+const CLIENT_VERSION = runtimeEnvironment.appVersion;
+const DEVICE_NAME = "SPlayer Atom Desktop";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 interface JellyItem {
@@ -45,7 +46,7 @@ interface JellyItem {
  * @param config - 主进程服务器配置
  * @returns Jellyfin/Emby 设备 ID
  */
-const deviceId = (config: StreamingRuntimeConfig): string => `splayer-next-${config.id}`;
+const deviceId = (config: StreamingRuntimeConfig): string => `splayer-atom-${config.id}`;
 
 /**
  * 请求 Jellyfin/Emby API

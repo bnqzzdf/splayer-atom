@@ -39,14 +39,14 @@ const createFixture = (root, version, channel) => {
   }
 };
 
-test("正式版生成 latest、beta 和 alpha 的完整更新清单", () => {
+test("正式版生成 latest 和 beta 的完整更新清单", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "splayer-release-stable-"));
   try {
     const src = path.join(root, "artifacts");
     const out = path.join(root, "out");
     createFixture(src, "1.2.0", "latest");
     prepareReleaseAssets(src, out, "1.2.0");
-    for (const channel of ["latest", "beta", "alpha"]) {
+    for (const channel of ["latest", "beta"]) {
       for (const suffix of ["", "-mac", "-linux", "-linux-arm64"]) {
         assert.equal(fs.existsSync(path.join(out, `${channel}${suffix}.yml`)), true);
       }
@@ -59,7 +59,7 @@ test("正式版生成 latest、beta 和 alpha 的完整更新清单", () => {
   }
 });
 
-test("Beta 版生成 beta 和 alpha 清单", () => {
+test("Beta 版只生成 beta 清单", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "splayer-release-beta-"));
   try {
     const src = path.join(root, "artifacts");
@@ -67,28 +67,13 @@ test("Beta 版生成 beta 和 alpha 清单", () => {
     createFixture(src, "1.3.0-beta.1", "beta");
     prepareReleaseAssets(src, out, "1.3.0-beta.1");
     assert.equal(fs.existsSync(path.join(out, "beta.yml")), true);
-    assert.equal(fs.existsSync(path.join(out, "alpha.yml")), true);
     assert.equal(fs.existsSync(path.join(out, "latest.yml")), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("Alpha 版只发布 alpha 清单", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "splayer-release-alpha-"));
-  try {
-    const src = path.join(root, "artifacts");
-    const out = path.join(root, "out");
-    createFixture(src, "1.4.0-alpha.1", "alpha");
-    prepareReleaseAssets(src, out, "1.4.0-alpha.1");
-    assert.equal(fs.existsSync(path.join(out, "alpha.yml")), true);
-    assert.equal(fs.existsSync(path.join(out, "beta.yml")), false);
-    assert.equal(fs.existsSync(path.join(out, "latest.yml")), false);
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("拒绝未支持的预发布通道", () => {
+test("拒绝 alpha 与其他未支持的预发布通道", () => {
+  assert.throws(() => resolveChannel("1.3.0-alpha.1"), /不支持的预发布版本格式/);
   assert.throws(() => resolveChannel("1.3.0-rc.1"), /不支持的预发布版本格式/);
 });

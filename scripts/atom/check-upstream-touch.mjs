@@ -54,7 +54,25 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 105);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
+// 正式产品身份必须修改少量上游 packaging/updater/对外 product-identification 表面；单独计数，避免伪装成业务逻辑扩张。
+const releaseIdentitySeamBudget = Number(process.env.UPSTREAM_RELEASE_IDENTITY_SEAM_BUDGET || 14);
 const metadataPaths = new Set([".gitignore", "AGENTS.md", "README.md", "README.zh-CN.md"]);
+const releaseIdentitySeamPaths = new Set([
+  ".github/scripts/prepare-release-assets.cjs",
+  ".github/scripts/prepare-release-assets.test.cjs",
+  ".github/workflows/dev.yml",
+  ".github/workflows/release.yml",
+  "dev-app-update.yml",
+  "electron-builder.config.ts",
+  "electron/main/ipc/config.ts",
+  "electron/main/services/updater.ts",
+  "electron/main/services/streaming/adapters/jellyfin.ts",
+  "electron/main/services/streaming/adapters/subsonic.ts",
+  "electron/main/window/desktopLyric.ts",
+  "package.json",
+  "src/apis/github.ts",
+  "src/settings/categories/general.ts",
+]);
 const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
 const runtimeNeutralSeamPaths = new Set([
   "electron.vite.config.ts",
@@ -120,6 +138,7 @@ const existsInUpstream = (file) => {
 const upstreamCodeTouches = [];
 const upstreamRuntimeSeamTouches = [];
 const upstreamCoreAuthoritySeamTouches = [];
+const upstreamReleaseIdentitySeamTouches = [];
 const upstreamGeneratedTouches = [];
 const downstreamMetadataTouches = [];
 const atomOwnedAdditions = [];
@@ -131,6 +150,8 @@ for (const file of [...changed].sort()) {
     downstreamMetadataTouches.push(file);
   } else if (generatedPaths.has(file)) {
     upstreamGeneratedTouches.push(file);
+  } else if (releaseIdentitySeamPaths.has(file)) {
+    upstreamReleaseIdentitySeamTouches.push(file);
   } else if (runtimeNeutralSeamPaths.has(file)) {
     upstreamRuntimeSeamTouches.push(file);
   } else if (coreAuthoritySeamPaths.has(file)) {
@@ -149,9 +170,11 @@ console.log(`Upstream ref: ${upstreamRef}`);
 console.log(`Upstream business-code touch budget: ${budget}`);
 console.log(`Upstream runtime-neutral seam budget: ${runtimeSeamBudget}`);
 console.log(`Upstream Core-authority seam budget: ${coreAuthoritySeamBudget}`);
+console.log(`Upstream release-identity seam budget: ${releaseIdentitySeamBudget}`);
 printGroup("Upstream business-code touches", upstreamCodeTouches);
 printGroup("Upstream runtime-neutral seam touches", upstreamRuntimeSeamTouches);
 printGroup("Upstream Core-authority seam touches", upstreamCoreAuthoritySeamTouches);
+printGroup("Upstream release-identity seam touches", upstreamReleaseIdentitySeamTouches);
 printGroup("Upstream generated touches", upstreamGeneratedTouches);
 printGroup("Downstream metadata touches", downstreamMetadataTouches);
 printGroup("Atom-owned additions", atomOwnedAdditions);
@@ -173,6 +196,13 @@ if (upstreamRuntimeSeamTouches.length > runtimeSeamBudget) {
 if (upstreamCoreAuthoritySeamTouches.length > coreAuthoritySeamBudget) {
   console.error(
     `\nUpstream Core-authority seam budget exceeded: ${upstreamCoreAuthoritySeamTouches.length} > ${coreAuthoritySeamBudget}. Re-evaluate whether Control still owns playback policy.`,
+  );
+  process.exitCode = 1;
+}
+
+if (upstreamReleaseIdentitySeamTouches.length > releaseIdentitySeamBudget) {
+  console.error(
+    `\nUpstream release-identity seam budget exceeded: ${upstreamReleaseIdentitySeamTouches.length} > ${releaseIdentitySeamBudget}. Re-evaluate whether the product identity change is touching runtime business code unnecessarily.`,
   );
   process.exitCode = 1;
 }

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "要发布的标签（例如 v1.1.0-beta.1 或 v1.1.0-alpha.1）"
+        description: "要发布的标签（例如 v1.1.0 或 v1.1.0-beta.1）"
         required: true
         type: string
 
@@ -78,15 +78,21 @@ jobs:
       - name: Verify release metadata
         shell: bash
         run: |
+          if [ "$GITHUB_REPOSITORY" != "bnqzzdf/splayer-atom" ]; then
+            echo "正式 SPlayer Atom release 只允许在 bnqzzdf/splayer-atom 运行: $GITHUB_REPOSITORY"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+            echo "正式 release 必须来自 clean source tree"
+            git status --short
+            exit 1
+          fi
           VERSION="$(node -p "require('./package.json').version")"
           if [ "v$VERSION" != "$RELEASE_TAG" ]; then
             echo "标签 $RELEASE_TAG 与 package.json 版本 v$VERSION 不一致"
             exit 1
           fi
           case "$VERSION" in
-            *-alpha|*-alpha.*)
-              echo "UPDATE_CHANNEL=alpha" >> "$GITHUB_ENV"
-              ;;
             *-beta|*-beta.*)
               echo "UPDATE_CHANNEL=beta" >> "$GITHUB_ENV"
               ;;
@@ -95,7 +101,7 @@ jobs:
               exit 1
               ;;
             *)
-              echo "UPDATE_CHANNEL=latest" >> "$GITHUB_ENV"
+              echo "UPDATE_CHANNEL=stable" >> "$GITHUB_ENV"
               ;;
           esac
 
@@ -163,7 +169,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Next-${{ matrix.name }}
+          name: SPlayer-Atom-${{ matrix.name }}
           path: dist/*.*
 
   # 合并多架构更新清单并创建 GitHub 草稿 Release
@@ -187,15 +193,21 @@ jobs:
       - name: Verify release metadata
         shell: bash
         run: |
+          if [ "$GITHUB_REPOSITORY" != "bnqzzdf/splayer-atom" ]; then
+            echo "正式 SPlayer Atom release 只允许在 bnqzzdf/splayer-atom 运行: $GITHUB_REPOSITORY"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+            echo "正式 release 必须来自 clean source tree"
+            git status --short
+            exit 1
+          fi
           VERSION="$(node -p "require('./package.json').version")"
           if [ "v$VERSION" != "$RELEASE_TAG" ]; then
             echo "标签 $RELEASE_TAG 与 package.json 版本 v$VERSION 不一致"
             exit 1
           fi
           case "$VERSION" in
-            *-alpha|*-alpha.*)
-              echo "UPDATE_CHANNEL=alpha" >> "$GITHUB_ENV"
-              ;;
             *-beta|*-beta.*)
               echo "UPDATE_CHANNEL=beta" >> "$GITHUB_ENV"
               ;;
@@ -204,7 +216,7 @@ jobs:
               exit 1
               ;;
             *)
-              echo "UPDATE_CHANNEL=latest" >> "$GITHUB_ENV"
+              echo "UPDATE_CHANNEL=stable" >> "$GITHUB_ENV"
               ;;
           esac
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -237,7 +249,7 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release delete "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --yes
           fi
-          if [ "$UPDATE_CHANNEL" != "latest" ]; then
+          if [ "$UPDATE_CHANNEL" = "beta" ]; then
             gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$RELEASE_TAG" \

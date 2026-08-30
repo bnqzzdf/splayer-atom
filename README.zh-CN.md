@@ -1,17 +1,17 @@
 <div align="center">
 
-<img alt="SPlayer-Next logo" width="120" height="120" src="public/icons/favicon.png" />
+<img alt="SPlayer Atom logo" width="120" height="120" src="public/icons/favicon.png" />
 
-<h2>SPlayer-Next</h2>
+<h2>SPlayer Atom</h2>
 
-<p>🎵 跨平台桌面音乐播放器，支持丰富的歌词展现形式与广泛的音频格式</p>
+<p>🎵 Core-centric 的 SPlayer 下游版本，共享 Desktop/Web Control、Headless Core 与 Source Direct 播放架构</p>
 
-<p>「<a href="https://github.com/SPlayer-Dev/SPlayer">SPlayer</a>」的继任版本</p>
+<p>持续同步上游 <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a></p>
 
-[![Stars](https://img.shields.io/github/stars/SPlayer-Dev/SPlayer-Next?style=flat)](https://github.com/SPlayer-Dev/SPlayer-Next/stargazers)
-[![Release](https://img.shields.io/github/v/release/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/releases)
-[![License](https://img.shields.io/github/license/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/blob/main/LICENSE)
-[![Issues](https://img.shields.io/github/issues/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/issues)
+[![Stars](https://img.shields.io/github/stars/bnqzzdf/splayer-atom?style=flat)](https://github.com/bnqzzdf/splayer-atom/stargazers)
+[![Release](https://img.shields.io/github/v/release/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/releases)
+[![License](https://img.shields.io/github/license/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/blob/dev/LICENSE)
+[![Issues](https://img.shields.io/github/issues/bnqzzdf/splayer-atom)](https://github.com/bnqzzdf/splayer-atom/issues)
 
 [English](./README.md) | **简体中文**
 

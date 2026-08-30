@@ -16,7 +16,7 @@ const { autoUpdater } = electronUpdater;
 const canSelfInstall = !isMac && !isPortable && !isAppX;
 
 /** Releases 页 */
-const RELEASES_URL = "https://github.com/SPlayer-Dev/SPlayer-Next/releases";
+const RELEASES_URL = "https://github.com/bnqzzdf/splayer-atom/releases";
 
 /** Microsoft Store 更新页 */
 const STORE_UPDATES_URL = "ms-windows-store://updates";
@@ -46,7 +46,7 @@ const emit = (event: UpdateEvent): void => sendToMain("update:event", event);
  */
 const getChannel = (): UpdateChannel => {
   const channel = store.get("update.channel");
-  return channel === "beta" || channel === "alpha" ? channel : "stable";
+  return channel === "beta" ? channel : "stable";
 };
 
 /**
@@ -163,7 +163,7 @@ export const downloadUpdate = (): void => {
 export const applyChannelChange = (previous: UpdateChannel, channel: UpdateChannel): void => {
   if (previous === channel) return;
   updaterLog.info(`切换更新通道: ${previous} -> ${channel}`);
-  const channelPriority: Record<UpdateChannel, number> = { stable: 0, beta: 1, alpha: 2 };
+  const channelPriority: Record<UpdateChannel, number> = { stable: 0, beta: 1 };
   runCheck(true, channelPriority[channel] < channelPriority[previous]);
 };
 

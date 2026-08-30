@@ -1,9 +1,25 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { app, net, safeStorage, utilityProcess } from "electron";
 import { configureRuntimeFetch } from "./atom/runtime/fetch";
 import { configureRuntimePluginHost } from "./atom/runtime/pluginHost";
 import { configureRuntimeSecretCodec } from "./atom/runtime/secrets";
+
+const readDesktopReleaseIdentity = (): {
+  atomCommit?: string;
+  atomSourceDirty?: boolean;
+  splayerBaseline?: string;
+} => {
+  try {
+    return JSON.parse(readFileSync(path.join(app.getAppPath(), "package.json"), "utf8")) as {
+      atomCommit?: string;
+      atomSourceDirty?: boolean;
+      splayerBaseline?: string;
+    };
+  } catch {
+    return {};
+  }
+};
 
 const configureElectronRuntime = (): void => {
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
@@ -15,6 +31,14 @@ const configureElectronRuntime = (): void => {
   process.env.ATOM_APP_NAME = app.getName();
   process.env.ATOM_APP_VERSION = app.getVersion();
   process.env.ATOM_APP_PACKAGED = app.isPackaged ? "1" : "0";
+  const releaseIdentity = readDesktopReleaseIdentity();
+  if (releaseIdentity.atomCommit) process.env.ATOM_COMMIT = releaseIdentity.atomCommit;
+  if (releaseIdentity.atomSourceDirty !== undefined) {
+    process.env.ATOM_SOURCE_DIRTY = releaseIdentity.atomSourceDirty ? "1" : "0";
+  }
+  if (releaseIdentity.splayerBaseline) {
+    process.env.ATOM_SPLAYER_BASELINE = releaseIdentity.splayerBaseline;
+  }
   process.env.ATOM_USER_DATA_DIR = app.getPath("userData");
   process.env.ATOM_MUSIC_DIR = app.getPath("music");
   process.env.ATOM_TEMP_DIR = app.getPath("temp");

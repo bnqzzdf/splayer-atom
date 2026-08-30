@@ -135,12 +135,7 @@ const applyConfigChange = (keyPath: string, value: unknown, previous: unknown): 
 export const registerConfigIpc = (): void => {
   ipcMain.handle("config:get", (_event, keyPath: string) => store.get(keyPath as ConfigPath));
   ipcMain.handle("config:set", (_event, keyPath: string, value: unknown) => {
-    if (
-      keyPath === "update.channel" &&
-      value !== "stable" &&
-      value !== "beta" &&
-      value !== "alpha"
-    ) {
+    if (keyPath === "update.channel" && value !== "stable" && value !== "beta") {
       throw new Error(`无效的更新通道: ${String(value)}`);
     }
     const previous = store.get(keyPath as ConfigPath);

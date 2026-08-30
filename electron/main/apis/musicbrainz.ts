@@ -3,9 +3,10 @@ import path from "node:path";
 import { getArtistCacheDir } from "@main/utils/config";
 import { toCacheUrl } from "@main/atom/cacheUrl";
 import { runtimeFetch } from "@main/atom/runtime/fetch";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
 /** MusicBrainz User-Agent */
-const UA = "SPlayer-Next/1.0.0 (https://github.com/imsyy/SPlayer)";
+const UA = `SPlayer-Atom/${runtimeEnvironment.appVersion} (https://github.com/bnqzzdf/splayer-atom)`;
 
 /** 预取并发数 */
 const PREFETCH_CONCURRENCY = 2;

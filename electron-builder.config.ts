@@ -1,27 +1,42 @@
 import type { Configuration } from "electron-builder";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version as string;
-const prereleaseChannel = /-(alpha|beta)(?:\.|$)/.exec(packageVersion)?.[1];
-const inferredUpdateChannel = prereleaseChannel ?? "latest";
-const updateChannel = process.env.UPDATE_CHANNEL ?? inferredUpdateChannel;
+const atomCommit =
+  process.env.ATOM_COMMIT ??
+  execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const atomSourceDirty =
+  execFileSync("git", ["status", "--porcelain", "--untracked-files=normal"], {
+    encoding: "utf8",
+  }).trim().length > 0;
+const splayerBaseline = (
+  JSON.parse(readFileSync("scripts/atom/upstream.json", "utf8")) as { acceptedBaseline?: string }
+).acceptedBaseline;
+if (!atomCommit || !splayerBaseline)
+  throw new Error("缺少 Atom commit 或 SPlayer baseline release metadata");
+const prereleaseChannel = /-(beta)(?:\.|$)/.exec(packageVersion)?.[1];
+const inferredReleaseChannel = prereleaseChannel ?? "stable";
+const releaseChannel = process.env.UPDATE_CHANNEL ?? inferredReleaseChannel;
 const headlessBuild = process.env.HEADLESS_BUILD === "1";
 
-if (updateChannel !== "latest" && updateChannel !== "beta" && updateChannel !== "alpha") {
-  throw new Error(`不支持的更新通道: ${updateChannel}`);
+if (releaseChannel !== "stable" && releaseChannel !== "beta") {
+  throw new Error(`不支持的更新通道: ${releaseChannel}`);
 }
 if (packageVersion.includes("-") && !prereleaseChannel) {
   throw new Error(`不支持的预发布版本格式: ${packageVersion}`);
 }
-if (updateChannel !== inferredUpdateChannel) {
-  throw new Error(`版本 ${packageVersion} 与更新通道 ${updateChannel} 不匹配`);
+if (releaseChannel !== inferredReleaseChannel) {
+  throw new Error(`版本 ${packageVersion} 与更新通道 ${releaseChannel} 不匹配`);
 }
+const publishChannel = releaseChannel === "stable" ? "latest" : "beta";
 
 const config: Configuration = {
-  appId: "top.imsyy.splayer-next",
-  productName: "SPlayer-Next",
-  copyright: "Copyright © imsyy 2025",
+  appId: "io.github.bnqzzdf.splayer-atom",
+  productName: "SPlayer Atom",
+  copyright: "Copyright © SPlayer contributors and SPlayer Atom contributors",
   directories: { buildResources: "public" },
+  extraMetadata: { atomCommit, atomSourceDirty, splayerBaseline },
   afterPack: "./scripts/after-pack.ts",
   compression: "maximum",
   generateUpdatesFilesForAllChannels: true,
@@ -86,21 +101,20 @@ const config: Configuration = {
     },
   ],
   win: {
-    executableName: "SPlayer-Next",
+    executableName: "splayer-atom",
     icon: "public/icons/logo.ico",
     artifactName: "${productName}-${version}-${arch}.${ext}",
     forceCodeSigning: false,
     target: ["nsis", "portable"],
-    protocols: [{ name: "Orpheus Protocol", schemes: ["orpheus"] }],
   },
   nsis: {
     oneClick: false,
-    guid: "top.imsyy.splayer-next",
+    guid: "io.github.bnqzzdf.splayer-atom",
     installerIcon: "public/icons/favicon.ico",
     uninstallerIcon: "public/icons/favicon.ico",
     artifactName: "${productName}-${version}-${arch}-setup.${ext}",
-    shortcutName: "SPlayer Next",
-    uninstallDisplayName: "SPlayer Next",
+    shortcutName: "SPlayer Atom",
+    uninstallDisplayName: "SPlayer Atom",
     createDesktopShortcut: "always",
     allowElevation: true,
     allowToChangeInstallationDirectory: true,
@@ -110,7 +124,7 @@ const config: Configuration = {
     artifactName: "${productName}-${version}-${arch}-portable.${ext}",
   },
   mac: {
-    executableName: "SPlayer-Next",
+    executableName: "splayer-atom",
     icon: "public/icons/icon.icns",
     artifactName: "${productName}-${version}-${arch}.${ext}",
     identity: null,
@@ -126,7 +140,6 @@ const config: Configuration = {
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
-      CFBundleURLTypes: [{ CFBundleURLName: "Orpheus Protocol", CFBundleURLSchemes: ["orpheus"] }],
     },
     target: ["dmg", "zip"],
   },
@@ -134,18 +147,25 @@ const config: Configuration = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
   },
   linux: {
-    executableName: "SPlayer-Next",
+    executableName: "splayer-atom",
     icon: "public/icons/favicon-512x512.png",
     artifactName: "${name}-${version}-${arch}.${ext}",
     maintainer: "imsyy.top",
     category: "Audio;Music;AudioVideo;",
     target: ["AppImage", "deb", "rpm", "tar.gz", "pacman"],
     syncDesktopName: true,
-    desktop: {
-      entry: headlessBuild
-        ? { Type: "Application", Terminal: true, Exec: "${executable} --headless", Categories: "Audio;Music;AudioVideo;" }
-        : { MimeType: "x-scheme-handler/orpheus;" },
-    },
+    ...(headlessBuild
+      ? {
+          desktop: {
+            entry: {
+              Type: "Application",
+              Terminal: true,
+              Exec: "${executable} --headless",
+              Categories: "Audio;Music;AudioVideo;",
+            },
+          },
+        }
+      : {}),
   },
   appImage: {
     artifactName: "${name}-${version}-${arch}.${ext}",
@@ -169,9 +189,9 @@ const config: Configuration = {
   },
   publish: {
     provider: "github",
-    owner: "SPlayer-Dev",
-    repo: "SPlayer-Next",
-    channel: updateChannel,
+    owner: "bnqzzdf",
+    repo: "splayer-atom",
+    channel: publishChannel,
   },
 };
 
