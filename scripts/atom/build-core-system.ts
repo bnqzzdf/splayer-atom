@@ -6,6 +6,7 @@ import { CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntim
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
+const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
 
 if (process.versions.node !== CORE_NODE_REFERENCE) {
@@ -39,7 +40,22 @@ run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.confi
 run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);
 run("构建 Web Control", bin("vite"), ["build", "-c", "scripts/atom/vite.web.config.ts"]);
 run("审计 Core build", process.execPath, ["scripts/atom/check-core-build.mjs"]);
-run("生成 system-runtime tar.gz", bin("tsx"), ["scripts/atom/stage-core-system.ts", "--archive"]);
-run("验收最终 tar artifact", bin("tsx"), ["scripts/atom/check-core-artifact.ts"]);
+run(bundleNode ? "生成 bundled-runtime tar.gz" : "生成 system-runtime tar.gz", bin("tsx"), [
+  "scripts/atom/stage-core-system.ts",
+  "--archive",
+  ...(bundleNode ? ["--bundle-node"] : []),
+]);
+run("验收最终 tar artifact", bin("tsx"), [
+  "scripts/atom/check-core-artifact.ts",
+  ...(bundleNode ? ["--bundle-node"] : []),
+]);
 
-console.log(`[CoreBuild] PASS ${path.join(root, "out", "core-system-linux-x64.tar.gz")}`);
+console.log(
+  `[CoreBuild] PASS ${path.join(
+    root,
+    "out",
+    bundleNode
+      ? "splayer-atom-core-bundled-linux-x64.tar.gz"
+      : "splayer-atom-core-system-linux-x64.tar.gz",
+  )}`,
+);

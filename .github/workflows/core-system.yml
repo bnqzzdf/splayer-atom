@@ -71,13 +71,22 @@ jobs:
       - name: Build and validate Core system artifact
         run: pnpm exec tsx scripts/atom/build-core-system.ts
 
+      - name: Stage and validate bundled Node variant
+        run: |
+          pnpm exec tsx scripts/atom/stage-core-system.ts --archive --bundle-node
+          pnpm exec tsx scripts/atom/check-core-artifact.ts --bundle-node
+
       - name: Verify deployment surface in final tar
         run: |
-          tar -tzf out/core-system-linux-x64.tar.gz | grep -Fx core-system/docs/core-deployment.md
-          tar -tzf out/core-system-linux-x64.tar.gz | grep -Fx core-system/service/install-systemd.sh
-          tar -tzf out/core-system-linux-x64.tar.gz | grep -Fx core-system/service/splayer-atom-core.service
+          tar -tzf out/splayer-atom-core-system-linux-x64.tar.gz | grep -Fx core-system/docs/core-deployment.md
+          tar -tzf out/splayer-atom-core-system-linux-x64.tar.gz | grep -Fx core-system/service/install-systemd.sh
+          tar -tzf out/splayer-atom-core-system-linux-x64.tar.gz | grep -Fx core-system/service/splayer-atom-core.service
+          tar -tzf out/splayer-atom-core-bundled-linux-x64.tar.gz | grep -Fx core-system/runtime/bin/node
+          tar -tzf out/splayer-atom-core-bundled-linux-x64.tar.gz | grep -Fx core-system/runtime/LICENSE
           test -x out/core-system/service/install-systemd.sh
           test -x out/core-system/bin/splayer-atom-core
+          test -x out/core-system/runtime/bin/node
+          test -f out/core-system/runtime/LICENSE
 
       - name: Whitespace check
         run: git diff --check

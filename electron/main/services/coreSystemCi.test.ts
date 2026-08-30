@@ -34,6 +34,11 @@ test("Core CI reuses the repository gates and does not publish a release", () =>
   assert.match(workflowSource, /run: pnpm lint/);
   assert.match(workflowSource, /node scripts\/atom\/check-upstream-touch\.mjs/);
   assert.match(workflowSource, /pnpm exec tsx scripts\/atom\/build-core-system\.ts/);
+  assert.match(workflowSource, /scripts\/atom\/stage-core-system\.ts --archive --bundle-node/);
+  assert.match(workflowSource, /scripts\/atom\/check-core-artifact\.ts --bundle-node/);
+  assert.match(workflowSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(workflowSource, /core-system\/runtime\/bin\/node/);
+  assert.match(workflowSource, /core-system\/runtime\/LICENSE/);
   assert.match(workflowSource, /git diff --check/);
   assert.doesNotMatch(workflowSource, /upload-artifact|release-action|gh release|publish/);
 });
@@ -62,6 +67,6 @@ test("Diretta release CI keeps the proprietary SDK on a controlled self-hosted r
 });
 
 test("Diretta release CI rejects SDK files in the final Core artifact", () => {
-  assert.match(direttaWorkflowSource, /tar -tzf out\/core-system-linux-x64\.tar\.gz/);
+  assert.match(direttaWorkflowSource, /tar -tzf out\/splayer-atom-core-system-linux-x64\.tar\.gz/);
   assert.match(direttaWorkflowSource, /Diretta SDK source\/archive leaked into Core artifact/);
 });

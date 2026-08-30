@@ -6,7 +6,6 @@ assertSupportedCoreNodeRuntime();
 
 process.env.ATOM_HEADLESS = "1";
 process.env.ATOM_APP_NAME ??= "SPlayer Atom Core";
-process.env.ATOM_APP_VERSION ??= "1.0.0";
 process.env.ATOM_APP_PACKAGED ??= process.env.NODE_ENV === "production" ? "1" : "0";
 if (process.env.ATOM_APP_PACKAGED === "1") {
   process.env.ATOM_DATA_DIR ??= fileURLToPath(new URL("../data", import.meta.url));

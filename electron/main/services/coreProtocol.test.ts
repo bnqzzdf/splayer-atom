@@ -35,6 +35,13 @@ test("Core Protocol v1 is the only currently supported Control range", () => {
   );
 });
 
+test("product version differences do not override Core Protocol compatibility", () => {
+  const olderProduct = { version: "0.1.0", protocol: { version: CORE_PROTOCOL_VERSION } };
+  const newerProduct = { version: "9.9.9", protocol: { version: CORE_PROTOCOL_VERSION } };
+  assert.equal(isCoreProtocolCompatible(olderProduct), true);
+  assert.equal(isCoreProtocolCompatible(newerProduct), true);
+});
+
 test("Core capability reports actual Diretta native metadata instead of a hard-coded claim", () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "splayer-atom-capability-"));
   const previous = process.env.ATOM_NATIVE_DIR;
@@ -54,6 +61,49 @@ test("Core capability reports actual Diretta native metadata instead of a hard-c
   } finally {
     if (previous === undefined) Reflect.deleteProperty(process.env, "ATOM_NATIVE_DIR");
     else Reflect.set(process.env, "ATOM_NATIVE_DIR", previous);
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Core info projects packaged Atom release identity independently from protocol compatibility", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "splayer-atom-release-info-"));
+  const previousResources = process.env.ATOM_RESOURCES_DIR;
+  const previousVersion = process.env.ATOM_APP_VERSION;
+  const previousCommit = process.env.ATOM_COMMIT;
+  const previousSourceDirty = process.env.ATOM_SOURCE_DIRTY;
+  const previousBaseline = process.env.ATOM_SPLAYER_BASELINE;
+  try {
+    writeFileSync(
+      path.join(tempDir, "runtime.json"),
+      JSON.stringify({
+        atomVersion: "1.2.3",
+        atomCommit: "atom-commit",
+        sourceDirty: true,
+        splayerBaseline: "splayer-baseline",
+      }),
+    );
+    Reflect.set(process.env, "ATOM_RESOURCES_DIR", tempDir);
+    Reflect.deleteProperty(process.env, "ATOM_APP_VERSION");
+    Reflect.deleteProperty(process.env, "ATOM_COMMIT");
+    Reflect.deleteProperty(process.env, "ATOM_SOURCE_DIRTY");
+    Reflect.deleteProperty(process.env, "ATOM_SPLAYER_BASELINE");
+
+    const info = getCoreInfo();
+    assert.equal(info.version, "1.2.3");
+    assert.equal(info.commit, "atom-commit");
+    assert.equal(info.sourceDirty, true);
+    assert.equal(info.splayerBaseline, "splayer-baseline");
+    assert.equal(info.protocol.version, CORE_PROTOCOL_VERSION);
+  } finally {
+    const restore = (name: string, value: string | undefined): void => {
+      if (value === undefined) Reflect.deleteProperty(process.env, name);
+      else Reflect.set(process.env, name, value);
+    };
+    restore("ATOM_RESOURCES_DIR", previousResources);
+    restore("ATOM_APP_VERSION", previousVersion);
+    restore("ATOM_COMMIT", previousCommit);
+    restore("ATOM_SOURCE_DIRTY", previousSourceDirty);
+    restore("ATOM_SPLAYER_BASELINE", previousBaseline);
     rmSync(tempDir, { recursive: true, force: true });
   }
 });

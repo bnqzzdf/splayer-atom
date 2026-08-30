@@ -23,14 +23,18 @@ Desktop characteristics:
 - Desktop Control sends playback/domain commands to the same Core-owned session logic used by Node Core; it must not regain a second raw playable-source authority path.
 - The existing upstream Desktop release workflows are not yet an Atom formal release channel. Do not publish Atom by reusing upstream SPlayer updater/product identity.
 
-## Core system-runtime flavor
+## Core system-runtime and bundled-runtime flavors
 
-The Core flavor is an ordinary Node process plus Web Control. It is built from the same repository and reuses the same settings, database, provider, playback-session and plugin implementation.
+The Core flavor is an ordinary Node process plus Web Control. It is built from the same repository and reuses the same settings, database, provider, playback-session and plugin implementation. Runtime packaging is a deployment variant only: system-runtime uses a compatible host Node, while bundled-runtime carries the release reference Node inside `runtime/bin/node`.
 
-Formal local gate:
+Formal local gates:
 
 ```bash
+# Host provides a supported Node >=24.18.0 <25
 pnpm exec tsx scripts/atom/build-core-system.ts
+
+# Self-contained runtime; stages the exact reference Node 24.18.0
+pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node
 ```
 
 The command requires Linux x86-64 and the exact reference Node `24.18.0`. It runs:
@@ -41,16 +45,19 @@ core-audio native release build
 → production plugin-host IPC smoke
 → Web Control build
 → Core dependency/Electron audit
-→ system-runtime staging
+→ system-runtime or bundled-runtime staging
 → deterministic tar.gz
-→ extracted-artifact HTTP/Web/schema smoke
+→ extracted-artifact HTTP/Web/schema/runtime smoke
 ```
 
-The produced technical artifact is:
+The produced technical artifacts are:
 
 ```text
-out/core-system-linux-x64.tar.gz
+out/splayer-atom-core-system-linux-x64.tar.gz
+out/splayer-atom-core-bundled-linux-x64.tar.gz
 ```
+
+Both archives contain the same `app/`, `renderer/`, native addon, data layout and protocol contract. `runtime.json` records SPlayer Atom version/commit, dirty-worktree state, accepted SPlayer baseline, protocol/schema/capabilities and `nodeBundled`; the bundled final-artifact gate launches without `ATOM_NODE_BIN` and verifies the running executable is the archive's own `runtime/bin/node`.
 
 Core runtime compatibility is `>=24.18.0 <25`; only the release/reference build is pinned to `24.18.0`. A second Node 24 patch smoke is intentionally not maintained.
 
@@ -62,6 +69,8 @@ A normal technical Core build may omit Diretta and records `diretta: false` in n
 
 ```bash
 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
+# self-contained Diretta variant uses the same gate:
+pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-node
 ```
 
 That mode fails if `DIRETTA_SDK_ROOT` is absent. Core Diretta release builds are pinned to **Diretta Host SDK 149** by reading the SDK's public `Host/Release.hpp`; any other release is rejected before native compilation. `build.json` and final `runtime.json` record `direttaSdkRelease: 149` when Diretta is compiled, while no-Diretta artifacts record `null`. The first formal Core release target remains Linux x86-64; AArch64 is not promoted to a supported release platform until its separate hardware gate is complete.
@@ -79,7 +88,7 @@ The tar artifact carries:
 - `service/install-systemd.sh` installer;
 - `docs/core-deployment.md` installation/upgrade/rollback guide;
 - durable `data/` root;
-- `runtime.json` runtime/protocol/capability/schema metadata.
+- `runtime.json` SPlayer Atom release identity plus runtime/protocol/capability/schema metadata.
 
 See [`core-deployment.md`](./core-deployment.md) for the operator procedure.
 
@@ -94,7 +103,7 @@ Existing upstream-oriented workflows continue to validate Desktop behavior. Atom
 - Node/Web tests, typecheck, lint and upstream-touch audit;
 - the same `build-core-system.ts` artifact pipeline used locally.
 
-The Core workflow is a validation gate, not a release publisher. The first GitHub-hosted `Core System Gate` for commit `fd5671f` completed successfully on 2026-08-29 as Actions run `33245921866`; the follow-up CI/provisioning commit `6aac815` also passed as run `33246384095`, proving the ordinary no-SDK Core path remains green after the Diretta release-gate addition. Formal Atom artifact naming, updater/feed identity and release channels remain blocked on the product-identity roadmap work.
+The Core workflow is a validation gate, not a release publisher. The first GitHub-hosted `Core System Gate` for commit `fd5671f` completed successfully on 2026-08-29 as Actions run `33245921866`; the follow-up CI/provisioning commit `6aac815` also passed as run `33246384095`, proving the ordinary no-SDK Core path remains green after the Diretta release-gate addition. SPlayer Atom artifact naming, updater/feed identity and stable/beta release channels are now code-defined; the next hosted run must validate the renamed Core artifacts and bundled smoke before the first formal release.
 
 ## Shared architecture contract
 

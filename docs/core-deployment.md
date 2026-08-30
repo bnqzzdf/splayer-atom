@@ -1,12 +1,13 @@
 # SPlayer Atom Core Deployment and Upgrade
 
-This document describes the supported Linux x86-64 system-runtime deployment model for the current Core artifact.
+This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
 
 ## Runtime contract
 
 - Core requires Node `>=24.18.0 <25`.
 - Release/reference validation uses Node `24.18.0`.
-- The system-runtime and future bundled-runtime variants execute the same Core JS/native/protocol contract.
+- The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
+- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node in `>=24.18.0 <25`.
 - The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
 
 ## Installation layout
@@ -23,6 +24,7 @@ core-system/
 ├─ service/
 ├─ docs/
 ├─ data/
+├─ runtime/                      # bundled-runtime only: bin/node
 ├─ runtime.json
 └─ LICENSE
 ```
@@ -38,7 +40,7 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core
 ```
 
-The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a future bundled runtime is present, and otherwise the system `node` executable.
+The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same `core-system/` installation layout.
 
 ### systemd for ordinary ALSA Core
 
@@ -89,6 +91,7 @@ sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
 sudo mkdir -p /opt/splayer-atom-core
 sudo tar -xzf splayer-atom-core-system-linux-x64.tar.gz \
   -C /opt/splayer-atom-core --strip-components=1
+# bundled-runtime uses the corresponding bundled archive and the same target layout
 ```
 
 4. Replace the new artifact's empty `data/` with a copy of the pre-upgrade durable state. Copy rather than move it so the rollback directory remains independently recoverable.
@@ -153,5 +156,7 @@ journalctl -u splayer-atom-core -n 200 --no-pager
 node --version
 cat /opt/splayer-atom-core/runtime.json
 ```
+
+`runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, `splayerBaseline`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
 
 Core production logs go to stdout/stderr so systemd/journald remains the deployment log owner. The installation directory should not accumulate production log files.

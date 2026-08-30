@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,7 +14,16 @@ import type { CoreInfo } from "../../shared/types/core";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const archiveFile = path.join(root, "out", "core-system-linux-x64.tar.gz");
+const args = new Set(process.argv.slice(2));
+const bundleNode = args.delete("--bundle-node");
+if (args.size > 0) throw new Error(`[CoreArtifact] 未知参数: ${[...args].join(" ")}`);
+const archiveFile = path.join(
+  root,
+  "out",
+  bundleNode
+    ? "splayer-atom-core-bundled-linux-x64.tar.gz"
+    : "splayer-atom-core-system-linux-x64.tar.gz",
+);
 
 const fail = (message: string): never => {
   throw new Error(`[CoreArtifact] ${message}`);
@@ -67,15 +76,43 @@ try {
 
   const installRoot = path.join(tempDir, "core-system");
   const runtime = JSON.parse(readFileSync(path.join(installRoot, "runtime.json"), "utf8")) as {
+    productName?: string;
+    atomVersion?: string;
+    atomCommit?: string;
+    sourceDirty?: boolean;
+    splayerBaseline?: string;
     nodeRange?: string;
     nodeReference?: string;
+    nodeBundled?: boolean;
     protocolVersion?: number;
     dataSchema?: { database?: number; config?: number };
     capabilities?: CoreInfo["capabilities"];
     direttaSdkRelease?: number | null;
   };
+  if (
+    runtime.productName !== "SPlayer Atom" ||
+    !runtime.atomVersion ||
+    !runtime.atomCommit ||
+    typeof runtime.sourceDirty !== "boolean" ||
+    !runtime.splayerBaseline
+  ) {
+    fail("runtime.json 缺少 SPlayer Atom release identity metadata");
+  }
   if (runtime.nodeRange !== CORE_NODE_RANGE || runtime.nodeReference !== CORE_NODE_REFERENCE) {
     fail("runtime.json 与 Core Node contract 不一致");
+  }
+  if (runtime.nodeBundled !== bundleNode) {
+    fail(`runtime.json nodeBundled 与 artifact 变体不一致: ${String(runtime.nodeBundled)}`);
+  }
+  const bundledNode = path.join(installRoot, "runtime", "bin", "node");
+  const bundledNodeLicense = path.join(installRoot, "runtime", "LICENSE");
+  if (bundleNode !== existsSync(bundledNode)) {
+    fail(
+      bundleNode ? "bundled-runtime 缺少 runtime/bin/node" : "system-runtime 不应携带 bundled Node",
+    );
+  }
+  if (bundleNode !== existsSync(bundledNodeLicense)) {
+    fail(bundleNode ? "bundled-runtime 缺少 Node LICENSE" : "system-runtime 不应携带 Node LICENSE");
   }
   if (runtime.protocolVersion !== CORE_PROTOCOL_VERSION) {
     fail("runtime.json 缺少 Core Protocol metadata");
@@ -104,7 +141,7 @@ try {
     cwd: installRoot,
     env: {
       ...process.env,
-      ATOM_NODE_BIN: process.execPath,
+      ATOM_NODE_BIN: bundleNode ? "" : process.execPath,
       ATOM_SERVER_PORT: String(port),
       XDG_CACHE_HOME: path.join(tempDir, "cache"),
     },
@@ -123,7 +160,14 @@ try {
   const info = await waitForJson<CoreInfo>(`${baseUrl}/api/info`).catch((error) =>
     fail(`Core 未能通过 /api/info 启动验收: ${String(error)}\n${output}`),
   );
+  if (bundleNode && realpathSync(`/proc/${child.pid}/exe`) !== realpathSync(bundledNode)) {
+    fail(`bundled-runtime 未使用包内 Node: ${realpathSync(`/proc/${child.pid}/exe`)}`);
+  }
   if (
+    info.version !== runtime.atomVersion ||
+    info.commit !== runtime.atomCommit ||
+    info.sourceDirty !== runtime.sourceDirty ||
+    info.splayerBaseline !== runtime.splayerBaseline ||
     info.node !== CORE_NODE_REFERENCE ||
     info.nodeRange !== CORE_NODE_RANGE ||
     info.nodeReference !== CORE_NODE_REFERENCE ||

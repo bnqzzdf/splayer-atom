@@ -798,8 +798,14 @@
       "officialSite": "官方网站",
       "showMore": "更多贡献者",
       "collapse": "收起",
-      "commit": "提交",
-      "date": "日期"
+      "commit": "Atom 提交",
+      "date": "构建日期",
+      "coreVersion": "Core 版本",
+      "splayerBaseline": "SPlayer 基线",
+      "coreProtocol": "Core Protocol",
+      "sourceTree": "源码状态",
+      "clean": "Clean",
+      "dirty": "Dirty（含未提交修改）"
     },
     "storeVersion": "Store",
     "language": {

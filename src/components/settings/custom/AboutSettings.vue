@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { CoreInfo } from "@shared/types/core";
 import { getContributors, type Contributor } from "@/apis/github";
+import { getCoreInfo } from "@/core/controlClient";
 import { useCopyText } from "@/composables/useCopyText";
 import { useUpdateStore } from "@/stores/update";
 import { hasHostCapability, isDesktopRenderer } from "@/runtime";
@@ -32,6 +34,8 @@ const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
 const versions = isDesktopRenderer() ? window.electron.process.versions : null;
 /** 操作系统信息 */
 const osInfo = window.api.system.osInfo;
+/** 当前连接 Core 的 release / protocol 信息。 */
+const coreInfo = shallowRef<CoreInfo | null>(null);
 
 /** 检查更新中 */
 const checking = computed(() => update?.phase === "checking");
@@ -58,26 +62,42 @@ interface EnvItem {
 }
 
 /** 环境信息列表 */
-const envItems = computed<EnvItem[]>(() => [
-  {
-    label: t("settings.about.commit"),
-    value: COMMIT_HASH,
-    url: `${REPO_URL}/commit/${COMMIT_HASH}`,
-  },
-  {
-    label: t("settings.about.date"),
-    value: `${COMMIT_DATE} (${commitTimeAgo.value})`,
-  },
-  ...(versions
-    ? [
-        { label: "Electron", value: versions.electron },
-        { label: "Chromium", value: versions.chrome },
-        { label: "Node.js", value: versions.node },
-        { label: "V8", value: versions.v8 },
-      ]
-    : []),
-  { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}`.trim() },
-]);
+const envItems = computed<EnvItem[]>(() => {
+  const info = coreInfo.value;
+  const commit = info?.commit ?? COMMIT_HASH;
+  return [
+    {
+      label: t("settings.about.commit"),
+      value: commit,
+      url: `${REPO_URL}/commit/${commit}`,
+    },
+    {
+      label: t("settings.about.date"),
+      value: `${COMMIT_DATE} (${commitTimeAgo.value})`,
+    },
+    ...(info
+      ? [
+          { label: t("settings.about.coreVersion"), value: info.version },
+          { label: t("settings.about.splayerBaseline"), value: info.splayerBaseline },
+          { label: t("settings.about.coreProtocol"), value: `v${info.protocol.version}` },
+          {
+            label: t("settings.about.sourceTree"),
+            value: t(info.sourceDirty ? "settings.about.dirty" : "settings.about.clean"),
+          },
+          { label: "Core Node.js", value: info.node },
+        ]
+      : []),
+    ...(versions
+      ? [
+          { label: "Electron", value: versions.electron },
+          { label: "Chromium", value: versions.chrome },
+          { label: "Node.js", value: versions.node },
+          { label: "V8", value: versions.v8 },
+        ]
+      : []),
+    { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}`.trim() },
+  ];
+});
 
 /** 复制环境信息 */
 const handleCopyEnvInfo = (): void => {
@@ -121,11 +141,14 @@ const visibleDevelopers = computed(() =>
 const hasMoreDevelopers = computed(() => developers.value.length > 6);
 
 onMounted(async () => {
-  try {
-    developers.value = await getContributors();
-  } catch (error) {
-    console.error("获取贡献者失败:", error);
-  }
+  const [coreResult, contributorsResult] = await Promise.allSettled([
+    getCoreInfo(),
+    getContributors(),
+  ]);
+  if (coreResult.status === "fulfilled") coreInfo.value = coreResult.value;
+  else console.error("获取 Core 信息失败:", coreResult.reason);
+  if (contributorsResult.status === "fulfilled") developers.value = contributorsResult.value;
+  else console.error("获取贡献者失败:", contributorsResult.reason);
 });
 </script>
 

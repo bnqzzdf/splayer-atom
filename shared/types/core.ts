@@ -18,6 +18,9 @@ export interface CoreCapabilities {
 export interface CoreInfo {
   name: string;
   version: string;
+  commit: string;
+  sourceDirty: boolean;
+  splayerBaseline: string;
   platform: string;
   arch: string;
   node: string;

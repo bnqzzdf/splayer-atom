@@ -232,6 +232,10 @@ test("About Settings does not require an Electron facade in Web Control", () => 
   assert.match(aboutSettingsSource, /v-if="logDirectoryAvailable"/);
   assert.match(webApiSource, /request<CoreInfo>\("\/info"\)/);
   assert.match(webApiSource, /osInfo: \{ type: info\.platform, arch: info\.arch, release: "" \}/);
+  assert.match(aboutSettingsSource, /getCoreInfo\(\)/);
+  assert.match(aboutSettingsSource, /info\.splayerBaseline/);
+  assert.match(aboutSettingsSource, /info\.protocol\.version/);
+  assert.match(aboutSettingsSource, /info\.sourceDirty/);
 });
 
 test("production Web mounts the shared SPlayer Control while HeadlessApp stays debug-only", () => {

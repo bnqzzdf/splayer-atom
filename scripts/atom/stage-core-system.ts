@@ -26,6 +26,7 @@ const audioEngineFile = path.join(root, "out", "native", "audio-engine.node");
 const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
+const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 
 const fail = (message: string): never => {
@@ -54,6 +55,31 @@ requireDir(rendererDir, "Web renderer build");
 requireFile(nativeBuildFile, "Core native build metadata");
 requireFile(audioEngineFile, "Core audio-engine addon");
 requireFile(path.join(root, "LICENSE"), "AGPL license");
+
+const packageMetadata = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as {
+  productName?: string;
+  version?: string;
+};
+const upstreamMetadata = JSON.parse(
+  readFileSync(path.join(root, "scripts", "atom", "upstream.json"), "utf8"),
+) as { acceptedBaseline?: string };
+if (packageMetadata.productName !== "SPlayer Atom" || !packageMetadata.version) {
+  fail("package.json 缺少正式 SPlayer Atom 产品身份或版本");
+}
+if (!upstreamMetadata.acceptedBaseline) fail("缺少 SPlayer accepted baseline");
+const gitHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
+if (gitHead.error) throw gitHead.error;
+if (gitHead.status !== 0 || gitHead.signal || !gitHead.stdout.trim()) {
+  fail(`无法读取 Atom commit: ${`${gitHead.stdout ?? ""}${gitHead.stderr ?? ""}`.trim()}`);
+}
+const atomCommit = gitHead.stdout.trim();
+const gitStatus = spawnSync("git", ["status", "--porcelain", "--untracked-files=normal"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (gitStatus.error) throw gitStatus.error;
+if (gitStatus.status !== 0 || gitStatus.signal) fail("无法读取 Atom worktree 状态");
+const sourceDirty = gitStatus.stdout.trim().length > 0;
 
 const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   profile?: string;
@@ -102,6 +128,15 @@ cpSync(
   path.join(outputDir, "bin", "splayer-atom-core"),
 );
 chmodSync(path.join(outputDir, "bin", "splayer-atom-core"), 0o755);
+if (bundleNode) {
+  const bundledNode = path.join(outputDir, "runtime", "bin", "node");
+  const nodeLicense = path.resolve(path.dirname(process.execPath), "..", "LICENSE");
+  requireFile(nodeLicense, "bundled Node license");
+  mkdirSync(path.dirname(bundledNode), { recursive: true });
+  cpSync(process.execPath, bundledNode);
+  chmodSync(bundledNode, 0o755);
+  cpSync(nodeLicense, path.join(outputDir, "runtime", "LICENSE"));
+}
 mkdirSync(path.join(outputDir, "service"), { recursive: true });
 cpSync(
   path.join(root, "scripts", "atom", "core-system", "splayer-atom-core.service"),
@@ -131,10 +166,16 @@ writeFileSync(
   path.join(outputDir, "runtime.json"),
   `${JSON.stringify(
     {
+      productName: packageMetadata.productName,
+      atomVersion: packageMetadata.version,
+      atomCommit,
+      sourceDirty,
+      splayerBaseline: upstreamMetadata.acceptedBaseline,
       platform: "linux",
       arch: "x64",
       nodeRange: CORE_NODE_RANGE,
       nodeReference: CORE_NODE_REFERENCE,
+      nodeBundled: bundleNode,
       betterSqlite3: betterSqlitePackage.version ?? "unknown",
       protocolVersion: CORE_PROTOCOL_VERSION,
       dataSchema: {
@@ -182,7 +223,13 @@ console.log(`[CoreStage] PASS ${outputDir}`);
 console.log(smoke.stdout.trim());
 
 if (archive) {
-  const archiveFile = path.join(root, "out", "core-system-linux-x64.tar.gz");
+  const archiveFile = path.join(
+    root,
+    "out",
+    bundleNode
+      ? "splayer-atom-core-bundled-linux-x64.tar.gz"
+      : "splayer-atom-core-system-linux-x64.tar.gz",
+  );
   rmSync(archiveFile, { force: true });
   const tar = spawnSync(
     "tar",

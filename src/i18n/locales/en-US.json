@@ -810,8 +810,14 @@
       "officialSite": "Official Site",
       "showMore": "More Contributors",
       "collapse": "Collapse",
-      "commit": "Commit",
-      "date": "Date"
+      "commit": "Atom Commit",
+      "date": "Build Date",
+      "coreVersion": "Core Version",
+      "splayerBaseline": "SPlayer Baseline",
+      "coreProtocol": "Core Protocol",
+      "sourceTree": "Source Tree",
+      "clean": "Clean",
+      "dirty": "Dirty (uncommitted changes)"
     },
     "storeVersion": "Store",
     "language": {

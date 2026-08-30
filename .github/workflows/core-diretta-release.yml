@@ -68,7 +68,7 @@ jobs:
 
       - name: Verify SDK stays outside release artifact
         run: |
-          if tar -tzf out/core-system-linux-x64.tar.gz | grep -E '(^|/)(DirettaHostSDK|Release\.hpp)(/|$)'; then
+          if tar -tzf out/splayer-atom-core-system-linux-x64.tar.gz | grep -E '(^|/)(DirettaHostSDK|Release\.hpp)(/|$)'; then
             echo "Diretta SDK source/archive leaked into Core artifact" >&2
             exit 1
           fi

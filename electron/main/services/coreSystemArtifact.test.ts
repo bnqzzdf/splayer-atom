@@ -70,13 +70,26 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /prebuilds", "linux-x64\.node"/);
   assert.match(stageSource, /audio-engine\.node/);
   assert.match(stageSource, /AGPL license/);
-  assert.match(stageSource, /core-system-linux-x64\.tar\.gz/);
+  assert.match(stageSource, /splayer-atom-core-system-linux-x64\.tar\.gz/);
+  assert.match(stageSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(stageSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
+  assert.match(stageSource, /requireFile\(nodeLicense, "bundled Node license"\)/);
+  assert.match(stageSource, /runtime", "LICENSE"/);
+  assert.match(stageSource, /nodeBundled: bundleNode/);
+  assert.match(stageSource, /productName: packageMetadata\.productName/);
+  assert.match(stageSource, /atomVersion: packageMetadata\.version/);
+  assert.match(stageSource, /atomCommit/);
+  assert.match(stageSource, /sourceDirty/);
+  assert.match(stageSource, /splayerBaseline: upstreamMetadata\.acceptedBaseline/);
   assert.match(stageSource, /--sort=name/);
   assert.match(stageSource, /--mtime=@0/);
   assert.doesNotMatch(stageSource, /pnpm\s+(?:install|deploy)|npm\s+install|postinstall/);
 });
 
 test("formal Core system build always rebuilds before staging and checks the final tar", () => {
+  assert.match(buildSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(buildSource, /\.\.\.\(bundleNode \? \["--bundle-node"\] : \[\]\)/);
   const nativeBuild = buildSource.indexOf("build-core-native.ts");
   const coreBuild = buildSource.indexOf("vite.core.config.ts");
   const webBuild = buildSource.indexOf("vite.web.config.ts");
@@ -100,14 +113,33 @@ test("system-runtime launcher and systemd unit execute the same Core entry", () 
 });
 
 test("final tar artifact smoke starts the extracted Core on an isolated port", () => {
-  assert.match(artifactCheckSource, /ATOM_NODE_BIN: process\.execPath/);
+  assert.match(artifactCheckSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(artifactCheckSource, /runtime\.nodeBundled !== bundleNode/);
+  assert.match(artifactCheckSource, /bundleNode !== existsSync\(bundledNode\)/);
+  assert.match(artifactCheckSource, /bundleNode !== existsSync\(bundledNodeLicense\)/);
+  assert.match(artifactCheckSource, /bundled-runtime 缺少 Node LICENSE/);
+  assert.match(artifactCheckSource, /ATOM_NODE_BIN: bundleNode \? "" : process\.execPath/);
+  assert.match(artifactCheckSource, /realpathSync\(`\/proc\/\$\{child\.pid\}\/exe`\)/);
   assert.match(artifactCheckSource, /ATOM_SERVER_PORT: String\(port\)/);
+  assert.match(artifactCheckSource, /runtime\.productName !== "SPlayer Atom"/);
+  assert.match(artifactCheckSource, /info\.version !== runtime\.atomVersion/);
+  assert.match(artifactCheckSource, /info\.commit !== runtime\.atomCommit/);
+  assert.match(artifactCheckSource, /info\.sourceDirty !== runtime\.sourceDirty/);
+  assert.match(artifactCheckSource, /info\.splayerBaseline !== runtime\.splayerBaseline/);
   assert.match(artifactCheckSource, /\/api\/info/);
   assert.match(artifactCheckSource, /\/api\/session/);
   assert.match(artifactCheckSource, /\/api\/library\/count/);
   assert.match(artifactCheckSource, /\/api\/cache\/stats/);
   assert.match(artifactCheckSource, /\/api\/cache\/dir/);
   assert.match(artifactCheckSource, /child\.kill\("SIGTERM"\)/);
+});
+
+test("system and bundled runtime remain deployment variants of the same staged Core", () => {
+  assert.match(launcherSource, /elif \[ -x "\$ROOT_DIR\/runtime\/bin\/node" \]/);
+  assert.match(launcherSource, /NODE_BIN=\$ROOT_DIR\/runtime\/bin\/node/);
+  assert.match(stageSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(buildSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(artifactCheckSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {
