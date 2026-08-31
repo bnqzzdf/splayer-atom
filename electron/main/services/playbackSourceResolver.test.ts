@@ -57,6 +57,7 @@ describe("isSkippablePlaybackError", () => {
   it("keeps device and unknown failures outside automatic queue advancement", () => {
     assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_NOT_FOUND), false);
     assert.equal(isSkippablePlaybackError(ErrorCode.DEVICE_INIT_FAILED), false);
+    assert.equal(isSkippablePlaybackError(ErrorCode.OUTPUT_DEVICE_REQUIRED), false);
     assert.equal(isSkippablePlaybackError(ErrorCode.UNKNOWN), false);
   });
 });

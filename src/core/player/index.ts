@@ -277,12 +277,17 @@ export const setPitchSync = async (on: boolean): Promise<void> => {
 
 /** 刷新音频输出设备列表 */
 export const refreshDevices = async (): Promise<void> => {
-  const result = await playerClient.getOutputDevices();
+  const result = await playerClient.getOutputSnapshot();
   if (!result.success || !result.data) return;
-  useStatusStore().outputDevices = result.data;
+  const status = useStatusStore();
+  status.outputDevices = result.data.data;
+  status.selectedOutputDevice = result.data.selected;
+  status.outputDevicesReady = true;
   const settings = useSettingsStore();
   await settings.syncSystem();
-  settings.player.outputDevice = settings.system.player.outputDevice;
+  settings.player.outputDevice = isWebRemote()
+    ? result.data.selected
+    : settings.system.player.outputDevice;
 };
 
 /**
@@ -308,6 +313,9 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
     const settings = useSettingsStore();
     settings.system.player.outputDevice = deviceId;
     settings.player.outputDevice = deviceId;
+    const status = useStatusStore();
+    status.selectedOutputDevice = deviceId;
+    status.outputDevicesReady = true;
   } finally {
     preparingToast?.close();
   }

@@ -15,6 +15,9 @@ process.env.ATOM_LOG_STDIO_ONLY ??= "1";
 process.env.ATOM_RENDERER_DIR ??= fileURLToPath(new URL("../renderer", import.meta.url));
 process.env.ATOM_NATIVE_DIR ??= fileURLToPath(new URL("../native", import.meta.url));
 process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js", import.meta.url));
+// bundled `ws` 不加载可选原生加速模块，避免 Rollup 的 CommonJS 包装破坏其导出形状。
+process.env.WS_NO_BUFFER_UTIL ??= "1";
+process.env.WS_NO_UTF_8_VALIDATE ??= "1";
 
 let shuttingDown = false;
 

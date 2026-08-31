@@ -18,6 +18,12 @@ const status = useStatusStore();
 const media = useMediaStore();
 const settings = useSettingsStore();
 const { isPlayerExpanded, isPlaying } = storeToRefs(status);
+const hasTrack = computed(() => media.track !== null);
+
+/** 仅有实际曲目时允许展开全屏播放器。 */
+const expandPlayer = (): void => {
+  if (hasTrack.value) isPlayerExpanded.value = true;
+};
 
 /** 当前歌曲中可展示的歌手 */
 const artists = computed(() => getValidArtists(media.track?.artists));
@@ -56,12 +62,16 @@ const isArtistLinkable = (artist: Artist): boolean => {
   <div class="flex items-center min-w-0" :class="compact ? 'gap-2' : 'gap-3'">
     <!-- 封面 -->
     <div
-      class="relative shrink-0 rounded-lg overflow-hidden cursor-pointer group"
-      :class="compact ? 'size-10 shadow-sm' : 'size-14'"
-      @click="isPlayerExpanded = true"
+      class="relative shrink-0 rounded-lg overflow-hidden"
+      :class="[
+        compact ? 'size-10 shadow-sm' : 'size-14',
+        hasTrack ? 'cursor-pointer group' : 'opacity-55',
+      ]"
+      @click="expandPlayer"
     >
       <SImg :src="media.track?.cover" class="size-full" />
       <div
+        v-if="hasTrack"
         class="absolute inset-0 z-10 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-200"
       >
         <IconLucideChevronUp
@@ -124,6 +134,14 @@ const isArtistLinkable = (artist: Artist): boolean => {
             <span v-else class="opacity-50">{{ $t("playlist.unknownArtist") }}</span>
           </div>
         </Transition>
+      </div>
+      <div
+        v-else
+        key="not-playing"
+        class="min-w-0 flex-1 text-on-surface-variant"
+        :class="compact ? 'text-sm' : 'text-base font-medium'"
+      >
+        {{ $t("player.notPlaying") }}
       </div>
     </Transition>
   </div>

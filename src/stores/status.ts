@@ -27,6 +27,12 @@ export const useStatusStore = defineStore(
     const currentSource = ref<string | null>(null);
     /** 输出设备 */
     const outputDevices = ref<AudioDevice[]>([]);
+    /** Core Native 当前实际选中的输出设备 */
+    const selectedOutputDevice = ref<string | null>(null);
+    /** 是否已收到首份 Core 输出设备快照 */
+    const outputDevicesReady = ref(false);
+    /** 请求现有播放栏打开输出设备选择 */
+    const outputSelectionRequest = ref(0);
     /** 歌曲加载 */
     const trackLoading = ref(false);
     /** 全屏播放器展开状态 */
@@ -130,6 +136,9 @@ export const useStatusStore = defineStore(
       commentsTrack,
       showLyric,
       outputDevices,
+      selectedOutputDevice,
+      outputDevicesReady,
+      outputSelectionRequest,
       playIndex,
       repeatMode,
       shuffleMode,

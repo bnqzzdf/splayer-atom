@@ -3,6 +3,7 @@ import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useOrpheusProtocol } from "@/composables/useOrpheusProtocol";
+import { isWebRemote } from "@/runtime";
 
 const route = useRoute();
 const status = useStatusStore();
@@ -11,8 +12,8 @@ const settings = useSettingsStore();
 // 接入 orpheus 协议唤起
 useOrpheusProtocol();
 
-/** 有歌曲信息时显示播放栏 */
-const showPlayerBar = computed(() => !!useMediaStore().track);
+/** Headless Web 常驻播放栏以保留首次输出选择入口；Desktop 延续按曲目显示。 */
+const showPlayerBar = computed(() => isWebRemote() || !!useMediaStore().track);
 const { isPlayerExpanded } = storeToRefs(status);
 const { appearance } = settings;
 

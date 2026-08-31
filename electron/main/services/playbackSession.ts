@@ -43,6 +43,7 @@ import { playerLog } from "@main/utils/logger";
 import { toMs } from "@main/utils/time";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@shared/utils/djMode";
+import { selectInitialHeadlessOutput } from "@shared/utils/outputDevice";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import {
   advancePersonalFmPool,
@@ -212,6 +213,12 @@ const loadIndex = async (
   resolvedOverride?: ResolvedPlaybackSource,
 ): Promise<void> => {
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
+  if (isHeadlessMode() && !getPlayer().getSelectedDeviceName()) {
+    throw new CorePlaybackLoadError(
+      ErrorCode.OUTPUT_DEVICE_REQUIRED,
+      "Headless Core output device must be selected before playback",
+    );
+  }
   if (!sourceRecovery) sourceRecoveryAttempts = 0;
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
@@ -333,6 +340,17 @@ export const initPlaybackSession = async (): Promise<void> => {
       await player.setOutputDevice(output);
     } catch (error) {
       playerLog.warn(`[session] persisted output not activated: ${String(error)}`);
+    }
+  } else if (isHeadlessMode()) {
+    const initialOutput = selectInitialHeadlessOutput(player.getOutputDevices());
+    if (initialOutput) {
+      try {
+        await player.setOutputDevice(initialOutput);
+        store.set("player.outputDevice", initialOutput);
+        playerLog.info(`[session] selected sole ALSA hardware output: ${initialOutput}`);
+      } catch (error) {
+        playerLog.warn(`[session] initial ALSA output not activated: ${String(error)}`);
+      }
     }
   }
 };

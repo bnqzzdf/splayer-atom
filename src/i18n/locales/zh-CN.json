@@ -464,6 +464,7 @@
   "player": {
     "prev": "上一首",
     "next": "下一首",
+    "notPlaying": "未在播放",
     "heartMode": {
       "needLogin": "登录后才能使用心动模式",
       "noSeed": "暂无可用的心动种子歌曲",
@@ -799,13 +800,14 @@
       "showMore": "更多贡献者",
       "collapse": "收起",
       "commit": "Atom 提交",
-      "date": "构建日期",
-      "coreVersion": "Core 版本",
+      "date": "提交时间",
+      "coreVersion": "Atom 版本",
       "splayerBaseline": "SPlayer 基线",
       "coreProtocol": "Core Protocol",
       "sourceTree": "源码状态",
       "clean": "Clean",
-      "dirty": "Dirty（含未提交修改）"
+      "dirty": "Dirty（含未提交修改）",
+      "direttaSdk": "Diretta SDK"
     },
     "storeVersion": "Store",
     "language": {
@@ -883,7 +885,10 @@
     "outputDevice": {
       "label": "输出设备",
       "description": "选择音频输出设备",
-      "default": "系统默认"
+      "default": "系统默认",
+      "required": "需要选择输出设备",
+      "requiredHint": "请选择一个 ALSA 或 Diretta 输出设备后再播放。",
+      "noneAvailable": "未检测到可用的 ALSA 或 Diretta 输出设备"
     },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",
@@ -2212,6 +2217,7 @@
     "deviceHint": "未检测到可用的音频输出设备，请连接耳机或音箱后重试。",
     "DEVICE_NOT_FOUND": "未找到音频输出设备",
     "DEVICE_INIT_FAILED": "音频设备初始化失败",
+    "OUTPUT_DEVICE_REQUIRED": "请先选择输出设备",
     "FILE_NOT_FOUND": "文件不存在或无法访问",
     "FILE_NO_AUDIO_STREAM": "文件中未找到音频流",
     "FILE_DECODE_ERROR": "音频解码失败",

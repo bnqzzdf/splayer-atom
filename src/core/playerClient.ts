@@ -27,20 +27,28 @@ type PlayerControlApi = Pick<
   | "readLyricFile"
   | "getOutputDevices"
   | "setOutputDevice"
->;
+> & {
+  getOutputSnapshot(): Promise<IpcResponse<OutputSnapshot>>;
+};
 
 interface OutputSnapshot {
   selected: string | null;
   data: AudioDevice[];
 }
 
-const mapOutputResult = async (
+const mapOutputSnapshot = async (
   result: Promise<IpcResponse<OutputSnapshot>>,
-): Promise<IpcResponse<AudioDevice[]>> => {
+): Promise<IpcResponse<OutputSnapshot>> => {
   const resolved = await result;
   if (!resolved.success) return { success: false, error: resolved.error };
   if (!resolved.data) return { success: false, error: "CORE_RESPONSE_MISSING_DATA" };
-  return { success: true, data: projectOutputDevices(resolved.data.data, isWebRemote()) };
+  return {
+    success: true,
+    data: {
+      selected: resolved.data.selected,
+      data: projectOutputDevices(resolved.data.data, isWebRemote()),
+    },
+  };
 };
 
 /**
@@ -80,6 +88,12 @@ export const playerClient: PlayerControlApi = {
       ? { success: true, data: result.data.data }
       : { success: false, error: result.error ?? "CORE_RESPONSE_MISSING_DATA" };
   },
-  getOutputDevices: () => mapOutputResult(coreResult<OutputSnapshot>("/output/devices")),
+  getOutputSnapshot: () => mapOutputSnapshot(coreResult<OutputSnapshot>("/output/devices")),
+  getOutputDevices: async () => {
+    const result = await mapOutputSnapshot(coreResult<OutputSnapshot>("/output/devices"));
+    return result.success && result.data
+      ? { success: true, data: result.data.data }
+      : { success: false, error: result.error };
+  },
   setOutputDevice: (deviceId) => coreCommand("/output/select", { deviceId }),
 };

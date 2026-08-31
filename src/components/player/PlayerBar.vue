@@ -105,6 +105,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         :thumb-size="10"
         :always-show-thumb="false"
         :show-popover="showTooltip"
+        :disabled="!media.track"
         @drag-end="onSeekDragEnd"
       >
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
@@ -126,6 +127,7 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         :thumb-size="12"
         :always-show-thumb="false"
         :show-popover="showTooltip"
+        :disabled="!media.track"
         @drag-end="onSeekDragEnd"
       >
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>

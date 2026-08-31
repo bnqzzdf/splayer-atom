@@ -29,6 +29,11 @@ const { isDesktopLyricOpen } = storeToRefs(settings);
 const { sampleControlsUnavailable: directLocked } = useDirectModeState();
 const webRemote = isWebRemote();
 const desktopLyricAvailable = hasHostCapability("desktopLyric");
+const outputPopoverOpen = ref(false);
+const outputSelectionRequired = computed(
+  () => webRemote && status.outputDevicesReady && status.selectedOutputDevice === null,
+);
+let initialOutputPromptHandled = false;
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
@@ -39,10 +44,27 @@ const lyricButtonType = computed(() =>
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
 const selectedOutputLabel = computed(() => {
-  const selected = settings.player.outputDevice;
-  if (!selected) return t("settings.outputDevice.default");
+  const selected = status.selectedOutputDevice;
+  if (!selected) return t("settings.outputDevice.required");
   return status.outputDevices.find((device) => device.id === selected)?.name ?? selected;
 });
+
+watch(
+  [() => status.outputDevicesReady, () => status.selectedOutputDevice],
+  ([ready, selected]) => {
+    if (!webRemote || !ready || initialOutputPromptHandled) return;
+    initialOutputPromptHandled = true;
+    if (!selected) outputPopoverOpen.value = true;
+  },
+  { immediate: true },
+);
+
+watch(
+  () => status.outputSelectionRequest,
+  () => {
+    if (webRemote) outputPopoverOpen.value = true;
+  },
+);
 
 /** 静音前的音量，用于解除静音时恢复 */
 const lastVolume = ref(status.volume || 0.7);
@@ -96,6 +118,7 @@ const onMoreMenuSelect = (key: string): void => {
     <!-- Web 没有系统托盘/原生菜单，直接在播放器工具栏暴露主机输出选择。 -->
     <SPopover
       v-if="webRemote"
+      v-model:open="outputPopoverOpen"
       trigger="click"
       side="top"
       :cover="cover"
@@ -103,11 +126,11 @@ const onMoreMenuSelect = (key: string): void => {
     >
       <template #trigger>
         <SButton
-          :type="buttonType"
-          variant="ghost"
+          :type="outputSelectionRequired ? 'primary' : buttonType"
+          :variant="outputSelectionRequired ? 'tertiary' : 'ghost'"
           circle
           size="large"
-          :class="mutedClass"
+          :class="outputSelectionRequired ? undefined : mutedClass"
           :title="`${t('settings.outputDevice.label')}: ${selectedOutputLabel}`"
         >
           <template #icon><IconLucideSpeaker /></template>
@@ -115,7 +138,10 @@ const onMoreMenuSelect = (key: string): void => {
       </template>
       <div class="flex flex-col gap-2">
         <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
-        <OutputDeviceSelector />
+        <div v-if="outputSelectionRequired" class="text-xs text-on-surface-variant">
+          {{ t("settings.outputDevice.requiredHint") }}
+        </div>
+        <OutputDeviceSelector @selected="outputPopoverOpen = false" />
         <div
           v-if="settings.player.outputDevice?.startsWith('diretta:')"
           class="text-xs text-on-surface-variant"

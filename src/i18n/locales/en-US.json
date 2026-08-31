@@ -476,6 +476,7 @@
   "player": {
     "prev": "Previous",
     "next": "Next",
+    "notPlaying": "Not playing",
     "heartMode": {
       "needLogin": "Sign in to use Heart Mode",
       "noSeed": "No seed track available for Heart Mode",
@@ -811,13 +812,14 @@
       "showMore": "More Contributors",
       "collapse": "Collapse",
       "commit": "Atom Commit",
-      "date": "Build Date",
-      "coreVersion": "Core Version",
+      "date": "Commit Time",
+      "coreVersion": "Atom Version",
       "splayerBaseline": "SPlayer Baseline",
       "coreProtocol": "Core Protocol",
       "sourceTree": "Source Tree",
       "clean": "Clean",
-      "dirty": "Dirty (uncommitted changes)"
+      "dirty": "Dirty (uncommitted changes)",
+      "direttaSdk": "Diretta SDK"
     },
     "storeVersion": "Store",
     "language": {
@@ -895,7 +897,10 @@
     "outputDevice": {
       "label": "Output Device",
       "description": "Select audio output device",
-      "default": "System Default"
+      "default": "System Default",
+      "required": "Output device required",
+      "requiredHint": "Select an ALSA or Diretta output device before playing.",
+      "noneAvailable": "No available ALSA or Diretta output device was detected"
     },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",
@@ -2224,6 +2229,7 @@
     "deviceHint": "No audio output device detected. Please connect headphones or speakers and try again.",
     "DEVICE_NOT_FOUND": "No audio output device found",
     "DEVICE_INIT_FAILED": "Failed to initialize audio device",
+    "OUTPUT_DEVICE_REQUIRED": "Select an output device before playing",
     "FILE_NOT_FOUND": "File not found or inaccessible",
     "FILE_NO_AUDIO_STREAM": "No audio stream found in file",
     "FILE_DECODE_ERROR": "Audio decode failed",

@@ -11,6 +11,8 @@ export enum ErrorCode {
   DEVICE_NOT_FOUND = "DEVICE_NOT_FOUND",
   /** 音频设备初始化失败 */
   DEVICE_INIT_FAILED = "DEVICE_INIT_FAILED",
+  /** Headless Core 尚未选择输出设备 */
+  OUTPUT_DEVICE_REQUIRED = "OUTPUT_DEVICE_REQUIRED",
 
   // 文件相关
   /** 文件不存在或无法访问 */

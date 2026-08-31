@@ -12,6 +12,7 @@ import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
 import { handleError } from "@/utils/errors";
+import { ErrorCode } from "@shared/types/errors";
 import {
   hasReachedSeekTarget,
   insertManyToQueue,
@@ -131,6 +132,9 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       playback.setFftFrame(event.data.ldata, event.data.rdata);
       break;
     case "error":
+      if (event.data.error === ErrorCode.OUTPUT_DEVICE_REQUIRED) {
+        status.outputSelectionRequest++;
+      }
       handleError(event.data.error);
       break;
     case "ended": {

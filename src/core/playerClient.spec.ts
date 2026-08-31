@@ -60,7 +60,7 @@ describe("shared player processing Core Protocol client", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ selected: null, data: devices }), {
+        new Response(JSON.stringify({ selected: devices[2].id, data: devices }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -68,9 +68,12 @@ describe("shared player processing Core Protocol client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { playerClient } = await import("./playerClient");
-    await expect(playerClient.getOutputDevices()).resolves.toEqual({
+    await expect(playerClient.getOutputSnapshot()).resolves.toEqual({
       success: true,
-      data: [devices[0], devices[2], { ...devices[3], name: "DX5 II · Diretta" }],
+      data: {
+        selected: devices[2].id,
+        data: [devices[2], { ...devices[3], name: "DX5 II · Diretta" }],
+      },
     });
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/output/devices");
   });
