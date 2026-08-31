@@ -16,7 +16,7 @@
 
 import type { Album, Artist, AudioQuality, Playlist, Track } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
-import { coverSizePair } from "@/utils/streamingSettings";
+import { coverSizePair } from "../streamingSettings";
 
 // 注：Qobuz 封面 URL 派生逻辑（deriveCoverUrl）位于 electron/main/apis/qobuz/core/cover.ts，
 // 前端无法跨进程边界 import，这里实现等价的本地版本 withCoverSize。
@@ -34,10 +34,7 @@ const proxyQobuzImage = (url: string | undefined | null): string | undefined => 
   if (!url) return undefined;
   try {
     const u = new URL(url);
-    if (
-      (u.protocol === "http:" || u.protocol === "https:") &&
-      QOBUZ_IMG_HOST_RE.test(u.hostname)
-    ) {
+    if ((u.protocol === "http:" || u.protocol === "https:") && QOBUZ_IMG_HOST_RE.test(u.hostname)) {
       return `/api/proxy/image?url=${encodeURIComponent(url)}`;
     }
   } catch {
@@ -80,6 +77,7 @@ interface QobuzAlbumRef {
 interface QobuzTrack {
   id: number | string;
   title?: string;
+  version?: string;
   /** 秒 */
   duration?: number;
   performer?: QobuzPerformer;
@@ -172,12 +170,15 @@ export const songToTrack = (track: QobuzTrack): Track => {
   const album = track.album;
   const cover = album?.image?.large ?? album?.image?.small;
   const coverOriginal = withCoverSize(cover, coverSizePair("qobuz").large);
-  const performer = track.performer;
+  const performer = track.performer ?? album?.artist;
+  const title = track.version ? `${track.title ?? ""} (${track.version})` : (track.title ?? "");
   return {
     id: String(track.id),
     source: "qobuz",
-    title: track.title ?? "",
-    artists: performer?.name ? [{ id: String(performer.id ?? ""), name: performer.name }] : [],
+    title,
+    artists: performer?.name
+      ? [{ id: performer.id != null ? String(performer.id) : undefined, name: performer.name }]
+      : [],
     album: album
       ? {
           id: String(album.id ?? ""),
@@ -198,6 +199,9 @@ export const songToTrack = (track: QobuzTrack): Track => {
  */
 export const songsToTracks = (tracks: QobuzTrack[] | undefined | null): Track[] =>
   tracks?.map(songToTrack) ?? [];
+
+/** Core/provider fixture compatibility name. */
+export const qobuzTrackToTrack = songToTrack;
 
 /**
  * Qobuz album → 应用层 Album

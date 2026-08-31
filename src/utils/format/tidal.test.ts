@@ -30,7 +30,7 @@ describe("tidalTrackToTrack", () => {
     ]);
     assert.equal(track.album?.id, "99");
     assert.equal(track.album?.name, "Example Album");
-    assert.match(track.cover ?? "", /resources\.tidal\.com\/images/);
+    assert.match(decodeURIComponent(track.cover ?? ""), /resources\.tidal\.com\/images/);
   });
 
   it("accepts a single string artist and clamps missing duration to zero", () => {

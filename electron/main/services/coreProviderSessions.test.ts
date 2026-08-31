@@ -54,9 +54,11 @@ test("Managed Provider requests and session projection use the shared Core Contr
   assert.match(webApiSource, /providerClient\.call\(platform, name, params\)/);
   assert.doesNotMatch(webApiSource, /onSessionsChange|event\.type === "providerSessions"/);
 
-  const obsoleteRequestIpc = /apis:(getSessions|clearSession|setCookie)/;
-  assert.doesNotMatch(ipcSource, obsoleteRequestIpc);
-  assert.doesNotMatch(preloadSource, obsoleteRequestIpc);
+  assert.doesNotMatch(ipcSource, /apis:getSessions/);
+  assert.doesNotMatch(preloadSource, /apis:getSessions/);
+  assert.match(ipcSource, /platform !== "qqmusic" && platform !== "kugou"/);
+  assert.match(preloadSource, /clearSession: \(platform: "qqmusic" \| "kugou"\)/);
+  assert.match(preloadSource, /setCookie: \(platform: "qqmusic" \| "kugou", cookie: string\)/);
 });
 
 test("Atom-managed provider wrappers use Core Protocol while QQ and Kugou remain frozen compatibility IPC", () => {

@@ -40,5 +40,6 @@ test("Netease embedded login window is a Desktop Host capability, not a Core aut
   assert.match(loginDialogSource, /v-if="providerLoginWindowAvailable"/);
   assert.match(loginDialogSource, /window\.api\.apis\.openLoginWeb\("netease"\)/);
   assert.match(loginDialogSource, /openManualCookie/);
-  assert.match(loginDialogSource, /startQrFlow/);
+  assert.match(loginDialogSource, /neteaseQrLoginAdapter/);
+  assert.match(loginDialogSource, /<QrLoginPanel/);
 });

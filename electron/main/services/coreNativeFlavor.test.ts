@@ -5,12 +5,16 @@ import path from "node:path";
 import test from "node:test";
 import { DIRETTA_SDK_RELEASE, readDirettaSdkRelease } from "../../../scripts/atom/diretta-sdk";
 
-const cargoSource = readFileSync(
+const shimCargoSource = readFileSync(
   new URL("../../../native/audio-engine/Cargo.toml", import.meta.url),
   "utf8",
 );
+const coreCargoSource = readFileSync(
+  new URL("../../../native/audio-engine-core/Cargo.toml", import.meta.url),
+  "utf8",
+);
 const watcherSource = readFileSync(
-  new URL("../../../native/audio-engine/src/device_watcher/mod.rs", import.meta.url),
+  new URL("../../../native/audio-engine-core/src/device_watcher/mod.rs", import.meta.url),
   "utf8",
 );
 const buildSource = readFileSync(
@@ -27,15 +31,22 @@ const nativeLoaderSource = readFileSync(
   "utf8",
 );
 
-test("audio-engine keeps Desktop extras behind a Cargo feature", () => {
-  assert.match(cargoSource, /default = \["desktop-audio"\]/);
+test("audio-engine keeps Desktop extras behind the shared Core Cargo feature", () => {
+  assert.match(shimCargoSource, /default = \["desktop-audio"\]/);
+  assert.match(shimCargoSource, /"audio-engine-core\/desktop-audio"/);
+  assert.match(shimCargoSource, /core-audio = \[[^\]]*"audio-engine-core\/headless"[^\]]*\]/s);
   assert.match(
-    cargoSource,
+    shimCargoSource,
+    /audio-engine-core = \{ path = "\.\.\/audio-engine-core", default-features = false/,
+  );
+  assert.match(coreCargoSource, /default = \["fft", "midi", "desktop-audio"\]/);
+  assert.match(
+    coreCargoSource,
     /desktop-audio = \["cpal\/pipewire", "cpal\/pulseaudio", "dep:pipewire"\]/,
   );
-  assert.match(cargoSource, /core-audio = \[\]/);
-  assert.match(cargoSource, /cpal = \{ version = "0\.18\.2", default-features = false \}/);
-  assert.match(cargoSource, /pipewire = \{[^\n]+optional = true \}/);
+  assert.match(coreCargoSource, /headless = \[\]/);
+  assert.match(coreCargoSource, /cpal = \{ version = "0\.18\.2", default-features = false \}/);
+  assert.match(coreCargoSource, /pipewire = \{[^\n]+optional = true \}/);
 });
 
 test("Linux Core disables the PipeWire device watcher", () => {

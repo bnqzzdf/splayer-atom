@@ -356,21 +356,38 @@ const onLoginDialogClose = (open: boolean): void => {
     <!-- 登录提示态 -->
     <div v-else-if="isAuthError" class="flex-1 flex items-center justify-center px-6">
       <div class="text-center flex flex-col items-center max-w-sm">
-        <div class="size-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+        <div
+          class="size-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4"
+        >
           <IconLucideLogIn class="size-8" />
         </div>
         <div class="text-base font-semibold text-on-surface mb-1">
-          {{ (status.searchPlatform === 'tidal' ? 'TIDAL' : status.searchPlatform === 'qobuz' ? 'Qobuz' : status.searchPlatform.toUpperCase()) + ' 尚未登录' }}
+          {{
+            (status.searchPlatform === "tidal"
+              ? "TIDAL"
+              : status.searchPlatform === "qobuz"
+                ? "Qobuz"
+                : status.searchPlatform.toUpperCase()) + " 尚未登录"
+          }}
         </div>
         <div class="text-xs text-on-surface-variant/80 mb-5 leading-relaxed">
-          {{ status.searchPlatform === 'tidal'
-            ? '搜索与播放 TIDAL 曲目需要先绑定授权您的 TIDAL 账号'
-            : '搜索与播放该平台曲目需要先登录账号' }}
+          {{
+            status.searchPlatform === "tidal"
+              ? "搜索与播放 TIDAL 曲目需要先绑定授权您的 TIDAL 账号"
+              : "搜索与播放该平台曲目需要先登录账号"
+          }}
         </div>
         <div class="flex items-center gap-3">
-          <SButton variant="primary" size="medium" @click="openLoginModal">
+          <SButton type="primary" size="medium" @click="openLoginModal">
             <template #icon><IconLucideLogIn class="size-4" /></template>
-            登录 {{ status.searchPlatform === 'tidal' ? 'TIDAL' : status.searchPlatform === 'qobuz' ? 'Qobuz' : status.searchPlatform.toUpperCase() }}
+            登录
+            {{
+              status.searchPlatform === "tidal"
+                ? "TIDAL"
+                : status.searchPlatform === "qobuz"
+                  ? "Qobuz"
+                  : status.searchPlatform.toUpperCase()
+            }}
           </SButton>
           <SButton variant="secondary" size="medium" @click="onRetry">
             <template #icon><IconLucideRotateCw class="size-4" /></template>

@@ -58,7 +58,40 @@ export interface DirettaTargetCapabilities {
 
 export type ClientMode = "electron" | "http";
 
-export interface IPlayerClient extends PlayerApi {
+export interface IPlayerClient extends Pick<
+  PlayerApi,
+  | "load"
+  | "play"
+  | "pause"
+  | "stop"
+  | "seek"
+  | "setVolume"
+  | "setPauseOnDeviceSwitch"
+  | "getVolume"
+  | "getStatus"
+  | "setFftEnabled"
+  | "getFftData"
+  | "setFadeDuration"
+  | "getFadeDuration"
+  | "getCoverRaw"
+  | "readLyricFile"
+  | "reinit"
+  | "setNormalizationEnabled"
+  | "setEqualizerEnabled"
+  | "setEqualizerBands"
+  | "setPreampGain"
+  | "setSpeed"
+  | "setPitch"
+  | "setPitchSync"
+  | "getOutputDevices"
+  | "getDefaultDeviceName"
+  | "setOutputDevice"
+  | "getSelectedDeviceName"
+  | "syncPlayMode"
+  | "syncLikeState"
+  | "dispatch"
+  | "onEvent"
+> {
   scanDirettaTargets(): Promise<IpcResponse<DirettaTarget[]>>;
   getDirettaStatus(): Promise<IpcResponse<DirettaStatus>>;
   selectDirettaTarget(target: string | null): Promise<IpcResponse<any>>;

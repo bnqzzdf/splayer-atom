@@ -1,4 +1,4 @@
-import { isHeadless } from "@main/core/mode";
+import { isHeadless } from "./core/mode";
 
 export type AtomRuntimeMode = "desktop" | "headless";
 

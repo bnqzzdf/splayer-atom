@@ -132,7 +132,9 @@ export const useLibraryStore = defineStore("library", () => {
     try {
       const scanStatus = await libraryClient.isScanning();
       if (scanStatus.success && scanStatus.data) {
-        const isCurrentlyScanning = Boolean((scanStatus.data as any).is_scanning ?? scanStatus.data);
+        const isCurrentlyScanning = Boolean(
+          (scanStatus.data as any).is_scanning ?? scanStatus.data,
+        );
         scanning.value = isCurrentlyScanning;
         if (!isCurrentlyScanning) scanProgress.value = null;
       } else {
@@ -242,7 +244,7 @@ export const useLibraryStore = defineStore("library", () => {
             loadArtistAvatars();
           }
         });
-      } else if (phase === "error") {
+      } else if (data.phase === "error") {
         scanning.value = false;
         scanProgress.value = null;
       }

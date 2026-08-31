@@ -835,7 +835,7 @@ export const initPlayer = async (): Promise<void> => {
   // 检查服务端当前是否已经在播放或暂停状态（如 Headless 后台守护进程持续播放中）
   let isServerActive = false;
   try {
-    const serverStatus = await window.api.player.getStatus();
+    const serverStatus = await playerClient.getStatus();
     if (serverStatus.success && serverStatus.data) {
       if (serverStatus.data.state === "playing" || serverStatus.data.state === "paused") {
         isServerActive = true;

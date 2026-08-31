@@ -1,6 +1,6 @@
 import type { Track, AudioQuality, Artist, Album, Playlist } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
-import { coverSizePair } from "@/utils/streamingSettings";
+import { coverSizePair } from "../streamingSettings";
 
 /**
  * 将 TIDAL CDN 图片 URL 改写为经部署服务器代理的地址。
@@ -13,10 +13,7 @@ const proxyTidalImage = (url: string | undefined | null): string | undefined => 
   if (!url) return undefined;
   try {
     const u = new URL(url);
-    if (
-      (u.protocol === "http:" || u.protocol === "https:") &&
-      TIDAL_IMG_HOST_RE.test(u.hostname)
-    ) {
+    if ((u.protocol === "http:" || u.protocol === "https:") && TIDAL_IMG_HOST_RE.test(u.hostname)) {
       return "/api/proxy/image?url=" + encodeURIComponent(url);
     }
   } catch {
@@ -32,10 +29,7 @@ const proxyTidalImage = (url: string | undefined | null): string | undefined => 
  * 将 "-" 替换为 "/" 后拼接到 resources.tidal.com/images/。
  * 如果已经是完整 URL，直接替换尺寸。
  */
-const buildTidalCover = (
-  coverId: TidalImageField,
-  size = 640,
-): string | undefined => {
+const buildTidalCover = (coverId: TidalImageField, size = 640): string | undefined => {
   if (!coverId) return undefined;
   // 字符串：UUID 或完整 URL
   if (typeof coverId === "string") {
@@ -47,7 +41,13 @@ const buildTidalCover = (
   }
   // 对象：{ href, small, medium, large } 或 { url }
   if (typeof coverId === "object" && !Array.isArray(coverId)) {
-    const obj = coverId as { href?: string; small?: string; medium?: string; large?: string; url?: string };
+    const obj = coverId as {
+      href?: string;
+      small?: string;
+      medium?: string;
+      large?: string;
+      url?: string;
+    };
     const raw = obj.href || obj.large || obj.medium || obj.small || obj.url;
     return raw ? buildTidalCover(raw, size) : undefined;
   }
@@ -66,10 +66,7 @@ const buildTidalCover = (
  * [FIX] 新增对对象/数组格式封面字段的支持（image/squareImage 可能返回对象）。
  * 所有封面统一走 /api/proxy/image，规避客户端无法直连 resources.tidal.com 的问题。
  */
-export const tidalCoverUrl = (
-  coverId: TidalImageField,
-  size = 640,
-): string | undefined => {
+export const tidalCoverUrl = (coverId: TidalImageField, size = 640): string | undefined => {
   const raw = buildTidalCover(coverId, size);
   return raw ? proxyTidalImage(raw) : undefined;
 };
@@ -84,7 +81,13 @@ export const tidalCoverUrl = (
  * - image: 矩形编辑图（640x640 尺寸返回 403），仅作为兜底
  */
 export const resolveTidalCover = (
-  fields: { squareImage?: TidalImageField; image?: TidalImageField; imageCover?: TidalImageField; cover?: TidalImageField; picture?: TidalImageField },
+  fields: {
+    squareImage?: TidalImageField;
+    image?: TidalImageField;
+    imageCover?: TidalImageField;
+    cover?: TidalImageField;
+    picture?: TidalImageField;
+  },
   size = 640,
 ): string | undefined => {
   const { squareImage, image, imageCover, cover, picture } = fields;
@@ -111,7 +114,12 @@ interface TidalArtistRef {
  * - 对象：{ href, small, medium, large }
  * - 数组（兼容）：[{ url }] / [{ href }]
  */
-type TidalImageField = string | { href?: string; small?: string; medium?: string; large?: string } | Array<{ url?: string; href?: string }> | undefined | null;
+type TidalImageField =
+  | string
+  | { href?: string; small?: string; medium?: string; large?: string }
+  | Array<{ url?: string; href?: string }>
+  | undefined
+  | null;
 
 interface TidalAlbumRef {
   id?: number | string;
@@ -120,7 +128,7 @@ interface TidalAlbumRef {
   /** 某些接口用 image / imageCover 字段 */
   image?: TidalImageField;
   imageCover?: TidalImageField;
-  artist?: TidalArtistRef;
+  artist?: TidalArtistRef | string;
 }
 
 interface TidalTrack {
@@ -128,7 +136,7 @@ interface TidalTrack {
   title?: string;
   /** 秒 */
   duration?: number;
-  artist?: TidalArtistRef;
+  artist?: TidalArtistRef | string;
   artists?: TidalArtistRef[];
   album?: TidalAlbumRef;
   /** 封面 ID（兼容多种字段名） */
@@ -208,7 +216,12 @@ interface TidalPlaylist {
  * 从 track 对象提取封面（已是完整 URL 形式，按需重新调整尺寸）
  */
 const resolveCover = (
-  item: { cover?: TidalImageField; image?: TidalImageField; imageCover?: TidalImageField; album?: TidalAlbumRef },
+  item: {
+    cover?: TidalImageField;
+    image?: TidalImageField;
+    imageCover?: TidalImageField;
+    album?: TidalAlbumRef;
+  },
   size = 640,
 ): string | undefined => {
   return (
@@ -223,12 +236,16 @@ const resolveCover = (
 /**
  * 从 track 对象提取艺术家名称
  */
-const extractArtistName = (item: { artist?: TidalArtistRef; artists?: TidalArtistRef[]; album?: TidalAlbumRef }): string => {
-  if (item.artist?.name) return item.artist.name;
+const extractArtistName = (item: {
+  artist?: TidalArtistRef | string;
+  artists?: TidalArtistRef[];
+  album?: TidalAlbumRef;
+}): string => {
   if (typeof item.artist === "string") return item.artist;
+  if (item.artist?.name) return item.artist.name;
   if (item.artists?.length && item.artists[0]?.name) return item.artists[0].name;
-  if (item.album?.artist?.name) return item.album.artist.name;
   if (typeof item.album?.artist === "string") return item.album.artist;
+  if (item.album?.artist?.name) return item.album.artist.name;
   return "Unknown Artist";
 };
 
@@ -240,14 +257,18 @@ const extractArtistName = (item: { artist?: TidalArtistRef; artists?: TidalArtis
  * 保证歌手名始终可点击跳转到歌手详情页；同时保留多歌手列表。
  */
 const buildArtists = (track: TidalTrack): Artist[] => {
+  if (typeof track.artist === "string") return [{ name: track.artist }];
   const list: TidalArtistRef[] = track.artists?.length
     ? track.artists
     : track.artist
       ? [track.artist]
       : [];
   return list
-    .filter((a) => a?.name)
-    .map((a) => ({ id: String(a?.id ?? ""), name: a.name as string }));
+    .filter((artist) => artist?.name)
+    .map((artist) => ({
+      id: artist.id != null ? String(artist.id) : undefined,
+      name: artist.name as string,
+    }));
 };
 
 // ─── 转换函数 ────────────────────────────────────────────────────────────
@@ -324,10 +345,11 @@ const pickQuality = (track: TidalTrack): AudioQuality | undefined => {
  */
 export const songToTrack = (track: TidalTrack): Track => {
   const artistName = extractArtistName(track);
+  const title = track.version ? `${track.title ?? ""} (${track.version})` : (track.title ?? "");
   return {
     id: String(track.id),
     source: "tidal",
-    title: track.title ?? "",
+    title,
     artists: artistName !== "Unknown Artist" ? buildArtists(track) : [],
     album: track.album
       ? {
@@ -349,6 +371,9 @@ export const songToTrack = (track: TidalTrack): Track => {
  */
 export const songsToTracks = (tracks: TidalTrack[] | undefined | null): Track[] =>
   tracks?.map(songToTrack) ?? [];
+
+/** Core/provider fixture compatibility name. */
+export const tidalTrackToTrack = songToTrack;
 
 /**
  * Tidal album → 应用层 Album
@@ -379,7 +404,9 @@ export const albumToCover = (album: TidalAlbum): CoverItem => ({
 export const toArtist = (raw: TidalArtist): Artist => ({
   id: String(raw.id),
   name: raw.name ?? "",
-  avatar: tidalCoverUrl(raw.picture, coverSizePair("tidal").small) || resolveTidalCover(raw, coverSizePair("tidal").small),
+  avatar:
+    tidalCoverUrl(raw.picture, coverSizePair("tidal").small) ||
+    resolveTidalCover(raw, coverSizePair("tidal").small),
   albumCount: raw.albumCount,
 });
 
@@ -389,7 +416,9 @@ export const toArtist = (raw: TidalArtist): Artist => ({
 export const artistToCover = (artist: TidalArtist): CoverItem => ({
   id: String(artist.id),
   title: artist.name ?? "",
-  cover: tidalCoverUrl(artist.picture, coverSizePair("tidal").small) || resolveTidalCover(artist, coverSizePair("tidal").small),
+  cover:
+    tidalCoverUrl(artist.picture, coverSizePair("tidal").small) ||
+    resolveTidalCover(artist, coverSizePair("tidal").small),
   subtitle: "",
   trackCount: artist.albumCount ?? 0,
 });
@@ -420,11 +449,4 @@ export const playlistToCover = (playlist: TidalPlaylist): CoverItem => ({
   trackCount: playlist.numberOfTracks ?? 0,
 });
 
-export type {
-  TidalTrack,
-  TidalAlbum,
-  TidalArtist,
-  TidalPlaylist,
-  TidalArtistRef,
-  TidalAlbumRef,
-};
+export type { TidalTrack, TidalAlbum, TidalArtist, TidalPlaylist, TidalArtistRef, TidalAlbumRef };
