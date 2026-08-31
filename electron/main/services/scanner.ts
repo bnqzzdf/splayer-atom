@@ -13,7 +13,7 @@ import {
   type UpsertTrack,
 } from "@main/database";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
-import { toCacheUrl } from "@main/atom/cacheUrl";
+import { fromCacheUrl, toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
 import { parseArtists, parseAlbum } from "@main/utils/metadata";
 import { getCoverCacheDir, isWin } from "@main/utils/config";
@@ -192,8 +192,14 @@ export const startScan = (dirs: string[], incremental = true): void => {
   currentScanProgress = { phase: "scanning", total: 0, scanned: 0 };
   libraryLog.info(`开始扫描 ${dirs.length} 个目录 (增量=${incremental})`);
 
-  // 增量扫描时传入已有文件记录，Rust 端会比对 mtime/size 跳过未变化的文件
-  const incrementalData = incremental ? getFileRecords() : undefined;
+  // Rust 端同时校验音频指纹与可重建封面缓存；非法 cache 引用直接强制重新探测。
+  const incrementalData = incremental
+    ? getFileRecords().flatMap(({ cover, ...record }) => {
+        const coverPath = fromCacheUrl(cover);
+        if (cover?.startsWith("cache://") && !coverPath) return [];
+        return [{ ...record, coverPath }];
+      })
+    : undefined;
 
   const engine = getEngine();
   engine.scanDirs(

@@ -108,13 +108,14 @@ export interface FileRecord {
   path: string;
   mtime: number;
   size: number;
+  cover: string | null;
 }
 
-/** 获取所有真实音频文件记录（path + mtime + size），用于增量扫描比对 */
+/** 获取所有真实音频文件记录及封面引用，用于增量扫描比对与缓存修复。 */
 export const getFileRecords = (): FileRecord[] => {
   return getDb()
     .prepare(
-      "SELECT path, COALESCE(file_mtime, 0) as mtime, file_size as size FROM tracks WHERE cue_path IS NULL",
+      "SELECT path, COALESCE(file_mtime, 0) as mtime, file_size as size, cover FROM tracks WHERE cue_path IS NULL",
     )
     .all() as FileRecord[];
 };

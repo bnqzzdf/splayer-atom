@@ -4,9 +4,8 @@
 
 import type { Server } from "node:http";
 import os from "node:os";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { serve, upgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -22,6 +21,7 @@ import { getHeadlessServerPort, isHeadlessMode } from "@main/runtime";
 import { externalControlGate, wsGate } from "./gate";
 import { buildRoutes } from "./routes";
 import { wsHandlers } from "./ws";
+import { createDynamicCacheRoute } from "./cacheRoute";
 
 let runningServer: Server | null = null;
 let runningWss: WebSocketServer | null = null;
@@ -97,33 +97,33 @@ export const startServer = (): Promise<ExternalApiStatus> => {
       );
     }
     if (headless) {
-      const cacheRoute = (prefix: string, root: string) =>
-        serveStatic({
-          root,
-          rewriteRequestPath: (requestPath) => requestPath.slice(prefix.length) || "/",
-        });
       // 只暴露 UI 需要的图像缓存；歌曲缓存绝不作为静态目录对局域网开放。
       const imageCaches = [
-        ["/cache/covers", getCoverCacheDir()],
-        ["/cache/artists", getArtistCacheDir()],
-        ["/cache/backgrounds", getBackgroundsDir()],
+        ["/cache/covers", getCoverCacheDir],
+        ["/cache/artists", getArtistCacheDir],
+        ["/cache/backgrounds", getBackgroundsDir],
       ] as const;
-      for (const [prefix, root] of imageCaches) {
-        if (existsSync(root)) app.use(`${prefix}/*`, cacheRoute(prefix, root));
+      for (const [prefix, getRoot] of imageCaches) {
+        app.use(`${prefix}/*`, createDynamicCacheRoute(prefix, getRoot));
       }
     }
     if (headless && !process.env.ELECTRON_RENDERER_URL) {
       // Production headless serves the same built Vue renderer; no second web service is started.
       const rendererRoot = process.env.ATOM_RENDERER_DIR || join(__dirname, "../renderer");
-      app.get("/", serveStatic({ root: rendererRoot, path: "index.html" }));
-      app.get("/debug", serveStatic({ root: rendererRoot, path: "index.html" }));
+      const rendererEntry = serveStatic({ root: rendererRoot, path: "index.html" });
+      const disableRendererEntryCache: MiddlewareHandler = async (c, next) => {
+        c.header("Cache-Control", "no-store");
+        await next();
+      };
+      app.get("/", disableRendererEntryCache, rendererEntry);
+      app.get("/debug", disableRendererEntryCache, rendererEntry);
       app.use("/*", serveStatic({ root: rendererRoot }));
     } else {
       app.get("/", (c) =>
         c.text(
           headless
             ? "Atom headless API (development UI is served by electron-vite)"
-            : "SPlayer Next external API",
+            : "SPlayer Atom external API",
         ),
       );
     }
