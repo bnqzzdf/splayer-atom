@@ -16,6 +16,7 @@ export default defineConfig(
     "**/public/",
     "**/.git/",
     "**/.vitepress/",
+    "history/",
     "native/*/index.d.ts",
     ".github/scripts/",
   ]),

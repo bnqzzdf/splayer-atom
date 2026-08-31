@@ -16,6 +16,11 @@ skills-lock.json
 .vscode/settings.json
 .idea
 
+# planning-with-files 本地工作记忆
+/task_plan.md
+/findings.md
+/progress.md
+
 # Rust build artifacts
 **/target
 native/*/*.node
