@@ -6,7 +6,7 @@
 
 - 使用从干净 checkout 生成并已通过 final-artifact smoke 的 Linux x86-64 Core `tar.gz`。
 - system-runtime 使用 Node `24.18.0`；bundled-runtime 必须确认实际进程使用包内 Node。
-- Diretta-branded artifact 必须记录 `diretta=true`、`direttaSdkRelease=149`，并由受控 SDK 149 gate 生成。
+- Diretta-branded artifact 必须记录 `diretta=true`、`direttaSdkRelease=150`，并由受控 SDK 150 gate 生成。
 - ALSA 验收使用明确的真实 `alsa:hw:*` device，不以 `default`、PipeWire 或 PulseAudio 代替。
 - Linux Diretta Host Core 以 root 运行；普通用户发现到 Target 不代表具备连接权限。
 - 在 Web Control 中预先建立验收队列。诊断脚本不会插入、改写或清空队列。

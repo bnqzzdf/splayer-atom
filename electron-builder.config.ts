@@ -152,7 +152,7 @@ const config: Configuration = {
     artifactName: "${name}-${version}-${arch}.${ext}",
     maintainer: "imsyy.top",
     category: "Audio;Music;AudioVideo;",
-    target: ["AppImage", "deb", "rpm", "tar.gz", "pacman"],
+    target: ["tar.gz"],
     syncDesktopName: true,
     ...(headlessBuild
       ? {

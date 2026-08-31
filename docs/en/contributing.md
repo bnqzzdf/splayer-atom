@@ -28,12 +28,12 @@ Set `SKIP_NATIVE_BUILD=true` to skip Rust compilation during renderer-only devel
 pnpm build
 pnpm build:win
 pnpm build:mac
-pnpm build:linux
+pnpm build:linux  # Linux tar.gz only
 
-# Build selected electron-builder targets
+# Build selected Windows/macOS targets; Linux Desktop is fixed to tar.gz
 pnpm build:win nsis
 pnpm build:mac dmg
-pnpm build:linux tar.gz
+# Linux: pnpm build:linux
 
 # Build unpacked output for local testing
 pnpm build:unpack

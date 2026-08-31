@@ -259,7 +259,7 @@ Diretta Source Direct
 - [x] Core native build 只构建 `audio-engine`，不构建 `audio-capture`、`media-ctrl`、taskbar/opencc 等 Desktop native addon。
 - [x] `audio-engine` 已使用 Cargo features 拆分 Desktop extras 与 Core `core-audio` flavor，使 Core build 只包含需要的 Linux audio backend。
 - [ ] 未来 Desktop Output Agent 可按桌面平台需要构建其 OS output backend，不影响 Core 的最小 Linux 依赖。
-- [x] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包；正式 SDK-enabled pipeline 使用 `--require-diretta` 并在编译前校验 SDK 149。
+- [x] 要求 Diretta 的正式 Core release 在缺少 Diretta SDK 时明确构建失败，不允许静默生成无 Diretta 能力的同名发行包；正式 SDK-enabled pipeline 使用 `--require-diretta`，并在编译前校验 `docs/build-flavors.md` 与发布 workflow 当前声明的受控 SDK release。
 
 ### Runtime-neutral 基础能力
 
@@ -707,7 +707,7 @@ Atom Commit:       <commit>
 - [x] Core CI 使用 ephemeral runner + `pnpm install --frozen-lockfile` 从干净 package store 构建；首次 hosted clean run 已验证该环境与依赖策略可实际完成 artifact 全链。
 - [x] upstream Desktop CI 保持原流程，Atom `Core System Gate` 独立构建 Core flavor；Core runtime、`audio-engine.node`、`better-sqlite3` 与真实 plugin-host `hostReady → ping → pong` smoke 已在 reference Node `24.18.0` hosted artifact pipeline 通过。
 - [x] Core artifact pipeline 已串联 native release、Core JS、plugin-host IPC smoke、Web、Electron/external dependency audit、staging 与最终 tar smoke；Node/Web/type/lint/touch、部署面与 whitespace 门禁均在首次 GitHub-hosted run 通过。bundled-runtime 变体也已接入同一 `Core System Gate`：在 system build 后只重做 staging/tar/final smoke，不重复 native/Core/Web build；该新增 CI step 已本地静态/实构建验证，待下一次 hosted run 提供远端证据。
-- [~] SDK-enabled Diretta build 的受控 provisioning 已落实为独立手动 `Core Diretta Release Gate`：只运行在 `self-hosted/linux/x64/diretta-sdk-149` 受控 runner，SDK 149 只读预置在 checkout 外 `/opt/diretta/HostSDK_149`，不进入 GitHub Secrets / repository / Actions artifact / release upload。`diretta-release` Environment 已创建并仅允许 `dev` 部署；首次远端执行现在只缺受控 runner 注册。
+- [~] SDK-enabled Diretta build 的受控 provisioning 已落实为独立手动 `Core Diretta Release Gate`：只运行在带当前受控 Diretta SDK release 标签的 `self-hosted/linux/x64` runner，SDK 只读预置在 checkout 外，由发布 workflow 定义固定路径，不进入 GitHub Secrets / repository / Actions artifact / release upload。`diretta-release` Environment 已创建并仅允许 `dev` 部署；首次远端执行现在只缺受控 runner 注册。
 
 ### Core Artifact
 
@@ -764,9 +764,9 @@ library fixture / queue / playback smoke
 Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能否分发”转为确保 release build 的 SDK 来源、版本和能力一致。
 
 - [x] Diretta SDK 支持公开 release。
-- [x] 首个正式 Core release 固定 **Diretta Host SDK 149 + Linux x86-64**。构建从 SDK 自带 `Host/Release.hpp` 读取 `ReleaseNo` 并在编译前拒绝非 149；AArch64 只保留当前 native compile capability，不在真实机器 release gate 完成前声明正式支持。
-- [x] CI 中 SDK 的安全供应方式已明确并代码化：SDK-enabled gate 仅手动运行在受控 self-hosted `diretta-sdk-149` runner，SDK 149 只读预置于 checkout 外固定路径；普通 GitHub-hosted CI 永不接触 SDK，workflow 也不上传 SDK/source/archive。
-- [~] `diretta-release` Environment 已创建并配置 `dev`-only deployment branch policy；仍需注册首台受控 `diretta-sdk-149` release runner 后执行首次远端 SDK-enabled `--require-diretta` gate。
+- [x] 首个正式 Core release 固定 **Linux x86-64**，Diretta Host SDK 的具体 release 由 `docs/build-flavors.md` 与发布 workflow 管理。构建从 SDK 自带 `Host/Release.hpp` 读取 `ReleaseNo` 并在编译前拒绝与当前发布规则不一致的 SDK；AArch64 只保留当前 native compile capability，不在真实机器 release gate 完成前声明正式支持。
+- [x] CI 中 SDK 的安全供应方式已明确并代码化：SDK-enabled gate 仅手动运行在匹配当前发布 SDK release 的受控 self-hosted runner，SDK 只读预置于 checkout 外固定路径；普通 GitHub-hosted CI 永不接触 SDK，workflow 也不上传 SDK/source/archive。
+- [~] `diretta-release` Environment 已创建并配置 `dev`-only deployment branch policy；仍需注册首台匹配当前发布 SDK release 的受控 release runner 后执行首次远端 SDK-enabled `--require-diretta` gate。
 - [x] 正式 Core release 要求包含 Diretta 时必须使用 `--require-diretta`；缺少 `DIRETTA_SDK_ROOT` 会在清理/编译前失败，不允许静默生成同名 no-Diretta artifact。
 - [x] native `build.json` 与最终 `runtime.json` 同时记录 Diretta capability 与 `direttaSdkRelease`；SDK-enabled artifact 已实构建记录 149，no-Diretta artifact 记录 `null`。
 

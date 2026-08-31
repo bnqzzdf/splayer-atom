@@ -28,6 +28,10 @@ const jellyfinSource = read("electron/main/services/streaming/adapters/jellyfin.
 const subsonicSource = read("electron/main/services/streaming/adapters/subsonic.ts");
 const desktopLyricSource = read("electron/main/window/desktopLyric.ts");
 const githubApiSource = read("src/apis/github.ts");
+const webEntrySource = read("index.html");
+const webBootstrapSource = read("src/main.ts");
+const sidebarLogoSource = read("src/components/layout/SideBarLogo.vue");
+const serverSource = read("electron/main/server/index.ts");
 
 test("SPlayer Atom owns an installation and repository identity distinct from upstream", () => {
   assert.equal(packageJson.name, "splayer-atom");
@@ -96,6 +100,14 @@ test("runtime integrations identify the current product as SPlayer Atom", () => 
   assert.match(subsonicSource, /const CLIENT_NAME = "SPlayer Atom"/);
   assert.match(desktopLyricSource, /title: "SPlayer Atom - Desktop Lyric"/);
   assert.match(githubApiSource, /const repoSlug = "bnqzzdf\/splayer-atom"/);
+  assert.match(webEntrySource, /<title>SPlayer Atom<\/title>/);
+  assert.doesNotMatch(webEntrySource, /app-loading|splash/i);
+  assert.doesNotMatch(webBootstrapSource, /app-loading|splash/i);
+  assert.doesNotMatch(webEntrySource, /SPlayer Next/);
+  assert.match(sidebarLogoSource, />SPlayer<\/span>/);
+  assert.match(sidebarLogoSource, /ATOM/);
+  assert.match(serverSource, /SPlayer Atom external API/);
+  assert.match(serverSource, /c\.header\("Cache-Control", "no-store"\)/);
 });
 
 test("CI artifact labels expose Atom rather than upstream product identity", () => {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export const DIRETTA_SDK_RELEASE = 149;
+export const DIRETTA_SDK_RELEASE = 150;
 
 /**
  * 从 Diretta SDK 的公开 Release.hpp 读取 release 编号。

@@ -12,13 +12,13 @@ concurrency:
 
 env:
   CI: true
-  DIRETTA_SDK_ROOT: /opt/diretta/HostSDK_149
+  DIRETTA_SDK_ROOT: /opt/diretta/HostSDK_150
 
 jobs:
   core-diretta-linux-x64:
-    name: Core Diretta artifact (SDK 149)
+    name: Core Diretta artifact (SDK 150)
     if: github.ref == 'refs/heads/dev'
-    runs-on: [self-hosted, linux, x64, diretta-sdk-149]
+    runs-on: [self-hosted, linux, x64, diretta-sdk-150]
     environment: diretta-release
     timeout-minutes: 45
     steps:

@@ -10,9 +10,10 @@ Primary build commands:
 
 ```bash
 pnpm build
-pnpm build:linux
 pnpm build:mac
 pnpm build:win
+# Linux Desktop 仅生成通用 tar.gz
+pnpm build:linux
 ```
 
 Desktop characteristics:
@@ -22,6 +23,7 @@ Desktop characteristics:
 - Desktop-specific hotkeys, tray, desktop lyrics, system media presentation and related UI remain Desktop surfaces.
 - Desktop Control sends playback/domain commands to the same Core-owned session logic used by Node Core; it must not regain a second raw playable-source authority path.
 - The existing upstream Desktop release workflows are not yet an Atom formal release channel. Do not publish Atom by reusing upstream SPlayer updater/product identity.
+- Linux Desktop packaging is intentionally limited to the generic `tar.gz` target; Windows and macOS keep their configured installer targets.
 
 ## Core system-runtime and bundled-runtime flavors
 
@@ -73,11 +75,11 @@ pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-node
 ```
 
-That mode fails if `DIRETTA_SDK_ROOT` is absent. Core Diretta release builds are pinned to **Diretta Host SDK 149** by reading the SDK's public `Host/Release.hpp`; any other release is rejected before native compilation. `build.json` and final `runtime.json` record `direttaSdkRelease: 149` when Diretta is compiled, while no-Diretta artifacts record `null`. The first formal Core release target remains Linux x86-64; AArch64 is not promoted to a supported release platform until its separate hardware gate is complete.
+That mode fails if `DIRETTA_SDK_ROOT` is absent. Core Diretta release builds are pinned to **Diretta Host SDK 150** by reading the SDK's public `Host/Release.hpp`; any other release is rejected before native compilation. `build.json` and final `runtime.json` record `direttaSdkRelease: 150` when Diretta is compiled, while no-Diretta artifacts record `null`. The first formal Core release target remains Linux x86-64; AArch64 is not promoted to a supported release platform until its separate hardware gate is complete.
 
-The proprietary SDK remains external to the repository. SDK-enabled release validation uses the separate manual `Core Diretta Release Gate` on a controlled self-hosted Ubuntu 24.04 x86-64 runner labeled `diretta-sdk-149`. The runner administrator provisions SDK 149 read-only at `/opt/diretta/HostSDK_149`, outside `GITHUB_WORKSPACE`; the workflow never stores the SDK in GitHub Secrets, the repository, Actions artifacts or release uploads. The existing `Release.hpp` check and `--require-diretta` build gate remain authoritative.
+The proprietary SDK remains external to the repository. SDK-enabled release validation uses the separate manual `Core Diretta Release Gate` on a controlled self-hosted Ubuntu 24.04 x86-64 runner labeled `diretta-sdk-150`. The runner administrator provisions SDK 150 read-only at `/opt/diretta/HostSDK_150`, outside `GITHUB_WORKSPACE`; the workflow never stores the SDK in GitHub Secrets, the repository, Actions artifacts or release uploads. The existing `Release.hpp` check and `--require-diretta` build gate remain authoritative.
 
-The Diretta release runner is intentionally not used for pull requests or ordinary `dev` pushes. It is a privileged release resource: only an explicit `workflow_dispatch` on `dev`, behind the `diretta-release` GitHub Environment, may consume it. The environment exists and has a custom deployment branch policy allowing only `dev`. The runner image must provide Ubuntu 24.04 x86-64, ALSA development headers, `pkg-config` and `clang`; Node 24.18.0, Rust 1.98.0 and pnpm are still pinned by the workflow itself. Until a trusted runner with the `diretta-sdk-149` label is registered, the SDK-enabled remote gate is defined and protected but not executable.
+The Diretta release runner is intentionally not used for pull requests or ordinary `dev` pushes. It is a privileged release resource: only an explicit `workflow_dispatch` on `dev`, behind the `diretta-release` GitHub Environment, may consume it. The environment exists and has a custom deployment branch policy allowing only `dev`. The runner image must provide Ubuntu 24.04 x86-64, ALSA development headers, `pkg-config` and `clang`; Node 24.18.0, Rust 1.98.0 and pnpm are still pinned by the workflow itself. Until a trusted runner with the `diretta-sdk-150` label is registered, the SDK-enabled remote gate is defined and protected but not executable.
 
 ### Core deployment
 

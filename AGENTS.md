@@ -114,8 +114,9 @@ Diretta is a strict Source Direct path, not another processed SPlayer output bac
 - Core supports Node `>=24.18.0 <25`; release/artifact gates use reference Node `24.18.0`.
 - The Linux x86-64 Core `core-audio` flavor builds only the required audio engine and must remain free
   of Electron, Chromium, GTK, PipeWire/PulseAudio, and Desktop-only native modules at runtime.
-- A Diretta-branded Core release is pinned to Host SDK 149 and must use the required-SDK gate. Missing
-  or mismatched SDK provenance must fail before producing a same-named artifact.
+- A Diretta-branded Core release must use the Host SDK release declared by `docs/build-flavors.md`
+  and the release workflow, together with the required-SDK gate. Missing or mismatched SDK
+  provenance must fail before producing a same-named artifact.
 - The final `tar.gz` artifact, its runtime metadata, startup/termination, Core endpoints, Web root,
   native addons, and plugin-host IPC are the release unit; a source-tree build alone is insufficient.
 - Real ALSA/Diretta/PCM/Native-DSD/long-run behavior remains a separate hardware gate. Never infer

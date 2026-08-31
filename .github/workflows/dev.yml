@@ -83,7 +83,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libasound2-dev libdbus-1-dev libpipewire-0.3-dev libpulse-dev pkg-config clang \
-            rpm libarchive-tools
+            libarchive-tools
 
       # 清理旧构建产物
       - name: Clean workspace on Windows
@@ -136,37 +136,9 @@ jobs:
           path: dist/*.zip
 
       # 上传构建产物 (Linux)
-      - name: Upload Linux AppImage
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-Linux-appimage-${{ matrix.arch }}
-          path: dist/*.AppImage
-
-      - name: Upload Linux DEB
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-Linux-deb-${{ matrix.arch }}
-          path: dist/*.deb
-
-      - name: Upload Linux RPM
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-Linux-rpm-${{ matrix.arch }}
-          path: dist/*.rpm
-
       - name: Upload Linux Tar
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: SPlayer-Atom-Linux-tar-${{ matrix.arch }}
           path: dist/*.tar.gz
-
-      - name: Upload Linux Pacman
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-Linux-pacman-${{ matrix.arch }}
-          path: dist/*.pacman

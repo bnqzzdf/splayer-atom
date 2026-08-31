@@ -57,13 +57,13 @@ test("Core native builder emits only the ALSA-only audio-engine addon", () => {
 });
 
 test("Core Diretta build pins the verified SDK release from Release.hpp", () => {
-  assert.equal(DIRETTA_SDK_RELEASE, 149);
+  assert.equal(DIRETTA_SDK_RELEASE, 150);
   const sdkRoot = mkdtempSync(path.join(tmpdir(), "atom-diretta-sdk-"));
   try {
     mkdirSync(path.join(sdkRoot, "Host"));
     writeFileSync(
       path.join(sdkRoot, "Host", "Release.hpp"),
-      "namespace DIRETTA { static constexpr unsigned ReleaseNo = 149; }\n",
+      "namespace DIRETTA { static constexpr unsigned ReleaseNo = 150; }\n",
     );
     assert.equal(readDirettaSdkRelease(sdkRoot), DIRETTA_SDK_RELEASE);
   } finally {
