@@ -7,6 +7,7 @@ import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "./nodeRuntime";
 
 interface NativeBuildMetadata {
   diretta?: boolean;
+  direttaSdkRelease?: number;
 }
 
 interface RuntimeReleaseMetadata {
@@ -14,6 +15,7 @@ interface RuntimeReleaseMetadata {
   atomCommit?: string;
   sourceDirty?: boolean;
   splayerBaseline?: string;
+  direttaSdkRelease?: number | null;
 }
 
 const envText = (name: string): string | null => {
@@ -63,6 +65,7 @@ export const getCoreCapabilities = (): CoreCapabilities => {
 /** 返回 Control 建立兼容连接所需的 Core 元信息。 */
 export const getCoreInfo = (): CoreInfo => {
   const release = readRuntimeReleaseMetadata();
+  const nativeBuild = readNativeBuildMetadata();
   return {
     name: runtimeEnvironment.appName,
     version: envText("ATOM_APP_VERSION") ?? release.atomVersion ?? runtimeEnvironment.appVersion,
@@ -77,6 +80,10 @@ export const getCoreInfo = (): CoreInfo => {
     node: process.versions.node,
     nodeRange: CORE_NODE_RANGE,
     nodeReference: CORE_NODE_REFERENCE,
+    direttaSdkRelease:
+      nativeBuild.diretta === true
+        ? (release.direttaSdkRelease ?? nativeBuild.direttaSdkRelease ?? null)
+        : null,
     protocol: { version: CORE_PROTOCOL_VERSION },
     capabilities: getCoreCapabilities(),
   };

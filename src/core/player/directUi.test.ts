@@ -12,6 +12,11 @@ const webOutputSelectorSource = readFileSync(
   new URL("../../web/OutputDeviceSelector.vue", import.meta.url),
   "utf8",
 );
+const outputDevicesSource = readFileSync(new URL("../outputDevices.ts", import.meta.url), "utf8");
+const mainLayoutSource = readFileSync(
+  new URL("../../layouts/MainLayout.vue", import.meta.url),
+  "utf8",
+);
 const equalizerSource = readFileSync(
   new URL("../../components/modals/EqualizerDialog.vue", import.meta.url),
   "utf8",
@@ -233,9 +238,24 @@ test("About Settings does not require an Electron facade in Web Control", () => 
   assert.match(webApiSource, /request<CoreInfo>\("\/info"\)/);
   assert.match(webApiSource, /osInfo: \{ type: info\.platform, arch: info\.arch, release: "" \}/);
   assert.match(aboutSettingsSource, /getCoreInfo\(\)/);
-  assert.match(aboutSettingsSource, /info\.splayerBaseline/);
-  assert.match(aboutSettingsSource, /info\.protocol\.version/);
-  assert.match(aboutSettingsSource, /info\.sourceDirty/);
+  const visibleEnvironment = between(
+    aboutSettingsSource,
+    "const envItems = computed<EnvItem[]>",
+    "/** 完整诊断信息",
+  );
+  assert.match(visibleEnvironment, /commit\.slice\(0, 7\)/);
+  assert.match(visibleEnvironment, /Core Node\.js/);
+  assert.match(visibleEnvironment, /direttaSdkRelease/);
+  assert.doesNotMatch(visibleEnvironment, /splayerBaseline|sourceDirty|protocol|COMMIT_DATE/);
+  const copiedEnvironment = between(
+    aboutSettingsSource,
+    "const diagnosticItems = computed<EnvItem[]>",
+    "/** 复制环境信息",
+  );
+  assert.match(copiedEnvironment, /info\.splayerBaseline/);
+  assert.match(copiedEnvironment, /info\.protocol\.version/);
+  assert.match(copiedEnvironment, /info\.sourceDirty/);
+  assert.match(copiedEnvironment, /COMMIT_DATE/);
 });
 
 test("production Web mounts the shared SPlayer Control while HeadlessApp stays debug-only", () => {
@@ -251,12 +271,21 @@ test("production Web mounts the shared SPlayer Control while HeadlessApp stays d
 
 test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {
   assert.match(toolbarSource, /OutputDeviceSelector/);
-  assert.match(webOutputSelectorSource, /startsWith\("diretta:"\)/);
-  assert.match(webOutputSelectorSource, /alsa:hw:CARD=/);
+  assert.match(outputDevicesSource, /isDirectAlsaHardwareOutput/);
+  assert.match(outputDevicesSource, /startsWith\("diretta:"\)/);
   assert.match(webOutputSelectorSource, /ALSA ·/);
   assert.match(webOutputSelectorSource, /await switchDevice/);
   assert.match(webOutputSelectorSource, /await refreshDevices/);
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
+});
+
+test("Headless Web keeps one bottom output entry available before a track is loaded", () => {
+  assert.match(mainLayoutSource, /isWebRemote\(\) \|\| !!useMediaStore\(\)\.track/);
+  assert.match(toolbarSource, /v-model:open="outputPopoverOpen"/);
+  assert.match(toolbarSource, /status\.outputDevicesReady/);
+  assert.match(toolbarSource, /status\.selectedOutputDevice === null/);
+  assert.match(toolbarSource, /outputSelectionRequest/);
+  assert.doesNotMatch(mainLayoutSource, /NavHeader.*OutputDeviceSelector/s);
 });
 
 test("shared Control output switch reports online Source Direct preparation", () => {
@@ -285,6 +314,7 @@ test("Controls refresh output preference from Core config authority", () => {
   );
   assert.match(refreshFlow, /await settings\.syncSystem\(\)/);
   assert.match(refreshFlow, /settings\.system\.player\.outputDevice/);
+  assert.match(refreshFlow, /result\.data\.selected/);
   assert.doesNotMatch(refreshFlow, /getSelectedDeviceName/);
 });
 

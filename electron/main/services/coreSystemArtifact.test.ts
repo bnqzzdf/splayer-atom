@@ -105,6 +105,7 @@ test("formal Core system build always rebuilds before staging and checks the fin
 
 test("system-runtime launcher and systemd unit execute the same Core entry", () => {
   assert.match(launcherSource, /ATOM_NODE_BIN/);
+  assert.match(launcherSource, /ATOM_RESOURCES_DIR="\$\{ATOM_RESOURCES_DIR:-\$ROOT_DIR\}"/);
   assert.match(launcherSource, /runtime\/bin\/node/);
   assert.match(launcherSource, /app\/index\.js/);
   assert.match(serviceSource, /WorkingDirectory=\/opt\/splayer-atom-core/);
@@ -121,11 +122,13 @@ test("final tar artifact smoke starts the extracted Core on an isolated port", (
   assert.match(artifactCheckSource, /ATOM_NODE_BIN: bundleNode \? "" : process\.execPath/);
   assert.match(artifactCheckSource, /realpathSync\(`\/proc\/\$\{child\.pid\}\/exe`\)/);
   assert.match(artifactCheckSource, /ATOM_SERVER_PORT: String\(port\)/);
+  assert.match(artifactCheckSource, /cwd: tempDir/);
   assert.match(artifactCheckSource, /runtime\.productName !== "SPlayer Atom"/);
   assert.match(artifactCheckSource, /info\.version !== runtime\.atomVersion/);
   assert.match(artifactCheckSource, /info\.commit !== runtime\.atomCommit/);
   assert.match(artifactCheckSource, /info\.sourceDirty !== runtime\.sourceDirty/);
   assert.match(artifactCheckSource, /info\.splayerBaseline !== runtime\.splayerBaseline/);
+  assert.match(artifactCheckSource, /info\.direttaSdkRelease !== runtime\.direttaSdkRelease/);
   assert.match(artifactCheckSource, /\/api\/info/);
   assert.match(artifactCheckSource, /\/api\/session/);
   assert.match(artifactCheckSource, /\/api\/library\/count/);

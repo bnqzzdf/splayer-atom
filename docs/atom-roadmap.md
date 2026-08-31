@@ -616,7 +616,7 @@ Atom Commit:       <commit>
 
 另行维护独立的 **Core Protocol Version**，产品版本不直接等于协议版本。Control 连接 Core 时必须基于 protocol compatibility 判断是否可用，而不是要求 Core / Desktop 产品版本完全相等。
 
-- [x] Core `/api/info` 同时提供 Atom version/commit/sourceDirty/SPlayer baseline、shared Core Protocol v1、capability、arch 与 Node runtime；共享 About/环境信息直接消费 `getCoreInfo()` 展示 Core version/commit/baseline/protocol/source state/Node，且回归测试明确证明产品版本不同不会覆盖 protocol compatibility。
+- [x] Core `/api/info` 同时提供 Atom version/commit/sourceDirty/SPlayer baseline、shared Core Protocol v1、capability、arch、Node runtime 与 Diretta SDK release；共享 About/环境信息直接消费 `getCoreInfo()`，页面仅展示 Atom version/短 commit、Core Node、OS 与已启用的 Diretta SDK，完整 commit、提交时间、source state、baseline 与 protocol 只进入复制诊断，且回归测试明确证明产品版本不同不会覆盖 protocol compatibility。
 - [x] Web Control 已在所有 domain HTTP/WS 工作前按 shared protocol range 拒绝不兼容 Core，不再用产品版本号猜 API；Desktop/Web capability-driven UI 已在 §16 完成当前已知 Core/Host 边界收口。
 - [x] Core 已声明 `library`、`playback`、`download`、`diretta`、`netease`、`qobuz`、`tidal`、`remoteOutput` capability；其中 Diretta 从当前 native `build.json` 读取，no-SDK artifact 明确报告 false。
 - [x] 第一阶段正式 release channel 只保留 `beta` 与 `stable`；Alpha 已从 builder、release workflow、manifest merge 与设置 UI 移除。nightly artifact 可作为 CI 产物，但不建立额外正式更新通道。
@@ -768,7 +768,7 @@ Diretta SDK 已确认支持 SPlayer Atom 公开 release。后续重点从“能�
 - [x] CI 中 SDK 的安全供应方式已明确并代码化：SDK-enabled gate 仅手动运行在匹配当前发布 SDK release 的受控 self-hosted runner，SDK 只读预置于 checkout 外固定路径；普通 GitHub-hosted CI 永不接触 SDK，workflow 也不上传 SDK/source/archive。
 - [~] `diretta-release` Environment 已创建并配置 `dev`-only deployment branch policy；仍需注册首台匹配当前发布 SDK release 的受控 release runner 后执行首次远端 SDK-enabled `--require-diretta` gate。
 - [x] 正式 Core release 要求包含 Diretta 时必须使用 `--require-diretta`；缺少 `DIRETTA_SDK_ROOT` 会在清理/编译前失败，不允许静默生成同名 no-Diretta artifact。
-- [x] native `build.json` 与最终 `runtime.json` 同时记录 Diretta capability 与 `direttaSdkRelease`；SDK-enabled artifact 已实构建记录 149，no-Diretta artifact 记录 `null`。
+- [x] native `build.json` 与最终 `runtime.json` 同时记录 Diretta capability 与 `direttaSdkRelease`；SDK-enabled artifact 记录实际构建使用的 SDK release，no-Diretta artifact 记录 `null`。
 
 ---
 
@@ -876,6 +876,11 @@ Core Settings 在 Web / Desktop 完全对等；This Control 根据 Host Capabili
 - [x] Web / Desktop 扫描期间复用 Core scanner 的同一 `ScanProgress`，实时变化通过共享 `CoreControlEvent` envelope 投影，HTTP snapshot 仅保留为 Core 状态读取/诊断入口；不再用 0/0 合成进度，也不新增第二扫描状态机。
 - [x] Desktop/Web 共用的 `switchDevice()` Control 命令在在线 Track 切入 Diretta 且 Core 尚未完成时显示“正在准备 Source Direct 在线音源”loading 反馈；反馈复用现有已触碰命令层，Control 不直接调用 materialize，也不新增 selector 状态或上游 touch。
 - [x] Desktop/Web 搜索统一暴露本地来源，并复用现有 Library API 扩展到 songs / albums / artists；本地 playlist 搜索仍不伪造，Qobuz/TIDAL 继续按已实现能力保持 songs-only。
+- [x] Headless Web 在尚无曲目时保留同一个底部播放栏输出入口；Core 仅在唯一 ALSA hardware endpoint 时自动选择，否则在 source resolution 前要求用户通过该入口明确选择，不回退到 `alsa:default` 或自动选择 Diretta。
+- [x] Library 增量扫描在引用的 300 px 封面缓存缺失时重新探测，内嵌封面优先，同目录 `cover/folder/front` 图片作为共享缩略图回退；缓存路由不依赖 Core 启动时目录已经存在。
+- [x] Web 复制统一优先使用 Clipboard API，并在局域网 HTTP 等非安全上下文使用同步选区回退；环境卡只显示 Atom version/短 commit、Core Node、OS 与已启用的 Diretta SDK，完整 release provenance 仅由复制诊断导出。
+
+以上新增必要 delta 的当前 touch audit 为 business 113 / runtime-neutral 22 / Core-authority 13 / release-identity 20；Linux packaging 文档与 Atom HTML/sidebar 品牌按 release identity 如实单独报告，声明文件不计作业务实现。
 
 ### 验收标准
 

@@ -72,7 +72,14 @@ test("Core info projects packaged Atom release identity independently from proto
   const previousCommit = process.env.ATOM_COMMIT;
   const previousSourceDirty = process.env.ATOM_SOURCE_DIRTY;
   const previousBaseline = process.env.ATOM_SPLAYER_BASELINE;
+  const previousNative = process.env.ATOM_NATIVE_DIR;
   try {
+    const nativeDir = path.join(tempDir, "native");
+    mkdirSync(nativeDir);
+    writeFileSync(
+      path.join(nativeDir, "build.json"),
+      JSON.stringify({ diretta: true, direttaSdkRelease: 150 }),
+    );
     writeFileSync(
       path.join(tempDir, "runtime.json"),
       JSON.stringify({
@@ -80,9 +87,11 @@ test("Core info projects packaged Atom release identity independently from proto
         atomCommit: "atom-commit",
         sourceDirty: true,
         splayerBaseline: "splayer-baseline",
+        direttaSdkRelease: 150,
       }),
     );
     Reflect.set(process.env, "ATOM_RESOURCES_DIR", tempDir);
+    Reflect.set(process.env, "ATOM_NATIVE_DIR", nativeDir);
     Reflect.deleteProperty(process.env, "ATOM_APP_VERSION");
     Reflect.deleteProperty(process.env, "ATOM_COMMIT");
     Reflect.deleteProperty(process.env, "ATOM_SOURCE_DIRTY");
@@ -93,6 +102,7 @@ test("Core info projects packaged Atom release identity independently from proto
     assert.equal(info.commit, "atom-commit");
     assert.equal(info.sourceDirty, true);
     assert.equal(info.splayerBaseline, "splayer-baseline");
+    assert.equal(info.direttaSdkRelease, 150);
     assert.equal(info.protocol.version, CORE_PROTOCOL_VERSION);
   } finally {
     const restore = (name: string, value: string | undefined): void => {
@@ -104,6 +114,7 @@ test("Core info projects packaged Atom release identity independently from proto
     restore("ATOM_COMMIT", previousCommit);
     restore("ATOM_SOURCE_DIRTY", previousSourceDirty);
     restore("ATOM_SPLAYER_BASELINE", previousBaseline);
+    restore("ATOM_NATIVE_DIR", previousNative);
     rmSync(tempDir, { recursive: true, force: true });
   }
 });

@@ -28,8 +28,6 @@ const updaterAvailable = hasHostCapability("desktopUpdater");
 const logDirectoryAvailable = hasHostCapability("hostLogDirectory");
 const update = updaterAvailable ? useUpdateStore() : null;
 
-/** 提交时间 */
-const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
 /** Desktop runtime 版本；Web 不伪造 Electron 环境。 */
 const versions = isDesktopRenderer() ? window.electron.process.versions : null;
 /** 操作系统信息 */
@@ -61,23 +59,41 @@ interface EnvItem {
   url?: string;
 }
 
-/** 环境信息列表 */
+const knownCommit = (commit: string): boolean => commit !== "unknown" && commit.length > 0;
+
+/** 页面只展示用户识别当前运行环境所需的信息。 */
 const envItems = computed<EnvItem[]>(() => {
   const info = coreInfo.value;
   const commit = info?.commit ?? COMMIT_HASH;
+  const atomVersion = info?.version ?? APP_VERSION;
   return [
     {
-      label: t("settings.about.commit"),
-      value: commit,
-      url: `${REPO_URL}/commit/${commit}`,
-    },
-    {
-      label: t("settings.about.date"),
-      value: `${COMMIT_DATE} (${commitTimeAgo.value})`,
+      label: "Atom",
+      value: knownCommit(commit) ? `${atomVersion} (${commit.slice(0, 7)})` : atomVersion,
+      url: knownCommit(commit) ? `${REPO_URL}/commit/${commit}` : undefined,
     },
     ...(info
       ? [
-          { label: t("settings.about.coreVersion"), value: info.version },
+          { label: "Core Node.js", value: info.node },
+          ...(info.capabilities.diretta && info.direttaSdkRelease
+            ? [{ label: "Diretta", value: `SDK ${info.direttaSdkRelease}` }]
+            : []),
+        ]
+      : []),
+    { label: "OS", value: `${osInfo.type} ${osInfo.arch}`.trim() },
+  ];
+});
+
+/** 完整诊断信息不占用页面空间，仅由复制入口导出。 */
+const diagnosticItems = computed<EnvItem[]>(() => {
+  const info = coreInfo.value;
+  const commit = info?.commit ?? COMMIT_HASH;
+  return [
+    { label: t("settings.about.coreVersion"), value: info?.version ?? APP_VERSION },
+    { label: t("settings.about.commit"), value: commit },
+    { label: t("settings.about.date"), value: COMMIT_DATE },
+    ...(info
+      ? [
           { label: t("settings.about.splayerBaseline"), value: info.splayerBaseline },
           { label: t("settings.about.coreProtocol"), value: `v${info.protocol.version}` },
           {
@@ -85,6 +101,14 @@ const envItems = computed<EnvItem[]>(() => {
             value: t(info.sourceDirty ? "settings.about.dirty" : "settings.about.clean"),
           },
           { label: "Core Node.js", value: info.node },
+          ...(info.capabilities.diretta
+            ? [
+                {
+                  label: t("settings.about.direttaSdk"),
+                  value: info.direttaSdkRelease?.toString() ?? "unknown",
+                },
+              ]
+            : []),
         ]
       : []),
     ...(versions
@@ -101,7 +125,7 @@ const envItems = computed<EnvItem[]>(() => {
 
 /** 复制环境信息 */
 const handleCopyEnvInfo = (): void => {
-  const info = envItems.value.map((item) => `${item.label}: ${item.value}`).join("\n");
+  const info = diagnosticItems.value.map((item) => `${item.label}: ${item.value}`).join("\n");
   copy(info);
 };
 

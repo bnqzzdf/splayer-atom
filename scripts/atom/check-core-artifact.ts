@@ -138,7 +138,7 @@ try {
 
   const port = await reservePort();
   child = spawn(path.join(installRoot, "bin", "splayer-atom-core"), [], {
-    cwd: installRoot,
+    cwd: tempDir,
     env: {
       ...process.env,
       ATOM_NODE_BIN: bundleNode ? "" : process.execPath,
@@ -168,6 +168,7 @@ try {
     info.commit !== runtime.atomCommit ||
     info.sourceDirty !== runtime.sourceDirty ||
     info.splayerBaseline !== runtime.splayerBaseline ||
+    info.direttaSdkRelease !== runtime.direttaSdkRelease ||
     info.node !== CORE_NODE_REFERENCE ||
     info.nodeRange !== CORE_NODE_RANGE ||
     info.nodeReference !== CORE_NODE_REFERENCE ||

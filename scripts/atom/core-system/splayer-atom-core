@@ -17,4 +17,5 @@ if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
 fi
 
 export NODE_ENV=production
+export ATOM_RESOURCES_DIR="${ATOM_RESOURCES_DIR:-$ROOT_DIR}"
 exec "$NODE_BIN" "$ROOT_DIR/app/index.js" "$@"

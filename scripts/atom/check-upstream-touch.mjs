@@ -49,19 +49,22 @@ const upstreamRef = process.env.UPSTREAM_REF || upstreamConfig.acceptedBaseline;
 // Lyrics 再用 2 个 seam（薄 IPC 与 renderer lyric request）复用 runtime-neutral matching service/Core routes，目录 picker 保持 Host-only；
 // Streaming 再用 4 个 seam（薄 IPC、sync event、shared preload contract、唯一 renderer store）把管理/query/lyrics/event 统一到 Core Protocol；
 // 随后再用 2 个 seam（手工 preload 声明与旧 renderer download-source）端到端删除 `streaming:getStreamUrl`，最终 playable URL 只留在 Core resolver/adapter。
+// 当前再增加 4 个封面缓存修复触点（既有数据库记录和 3 个新增 native scanner/metadata 文件）、
+// 3 个无曲目播放栏/首次输出入口触点，以及 1 个共享浏览器复制触点。
 // NAPI/Vue 自动生成声明、Node Core runtime-neutral seam 与 Core-authority seam 单独报告，
 // 不计入业务代码触点；两类架构 seam 仍各自有独立预算，避免借迁移无限扩大上游改动面。
-const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 105);
+const budget = Number(process.env.UPSTREAM_TOUCH_BUDGET || 113);
 const runtimeSeamBudget = Number(process.env.UPSTREAM_RUNTIME_SEAM_BUDGET || 22);
 const coreAuthoritySeamBudget = Number(process.env.UPSTREAM_CORE_AUTHORITY_SEAM_BUDGET || 13);
 // 正式产品身份必须修改少量上游 packaging/updater/对外 product-identification 表面；单独计数，避免伪装成业务逻辑扩张。
-const releaseIdentitySeamBudget = Number(process.env.UPSTREAM_RELEASE_IDENTITY_SEAM_BUDGET || 14);
+const releaseIdentitySeamBudget = Number(process.env.UPSTREAM_RELEASE_IDENTITY_SEAM_BUDGET || 20);
 const metadataPaths = new Set([
   ".gitignore",
   ".github/copilot-instructions.md",
   ".github/instructions/review.instructions.md",
   "AGENTS.md",
   "CLAUDE.md",
+  "eslint.config.mjs",
   "README.md",
   "README.zh-CN.md",
   "demo/audio-architecture.md",
@@ -72,8 +75,13 @@ const releaseIdentitySeamPaths = new Set([
   ".github/scripts/prepare-release-assets.test.cjs",
   ".github/workflows/dev.yml",
   ".github/workflows/release.yml",
+  "docs/contributing.md",
+  "docs/download.md",
+  "docs/en/contributing.md",
+  "docs/en/download.md",
   "dev-app-update.yml",
   "electron-builder.config.ts",
+  "index.html",
   "electron/main/ipc/config.ts",
   "electron/main/services/updater.ts",
   "electron/main/services/streaming/adapters/jellyfin.ts",
@@ -81,9 +89,14 @@ const releaseIdentitySeamPaths = new Set([
   "electron/main/window/desktopLyric.ts",
   "package.json",
   "src/apis/github.ts",
+  "src/components/layout/SideBarLogo.vue",
   "src/settings/categories/general.ts",
 ]);
-const generatedPaths = new Set(["native/audio-engine/index.d.ts", "components.d.ts"]);
+const generatedPaths = new Set([
+  "native/audio-engine/index.d.ts",
+  "components.d.ts",
+  "src/env.d.ts",
+]);
 const runtimeNeutralSeamPaths = new Set([
   "electron.vite.config.ts",
   "electron/main/apis/musicbrainz.ts",
