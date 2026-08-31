@@ -60,3 +60,10 @@ test("Core uses stdout stderr logging while Desktop keeps file logging", () => {
   assert.match(engineSource, /!runtimeEnvironment\.stdioOnlyLogs/);
   assert.match(engineSource, /audioEngine\.initLogger\(nativeLogsDir, isDev\)/);
 });
+
+test("Bundled Core WebSocket uses the built-in JavaScript validation path", () => {
+  assert.match(coreEntrySource, /WS_NO_BUFFER_UTIL \?\?= "1"/);
+  assert.match(coreEntrySource, /WS_NO_UTF_8_VALIDATE \?\?= "1"/);
+  const serverImport = coreEntrySource.indexOf('import("@main/server")');
+  assert.ok(coreEntrySource.indexOf("WS_NO_BUFFER_UTIL") < serverImport);
+});

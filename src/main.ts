@@ -6,24 +6,6 @@ import "@/web/runtime.css";
 import piniaPersistedstate from "pinia-plugin-persistedstate";
 import { vRipple } from "./directives/ripple";
 
-/** splash 笔画动画总时长（ms） */
-const SPLASH_ANIM_MS = 2050;
-
-/** 移除 splash 层 */
-const removeSplash = (): void => {
-  const el = document.getElementById("app-loading");
-  if (!el) return;
-  el.classList.add("hidden");
-  el.addEventListener("transitionend", () => el.remove(), { once: true });
-};
-
-const scheduleSplashRemoval = (): void => {
-  const elapsed = performance.now() - (window.__splashStart ?? 0);
-  const remaining = Math.max(0, SPLASH_ANIM_MS - elapsed);
-  setTimeout(removeSplash, remaining);
-  setTimeout(removeSplash, SPLASH_ANIM_MS + 100);
-};
-
 const hasElectronApi = (): boolean =>
   typeof window !== "undefined" && "api" in window && typeof window.api === "object";
 
@@ -33,10 +15,9 @@ const mountDebugWeb = async (): Promise<void> => {
   const app = createApp(HeadlessApp);
   app.directive("ripple", vRipple);
   app.mount("#app");
-  scheduleSplashRemoval();
 };
 
-/** 挂载同一套 SPlayer UI；仅 transport/runtime 随 Desktop/Web 变化。 */
+/** 挂载同一套 SPlayer Atom UI；仅 transport/runtime 随 Desktop/Web 变化。 */
 const mountSPlayer = async (webRemote: boolean): Promise<void> => {
   if (webRemote) {
     document.documentElement.dataset.atomRuntime = "web";
@@ -87,7 +68,6 @@ const mountSPlayer = async (webRemote: boolean): Promise<void> => {
   }
   await router.isReady();
   app.mount("#app");
-  scheduleSplashRemoval();
 
   initPlayer().catch(console.error);
 
@@ -117,5 +97,4 @@ const bootstrap = async (): Promise<void> => {
 
 void bootstrap().catch((error) => {
   console.error("[bootstrap] failed", error);
-  removeSplash();
 });

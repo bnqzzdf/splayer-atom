@@ -22,6 +22,9 @@ export const resolveCoreDirectory = async (input: string): Promise<string> => {
 const defaultDirectory = async (): Promise<string> => {
   for (const candidate of [
     runtimeEnvironment.musicDir,
+    "/media",
+    "/mnt",
+    "/home",
     os.homedir(),
     path.parse(process.cwd()).root,
   ]) {

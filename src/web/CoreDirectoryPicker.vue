@@ -39,7 +39,7 @@ const load = async (dir?: string): Promise<boolean> => {
 };
 
 const loadInitial = async (): Promise<void> => {
-  if (!props.initialPath || (await load(props.initialPath))) return;
+  if (props.initialPath && (await load(props.initialPath))) return;
   await load();
 };
 

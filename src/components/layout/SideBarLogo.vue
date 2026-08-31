@@ -20,10 +20,15 @@ const goHome = (): void => {
     >
       <SLogo :size="30" class="shrink-0" />
       <span
-        class="text-[22px] text-primary mt-0.5 leading-10 overflow-hidden whitespace-nowrap font-logo transition-[width,opacity,margin] duration-300"
-        :class="collapsed ? 'w-0 opacity-0 ml-0' : 'w-[90px] ml-2'"
+        class="inline-flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap text-primary transition-[width,opacity,margin] duration-300"
+        :class="collapsed ? 'w-0 opacity-0 ml-0' : 'w-[140px] opacity-100 ml-2'"
       >
-        SPlayer
+        <span class="font-logo text-[22px] leading-none">SPlayer</span>
+        <span
+          class="inline-flex h-5 items-center rounded-full border border-solid border-primary/20 bg-primary/8 px-2 text-[9px] font-semibold leading-none tracking-[0.14em]"
+        >
+          ATOM
+        </span>
       </span>
     </div>
   </div>

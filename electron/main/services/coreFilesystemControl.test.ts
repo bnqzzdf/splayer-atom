@@ -97,7 +97,12 @@ test("Web Core directory picker supports navigation and explicit Core path entry
   assert.match(pickerSource, /\/filesystem\/directories/);
   assert.match(pickerSource, /v-model="pathInput"/);
   assert.match(pickerSource, /@keyup\.enter="load\(pathInput\)"/);
-  assert.match(pickerSource, /loadInitial/);
+  assert.match(
+    pickerSource,
+    /if \(props\.initialPath && \(await load\(props\.initialPath\)\)\) return;/,
+  );
+  assert.match(pickerSource, /await load\(\);/);
   assert.match(pickerSource, /listing\?\.parent && load\(listing\.parent\)/);
   assert.match(pickerSource, /emit\("select", listing\.value\.path\)/);
+  assert.match(serviceSource, /"\/media",\n\s+"\/mnt",\n\s+"\/home"/);
 });
