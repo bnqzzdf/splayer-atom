@@ -19,6 +19,14 @@ test("Core preload prepares Diretta input and stages through the shared main ser
   assert.doesNotMatch(preloader, /window\.api/);
 });
 
+test("Diretta staging remains active when generic next-track preload is disabled", () => {
+  assert.match(
+    preloader,
+    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\) === true/,
+  );
+  assert.equal(preloader.match(/if \(!shouldPrepareNextInput\(\)\)/g)?.length, 2);
+});
+
 test("manual preload consumption cancels staging without deleting the source that normal load will use", () => {
   assert.match(preloader, /queueDirectCleanup\(prepared\.directSource, false\)/);
 });

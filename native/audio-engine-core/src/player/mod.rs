@@ -944,6 +944,9 @@ mod tests {
                 "Direct load must not invoke normal audio path {forbidden}"
             );
         }
+        assert!(!bindings.contains("DIRECT_RESTART_DELAY"));
+        assert!(!bindings.contains("for attempt in 0..2"));
+        assert!(direct_load.contains("player.stop();"));
 
         let direct_seek = bindings
             .split("#[cfg(feature = \"diretta\")]\n        {\n            let direct_take = {")

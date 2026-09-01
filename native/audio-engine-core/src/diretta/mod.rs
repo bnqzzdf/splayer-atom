@@ -382,4 +382,22 @@ mod tests {
             assert!(!dsd_open.contains(forbidden));
         }
     }
+
+    #[test]
+    fn bridge_completes_disconnect_before_releasing_the_connection() {
+        let bridge = include_str!("../../../diretta-sys/src/bridge.cpp");
+        let connection = bridge
+            .split("struct DirettaConnection")
+            .nth(1)
+            .and_then(|tail| tail.split("bool discover(").next())
+            .expect("Diretta connection body should exist");
+        assert!(connection.contains("~DirettaConnection()"));
+        assert!(connection.contains("shutdown();"));
+        assert!(connection.contains("disconnect_flgset();"));
+        assert!(connection.contains("disconnect(true);"));
+        assert!(connection.contains("disconnectWait();"));
+        assert!(connection.contains("sync->close();"));
+        assert!(!connection.contains("disconnect(false);"));
+        assert!(!connection.contains("kDisconnectTimeout"));
+    }
 }
