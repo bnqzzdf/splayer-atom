@@ -2,12 +2,15 @@
 //!
 //! 当音频文件没有内嵌封面时，回退到同目录下的常见封面文件。
 //! 支持的文件名（不区分大小写）按优先级排列：
-//! cover → folder → album → front → <同名> → 目录下唯一图片
+//! cover → folder → album → front → 封面 → 封套 → <同名> → 专用封面子目录 → 目录下唯一图片
 
 use std::path::{Path, PathBuf};
 
 /// 按优先级排列的封面文件名列表（不含扩展名）
-const COVER_NAMES: &[&str] = &["cover", "folder", "album", "front"];
+const COVER_NAMES: &[&str] = &["cover", "folder", "album", "front", "封面", "封套"];
+
+/// 常见的专用封面子目录名
+const COVER_SUBDIRS: &[&str] = &["artwork", "scans", "covers", "pictures", "封面"];
 
 /// 支持的图片扩展名
 const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "bmp"];
@@ -15,9 +18,10 @@ const COVER_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "bmp"];
 /// 在音频文件所在目录查找封面图片。
 ///
 /// 查找顺序：
-/// 1. 固定优先名：cover / folder / album / front（+ 支持的扩展名组合）
+/// 1. 固定优先名：cover / folder / album / front / 封面 / 封套
 /// 2. 与音频文件同名的图片文件
-/// 3. 目录下唯一的图片文件
+/// 3. 专用封面子目录中的固定优先名或唯一图片
+/// 4. 目录下唯一的图片文件
 ///
 /// @param audio_path - 音频文件路径
 /// @returns 找到的封面图片路径，未找到返回 None
@@ -46,12 +50,58 @@ pub fn find_folder_cover(audio_path: &str) -> Option<PathBuf> {
         }
     }
 
-    // 目录下唯一的图片文件
+    for subdir in list_cover_subdirs(dir) {
+        let Some(subdir_entries) = list_dir_images(&subdir) else {
+            continue;
+        };
+        if let Some(path) = find_named_cover(&subdir_entries) {
+            return Some(path);
+        }
+        if subdir_entries.len() == 1 {
+            return subdir_entries.into_iter().next();
+        }
+    }
+
+    // 专用封面目录应优先于根目录里唯一但无语义的随机图片
     if entries.len() == 1 {
-        return Some(entries.into_iter().next().unwrap());
+        return entries.into_iter().next();
     }
 
     None
+}
+
+fn find_named_cover(entries: &[PathBuf]) -> Option<PathBuf> {
+    for name in COVER_NAMES {
+        for ext in COVER_EXTS {
+            if let Some(path) = find_case_insensitive(entries, &format!("{name}.{ext}")) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn list_cover_subdirs(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut subdirs = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        COVER_SUBDIRS
+                            .iter()
+                            .any(|expected| name.eq_ignore_ascii_case(expected))
+                    })
+        })
+        .collect::<Vec<_>>();
+    subdirs.sort_by_cached_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    subdirs
 }
 
 /// 列出目录下所有支持扩展名的图片文件
@@ -218,6 +268,58 @@ mod tests {
             result.map(|p| p.file_name().unwrap().to_str().unwrap().to_string()),
             Some("cover.jpg".to_string())
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn finds_chinese_named_cover() {
+        let dir = temp_dir();
+        touch(&dir, "封面.jpg");
+        touch(&dir, "song.flac");
+
+        let result = find_folder_cover(dir.join("song.flac").to_str().unwrap());
+        assert_eq!(result, Some(dir.join("封面.jpg")));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn finds_unique_image_in_case_insensitive_artwork_subdir() {
+        let dir = temp_dir();
+        let artwork = dir.join("ARTWORK");
+        fs::create_dir(&artwork).unwrap();
+        touch(&artwork, "booklet-front.jpg");
+        touch(&dir, "song.flac");
+
+        let result = find_folder_cover(dir.join("song.flac").to_str().unwrap());
+        assert_eq!(result, Some(artwork.join("booklet-front.jpg")));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn ambiguous_artwork_subdir_does_not_choose_an_arbitrary_image() {
+        let dir = temp_dir();
+        let artwork = dir.join("Artwork");
+        fs::create_dir(&artwork).unwrap();
+        touch(&artwork, "page-01.jpg");
+        touch(&artwork, "page-02.jpg");
+        touch(&dir, "song.flac");
+
+        let result = find_folder_cover(dir.join("song.flac").to_str().unwrap());
+        assert!(result.is_none());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn dedicated_cover_subdir_beats_unrelated_single_root_image() {
+        let dir = temp_dir();
+        let artwork = dir.join("Artwork");
+        fs::create_dir(&artwork).unwrap();
+        touch(&artwork, "cover.jpg");
+        touch(&dir, "disc-label.jpg");
+        touch(&dir, "song.flac");
+
+        let result = find_folder_cover(dir.join("song.flac").to_str().unwrap());
+        assert_eq!(result, Some(artwork.join("cover.jpg")));
         cleanup(&dir);
     }
 }

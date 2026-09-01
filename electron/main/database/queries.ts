@@ -29,6 +29,12 @@ interface TrackRow {
   scanned_at: number;
 }
 
+const trackOrder = (prefix = ""): string =>
+  `${prefix}track IS NULL, ${prefix}track, COALESCE(${prefix}cue_start_ms, 0), ${prefix}path COLLATE NOCASE`;
+
+const libraryOrder = (prefix = ""): string =>
+  `json_extract(${prefix}album, '$.name') IS NULL, COALESCE(json_extract(${prefix}album, '$.name'), '') COLLATE NOCASE, ${trackOrder(prefix)}`;
+
 /** 将数据库行解析为 Track */
 const rowToTrack = (row: TrackRow): Track => {
   const quality: AudioQuality | undefined =
@@ -65,7 +71,9 @@ const rowToTrack = (row: TrackRow): Track => {
 
 /** 查询全部曲目（含被 CUE 引用的容器整轨，供扫描器读取时长/封面等） */
 export const getAllTracks = (): Track[] => {
-  const rows = getDb().prepare("SELECT * FROM tracks").all() as TrackRow[];
+  const rows = getDb()
+    .prepare(`SELECT * FROM tracks ORDER BY ${libraryOrder()}`)
+    .all() as TrackRow[];
   return rows.map(rowToTrack);
 };
 
@@ -300,7 +308,9 @@ export const getArtistList = (): ArtistSummary[] => {
 export const getAlbumTracks = (albumName: string): Track[] => {
   const rows = getDb()
     .prepare(
-      `SELECT * FROM tracks WHERE json_extract(album, '$.name') = ? AND ${excludeCueContainer()}`,
+      `SELECT * FROM tracks
+       WHERE json_extract(album, '$.name') = ? AND ${excludeCueContainer()}
+       ORDER BY ${trackOrder()}`,
     )
     .all(albumName) as TrackRow[];
   return rows.map(rowToTrack);
@@ -310,9 +320,12 @@ export const getAlbumTracks = (albumName: string): Track[] => {
 export const getArtistTracks = (artistName: string): Track[] => {
   const rows = getDb()
     .prepare(
-      `SELECT DISTINCT t.* FROM tracks t, json_each(t.artists) a
-       WHERE LOWER(json_extract(a.value, '$.name')) = LOWER(?)
-         AND ${excludeCueContainer("t.path")}`,
+      `SELECT * FROM tracks t
+       WHERE EXISTS (
+         SELECT 1 FROM json_each(t.artists) a
+         WHERE LOWER(json_extract(a.value, '$.name')) = LOWER(?)
+       ) AND ${excludeCueContainer("t.path")}
+       ORDER BY ${libraryOrder("t.")}`,
     )
     .all(artistName) as TrackRow[];
   return rows.map(rowToTrack);

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 /// 常见的音频扩展名列表
 const KNOWN_AUDIO_EXTENSIONS: &[&str] = &[
-    "ape", "flac", "wav", "mp3", "m4a", "ogg", "wma", "opus", "aac", "dsf", "dff", "iso", "cue",
+    "ape", "flac", "wav", "mp3", "m4a", "ogg", "wma", "opus", "aac", "dsf", "dff", "iso",
 ];
 
 /// 对字符串进行模糊归一化处理（仅保留非 ASCII 字符与 ASCII 字母数字，转为小写）
@@ -105,4 +105,33 @@ pub fn resolve_audio_path<P: AsRef<Path>>(cue_dir: P, audio_filename: &str) -> P
 
     // 未找到匹配，返回基于 cue_dir 的原始构造路径
     target
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "splayer-cue-matcher-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn cue_sheet_is_not_used_as_the_only_audio_fallback() {
+        let dir = temp_dir();
+        fs::write(dir.join("album.cue"), b"").unwrap();
+
+        let expected = dir.join("missing.flac");
+        assert_eq!(resolve_audio_path(&dir, "missing.flac"), expected);
+
+        fs::remove_dir_all(dir).unwrap();
+    }
 }

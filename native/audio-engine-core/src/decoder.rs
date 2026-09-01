@@ -11,6 +11,7 @@ use ffmpeg_audio::{
 use parking_lot::Mutex;
 use tracing::debug;
 
+use crate::cue::CueVirtualInfo;
 use crate::equalizer::Equalizer;
 use crate::error::{AudioErrorKind, AudioResultExt};
 use crate::loudness::LoudnessAnalyzer;
@@ -82,6 +83,9 @@ pub struct DecoderData {
     fft_resampler: Resampler,
     /// 网络中断句柄仅由远端源持有，stop() 取消后可在 seek 前重置
     cancel_handle: Option<HttpCancelHandle>,
+    /// CUE 虚拟分轨及当前相对位置，用于精确限制解码边界
+    cue_info: Option<CueVirtualInfo>,
+    cue_position_secs: f64,
 }
 
 /// 已打开且完成元数据读取的音源，等待按实际输出流采样率创建重采样器
@@ -90,6 +94,7 @@ pub struct PreparedDecoder {
     metadata: AudioMetadata,
     replay_gain_db: Option<f32>,
     cancel_handle: Option<HttpCancelHandle>,
+    cue_info: Option<CueVirtualInfo>,
 }
 
 impl PreparedDecoder {
@@ -125,7 +130,19 @@ impl DecoderData {
         if let Some(handle) = &self.cancel_handle {
             handle.reset();
         }
-        let target = Duration::from_secs_f64(position_secs);
+        let cue_position_secs = self.cue_info.as_ref().map(|cue| {
+            if cue.duration > 0.0 {
+                position_secs.clamp(0.0, cue.duration)
+            } else {
+                position_secs.max(0.0)
+            }
+        });
+        let target_secs = self
+            .cue_info
+            .as_ref()
+            .zip(cue_position_secs)
+            .map_or(position_secs, |(cue, position)| cue.start_time + position);
+        let target = Duration::from_secs_f64(target_secs);
         if self.reader.seek(target, SeekMode::Accurate).is_err()
             && self.reader.seek(target, SeekMode::Coarse).is_err()
         {
@@ -133,6 +150,9 @@ impl DecoderData {
         }
         let _ = self.player_resampler.flush();
         let _ = self.fft_resampler.flush();
+        if let Some(position) = cue_position_secs {
+            self.cue_position_secs = position;
+        }
         true
     }
 
@@ -168,12 +188,13 @@ pub fn prepare_decode(
     let (reader, cancel_handle) = open_source(source, cancel_handle)?;
 
     let info = reader.source_info();
+    let cue_info = crate::cue::parse_cue_virtual_path(source);
     let mut duration_secs = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
-    if let Some(cue_info) = crate::cue::parse_cue_virtual_path(source) {
-        if cue_info.duration > 0.0 {
-            duration_secs = cue_info.duration;
-        } else if duration_secs > cue_info.start_time {
-            duration_secs -= cue_info.start_time;
+    if let Some(cue) = &cue_info {
+        if cue.duration > 0.0 {
+            duration_secs = cue.duration;
+        } else if duration_secs > cue.start_time {
+            duration_secs -= cue.start_time;
         }
     }
     let stream_info = metadata::extract_stream_info(info);
@@ -213,6 +234,7 @@ pub fn prepare_decode(
         metadata,
         replay_gain_db,
         cancel_handle,
+        cue_info,
     })
 }
 
@@ -232,6 +254,7 @@ pub fn start_prepared_decode(
         mut metadata,
         replay_gain_db,
         cancel_handle,
+        cue_info,
     } = prepared;
     let target_rate = shared.sample_rate();
     let (player_resampler, fft_resampler) =
@@ -250,6 +273,8 @@ pub fn start_prepared_decode(
         player_resampler,
         fft_resampler,
         cancel_handle: cancel_handle.clone(),
+        cue_info,
+        cue_position_secs: 0.0,
     };
 
     let handle = thread::Builder::new()
@@ -443,12 +468,50 @@ fn build_resamplers(
     Ok((player_resampler, fft_resampler))
 }
 
+fn cue_player_sample_limit(data: &DecoderData, sample_rate: u32, channels: u16) -> Option<u64> {
+    let cue = data.cue_info.as_ref()?;
+    if cue.duration <= 0.0 {
+        return None;
+    }
+    let remaining_secs = (cue.duration - data.cue_position_secs).max(0.0);
+    let frames = (remaining_secs * f64::from(sample_rate)).round() as u64;
+    Some(frames.saturating_mul(u64::from(channels)))
+}
+
+fn apply_cue_sample_limit(
+    player_samples: &mut Vec<f32>,
+    fft_samples: &mut Vec<f32>,
+    emitted_samples: &mut u64,
+    max_samples: u64,
+) -> bool {
+    let original_player_len = player_samples.len();
+    let keep = max_samples
+        .saturating_sub(*emitted_samples)
+        .min(original_player_len as u64) as usize;
+
+    if keep < original_player_len {
+        player_samples.truncate(keep);
+        if keep == 0 {
+            fft_samples.clear();
+        } else {
+            let fft_frames = fft_samples.len() / usize::from(FFT_CHANNELS);
+            let keep_fft_frames = fft_frames.saturating_mul(keep) / original_player_len;
+            fft_samples.truncate(keep_fft_frames * usize::from(FFT_CHANNELS));
+        }
+    }
+
+    *emitted_samples = emitted_samples.saturating_add(keep as u64);
+    *emitted_samples >= max_samples
+}
+
 /// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放与 FFT 重采样器
 fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
     // 响度归一化：有 ReplayGain 标签时用固定增益，否则用实时分析
     let has_replay_gain = (shared.normalization_gain() - 1.0).abs() > f32::EPSILON;
     let mut loudness = LoudnessAnalyzer::new(shared.sample_rate(), shared.channels());
     loudness.set_has_replay_gain(has_replay_gain);
+    let max_player_samples = cue_player_sample_limit(data, shared.sample_rate(), shared.channels());
+    let mut emitted_player_samples = 0_u64;
 
     // 用于日志诊断：记录是否曾成功解码过帧
     let mut had_success = false;
@@ -456,6 +519,9 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
     loop {
         // 背压：缓冲区满时阻塞等待消费
         if !shared.wait_for_space() {
+            return;
+        }
+        if max_player_samples.is_some_and(|max| emitted_player_samples >= max) {
             return;
         }
 
@@ -487,6 +553,15 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 }
                 had_success = true;
 
+                let reached_cue_limit = max_player_samples.is_some_and(|max| {
+                    apply_cue_sample_limit(
+                        &mut player_samples,
+                        &mut fft_samples,
+                        &mut emitted_player_samples,
+                        max,
+                    )
+                });
+
                 if shared.is_normalization_enabled() && !player_samples.is_empty() {
                     let gain = if has_replay_gain {
                         shared.normalization_gain()
@@ -505,6 +580,10 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                     player_samples,
                     fft_samples,
                 });
+                if reached_cue_limit {
+                    debug!("CUE 分轨播放达到精确边界，结束当前音轨解码");
+                    return;
+                }
             }
             Ok(None) | Err(AudioError::Eof) => {
                 // EOF flush：把两个重采样器内部残留挤出来，否则最后几十毫秒丢
@@ -514,6 +593,14 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                 player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
                 let mut fft_samples = shared.take_fft_buffer();
                 fft_samples.extend_from_slice(data.fft_resampler.output_as::<f32>());
+                if let Some(max) = max_player_samples {
+                    apply_cue_sample_limit(
+                        &mut player_samples,
+                        &mut fft_samples,
+                        &mut emitted_player_samples,
+                        max,
+                    );
+                }
                 if !player_samples.is_empty() || !fft_samples.is_empty() {
                     shared.push(AudioChunk {
                         source_sample_count: player_samples.len() as u64,
@@ -690,5 +777,43 @@ mod tests {
         assert!(!fft_samples.is_empty());
         assert_eq!(player_samples.len() % 6, 0);
         assert_eq!(fft_samples.len() % usize::from(FFT_CHANNELS), 0);
+    }
+
+    #[test]
+    fn cue_limit_uses_remaining_duration_after_seek() {
+        let reader = AudioReader::new(Cursor::new(mono_wav())).unwrap();
+        let (player_resampler, fft_resampler) = build_resamplers(&reader, 48_000, 2).unwrap();
+        let data = DecoderData {
+            reader,
+            player_resampler,
+            fft_resampler,
+            cancel_handle: None,
+            cue_info: Some(CueVirtualInfo {
+                physical_path: "album.wav".to_string(),
+                start_time: 30.0,
+                duration: 10.0,
+                track_num: 2,
+            }),
+            cue_position_secs: 4.0,
+        };
+
+        assert_eq!(cue_player_sample_limit(&data, 48_000, 2), Some(576_000));
+    }
+
+    #[test]
+    fn cue_limit_truncates_audio_and_fft_at_the_same_frame_fraction() {
+        let mut player_samples = vec![0.0; 200];
+        let mut fft_samples = vec![0.0; 100];
+        let mut emitted = 900;
+
+        assert!(apply_cue_sample_limit(
+            &mut player_samples,
+            &mut fft_samples,
+            &mut emitted,
+            1_000,
+        ));
+        assert_eq!(player_samples.len(), 100);
+        assert_eq!(fft_samples.len(), 50);
+        assert_eq!(emitted, 1_000);
     }
 }
