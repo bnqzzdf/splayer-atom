@@ -4,7 +4,6 @@ import type {
   LoadResult,
   IpcResponse,
   PlayerStatus,
-  AudioDevice,
   FftData,
   PlayerEvent,
 } from "./types";
@@ -113,22 +112,6 @@ export class ElectronPlayerClient implements IPlayerClient {
     return this.api.setPitchSync(sync);
   }
 
-  getOutputDevices(): Promise<IpcResponse<AudioDevice[]>> {
-    return this.api.getOutputDevices();
-  }
-
-  getDefaultDeviceName(): Promise<IpcResponse<string | null>> {
-    return this.api.getDefaultDeviceName();
-  }
-
-  setOutputDevice(deviceName: string | null): Promise<IpcResponse> {
-    return this.api.setOutputDevice(deviceName);
-  }
-
-  getSelectedDeviceName(): Promise<IpcResponse<string | null>> {
-    return this.api.getSelectedDeviceName();
-  }
-
   syncPlayMode(repeatMode: string, shuffleMode: string): void {
     this.api.syncPlayMode(repeatMode, shuffleMode);
   }
@@ -143,38 +126,6 @@ export class ElectronPlayerClient implements IPlayerClient {
 
   onEvent(callback: (event: PlayerEvent) => void): () => void {
     return this.api.onEvent(callback);
-  }
-
-  async scanDirettaTargets(): Promise<IpcResponse<any[]>> {
-    return { success: true, data: [] };
-  }
-
-  async getDirettaStatus(): Promise<IpcResponse<any>> {
-    return { success: true, data: { selected_device: null, is_diretta_active: false } };
-  }
-
-  async selectDirettaTarget(target: string | null): Promise<IpcResponse<any>> {
-    return this.setOutputDevice(target);
-  }
-
-  async getDirettaTargetInfo(target: string): Promise<IpcResponse<any>> {
-    return {
-      success: true,
-      data: {
-        target_address: target,
-        pcm_max_sample_rate: 768000,
-        pcm_max_bits: 32,
-        pcm_channels: 2,
-        supports_dsd: true,
-        dsd_max_sample_rate: 22579200,
-        dsd_format_desc: "Native DSD512 (22.5792 MHz) & DoP",
-        pcm_format_desc: "PCM Up to 768 kHz / 32-bit",
-        supports_native_dsd: true,
-        mtu: 1500,
-        transmission_mode: "Auto (MS Mode 0 / Low Jitter Direct)",
-        bit_perfect_supported: true,
-      },
-    };
   }
 
   async browseFs(_path?: string): Promise<IpcResponse<any>> {

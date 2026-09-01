@@ -5,6 +5,7 @@ import { getCoreInfo } from "@/core/controlClient";
 import { useCopyText } from "@/composables/useCopyText";
 import { useUpdateStore } from "@/stores/update";
 import { hasHostCapability, isDesktopRenderer } from "@/runtime";
+import ProductBrand from "@/components/brand/ProductBrand.vue";
 import { openExternal } from "@/utils/url";
 import {
   APP_VERSION,
@@ -191,8 +192,8 @@ onMounted(async () => {
         class="flex flex-wrap items-center gap-4"
       >
         <SLogo :size="34" />
-        <div class="flex items-center gap-2 mr-auto">
-          <span class="text-lg font-logo text-on-surface">{{ REPO_NAME }}</span>
+        <div class="flex items-center gap-2 mr-auto text-on-surface">
+          <ProductBrand size="about" />
           <STag type="primary" size="small" round>v{{ APP_VERSION }}</STag>
           <STag v-if="IS_APPX" type="primary" size="small" round>
             {{ t("settings.storeVersion") }}

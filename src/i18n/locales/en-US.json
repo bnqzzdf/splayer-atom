@@ -1674,9 +1674,12 @@
       }
     },
     "platformLogin": {
-      "title": "Log in to {name} Account",
-      "desc": "Log in to retrieve playback streams directly from the platform",
-      "loginWeb": "Web Login",
+      "title": "Connect {name} Account",
+      "desc": "Connect once and let Core securely retain the account session",
+      "connect": "Connect Account",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "loginWeb": "Connect Account",
       "loginQr": "QR Login",
       "loginQrQQ": "QQ QR Login",
       "loginQrWX": "WeChat QR Login",
@@ -1690,7 +1693,8 @@
       "toast": {
         "loginSuccess": "{name} login successful: {user}",
         "loginFailed": "{name} login failed, please try again",
-        "logoutDone": "Logged out from {name}",
+        "logoutDone": "Disconnected from {name}",
+        "logoutFailed": "Failed to disconnect from {name}, please try again",
         "cookieSuccess": "{name} Cookie set successfully",
         "cookieInvalid": "Invalid Cookie, please check and retry"
       }

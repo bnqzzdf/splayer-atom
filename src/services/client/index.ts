@@ -7,8 +7,8 @@ export { ElectronPlayerClient } from "./electronClient";
 export { HttpPlayerClient } from "./httpClient";
 
 /**
- * 判断当前是否处于 Electron 桌面端环境
- * 注意：Web 模式下 webPolyfill 会注入 window.api，因此必须以 window.electron.ipcRenderer 作为原生桌面端判断基准
+ * 判断当前是否处于 Electron 桌面端环境。
+ * 以 preload 注入的 window.electron.ipcRenderer 为唯一桌面 Host 判据，不能用 window.api 推断运行形态。
  */
 export const isElectron = (): boolean => {
   return (
@@ -31,9 +31,7 @@ export const getClient = (): IAppClient => {
 
   const electron = isElectron();
   const mode: ClientMode = electron ? "electron" : "http";
-  const player: IPlayerClient = electron
-    ? new ElectronPlayerClient()
-    : new HttpPlayerClient();
+  const player: IPlayerClient = electron ? new ElectronPlayerClient() : new HttpPlayerClient();
 
   clientInstance = {
     mode,

@@ -14,7 +14,7 @@ import localCacheCategory from "./categories/localCache";
 import pluginsCategory from "./categories/plugins";
 import otherCategory from "./categories/other";
 import AboutSettings from "@/components/settings/custom/AboutSettings.vue";
-import ProviderAccounts from "@/components/settings/custom/ProviderAccounts.vue";
+import PlatformAccount from "@/components/settings/custom/PlatformAccount.vue";
 import IconLucideInfo from "~icons/lucide/info";
 
 const controlGeneralCategory: SettingCategory = {
@@ -48,11 +48,20 @@ const providerAccountsSection: SettingSection = {
   id: "providerAccounts",
   items: [
     {
-      key: "providerAccounts",
+      key: "qobuzAccount",
       type: "custom",
-      component: ProviderAccounts,
+      component: PlatformAccount,
+      componentProps: { platform: "qobuz" },
       fullWidth: true,
-      keywords: ["Qobuz", "TIDAL"],
+      keywords: ["Qobuz", "settings.platformLogin.connect"],
+    },
+    {
+      key: "tidalAccount",
+      type: "custom",
+      component: PlatformAccount,
+      componentProps: { platform: "tidal" },
+      fullWidth: true,
+      keywords: ["TIDAL", "settings.platformLogin.connect"],
     },
   ],
 };
@@ -62,7 +71,7 @@ const controlServicesCategory: SettingCategory = {
   ...servicesCategory,
   sections: (servicesCategory.sections ?? [])
     .flatMap((section) =>
-      section.id === "lastfm" ? [providerAccountsSection, section] : [section],
+      section.id === "network" ? [section, providerAccountsSection] : [section],
     )
     .filter((section) => isDesktopRenderer() || !desktopOnlyServiceSections.has(section.id)),
 };

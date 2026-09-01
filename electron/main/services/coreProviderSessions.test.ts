@@ -16,6 +16,8 @@ const userStoreSource = read(new URL("../../../src/stores/user.ts", import.meta.
 const neteaseSource = read(new URL("../../../src/apis/netease.ts", import.meta.url));
 const qobuzSource = read(new URL("../../../src/apis/qobuz.ts", import.meta.url));
 const tidalSource = read(new URL("../../../src/apis/tidal.ts", import.meta.url));
+const qobuzAuthSource = read(new URL("../apis/qobuz/auth.ts", import.meta.url));
+const tidalAuthSource = read(new URL("../apis/tidal/auth.ts", import.meta.url));
 const qqSource = read(new URL("../../../src/apis/qqmusic.ts", import.meta.url));
 const kugouSource = read(new URL("../../../src/apis/kugou.ts", import.meta.url));
 const cookieDialogSource = read(
@@ -72,8 +74,16 @@ test("Atom-managed provider wrappers use Core Protocol while QQ and Kugou remain
   assert.match(kugouSource, /window\.api\.apis\.call\("kugou", name, params\)/);
 });
 
-test("Control provider projection is non-persistent and Netease login UI reads Core authority", () => {
+test("Core persists managed streaming credentials while Control projection stays non-persistent", () => {
+  for (const authSource of [qobuzAuthSource, tidalAuthSource]) {
+    assert.match(authSource, /const STORAGE_FILE = path\.join\(configDir,/);
+    assert.match(authSource, /runtimeSecretCodec\.encode\(plain\)/);
+    assert.match(authSource, /fs\.readFileSync\(STORAGE_FILE/);
+    assert.match(authSource, /fs\.chmodSync\(STORAGE_FILE, 0o600\)/);
+  }
+
   assert.doesNotMatch(projectionStoreSource, /persist|localStorage|localforage/);
+  assert.match(projectionStoreSource, /providerClient\.getSessions\(\)/);
   assert.match(userStoreSource, /providerSessions\.isAuthenticated\("netease"\)/);
   assert.doesNotMatch(userStoreSource, /isLoggedIn = computed\(\(\) => profile\.value !== null\)/);
 });

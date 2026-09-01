@@ -212,6 +212,9 @@ Linux x86-64 是首个正式 Core 平台。其他架构只有 compile capability
 - [x] Core path 与 Control-local path 已区分；Library、Download 和 cache 目录最终由 Core 验证。
 - [x] 多个 Control 不创建第二 queue/settings/provider/playback authority。
 - [ ] 在真实 Core 主机上完成 Desktop + 多 Web Control 同时连接、断开、重连和长时间运行验收。
+- [ ] 低优先：如后续确有产品需求，通过正式 Core output contract 增加 Diretta Target 只读
+      capabilities projection；必须复用现有 output identity/discovery，不重新引入独立
+      scan/status/select transport，也不阻塞当前 release。
 
 当前 renderer lyric selection 是已知 presentation seam，不作为惯性重构任务。只有出现可复用、
 runtime-neutral 的小型 canonical lyric resolver，且不需要搬运 Vue/settings/presentation parser 时，

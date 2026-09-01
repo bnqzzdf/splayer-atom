@@ -2,9 +2,9 @@
 /**
  * 流媒体平台登录对话框（Qobuz / TIDAL）
  *
- * Qobuz：user_id + user_auth_token 表单登录
+ * Qobuz：user_id + user_auth_token 凭据导入
  *   - 用户需从 play.qobuz.com F12 → Network → api.json → Query String Parameters 获取
- *   - 后端 safeStorage 加密持久化，重启保持登录
+ *   - 凭据由 Core 验证并持久化，Control 只读取 providerSessions 投影
  *
  * TIDAL：设备码授权（OAuth2 Device Code Flow）
  *   - 第一步：调用 auth_device_authorization 获取 userCode + verificationUriComplete
@@ -13,8 +13,10 @@
  *   - 也支持用户自定义 Client ID / Client Secret（推荐）
  */
 
-import { useStreamingAuthStore } from "@/stores/streamingAuth";
+import * as qobuzApi from "@/apis/qobuz";
+import * as tidalApi from "@/apis/tidal";
 import { toast } from "@/composables/useToast";
+import { useProviderSessionsStore } from "@/stores/providerSessions";
 import type { TidalDeviceAuthorizationResponse } from "@/apis/tidal";
 import STabs from "@/components/ui/STabs.vue";
 import SAlert from "@/components/ui/SAlert.vue";
@@ -23,28 +25,41 @@ import IconLucideChevronDown from "~icons/lucide/chevron-down";
 const props = defineProps<{
   open: boolean;
   tab?: "qobuz" | "tidal";
+  singlePlatform?: "qobuz" | "tidal";
 }>();
 const emit = defineEmits<{
   "update:open": [value: boolean];
   "update:tab": [value: "qobuz" | "tidal"];
 }>();
 
-const authStore = useStreamingAuthStore();
+const providerSessions = useProviderSessionsStore();
 
 type Tab = "qobuz" | "tidal";
-const activeTab = ref<Tab>(props.tab ?? "qobuz");
+const activeTab = ref<Tab>(props.singlePlatform ?? props.tab ?? "qobuz");
+const qobuzSession = computed(() => providerSessions.sessions.qobuz);
+const tidalSession = computed(() => providerSessions.sessions.tidal);
 
-// Tab 列表（驱动 STabs）
-const tabs: { key: Tab; label: string }[] = [
-  { key: "qobuz", label: "Qobuz" },
-  { key: "tidal", label: "TIDAL" },
-];
+// 单平台卡片只展示对应登录流程；独立调用时仍保留双平台切换。
+const tabs = computed<{ key: Tab; label: string }[]>(() => {
+  if (props.singlePlatform) {
+    return [
+      {
+        key: props.singlePlatform,
+        label: props.singlePlatform === "qobuz" ? "Qobuz" : "TIDAL",
+      },
+    ];
+  }
+  return [
+    { key: "qobuz", label: "Qobuz" },
+    { key: "tidal", label: "TIDAL" },
+  ];
+});
 
-// 当外部设置 tab 变化时同步
+// 当外部指定平台变化时同步当前页签。
 watch(
-  () => props.tab,
-  (newTab) => {
-    if (newTab) activeTab.value = newTab;
+  () => [props.singlePlatform, props.tab] as const,
+  ([singlePlatform, tab]) => {
+    activeTab.value = singlePlatform ?? tab ?? activeTab.value;
   },
 );
 watch(activeTab, (newTab) => emit("update:tab", newTab));
@@ -59,7 +74,9 @@ const tidalClientId = ref("");
 const tidalClientSecret = ref("");
 const tidalAdvancedOpen = ref(false);
 const tidalDeviceInfo = ref<TidalDeviceAuthorizationResponse | null>(null);
-const tidalPollStatus = ref<"idle" | "polling" | "success" | "expired" | "denied" | "error">("idle");
+const tidalPollStatus = ref<"idle" | "polling" | "success" | "expired" | "denied" | "error">(
+  "idle",
+);
 const tidalPollMessage = ref<string>("");
 const tidalRequestLoading = ref(false);
 const tidalPollTimer = ref<ReturnType<typeof setTimeout> | null>(null);
@@ -94,10 +111,9 @@ watch(
       clearTidalPollTimer();
       return;
     }
-    await Promise.all([
-      authStore.fetchQobuzStatus(),
-      authStore.fetchTidalStatus(),
-    ]);
+    await providerSessions.refresh().catch((error) => {
+      console.warn("[streaming-login] provider session refresh failed", error);
+    });
     qobuzUserId.value = "";
     qobuzAuthToken.value = "";
     // 保留最近一次的 deviceInfo 但重置轮询状态
@@ -121,7 +137,11 @@ const onQobuzLogin = async (): Promise<void> => {
   }
   qobuzLoading.value = true;
   try {
-    await authStore.loginQobuz(userId, token);
+    const result = await qobuzApi.login(userId, token);
+    if (result?.status !== "success" && !(result as any)?.user_id && !(result as any)?.user) {
+      throw new Error("Qobuz 登录失败");
+    }
+    await providerSessions.refresh();
     toast.success("Qobuz 登录成功");
     emit("update:open", false);
   } catch (err) {
@@ -134,13 +154,13 @@ const onQobuzLogin = async (): Promise<void> => {
 /** Qobuz 登出 */
 const onQobuzLogout = async (): Promise<void> => {
   try {
-    await authStore.logoutQobuz();
+    await qobuzApi.logout();
+    await providerSessions.refresh();
     toast.success("已退出 Qobuz 登录");
   } catch (err) {
     toast.error(err instanceof Error ? err.message : "登出失败");
   }
 };
-
 
 // ============ TIDAL 授权码登录（官方客户端，无损） ============
 // 官方移动 client 的回调地址 com.player.tidal/auth 在桌面不可达，
@@ -163,7 +183,7 @@ const onTidalAuthorize = async (): Promise<void> => {
   tidalPkceMessage.value = "正在打开 TIDAL 授权页…";
   tidalCallbackUrl.value = "";
   try {
-    const info = await authStore.loginTidalAuthorize();
+    const info = await tidalApi.authAuthorize();
     window.open(info.url, "_blank", "noopener");
     tidalPkceMessage.value =
       "请在打开的 TIDAL 页面完成授权；授权后浏览器会跳到 com.player.tidal/auth 报错页（正常现象），请复制地址栏完整 URL 粘贴到下方。";
@@ -204,7 +224,12 @@ const onTidalCompleteLogin = async (): Promise<void> => {
   }
   tidalExchanging.value = true;
   try {
-    await authStore.exchangeTidalCode(code, state);
+    const result = (await tidalApi.authExchange(code, state)) as {
+      status?: string;
+      message?: string;
+    };
+    if (result.status !== "success") throw new Error(result.message || "TIDAL 登录失败");
+    await providerSessions.refresh();
     tidalPkceStatus.value = "success";
     tidalPkceMessage.value = "登录成功，已获得无损 FLAC 权限";
     toast.success("TIDAL 登录成功（官方客户端）");
@@ -233,7 +258,7 @@ const onTidalRequestDeviceCode = async (): Promise<void> => {
   cleanTidalState();
   tidalRequestLoading.value = true;
   try {
-    const info = await authStore.loginTidalDeviceCode(
+    const info = await tidalApi.authDeviceAuthorization(
       tidalClientId.value.trim() || undefined,
       tidalClientSecret.value.trim() || undefined,
     );
@@ -265,7 +290,7 @@ const onTidalPoll = async (): Promise<void> => {
   const info = tidalDeviceInfo.value;
   if (!info) return;
   try {
-    const res = await authStore.pollTidalToken(
+    const res = await tidalApi.authTokenPoll(
       info.deviceCode,
       tidalClientId.value.trim() || undefined,
       tidalClientSecret.value.trim() || undefined,
@@ -273,7 +298,7 @@ const onTidalPoll = async (): Promise<void> => {
     if (res.status === "success") {
       tidalPollStatus.value = "success";
       tidalPollMessage.value = `登录成功：${res.username ?? "已登录"}`;
-      authStore.completeTidalLogin(res.username ?? "tidal_user");
+      await providerSessions.refresh();
       toast.success("TIDAL 登录成功");
       clearTidalPollTimer();
       setTimeout(() => emit("update:open", false), 800);
@@ -322,9 +347,10 @@ const copyTidalUserCode = async (): Promise<void> => {
 
 /** 打开浏览器访问 TIDAL 授权链接 */
 const openTidalAuthUrl = (): void => {
-  const rawUrl = tidalDeviceInfo.value?.verificationUriComplete
-    ?? tidalDeviceInfo.value?.verificationUri
-    ?? "https://link.tidal.com";
+  const rawUrl =
+    tidalDeviceInfo.value?.verificationUriComplete ??
+    tidalDeviceInfo.value?.verificationUri ??
+    "https://link.tidal.com";
   const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
   window.open(url, "_blank", "noopener");
 };
@@ -332,7 +358,8 @@ const openTidalAuthUrl = (): void => {
 /** TIDAL 登出 */
 const onTidalLogout = async (): Promise<void> => {
   try {
-    await authStore.logoutTidal();
+    await tidalApi.logout();
+    await providerSessions.refresh();
     cleanTidalState();
     toast.success("已退出 TIDAL 登录");
   } catch (err) {
@@ -347,28 +374,25 @@ const onOpenUpdate = (value: boolean): void => {
 </script>
 
 <template>
-  <SDialog
-    :open="open"
-    title="流媒体平台登录"
-    width="480px"
-    @update:open="onOpenUpdate"
-  >
+  <SDialog :open="open" title="连接在线平台账号" width="480px" @update:open="onOpenUpdate">
     <STabs v-model="activeTab" :tabs="tabs" type="segment" class="mb-1">
       <!-- Qobuz Tab -->
       <template #qobuz>
         <div class="flex flex-col gap-3 pt-3">
           <!-- 已登录状态 -->
           <div
-            v-if="authStore.qobuzLoggedIn"
+            v-if="qobuzSession.authenticated"
             class="flex items-center justify-between rounded-lg bg-surface-variant/10 px-3 py-2"
           >
             <div class="flex flex-col">
-              <span class="text-sm font-medium text-on-surface">已登录</span>
-              <span class="text-xs text-on-surface-variant">{{
-                authStore.qobuz.username || authStore.qobuz.userId
-              }}</span>
+              <span class="text-sm font-medium text-on-surface">已连接</span>
+              <span class="text-xs text-on-surface-variant">
+                {{ qobuzSession.username || qobuzSession.userId || "Qobuz" }}
+              </span>
             </div>
-            <SButton variant="secondary" size="small" type="error" @click="onQobuzLogout">登出</SButton>
+            <SButton variant="secondary" size="small" type="error" @click="onQobuzLogout">
+              断开
+            </SButton>
           </div>
 
           <!-- 登录表单 -->
@@ -390,8 +414,12 @@ const onOpenUpdate = (value: boolean): void => {
                 :disabled="qobuzLoading"
               />
             </div>
-            <SButton :loading="qobuzLoading" type="primary" @click="onQobuzLogin">登录</SButton>
-            <div class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant">
+            <SButton :loading="qobuzLoading" type="primary" @click="onQobuzLogin">
+              验证并连接
+            </SButton>
+            <div
+              class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+            >
               <p class="mb-1 font-medium text-on-surface">如何获取凭证？</p>
               <p>1. 浏览器登录 play.qobuz.com</p>
               <p>2. F12 打开开发者工具 → Network</p>
@@ -407,19 +435,23 @@ const onOpenUpdate = (value: boolean): void => {
         <div class="flex flex-col gap-3 pt-3">
           <!-- 已登录状态 -->
           <div
-            v-if="authStore.tidalLoggedIn"
+            v-if="tidalSession.authenticated"
             class="flex items-center justify-between rounded-lg bg-surface-variant/10 px-3 py-2"
           >
             <div class="flex flex-col">
-              <span class="text-sm font-medium text-on-surface">已登录 TIDAL</span>
-              <span class="text-xs text-on-surface-variant">{{ authStore.tidal.username }}</span>
+              <span class="text-sm font-medium text-on-surface">已连接 TIDAL</span>
+              <span class="text-xs text-on-surface-variant">
+                {{ tidalSession.username || tidalSession.userId || "TIDAL" }}
+              </span>
             </div>
-            <SButton variant="secondary" size="small" type="error" @click="onTidalLogout">登出</SButton>
+            <SButton variant="secondary" size="small" type="error" @click="onTidalLogout">
+              断开
+            </SButton>
           </div>
 
           <!-- 设备码授权流程 -->
           <template v-else>
-                        <!-- 官方客户端授权码登录（无损，推荐） -->
+            <!-- 官方客户端授权码登录（无损，推荐） -->
             <div class="flex flex-col gap-2">
               <SButton
                 type="primary"
@@ -427,7 +459,7 @@ const onOpenUpdate = (value: boolean): void => {
                 :loading="tidalPkceStatus === 'waiting'"
                 @click="onTidalAuthorize"
               >
-                用官方客户端登录（无损音质）
+                使用 TIDAL 网页授权（推荐）
               </SButton>
               <SAlert v-if="tidalPkceStatus !== 'idle'" :type="tidalPkceType">
                 {{ tidalPkceMessage }}
@@ -449,7 +481,9 @@ const onOpenUpdate = (value: boolean): void => {
                 >
                   完成登录
                 </SButton>
-                <div class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant">
+                <div
+                  class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+                >
                   <p class="mb-1 font-medium text-on-surface">操作步骤</p>
                   <p>1. 点击上方按钮，在打开的 TIDAL 页面登录并授权</p>
                   <p>2. 浏览器会跳到 com.player.tidal/auth 报错页（正常现象）</p>
@@ -459,7 +493,7 @@ const onOpenUpdate = (value: boolean): void => {
             </div>
             <div class="my-2 border-t border-surface-variant/10"></div>
 
-<!-- 高级选项（自定义 Client ID / Secret） -->
+            <!-- 高级选项（自定义 Client ID / Secret） -->
             <div class="flex flex-col gap-1">
               <SButton
                 variant="ghost"
@@ -505,7 +539,9 @@ const onOpenUpdate = (value: boolean): void => {
               >
                 获取设备码
               </SButton>
-              <div class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant">
+              <div
+                class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+              >
                 <p class="mb-1 font-medium text-on-surface">设备码授权说明</p>
                 <p>1. 点击下方按钮生成一次性设备码</p>
                 <p>2. 在打开的 TIDAL 页面输入设备码完成授权</p>
@@ -518,10 +554,14 @@ const onOpenUpdate = (value: boolean): void => {
               <div class="flex flex-col gap-1.5 rounded-lg bg-surface-variant/10 px-3 py-3">
                 <span class="text-xs text-on-surface-variant">设备码（userCode）</span>
                 <div class="flex items-center gap-2">
-                  <code class="flex-1 text-base font-mono font-semibold text-on-surface select-all break-all">
+                  <code
+                    class="flex-1 text-base font-mono font-semibold text-on-surface select-all break-all"
+                  >
                     {{ tidalDeviceInfo.userCode }}
                   </code>
-                  <SButton variant="secondary" size="small" @click="copyTidalUserCode">复制</SButton>
+                  <SButton variant="secondary" size="small" @click="copyTidalUserCode">
+                    复制
+                  </SButton>
                 </div>
               </div>
 
@@ -540,7 +580,11 @@ const onOpenUpdate = (value: boolean): void => {
 
               <!-- 失败时重新获取 -->
               <SButton
-                v-if="tidalPollStatus === 'expired' || tidalPollStatus === 'denied' || tidalPollStatus === 'error'"
+                v-if="
+                  tidalPollStatus === 'expired' ||
+                  tidalPollStatus === 'denied' ||
+                  tidalPollStatus === 'error'
+                "
                 variant="secondary"
                 size="small"
                 @click="onTidalRequestDeviceCode"

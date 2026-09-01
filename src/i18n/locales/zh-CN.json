@@ -1662,9 +1662,12 @@
       }
     },
     "platformLogin": {
-      "title": "登录 {name} 账号",
-      "desc": "登录后可获取对应平台播放地址",
-      "loginWeb": "网页登录",
+      "title": "连接 {name} 账号",
+      "desc": "连接后由 Core 安全保持账号会话",
+      "connect": "连接账户",
+      "connected": "已连接",
+      "disconnect": "断开连接",
+      "loginWeb": "连接账户",
       "loginQr": "扫码登录",
       "loginQrQQ": "QQ 扫码登录",
       "loginQrWX": "微信扫码登录",
@@ -1678,7 +1681,8 @@
       "toast": {
         "loginSuccess": "{name} 登录成功：{user}",
         "loginFailed": "{name} 登录失败，请重试",
-        "logoutDone": "已退出 {name} 登录",
+        "logoutDone": "已断开 {name} 连接",
+        "logoutFailed": "断开 {name} 连接失败，请重试",
         "cookieSuccess": "{name} Cookie 设置成功",
         "cookieInvalid": "Cookie 无效，请检查后重试"
       }

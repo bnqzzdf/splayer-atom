@@ -31,6 +31,8 @@ const githubApiSource = read("src/apis/github.ts");
 const webEntrySource = read("index.html");
 const webBootstrapSource = read("src/main.ts");
 const sidebarLogoSource = read("src/components/layout/SideBarLogo.vue");
+const productBrandSource = read("src/components/brand/ProductBrand.vue");
+const aboutSettingsSource = read("src/components/settings/custom/AboutSettings.vue");
 const serverSource = read("electron/main/server/index.ts");
 
 test("SPlayer Atom owns an installation and repository identity distinct from upstream", () => {
@@ -104,8 +106,10 @@ test("runtime integrations identify the current product as SPlayer Atom", () => 
   assert.doesNotMatch(webEntrySource, /app-loading|splash/i);
   assert.doesNotMatch(webBootstrapSource, /app-loading|splash/i);
   assert.doesNotMatch(webEntrySource, /SPlayer Next/);
-  assert.match(sidebarLogoSource, />SPlayer<\/span>/);
-  assert.match(sidebarLogoSource, /ATOM/);
+  assert.match(sidebarLogoSource, /<ProductBrand/);
+  assert.match(aboutSettingsSource, /<ProductBrand size="about" \/>/);
+  assert.match(productBrandSource, />SPlayer<\/span>/);
+  assert.match(productBrandSource, /ATOM/);
   assert.match(serverSource, /SPlayer Atom external API/);
   assert.match(serverSource, /c\.header\("Cache-Control", "no-store"\)/);
 });

@@ -12,6 +12,18 @@ const webOutputSelectorSource = readFileSync(
   new URL("../../web/OutputDeviceSelector.vue", import.meta.url),
   "utf8",
 );
+const settingsOutputSelectorSource = readFileSync(
+  new URL("../../components/settings/custom/DeviceSelector.vue", import.meta.url),
+  "utf8",
+);
+const legacyHttpClientSource = readFileSync(
+  new URL("../../services/client/httpClient.ts", import.meta.url),
+  "utf8",
+);
+const legacyClientTypesSource = readFileSync(
+  new URL("../../services/client/types.ts", import.meta.url),
+  "utf8",
+);
 const outputDevicesSource = readFileSync(new URL("../outputDevices.ts", import.meta.url), "utf8");
 const mainLayoutSource = readFileSync(
   new URL("../../layouts/MainLayout.vue", import.meta.url),
@@ -149,7 +161,11 @@ test("Web Settings hides Desktop-only service scopes without fake facades", () =
     settingsSchemaSource,
     /isDesktopRenderer\(\) \|\| !desktopOnlyServiceSections\.has\(section\.id\)/,
   );
-  assert.match(settingsSchemaSource, /component: ProviderAccounts/);
+  assert.match(settingsSchemaSource, /component: PlatformAccount/);
+  assert.match(
+    settingsSchemaSource,
+    /section\.id === "network" \? \[section, providerAccountsSection\] : \[section\]/,
+  );
   assert.match(fontConfigSource, /if \(externalLyricFontsAvailable\) \{/);
 });
 
@@ -271,12 +287,22 @@ test("production Web mounts the shared SPlayer Control while HeadlessApp stays d
 
 test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {
   assert.match(toolbarSource, /OutputDeviceSelector/);
+  assert.doesNotMatch(toolbarSource, /DirettaCastPopover/);
   assert.match(outputDevicesSource, /isDirectAlsaHardwareOutput/);
   assert.match(outputDevicesSource, /startsWith\("diretta:"\)/);
   assert.match(webOutputSelectorSource, /ALSA ·/);
   assert.match(webOutputSelectorSource, /await switchDevice/);
   assert.match(webOutputSelectorSource, /await refreshDevices/);
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
+});
+
+test("Control keeps one Core-backed output transport", () => {
+  assert.doesNotMatch(settingsOutputSelectorSource, /services\/client|scanDiretta/);
+  assert.doesNotMatch(legacyHttpClientSource, /\/api\/v1\/diretta\//);
+  assert.doesNotMatch(
+    legacyClientTypesSource,
+    /scanDirettaTargets|getDirettaStatus|selectDirettaTarget|getDirettaTargetInfo/,
+  );
 });
 
 test("Headless Web keeps one bottom output entry available before a track is loaded", () => {

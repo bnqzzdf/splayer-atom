@@ -188,8 +188,6 @@ const onMoreMenuSelect = (key: string): void => {
         <span class="text-xs tabular-nums mt-2">{{ volumePercent }}%</span>
       </div>
     </SPopover>
-    <!-- 音频输出与 Diretta 投送快捷入口 -->
-    <DirettaCastPopover :cover="cover" />
     <SButton
       v-if="desktopLyricAvailable"
       :type="lyricButtonType"

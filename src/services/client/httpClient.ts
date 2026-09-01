@@ -5,7 +5,6 @@ import type {
   IpcResponse,
   PlayerStatus,
   PlayerState,
-  AudioDevice,
   FftData,
   PlayerEvent,
 } from "./types";
@@ -257,13 +256,17 @@ export class HttpPlayerClient implements IPlayerClient {
   }
 
   async getLibraryAlbumTracks(name: string): Promise<IpcResponse<any[]>> {
-    const res = await this.request<any[]>(`/api/v1/library/albums/${encodeURIComponent(name)}/tracks`);
+    const res = await this.request<any[]>(
+      `/api/v1/library/albums/${encodeURIComponent(name)}/tracks`,
+    );
     if (!res.success) return { success: false, data: [] };
     return { success: true, data: (res as any).data ?? [] };
   }
 
   async getLibraryArtistTracks(name: string): Promise<IpcResponse<any[]>> {
-    const res = await this.request<any[]>(`/api/v1/library/artists/${encodeURIComponent(name)}/tracks`);
+    const res = await this.request<any[]>(
+      `/api/v1/library/artists/${encodeURIComponent(name)}/tracks`,
+    );
     if (!res.success) return { success: false, data: [] };
     return { success: true, data: (res as any).data ?? [] };
   }
@@ -305,12 +308,14 @@ export class HttpPlayerClient implements IPlayerClient {
     return this.request("/api/v1/library/scan/status");
   }
 
-  async browseFs(path?: string): Promise<IpcResponse<{
-    current_path: string;
-    parent_path: string | null;
-    dirs: Array<{ name: string; path: string; has_children?: boolean; is_dir?: boolean }>;
-    audio_count: number;
-  }>> {
+  async browseFs(path?: string): Promise<
+    IpcResponse<{
+      current_path: string;
+      parent_path: string | null;
+      dirs: Array<{ name: string; path: string; has_children?: boolean; is_dir?: boolean }>;
+      audio_count: number;
+    }>
+  > {
     const url = path ? `/api/v1/fs/browse?path=${encodeURIComponent(path)}` : "/api/v1/fs/browse";
     const res = await this.request<any>(url);
     if (!res.success) {
@@ -345,7 +350,13 @@ export class HttpPlayerClient implements IPlayerClient {
     return res;
   }
 
-  async createPlaylist(input: { id?: string; title?: string; name?: string; description?: string; cover?: string }): Promise<IpcResponse<any>> {
+  async createPlaylist(input: {
+    id?: string;
+    title?: string;
+    name?: string;
+    description?: string;
+    cover?: string;
+  }): Promise<IpcResponse<any>> {
     return this.request("/api/v1/playlist/create", {
       method: "POST",
       body: JSON.stringify({
@@ -357,7 +368,10 @@ export class HttpPlayerClient implements IPlayerClient {
     });
   }
 
-  async updatePlaylist(id: string, input: { title?: string; name?: string; description?: string; cover?: string }): Promise<IpcResponse<any>> {
+  async updatePlaylist(
+    id: string,
+    input: { title?: string; name?: string; description?: string; cover?: string },
+  ): Promise<IpcResponse<any>> {
     return this.request(`/api/v1/playlist/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify({
@@ -469,34 +483,6 @@ export class HttpPlayerClient implements IPlayerClient {
     return { ok: false, error: res.error || "Request failed" };
   }
 
-  // -------------------------------------------------------------
-  // Diretta Audio-over-IP API
-  // -------------------------------------------------------------
-
-  async scanDirettaTargets(): Promise<IpcResponse<any[]>> {
-    const res = await this.request<any[]>("/api/v1/diretta/scan");
-    if (!res.success) return { success: false, data: [] };
-    return { success: true, data: (res as any).data ?? [] };
-  }
-
-  async getDirettaStatus(): Promise<IpcResponse<any>> {
-    return this.request("/api/v1/diretta/status");
-  }
-
-  async selectDirettaTarget(target: string | null): Promise<IpcResponse<any>> {
-    return this.request("/api/v1/diretta/select", {
-      method: "POST",
-      body: JSON.stringify({ target }),
-    });
-  }
-
-  async getDirettaTargetInfo(target: string): Promise<IpcResponse<any>> {
-    return this.request("/api/v1/diretta/target_info", {
-      method: "POST",
-      body: JSON.stringify({ target }),
-    });
-  }
-
   private emitEvent(event: PlayerEvent): void {
     for (const listener of this.eventListeners) {
       try {
@@ -558,16 +544,13 @@ export class HttpPlayerClient implements IPlayerClient {
       bit_rate?: number;
       codec?: string;
       cover?: string;
-    }>(
-      "/api/v1/player/load",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          source,
-          auto_play: options?.autoPlay ?? true,
-        }),
-      },
-    );
+    }>("/api/v1/player/load", {
+      method: "POST",
+      body: JSON.stringify({
+        source,
+        auto_play: options?.autoPlay ?? true,
+      }),
+    });
 
     if (!res.success) {
       return { success: false, error: res.error };
@@ -577,8 +560,10 @@ export class HttpPlayerClient implements IPlayerClient {
     const sampleRate = payload?.original_sample_rate || payload?.sample_rate || 44100;
     const channels = payload?.channels || 2;
     const bitsPerSample = payload?.bits_per_sample || 16;
-    const bitRate = payload?.bit_rate || (bitsPerSample * sampleRate * channels);
-    const codec = payload?.codec || (source.endsWith(".flac") ? "flac" : source.endsWith(".mp3") ? "mp3" : "flac");
+    const bitRate = payload?.bit_rate || bitsPerSample * sampleRate * channels;
+    const codec =
+      payload?.codec ||
+      (source.endsWith(".flac") ? "flac" : source.endsWith(".mp3") ? "mp3" : "flac");
 
     const loadResult: LoadResult = {
       detail: {
@@ -592,7 +577,10 @@ export class HttpPlayerClient implements IPlayerClient {
         externalLyrics: [],
       },
       mediaInfo: {
-        duration: payload?.duration != null ? Math.round(payload.duration * 1000) : (options?.meta?.duration ?? 0),
+        duration:
+          payload?.duration != null
+            ? Math.round(payload.duration * 1000)
+            : (options?.meta?.duration ?? 0),
         cover: payload?.cover ?? options?.meta?.cover,
       },
     };
@@ -723,30 +711,9 @@ export class HttpPlayerClient implements IPlayerClient {
     return { success: true };
   }
 
-  // 设备切换前暂停开关：headless 模式无热拔插场景，Diretta 目标切换由
-  // selectDirettaTarget 内部处理，此处按 Web 降级语义接受但不生效
+  // Headless Web 不处理桌面热拔插策略；正式 output 选择统一走 Core Control client。
   async setPauseOnDeviceSwitch(_enabled: boolean): Promise<IpcResponse> {
     return { success: true };
-  }
-
-  async getOutputDevices(): Promise<IpcResponse<AudioDevice[]>> {
-    return { success: true, data: [] };
-  }
-
-  async getDefaultDeviceName(): Promise<IpcResponse<string | null>> {
-    return { success: true, data: null };
-  }
-
-  async setOutputDevice(deviceName: string | null): Promise<IpcResponse> {
-    return this.selectDirettaTarget(deviceName);
-  }
-
-  async getSelectedDeviceName(): Promise<IpcResponse<string | null>> {
-    const status = await this.getDirettaStatus();
-    if (status.success && status.data) {
-      return { success: true, data: (status.data as any).selected_device ?? null };
-    }
-    return { success: true, data: null };
   }
 
   syncPlayMode(_repeatMode: string, _shuffleMode: string): void {
