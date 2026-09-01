@@ -35,9 +35,11 @@ The long-term model is **Core / Control / Output**:
   shell/Host integration and temporarily retained event transport, not for a new parallel business
   API when a Core contract exists.
 - Core Local Output is the first Output and uses the shared `audio-engine` through ALSA or Diretta.
-  A future Desktop Output Agent may execute Core jobs but must not own queue/provider/playback policy.
-- Do not publish or rebuild a permanent Electron Headless product. The supported Headless product
-  is the ordinary Node Core; transitional Electron Headless behavior is only an oracle.
+  A Desktop Output Agent is not current scope; if a concrete requirement accepts one later, it may
+  execute Core jobs but must not own queue/provider/playback policy.
+- Do not restore or publish Electron Headless or Pure Rust Headless as a product. The supported
+  Headless product is the ordinary Node Core. Historical implementations and artifacts are behavior
+  or protocol oracles only, even if a retained runtime discriminator still uses a legacy name.
 - Single active output is the current product scope. Do not introduce Zones, synchronized groups,
   or Core-to-endpoint PCM transport without a concrete accepted requirement.
 - Headless currently targets one user on a trusted LAN. Authentication, pairing, CSRF, and public
@@ -71,11 +73,34 @@ Also enforce these constraints:
 - `/home/bnqzzdf/code/tinyLMS`, `/home/bnqzzdf/code/tinylms-next`, and retained artifacts are behavior
   or protocol oracles, not product architecture or fidelity references.
 
-## Upstream and Git discipline
+## Source updates and Git discipline
 
 - `origin` is the Atom repository and the only default development/release push target.
-- `splayer` is fetch-only. `vendor/splayer` must equal an official SPlayer commit and contain no
-  Atom delta. Follow `docs/upstream-sync.md` for integration and accepted-baseline updates.
+- Official SPlayer is the only foundation upstream. `splayer` is fetch-only. `vendor/splayer` must
+  equal an official SPlayer commit, contain no Atom delta, and move only by fast-forward. Integrate
+  it through a dedicated `sync/splayer-*` branch or worktree; never rebase published Atom history.
+- When official SPlayer and another source both changed, integrate and stabilize official SPlayer
+  first. Do not obtain official-owned UI, player, queue, library, or lifecycle updates indirectly
+  through a downstream fork.
+- `ffs/dev` from `feifenspace/SPlayer-Next`, maintained by songlian and fetched through the
+  fetch-only `ffs` remote, is a candidate capability source, not a second upstream baseline. Never
+  merge or rebase it wholesale into Atom, point `vendor/splayer` at it, create a parallel vendor
+  branch for it, or record it as the accepted SPlayer baseline.
+- Fetch and pin the exact `ffs/dev` candidate commit before review. Inspect candidate commits and
+  paths independently. Accept only a narrow, coherent change that fits the current Atom ownership
+  model; reject mixed commits instead of importing obsolete architecture and deleting it afterward.
+- Directly cherry-pick an `ffs/dev` commit only when the complete commit is independently valid and
+  leaves a buildable Atom tree; use `git cherry-pick -x` for provenance. If only the behavior or a
+  subset is valid, port the smallest final change onto the current owner without preserving the
+  source branch's intermediate state, wrappers, fallback, or directory layout.
+- In particular, an `ffs/dev` update must not restore Pure Rust Headless/Core, Rust QQ/Kugou,
+  provider/session authority outside Node Core, Qobuz/TIDAL TypeScript protocol fallback, a second
+  audio engine or Diretta bridge, `f32` Diretta, or legacy Diretta cfg/build paths.
+- Perform each `ffs/dev` port from the latest accepted Atom `dev` on a dedicated `port/ffs-*` branch.
+  Keep each commit coherent and usable when checked out alone, retain the source SHA when the user
+  authorizes a commit body, and run tests proportional to the affected provider/Core/audio scope.
+- Follow `docs/upstream-sync.md` for official integration, accepted-baseline updates, candidate
+  reporting, and validation. A moving remote ref is never evidence that Atom has accepted an update.
 - General upstream fixes must branch from `vendor/splayer` into a minimal `contrib/*` change; do not
   submit Atom `dev` directly to SPlayer.
 - Preserve unrelated working-tree changes and keep ownership-oriented changes separable.
@@ -131,14 +156,15 @@ pnpm typecheck
 pnpm lint
 pnpm build
 pnpm build:native --dev
-cargo test -p audio-engine
+cargo check --workspace
+cargo test --workspace
 node scripts/atom/check-upstream-touch.mjs
 git diff --check
 ```
 
 Run checks proportional to the change. Use `docs/atom-development.md` and `docs/build-flavors.md`
-for Core artifact and platform-specific commands. On Linux, prefer `cargo test -p audio-engine` over
-the Windows-oriented full native workspace test. Do not format or rewrite unrelated dirty files.
+for Core artifact and platform-specific commands. Real audio behavior remains a separate hardware
+gate even when the full Cargo workspace passes. Do not format or rewrite unrelated dirty files.
 
 ## Engineering conventions
 
