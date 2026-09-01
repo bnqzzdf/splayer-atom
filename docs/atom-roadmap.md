@@ -525,7 +525,7 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ## 10. Qobuz
 
-当前已有 Atom-owned Qobuz 底层实现，不应另建 provider framework。
+Qobuz 平台协议以 atom-base 验证过的 `native/streaming-api` Rust 实现为唯一事实来源；Node Core 只保留账户 session / credential authority 与 Core contract adapter，不保留第二套 TypeScript HTTP、签名或 credential discovery 实现。
 
 ### 已有能力
 
@@ -559,6 +559,8 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 
 ### 已有能力
 
+TIDAL 平台协议同样以 `native/streaming-api` Rust 实现为唯一事实来源；Node Core 只保留用户 token / refresh token / session authority 与 Core contract adapter，不保留第二套 TypeScript auth、request、manifest 或 DASH 实现。
+
 - [x] token import / auth status / logout main actions。
 - [x] search 基础实现。
 - [x] playback manifest 解析。
@@ -577,11 +579,11 @@ QQ Music 不作为 SPlayer Atom 的主动开发平台。现有相关能力视为
 - [ ] 普通输出与 Diretta 双路径验收。
 - [ ] main-authority 自动下一首验收。
 
-### 延后项
+### 授权凭据原则
 
-- [ ] 第一方 Authorization Code / PKCE 登录。
+- [x] Authorization Code / PKCE 与 Device Code 登录复用 atom-base 已完成真实接入验证的 TIDAL client credential / redirect 配置；该凭据属于 Qobuz/TIDAL Rust protocol engine 的已验证兼容实现，不在 Node/Core/Control 复制第二套 TIDAL auth 实现。
 
-该项等待 SPlayer Atom 自有 TIDAL Developer application 与 redirect 配置，不使用历史项目或第三方共享 client credential 作为产品依赖。
+除显式环境变量覆盖外，正式 TIDAL 接入以该已验证 client credential 为默认协议参数；Node Core 仍只持有用户 token / refresh token / session authority，不复制或改写平台授权协议。
 
 ---
 

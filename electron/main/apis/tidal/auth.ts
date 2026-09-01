@@ -15,11 +15,13 @@ export interface TidalAuthState {
   username?: string;
   countryCode?: string;
   clientId?: string;
+  clientSecret?: string;
 }
 
 interface PersistedTidalAuth {
   encryptedAccessToken: string;
   encryptedRefreshToken?: string;
+  encryptedClientSecret?: string;
   expiresAt?: number;
   userId?: string;
   username?: string;
@@ -63,6 +65,7 @@ const load = (): TidalAuthState | null => {
       username: process.env.TIDAL_USERNAME?.trim() || undefined,
       countryCode: process.env.TIDAL_COUNTRY_CODE?.trim() || undefined,
       clientId: process.env.TIDAL_CLIENT_ID?.trim() || undefined,
+      clientSecret: process.env.TIDAL_CLIENT_SECRET?.trim() || undefined,
     };
   }
 
@@ -78,6 +81,7 @@ const load = (): TidalAuthState | null => {
       username: persisted.username,
       countryCode: persisted.countryCode,
       clientId: persisted.clientId,
+      clientSecret: decrypt(persisted.encryptedClientSecret) || undefined,
     };
   } catch {
     return null;
@@ -96,6 +100,7 @@ export const setTidalAuth = (state: TidalAuthState): void => {
     const persisted: PersistedTidalAuth = {
       encryptedAccessToken: encrypt(state.accessToken),
       encryptedRefreshToken: state.refreshToken ? encrypt(state.refreshToken) : undefined,
+      encryptedClientSecret: state.clientSecret ? encrypt(state.clientSecret) : undefined,
       expiresAt: state.expiresAt,
       userId: state.userId,
       username: state.username,

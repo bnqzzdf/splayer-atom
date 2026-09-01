@@ -34,7 +34,10 @@ const nativeLoaderSource = readFileSync(
 test("audio-engine keeps Desktop extras behind the shared Core Cargo feature", () => {
   assert.match(shimCargoSource, /default = \["desktop-audio"\]/);
   assert.match(shimCargoSource, /"audio-engine-core\/desktop-audio"/);
-  assert.match(shimCargoSource, /core-audio = \[[^\]]*"audio-engine-core\/headless"[^\]]*\]/s);
+  assert.match(
+    shimCargoSource,
+    /core-audio = \["audio-engine-core\/fft", "audio-engine-core\/midi"\]/,
+  );
   assert.match(
     shimCargoSource,
     /audio-engine-core = \{ path = "\.\.\/audio-engine-core", default-features = false/,
@@ -44,7 +47,8 @@ test("audio-engine keeps Desktop extras behind the shared Core Cargo feature", (
     coreCargoSource,
     /desktop-audio = \["cpal\/pipewire", "cpal\/pulseaudio", "dep:pipewire"\]/,
   );
-  assert.match(coreCargoSource, /headless = \[\]/);
+  assert.match(coreCargoSource, /diretta = \["dep:diretta-sys"\]/);
+  assert.match(shimCargoSource, /diretta = \["audio-engine-core\/diretta"\]/);
   assert.match(coreCargoSource, /cpal = \{ version = "0\.18\.2", default-features = false \}/);
   assert.match(coreCargoSource, /pipewire = \{[^\n]+optional = true \}/);
 });
@@ -54,9 +58,13 @@ test("Linux Core disables the PipeWire device watcher", () => {
   assert.match(watcherSource, /all\(target_os = "linux", not\(feature = "desktop-audio"\)\)/);
 });
 
-test("Core native builder emits only the ALSA-only audio-engine addon", () => {
+test("Core native builder emits only the required audio and streaming addons", () => {
   assert.match(buildSource, /"--no-default-features"/);
-  assert.match(buildSource, /"--features",\n {2}"core-audio"/);
+  assert.match(buildSource, /const audioFeatures = direttaSdkRoot \? "core-audio,diretta" : "core-audio"/);
+  assert.match(buildSource, /streaming-api \(Qobuz\/TIDAL\)/);
+  assert.match(buildSource, /modules: \["audio-engine", "streaming-api"\]/);
+  assert.match(buildSource, /audio-engine\.node/);
+  assert.match(buildSource, /streaming-api\.node/);
   assert.match(buildSource, /out", "native"/);
   assert.match(buildSource, /DIRETTA_SDK_ROOT/);
   assert.match(buildSource, /CARGO_HOME/);
@@ -85,8 +93,10 @@ test("Core Diretta build pins the verified SDK release from Release.hpp", () => 
   assert.match(buildSource, /Core Diretta 构建固定使用 SDK/);
 });
 
-test("Core system staging refuses debug or mismatched Diretta native addons", () => {
+test("Core system staging refuses debug or mismatched native addons", () => {
   assert.match(stageSource, /nativeBuild\.profile !== "release"/);
+  assert.match(stageSource, /streaming-api\.node/);
+  assert.match(stageSource, /callStreamingProvider/);
   assert.match(stageSource, /nativeBuild\.flavor !== "core-audio"/);
   assert.match(stageSource, /nativeBuild\.direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
   assert.match(stageSource, /no-Diretta Core native metadata 不应携带 SDK release/);

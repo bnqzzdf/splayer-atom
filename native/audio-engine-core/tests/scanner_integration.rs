@@ -126,11 +126,13 @@ fn file_record_round_trips_path_mtime_size() {
         path: "tests/fixtures/track.mp3".to_string(),
         mtime: 1_000_000,
         size: 2_048,
+        cover_path: None,
     };
 
     assert_eq!(record.path, "tests/fixtures/track.mp3");
     assert_eq!(record.mtime, 1_000_000);
     assert_eq!(record.size, 2_048);
+    assert_eq!(record.cover_path, None);
 }
 
 #[test]

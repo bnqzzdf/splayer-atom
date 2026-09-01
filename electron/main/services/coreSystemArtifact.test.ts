@@ -69,6 +69,8 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /better-sqlite3\/package\.json/);
   assert.match(stageSource, /prebuilds", "linux-x64\.node"/);
   assert.match(stageSource, /audio-engine\.node/);
+  assert.match(stageSource, /streaming-api\.node/);
+  assert.match(stageSource, /callStreamingProvider/);
   assert.match(stageSource, /AGPL license/);
   assert.match(stageSource, /splayer-atom-core-system-linux-x64\.tar\.gz/);
   assert.match(stageSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);

@@ -15,8 +15,6 @@ pub struct PlaybackHandle {
     stream: PlaybackStream,
     volume: Arc<AtomicU32>,
     stopped: Arc<AtomicBool>,
-    /// Diretta 后端的暂停标志：暂停时推静音保持 Target 时钟在线
-    paused: Arc<AtomicBool>,
 }
 
 impl PlaybackHandle {
@@ -30,48 +28,32 @@ impl PlaybackHandle {
     ) -> Result<Self> {
         let volume = Arc::new(AtomicU32::new(volume.to_bits()));
         let stopped = Arc::new(AtomicBool::new(false));
-        let paused_flag = Arc::new(AtomicBool::new(paused));
-        let stream = output.build_stream(
-            source,
-            Arc::clone(&volume),
-            Arc::clone(&stopped),
-            Arc::clone(&paused_flag),
-        )?;
-        if let PlaybackStream::Cpal(stream) = &stream {
-            if !paused {
-                stream
-                    .play()
-                    .context("启动音频输出失败")
-                    .with_audio_kind(AudioErrorKind::Device)?;
-            }
+        let stream = output.build_stream(source, Arc::clone(&volume), Arc::clone(&stopped))?;
+        let PlaybackStream::Cpal(stream_ref) = &stream;
+        if !paused {
+            stream_ref
+                .play()
+                .context("启动音频输出失败")
+                .with_audio_kind(AudioErrorKind::Device)?;
         }
         Ok(Self {
             stream,
             volume,
             stopped,
-            paused: paused_flag,
         })
     }
 
     pub fn play(&self) {
-        match &self.stream {
-            PlaybackStream::Cpal(stream) => {
-                if let Err(error) = stream.play() {
-                    warn!(%error, "恢复音频输出失败");
-                }
-            }
-            PlaybackStream::Diretta => self.paused.store(false, Ordering::Release),
+        let PlaybackStream::Cpal(stream) = &self.stream;
+        if let Err(error) = stream.play() {
+            warn!(%error, "恢复音频输出失败");
         }
     }
 
     pub fn pause(&self) {
-        match &self.stream {
-            PlaybackStream::Cpal(stream) => {
-                if let Err(error) = stream.pause() {
-                    warn!(%error, "暂停音频输出失败");
-                }
-            }
-            PlaybackStream::Diretta => self.paused.store(true, Ordering::Release),
+        let PlaybackStream::Cpal(stream) = &self.stream;
+        if let Err(error) = stream.pause() {
+            warn!(%error, "暂停音频输出失败");
         }
     }
 

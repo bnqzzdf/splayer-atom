@@ -23,6 +23,7 @@ const coreDir = path.join(root, "out", "core");
 const rendererDir = path.join(root, "out", "renderer");
 const nativeBuildFile = path.join(root, "out", "native", "build.json");
 const audioEngineFile = path.join(root, "out", "native", "audio-engine.node");
+const streamingApiFile = path.join(root, "out", "native", "streaming-api.node");
 const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
@@ -54,6 +55,7 @@ requireDir(coreDir, "Core JS build");
 requireDir(rendererDir, "Web renderer build");
 requireFile(nativeBuildFile, "Core native build metadata");
 requireFile(audioEngineFile, "Core audio-engine addon");
+requireFile(streamingApiFile, "Core streaming-api addon");
 requireFile(path.join(root, "LICENSE"), "AGPL license");
 
 const packageMetadata = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as {
@@ -86,6 +88,7 @@ const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   flavor?: string;
   platform?: string;
   arch?: string;
+  modules?: string[];
   diretta?: boolean;
   direttaSdkRelease?: number | null;
 };
@@ -96,6 +99,13 @@ if (nativeBuild.profile !== "release" || nativeBuild.flavor !== "core-audio") {
 }
 if (nativeBuild.platform !== "linux" || nativeBuild.arch !== "x64") {
   fail(`Core native build metadata 与 linux-x64 staging 不一致`);
+}
+if (
+  !Array.isArray(nativeBuild.modules) ||
+  !nativeBuild.modules.includes("audio-engine") ||
+  !nativeBuild.modules.includes("streaming-api")
+) {
+  fail("Core native build metadata 缺少 audio-engine 或 streaming-api");
 }
 if (nativeBuild.diretta === true && nativeBuild.direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
   fail(
@@ -120,6 +130,7 @@ cpSync(coreDir, path.join(outputDir, "app"), { recursive: true });
 cpSync(rendererDir, path.join(outputDir, "renderer"), { recursive: true });
 mkdirSync(path.join(outputDir, "native"), { recursive: true });
 cpSync(audioEngineFile, path.join(outputDir, "native", "audio-engine.node"));
+cpSync(streamingApiFile, path.join(outputDir, "native", "streaming-api.node"));
 cpSync(nativeBuildFile, path.join(outputDir, "native", "build.json"));
 cpSync(path.join(root, "LICENSE"), path.join(outputDir, "LICENSE"));
 mkdirSync(path.join(outputDir, "bin"), { recursive: true });
@@ -207,7 +218,14 @@ if (db.prepare("select 1 as value").get().value !== 1) process.exit(2);
 db.close();
 const audioEngine = require("./native/audio-engine.node");
 if (typeof audioEngine.AudioPlayer !== "function") process.exit(3);
-console.log(JSON.stringify({ node: process.versions.node, sqlite: true, audioEngine: true }));
+const streamingApi = require("./native/streaming-api.node");
+if (typeof streamingApi.callStreamingProvider !== "function") process.exit(4);
+console.log(JSON.stringify({
+  node: process.versions.node,
+  sqlite: true,
+  audioEngine: true,
+  streamingApi: true,
+}));
 `;
 const smoke = spawnSync(process.execPath, ["-e", smokeSource], {
   cwd: outputDir,

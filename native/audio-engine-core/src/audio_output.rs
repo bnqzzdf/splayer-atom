@@ -12,7 +12,6 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample, StreamConfig, SupportedStreamConfig};
 use tracing::{debug, info, warn};
 
-use crate::diretta_output::{acquire_diretta_output, DirettaShared};
 use crate::error::{AudioErrorKind, AudioResultExt};
 use crate::source::DecoderSource;
 
@@ -20,22 +19,16 @@ use crate::source::DecoderSource;
 /// 禁止获取 `InnerPlayer` 锁、join 线程、枚举设备、创建新流或调用 NAPI async 方法。
 pub type OutputFailureCallback = Arc<dyn Fn() + Send + Sync + 'static>;
 
-/// 单次播放使用的输出流：cpal 设备流，或 Diretta 常驻推流线程的句柄标记。
-///
-/// Diretta 分支的实际推流由 `DirettaShared` 的常驻线程承担，
-/// 此变体只是类型占位，play/pause 通过共享原子标志传达。
+/// 单次普通播放使用的 cpal 输出流。Diretta 必须走独立 Source Direct runtime。
 pub enum PlaybackStream {
     Cpal(cpal::Stream),
-    Diretta,
 }
 
-/// 输出后端：cpal 本地设备，或 Diretta 网络音频 Target
 enum OutputBackend {
     Cpal {
         device: cpal::Device,
         config: SupportedStreamConfig,
     },
-    Diretta(DirettaShared),
 }
 
 /// 输出设备与配置句柄。`Send`，可放进 `InnerPlayer` 而不需 `unsafe impl Send`。
@@ -53,8 +46,8 @@ impl AudioOutput {
     /// 解析输出设备与配置
     ///
     /// # Arguments
-    /// * `device_id` - 输出设备 ID，`None` 走系统默认设备；
-    ///   `diretta:` / `diretta@` 前缀路由到 Diretta 网络音频后端
+    /// * `device_id` - 输出设备 ID，`None` 走系统默认设备；Diretta selector 会明确拒绝，
+    ///   因为 Diretta 只能由 Source Direct runtime 打开
     /// * `requested_sample_rate` - 期望输出采样率；设备支持时按此速率打开（音源精确采样率），
     ///   否则回退到设备默认配置。`None` 表示直接用设备默认配置
     /// * `generation` - 输出流单调代次，见 [`AudioOutput`] 字段说明
@@ -63,7 +56,7 @@ impl AudioOutput {
     /// # Errors
     /// - 找不到指定设备
     /// - 无可用音频设备
-    /// - Diretta Target 连接失败
+    /// - 错误地把 Diretta selector 送入普通 f32 输出路径
     pub fn new(
         device_id: Option<&str>,
         requested_sample_rate: Option<u32>,
@@ -72,20 +65,13 @@ impl AudioOutput {
     ) -> Result<Self> {
         let backend = open_backend(device_id, requested_sample_rate, &on_failure)
             .with_audio_kind(AudioErrorKind::Device)?;
-        match &backend {
-            OutputBackend::Cpal { device, config } => info!(
-                id = device_id_string(device).as_deref().unwrap_or("-"),
-                name = %device,
-                sample_rate = config.sample_rate(),
-                "打开音频输出配置"
-            ),
-            OutputBackend::Diretta(shared) => info!(
-                generation,
-                sample_rate = shared.sample_rate(),
-                channels = shared.channels(),
-                "Diretta 输出后端就绪"
-            ),
-        }
+        let OutputBackend::Cpal { device, config } = &backend;
+        info!(
+            id = device_id_string(device).as_deref().unwrap_or("-"),
+            name = %device,
+            sample_rate = config.sample_rate(),
+            "打开音频输出配置"
+        );
         Ok(Self {
             backend,
             generation,
@@ -95,52 +81,32 @@ impl AudioOutput {
 
     /// 实际输出流采样率（播放重采样目标）
     pub fn sample_rate(&self) -> u32 {
-        match &self.backend {
-            OutputBackend::Cpal { config, .. } => config.sample_rate(),
-            OutputBackend::Diretta(shared) => shared.sample_rate(),
-        }
+        let OutputBackend::Cpal { config, .. } = &self.backend;
+        config.sample_rate()
     }
 
     /// 实际输出流声道数
     pub fn channels(&self) -> u16 {
-        match &self.backend {
-            OutputBackend::Cpal { config, .. } => config.channels(),
-            OutputBackend::Diretta(shared) => shared.channels(),
-        }
+        let OutputBackend::Cpal { config, .. } = &self.backend;
+        config.channels()
     }
 
-    /// 按本配置创建一次播放的输出流，实时回调从 `source` 拉取样本。
-    /// 调用方持有返回的 `Stream`，直到本次播放结束。
-    ///
-    /// Diretta 分支不新建流：把播放资源交给常驻推流线程（连接保持不断开），
-    /// `paused` 初始状态也随资源下发，恢复播放由共享原子标志控制。
+    /// 按本配置创建一次普通播放输出流，实时回调从 `source` 拉取样本。
     pub(crate) fn build_stream(
         &self,
         source: DecoderSource,
         volume: Arc<AtomicU32>,
         stopped: Arc<AtomicBool>,
-        paused: Arc<AtomicBool>,
     ) -> Result<PlaybackStream> {
-        match &self.backend {
-            OutputBackend::Cpal { device, config } => {
-                let device = device.clone();
-                let config = config.clone();
-                let on_failure = Arc::clone(&self.on_failure);
-                run_in_mta(move || {
-                    build_typed_stream_for_format(
-                        &device, &config, source, volume, stopped, on_failure,
-                    )
-                })
-                .with_audio_kind(AudioErrorKind::Device)
-                .map(PlaybackStream::Cpal)
-            }
-            OutputBackend::Diretta(shared) => {
-                shared
-                    .attach_source(source, volume, stopped, paused, Arc::clone(&self.on_failure))
-                    .with_audio_kind(AudioErrorKind::Device)?;
-                Ok(PlaybackStream::Diretta)
-            }
-        }
+        let OutputBackend::Cpal { device, config } = &self.backend;
+        let device = device.clone();
+        let config = config.clone();
+        let on_failure = Arc::clone(&self.on_failure);
+        run_in_mta(move || {
+            build_typed_stream_for_format(&device, &config, source, volume, stopped, on_failure)
+        })
+        .with_audio_kind(AudioErrorKind::Device)
+        .map(PlaybackStream::Cpal)
     }
 }
 
@@ -150,29 +116,14 @@ impl Drop for AudioOutput {
     }
 }
 
-/// 按设备选择器构建输出后端。
-///
-/// `diretta:` / `diretta@` 前缀路由到 [`crate::diretta_output`]（连接按目标缓存复用，
-/// 切歌不断开）；其余选择器走 cpal 设备查找。
+/// 按设备选择器构建普通 cpal 输出后端。Diretta 不允许进入 f32/DSP pipeline。
 fn open_backend(
     device_id: Option<&str>,
     requested_sample_rate: Option<u32>,
-    on_failure: &OutputFailureCallback,
+    _on_failure: &OutputFailureCallback,
 ) -> Result<OutputBackend> {
-    if let Some(selector) = device_id {
-        if let Some(target) = selector
-            .strip_prefix("diretta:")
-            .or_else(|| selector.strip_prefix("diretta@"))
-        {
-            let if_idx = crate::diretta_output::parse_interface_index(target);
-            let shared = acquire_diretta_output(
-                target,
-                if_idx,
-                requested_sample_rate,
-                Arc::clone(on_failure),
-            )?;
-            return Ok(OutputBackend::Diretta(shared));
-        }
+    if device_id.is_some_and(|selector| selector.starts_with("diretta:")) {
+        return Err(anyhow!("[Direct] Diretta selector 必须通过 Source Direct runtime"));
     }
     let (device, config) = open_device(device_id, requested_sample_rate)?;
     Ok(OutputBackend::Cpal { device, config })

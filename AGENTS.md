@@ -112,8 +112,9 @@ Diretta is a strict Source Direct path, not another processed SPlayer output bac
 ## Runtime, build, and validation
 
 - Core supports Node `>=24.18.0 <25`; release/artifact gates use reference Node `24.18.0`.
-- The Linux x86-64 Core `core-audio` flavor builds only the required audio engine and must remain free
-  of Electron, Chromium, GTK, PipeWire/PulseAudio, and Desktop-only native modules at runtime.
+- The Linux x86-64 Core `core-audio` flavor builds only the required native runtime modules: `audio-engine`
+  and the Qobuz/TIDAL `streaming-api`; it must remain free of Electron, Chromium, GTK,
+  PipeWire/PulseAudio, and Desktop-only native modules at runtime.
 - A Diretta-branded Core release must use the Host SDK release declared by `docs/build-flavors.md`
   and the release workflow, together with the required-SDK gate. Missing or mismatched SDK
   provenance must fail before producing a same-named artifact.

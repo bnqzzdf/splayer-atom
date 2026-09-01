@@ -3,10 +3,12 @@ name = "diretta-sys"
 version = "0.1.0"
 edition = "2021"
 authors = ["SPlayer Team"]
-description = "Native C++ FFI bindings to Diretta Host SDK"
+description = "SPlayer Atom strict Source Direct C++ bridge for the Diretta Host SDK"
+links = "atom_diretta"
 
-[dependencies]
-thiserror = "2.0"
+[features]
+default = []
+sdk = []
 
 [build-dependencies]
-cc = { version = "1.0", features = ["parallel"] }
+cc = "1.2.58"

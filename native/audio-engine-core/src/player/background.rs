@@ -94,7 +94,7 @@ impl InnerPlayer {
         let stop_flag = Arc::new(AtomicBool::new(false));
         self.position_timer_stop = Some(Arc::clone(&stop_flag));
 
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if let Some((monitor, seek_base, initial_transition_count)) = self.direct_monitor() {
             let cb = match &self.event_callback {
                 Some(cb) => Arc::clone(cb),

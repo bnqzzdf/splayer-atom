@@ -153,3 +153,23 @@ impl QobuzClient {
         Ok(body)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::QobuzClient;
+
+    #[test]
+    fn signature_matches_verified_track_get_file_url_vector() {
+        let params = HashMap::from([
+            ("track_id".to_string(), "123".to_string()),
+            ("intent".to_string(), "stream".to_string()),
+            ("format_id".to_string(), "6".to_string()),
+        ]);
+        assert_eq!(
+            QobuzClient::build_signature("track", "getFileUrl", &params, 1_700_000_000, "secret"),
+            "fac4640d8f3bec5a1ba2a90c8aa4f6fb"
+        );
+    }
+}

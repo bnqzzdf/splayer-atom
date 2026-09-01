@@ -8,7 +8,7 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use tracing::{info, warn};
 
-#[cfg(atom_diretta)]
+#[cfg(feature = "diretta")]
 use crate::direct_runtime::{DirectFormat, DirectPlayback};
 use crate::player::{self, InnerPlayer, PlayerEvent, PlayerState, SeekTake};
 use crate::{audio_output, decoder, device_watcher, diretta};
@@ -512,7 +512,7 @@ impl AudioPlayer {
                 .map(String::from);
             if direct_selector.is_some() {
                 player.validate_direct_entry().into_napi()?;
-                #[cfg(not(atom_diretta))]
+                #[cfg(not(feature = "diretta"))]
                 return Err(Error::from_reason(
                     "[Direct] 当前 audio-engine 未编译 Diretta Host SDK 支持".to_string(),
                 ));
@@ -535,10 +535,10 @@ impl AudioPlayer {
             )
         };
 
-        #[cfg(not(atom_diretta))]
+        #[cfg(not(feature = "diretta"))]
         let _ = &direct_selector;
 
-        #[cfg(atom_diretta)]
+        #[cfg(feature = "diretta")]
         if let Some(selector) = direct_selector {
             let source_for_direct = source.clone();
             let load_token_for_direct = Arc::clone(&load_token);
@@ -769,7 +769,7 @@ impl AudioPlayer {
     pub async fn seek(&self, position: f64) -> Result<()> {
         use crate::shared::Shared;
 
-        #[cfg(atom_diretta)]
+        #[cfg(feature = "diretta")]
         {
             let direct_take = {
                 let mut player = self.inner.lock();
@@ -925,7 +925,7 @@ impl AudioPlayer {
         duration_secs: f64,
         generation: u32,
     ) -> Result<bool> {
-        #[cfg(atom_diretta)]
+        #[cfg(feature = "diretta")]
         {
             let Some(handle) = self.inner.lock().direct_stage_handle() else {
                 return Ok(false);
@@ -940,7 +940,7 @@ impl AudioPlayer {
                 .into_napi()?;
             Ok(true)
         }
-        #[cfg(not(atom_diretta))]
+        #[cfg(not(feature = "diretta"))]
         {
             let _ = (source, duration_secs, generation);
             Ok(false)
@@ -950,7 +950,7 @@ impl AudioPlayer {
     /// 作废尚未进入音频 ring 的 Direct staged 下一音源。
     #[napi]
     pub fn cancel_direct_next(&self) {
-        #[cfg(atom_diretta)]
+        #[cfg(feature = "diretta")]
         if let Some(handle) = self.inner.lock().direct_stage_handle() {
             handle.cancel();
         }
@@ -959,14 +959,14 @@ impl AudioPlayer {
     /// renderer 在 directTrackBoundary 后确认其 queue/media 已推进到实际正在播放的下一首。
     #[napi]
     pub fn commit_direct_gapless_boundary(&self, source: String, duration_secs: f64) -> Result<()> {
-        #[cfg(atom_diretta)]
+        #[cfg(feature = "diretta")]
         {
             self.inner
                 .lock()
                 .commit_direct_gapless_boundary(&source, duration_secs)
                 .into_napi()
         }
-        #[cfg(not(atom_diretta))]
+        #[cfg(not(feature = "diretta"))]
         {
             let _ = (source, duration_secs);
             Err(Error::from_reason(
@@ -1162,7 +1162,7 @@ impl AudioPlayer {
             .as_deref()
             .and_then(diretta::selector_target)
             .is_some();
-        #[cfg(not(atom_diretta))]
+        #[cfg(not(feature = "diretta"))]
         if new_is_direct {
             return Err(Error::from_reason(
                 "[Direct] 当前 audio-engine 未编译 Diretta Host SDK 支持".to_string(),

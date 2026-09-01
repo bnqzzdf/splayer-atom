@@ -10,10 +10,12 @@ crate-type = ["cdylib"]
 napi = { workspace = true, features = ["napi9", "serde-json"] }
 napi-derive = { workspace = true }
 anyhow = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 windows-core = { workspace = true }
 
-[dependencies.windows]
+[target.'cfg(windows)'.dependencies.windows]
 workspace = true
 features = [
   "Win32_Foundation",

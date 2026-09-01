@@ -11,6 +11,9 @@ const modules: NativeModule[] = [
     name: "audio-engine",
   },
   {
+    name: "streaming-api",
+  },
+  {
     name: "audio-capture",
     enabled: process.platform === "win32" || process.platform === "linux",
   },
@@ -98,9 +101,13 @@ for (const mod of modules) {
   const cwd = `native/${mod.name}`;
 
   const buildType = options.isDev ? "debug" : "release";
+  const moduleArgs = [...napiArgs];
+  if (mod.name === "audio-engine" && process.env.DIRETTA_SDK_ROOT?.trim()) {
+    moduleArgs.push("--features", "diretta");
+  }
   console.log(`[BuildNative] 构建 ${mod.name} (${buildType})`);
 
-  const result = spawnSync("napi", ["build", ...napiArgs], {
+  const result = spawnSync("napi", ["build", ...moduleArgs], {
     stdio: "inherit",
     shell: process.platform === "win32",
     cwd,

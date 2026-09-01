@@ -1,79 +1,83 @@
-import { clearQobuzAuth, getQobuzAuthStatus, setQobuzAuth } from "./auth";
-import { qobuzRequest } from "./request";
+import {
+  clearQobuzAuth,
+  getQobuzAuth,
+  getQobuzAuthStatus,
+  setQobuzAuth,
+} from "./auth";
+import { callStreamingNative } from "@main/apis/streamingNative";
 
 export type QobuzParams = Record<string, unknown>;
 
-interface QobuzUserResponse {
-  id?: string | number;
-  login?: string;
-  email?: string;
-  display_name?: string;
-  user?: {
-    id?: string | number;
-    login?: string;
-    email?: string;
-    display_name?: string;
+const nativeAuth = (): Record<string, unknown> => {
+  const auth = getQobuzAuth();
+  if (!auth) return {};
+  return {
+    user_id: auth.userId,
+    user_auth_token: auth.token,
   };
-}
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+
+const stringValue = (value: unknown): string | undefined => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
+};
 
 const authLogin = async (params: QobuzParams): Promise<unknown> => {
-  const token = String(params.user_auth_token ?? "").trim();
-  if (!token) throw new Error("缺少 Qobuz user_auth_token");
+  const response = asRecord(await callStreamingNative("qobuz", "auth_login", nativeAuth(), params));
+  const token =
+    stringValue(response.user_auth_token) ??
+    stringValue(params.user_auth_token) ??
+    stringValue(params.userAuthToken);
+  if (!token) throw new Error("Qobuz 登录响应缺少 user_auth_token");
 
-  const response = await qobuzRequest<QobuzUserResponse>("user/get", {}, {
-    authRequired: false,
-    authToken: token,
-  });
-  const user = response.user ?? response;
-  const userId = user.id === undefined ? undefined : String(user.id);
-  const username = user.login || user.display_name || user.email || userId;
-  setQobuzAuth({ userId, username, token });
-  return { loggedIn: true, userId, username };
+  const user = asRecord(response.user);
+  const userId =
+    stringValue(response.user_id) ??
+    stringValue(user.id) ??
+    stringValue(params.user_id) ??
+    stringValue(params.userId);
+  const username =
+    stringValue(response.display_name) ??
+    stringValue(user.login) ??
+    stringValue(user.display_name) ??
+    userId;
+
+  setQobuzAuth({ token, userId, username });
+  return response;
 };
 
-const catalogSearch = (params: QobuzParams): Promise<unknown> => {
-  const query = String(params.query ?? "").trim();
-  if (!query) throw new Error("缺少 Qobuz 搜索关键词");
-  const type = String(params.type ?? "tracks").trim();
-  const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 50);
-  const offset = Math.max(Number(params.offset) || 0, 0);
-  return qobuzRequest(
-    "catalog/search",
-    { query, type, limit, offset },
-    { signed: true },
-  );
+const authStatus = async (): Promise<unknown> => {
+  if (!getQobuzAuth()) return getQobuzAuthStatus();
+  return callStreamingNative("qobuz", "auth_status", nativeAuth(), {});
 };
 
-const trackGetFileUrl = (params: QobuzParams): Promise<unknown> => {
-  const trackId = String(params.track_id ?? "").trim();
-  const formatId = String(params.format_id ?? "6").trim();
-  if (!trackId) throw new Error("缺少 Qobuz track_id");
-  return qobuzRequest(
-    "track/getFileUrl",
-    { track_id: trackId, format_id: formatId, intent: "stream" },
-    { signed: true },
-  );
-};
-
-const handlers: Record<string, (params: QobuzParams) => Promise<unknown> | unknown> = {
-  auth_login: authLogin,
-  auth_status: () => getQobuzAuthStatus(),
-  auth_logout: () => {
+const authLogout = async (): Promise<unknown> => {
+  try {
+    return await callStreamingNative("qobuz", "auth_logout", nativeAuth(), {});
+  } finally {
     clearQobuzAuth();
-    return { loggedIn: false };
-  },
-  catalog_search: catalogSearch,
-  track_getFileUrl: trackGetFileUrl,
+  }
 };
 
 /**
- * 调用 Qobuz API 的最小统一入口。
- * @param name - Qobuz 动作名
- * @param params - 动作参数
- * @returns 动作结果
+ * Qobuz Core 入口：session 由 Node Core 持有，平台协议全部委托给 Rust streaming-api。
  */
 export const callQobuz = async (name: string, params: QobuzParams = {}): Promise<unknown> => {
-  const handler = Object.hasOwn(handlers, name) ? handlers[name] : undefined;
-  if (!handler) throw new Error(`unknown qobuz api: ${name}`);
-  return handler(params);
+  if (name === "auth_login" || name === "login") return authLogin(params);
+  if (name === "auth_status" || name === "status" || name === "user_detail") {
+    return authStatus();
+  }
+  if (name === "auth_logout" || name === "logout") return authLogout();
+
+  const response = await callStreamingNative("qobuz", name, nativeAuth(), params);
+  if (name === "track_getFileUrl" || name === "song_url") {
+    const record = asRecord(response);
+    const data = asRecord(record.data);
+    return { ...data, raw: record.raw };
+  }
+  return response;
 };

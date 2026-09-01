@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 
 use crate::audio_output::AudioOutput;
 use crate::decoder;
-#[cfg(any(atom_diretta, test))]
+#[cfg(any(feature = "diretta", test))]
 use crate::direct_runtime::DirectPlayback;
 use crate::equalizer::Equalizer;
 use crate::metadata::AudioMetadata;
@@ -26,7 +26,7 @@ pub struct OldThreads {
     #[cfg(feature = "fft")]
     pub fft_timer: Option<JoinHandle<()>>,
     pub fade_handle: Option<JoinHandle<()>>,
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     pub direct_playback: Option<DirectPlayback>,
 }
 
@@ -34,7 +34,7 @@ impl OldThreads {
     /// 在工作线程上 join 所有旧 timer/fade，返回旧解码线程 handle 供调用方继续使用
     /// 忽略 join 错误：辅助线程 panic 不阻止新加载，主播放路径不依赖它们
     pub fn join_aux(self) -> Option<JoinHandle<decoder::DecoderData>> {
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         drop(self.direct_playback);
         #[cfg(feature = "fft")]
         let aux = [self.position_timer, self.fft_timer, self.fade_handle];
@@ -48,7 +48,7 @@ impl OldThreads {
 }
 
 /// async seek 阶段 1 的输出：带到工作线程做 join + ffmpeg seek + 重启解码
-#[cfg(any(atom_diretta, test))]
+#[cfg(any(feature = "diretta", test))]
 pub struct DirectSeekTake {
     pub playback: DirectPlayback,
     pub token: u64,
@@ -131,7 +131,7 @@ impl InnerPlayer {
             #[cfg(feature = "fft")]
             fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
-            #[cfg(any(atom_diretta, test))]
+            #[cfg(any(feature = "diretta", test))]
             direct_playback: self.direct_playback.take(),
         };
         (old_threads, token)
@@ -164,7 +164,7 @@ impl InnerPlayer {
         }
     }
 
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     pub fn take_for_async_direct_seek(&mut self) -> Result<Option<DirectSeekTake>> {
         if self.direct_playback.is_none() {
             return Ok(None);
@@ -220,7 +220,7 @@ impl InnerPlayer {
             #[cfg(feature = "fft")]
             fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
-            #[cfg(any(atom_diretta, test))]
+            #[cfg(any(feature = "diretta", test))]
             direct_playback: None,
         };
 
@@ -378,7 +378,7 @@ impl InnerPlayer {
         Ok(Some(metadata))
     }
 
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     pub fn commit_direct_seeked(
         &mut self,
         token: u64,
@@ -404,7 +404,7 @@ impl InnerPlayer {
         Ok(true)
     }
 
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     pub fn commit_direct_loaded(
         &mut self,
         token: u64,

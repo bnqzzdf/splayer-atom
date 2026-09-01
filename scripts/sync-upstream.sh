@@ -112,8 +112,8 @@ info "运行 pnpm typecheck ..."
 pnpm typecheck
 
 if command -v cargo >/dev/null 2>&1; then
-  info "运行 cargo check（headless-server + audio-engine-core）..."
-  cargo check -p headless-server -p audio-engine-core --quiet
+  info "运行 cargo check（audio-engine-core + streaming-api）..."
+  cargo check -p audio-engine-core -p streaming-api --quiet
 fi
 
 info "上游同步完成，全部检查通过。"

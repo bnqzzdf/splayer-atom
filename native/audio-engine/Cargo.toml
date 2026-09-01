@@ -13,7 +13,8 @@ desktop-audio = [
   "audio-engine-core/midi",
   "audio-engine-core/desktop-audio",
 ]
-core-audio = ["audio-engine-core/fft", "audio-engine-core/midi", "audio-engine-core/headless"]
+core-audio = ["audio-engine-core/fft", "audio-engine-core/midi"]
+diretta = ["audio-engine-core/diretta"]
 
 [dependencies]
 audio-engine-core = { path = "../audio-engine-core", default-features = false, features = ["napi"] }
@@ -30,7 +31,6 @@ tokio = { version = "1", features = ["rt"] }
 
 [build-dependencies]
 napi-build = "2.4.1"
-cc = "1.2.58"
 
 [dev-dependencies]
 base64 = "0.22.1"

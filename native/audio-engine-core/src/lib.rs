@@ -1,8 +1,7 @@
 //! FFmpeg 音频解码 + CPAL 播放。
 //!
-//! 在 Headless 环境下直接使用，或通过 NAPI 包装供 Node.js 绑定。
-//! FFT 频谱分析（fft feature）和 MIDI 合成器（midi feature）为可选，
-//! headless-server 不开启这两个 feature 以减小二进制体积。
+//! 作为 Atom 唯一音频实现，由薄 NAPI wrapper 暴露给 Node Core / Desktop。
+//! FFT 频谱分析（fft feature）和 MIDI 合成器（midi feature）为可选。
 
 #![allow(dead_code)]
 
@@ -10,8 +9,10 @@ pub mod audio_output;
 pub mod cue;
 pub mod decoder;
 pub mod device_watcher;
+pub mod direct_dsd;
+pub mod direct_pcm;
+pub mod direct_runtime;
 pub mod diretta;
-pub mod diretta_output;
 pub mod dsd;
 pub mod dts;
 pub mod equalizer;

@@ -1,166 +1,134 @@
-import { clearTidalAuth, getTidalAuthStatus, setTidalAuth } from "./auth";
-import { TIDAL_API_BASE, TIDAL_DEFAULT_COUNTRY, TIDAL_USER_AGENT } from "./config";
-import { materializeTidalDash } from "./dashMaterializer";
-import { parseTidalPlaybackManifest, type TidalPlaybackInfo } from "./manifest";
-import { tidalRequest } from "./request";
+import {
+  clearTidalAuth,
+  getTidalAuth,
+  getTidalAuthStatus,
+  setTidalAuth,
+  type TidalAuthState,
+} from "./auth";
+import { callStreamingNative } from "@main/apis/streamingNative";
+import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
 export type TidalParams = Record<string, unknown>;
 
-interface TidalSessionResponse {
-  userId?: string | number;
-  countryCode?: string;
-}
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 
-interface TidalSearchResponse {
-  tracks?: {
-    items?: unknown[];
-    totalNumberOfItems?: number;
-    limit?: number;
-    offset?: number;
-  };
-  items?: unknown[];
-  totalNumberOfItems?: number;
-}
-
-const validateAccessToken = async (accessToken: string): Promise<TidalSessionResponse> => {
-  const response = await fetch(`${TIDAL_API_BASE}/sessions`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": TIDAL_USER_AGENT,
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!response.ok) throw new Error(`TIDAL token 验证失败: HTTP ${response.status}`);
-  return (await response.json()) as TidalSessionResponse;
+const stringValue = (value: unknown): string | undefined => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
 };
 
-const authImport = async (params: TidalParams): Promise<unknown> => {
-  const accessToken = String(params.access_token ?? "").trim();
-  if (!accessToken) throw new Error("缺少 TIDAL access_token");
-  const session = await validateAccessToken(accessToken);
-  const expiresAtParam = Number(params.expires_at);
-  const expiresInParam = Number(params.expires_in);
-  const expiresAt = Number.isFinite(expiresAtParam)
-    ? expiresAtParam
-    : Number.isFinite(expiresInParam)
-      ? Date.now() + Math.max(expiresInParam, 60) * 1000
-      : undefined;
-  const userId = session.userId === undefined ? undefined : String(session.userId);
-  const countryCode = session.countryCode || String(params.country_code ?? "").trim() || TIDAL_DEFAULT_COUNTRY;
-  setTidalAuth({
-    accessToken,
-    refreshToken: String(params.refresh_token ?? "").trim() || undefined,
-    expiresAt,
-    userId,
-    username: String(params.username ?? "").trim() || undefined,
-    countryCode,
-    clientId: String(params.client_id ?? process.env.TIDAL_CLIENT_ID ?? "").trim() || undefined,
-  });
-  return { loggedIn: true, userId, countryCode, refreshable: Boolean(params.refresh_token) };
+const numberValue = (value: unknown): number | undefined => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : undefined;
 };
 
-const search = (params: TidalParams): Promise<TidalSearchResponse> => {
-  const query = String(params.query ?? "").trim();
-  if (!query) throw new Error("缺少 TIDAL 搜索关键词");
-  const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 50);
-  const offset = Math.max(Number(params.offset) || 0, 0);
-  return tidalRequest<TidalSearchResponse>("/search", {
-    query,
-    type: String(params.type ?? "TRACKS").trim().toUpperCase(),
-    limit,
-    offset,
-  });
-};
-
-const QUALITY_LADDERS: Record<string, readonly string[]> = {
-  LOW: ["LOW", "HIGH"],
-  HIGH: ["HIGH", "LOW"],
-  LOSSLESS: ["LOSSLESS", "HIGH"],
-  HI_RES: ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH"],
-  HI_RES_LOSSLESS: ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH"],
-};
-
-const trackGetStreamUrl = async (params: TidalParams): Promise<unknown> => {
-  const trackId = String(params.track_id ?? "").trim();
-  if (!trackId) throw new Error("缺少 TIDAL track_id");
-  const requestedQuality = String(params.quality ?? "LOSSLESS").trim().toUpperCase();
-  const ladder = QUALITY_LADDERS[requestedQuality] ?? QUALITY_LADDERS.LOSSLESS;
-  const tried: string[] = [];
-  let lastPlaybackError = "";
-
-  for (const quality of ladder) {
-    if (tried.includes(quality)) continue;
-    tried.push(quality);
-    let info: TidalPlaybackInfo;
-    try {
-      info = await tidalRequest<TidalPlaybackInfo>(`/tracks/${trackId}/playbackinfopostpaywall`, {
-        audioquality: quality,
-        playbackmode: "STREAM",
-        assetpresentation: "FULL",
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      lastPlaybackError = message;
-      if (/\((401|403|404)\)|HTTP\s+(401|403|404)/.test(message)) continue;
-      throw err;
-    }
-    const parsed = parseTidalPlaybackManifest(info);
-    if (!parsed) continue;
-    if (parsed.kind === "url") {
-      return {
-        streamUrl: parsed.url,
-        codec: parsed.codec,
-        audioQuality: info.audioQuality || quality,
-        bitDepth: info.bitDepth,
-        sampleRate: info.sampleRate,
-        requestedQuality,
-        usedQuality: quality,
-        triedQualities: tried,
-      };
-    }
-    try {
-      const materialized = await materializeTidalDash(parsed.xml, `${trackId}:${quality}`);
-      return {
-        localPath: materialized.path,
-        codec: materialized.descriptor.codec || parsed.codec,
-        audioQuality: info.audioQuality || quality,
-        bitDepth: info.bitDepth,
-        sampleRate: info.sampleRate || materialized.descriptor.sampleRate,
-        requestedQuality,
-        usedQuality: quality,
-        triedQualities: tried,
-        materialized: "dash-fmp4",
-      };
-    } catch (err) {
-      lastPlaybackError = err instanceof Error ? err.message : String(err);
-    }
+const expiresAtMs = (value: unknown, expiresIn: unknown): number | undefined => {
+  const explicit = numberValue(value);
+  if (explicit !== undefined && explicit > 0) {
+    return explicit < 10_000_000_000 ? explicit * 1000 : explicit;
   }
-
-  const suffix = lastPlaybackError ? `; last=${lastPlaybackError}` : "";
-  throw new Error(
-    `无法获取 TIDAL 可播放音源: track=${trackId}, qualities=${tried.join(",")}${suffix}`,
-  );
+  const seconds = numberValue(expiresIn);
+  return seconds !== undefined && seconds > 0 ? Date.now() + seconds * 1000 : undefined;
 };
 
-const handlers: Record<string, (params: TidalParams) => Promise<unknown> | unknown> = {
-  auth_import: authImport,
-  auth_status: () => getTidalAuthStatus(),
-  auth_logout: () => {
+const nativeAuth = (): Record<string, unknown> => {
+  const auth = getTidalAuth();
+  if (!auth) return {};
+  return {
+    access_token: auth.accessToken,
+    refresh_token: auth.refreshToken,
+    user_id: auth.userId,
+    country_code: auth.countryCode,
+    client_id: auth.clientId,
+    client_secret: auth.clientSecret,
+  };
+};
+
+const persistAuthResponse = (
+  responseValue: unknown,
+  params: TidalParams,
+): Record<string, unknown> => {
+  const response = asRecord(responseValue);
+  const current = getTidalAuth();
+  const accessToken = stringValue(response.accessToken) ?? current?.accessToken;
+  if (!accessToken) return response;
+
+  const next: TidalAuthState = {
+    accessToken,
+    refreshToken: stringValue(response.refreshToken) ?? current?.refreshToken,
+    expiresAt: expiresAtMs(response.expiresAt, response.expiresIn) ?? current?.expiresAt,
+    userId: stringValue(response.userId) ?? current?.userId,
+    username: stringValue(response.username) ?? current?.username,
+    countryCode: stringValue(response.countryCode) ?? current?.countryCode,
+    clientId:
+      stringValue(response.clientId) ??
+      stringValue(params.clientId) ??
+      stringValue(params.client_id) ??
+      current?.clientId,
+    clientSecret:
+      stringValue(params.clientSecret) ??
+      stringValue(params.client_secret) ??
+      current?.clientSecret,
+  };
+  setTidalAuth(next);
+  return response;
+};
+
+const authStatus = async (): Promise<unknown> => {
+  const projection = getTidalAuthStatus();
+  if (!getTidalAuth()) return projection;
+  const remote = asRecord(await callStreamingNative("tidal", "auth_status", nativeAuth(), {}));
+  return { ...projection, ...remote };
+};
+
+const authLogout = async (): Promise<unknown> => {
+  try {
+    return await callStreamingNative("tidal", "auth_logout", nativeAuth(), {});
+  } finally {
     clearTidalAuth();
-    return { loggedIn: false };
-  },
-  search,
-  track_getStreamUrl: trackGetStreamUrl,
+  }
 };
 
 /**
- * 调用 TIDAL API 的最小统一入口。
- * @param name - TIDAL 动作名
- * @param params - 动作参数
- * @returns 动作结果
+ * TIDAL Core 入口：Node Core 只持有 session，平台协议全部委托给 Rust streaming-api。
  */
 export const callTidal = async (name: string, params: TidalParams = {}): Promise<unknown> => {
-  const handler = Object.hasOwn(handlers, name) ? handlers[name] : undefined;
-  if (!handler) throw new Error(`unknown tidal api: ${name}`);
-  return handler(params);
+  if (name === "auth_status" || name === "status" || name === "user_detail") {
+    return authStatus();
+  }
+  if (name === "auth_logout" || name === "logout") return authLogout();
+
+  const nativeParams =
+    name === "track_getStreamUrl" || name === "song_url"
+      ? { ...params, _materialize_dir: runtimeEnvironment.tempDir }
+      : params;
+  const response = await callStreamingNative("tidal", name, nativeAuth(), nativeParams);
+  if (
+    name === "auth_exchange" ||
+    name === "exchange" ||
+    name === "auth_token_poll" ||
+    name === "token_poll" ||
+    name === "auth_token_refresh" ||
+    name === "refresh_token"
+  ) {
+    return persistAuthResponse(response, params);
+  }
+
+  if (name === "track_getStreamUrl" || name === "song_url") {
+    const record = asRecord(response);
+    const data = asRecord(record.data);
+    return {
+      streamUrl: stringValue(data.url),
+      localPath: stringValue(data.localPath),
+      codec: stringValue(data.codec),
+      audioQuality: stringValue(data.audioQuality),
+      bitDepth: numberValue(data.bitDepth),
+      sampleRate: numberValue(data.sampleRate),
+      raw: record.raw,
+    };
+  }
+
+  return response;
 };

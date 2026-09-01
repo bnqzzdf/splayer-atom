@@ -1,13 +1,11 @@
-[workspace]
-# 独立 crate（自带空 workspace 表，脱离仓库根工作区）：
-# 根 Cargo.toml 的 members 列表零改动，上游 merge 零冲突。
-# 构建/测试：cargo test --manifest-path native/streaming-api/Cargo.toml
-
 [package]
 name = "streaming-api"
 version = "0.1.0"
 edition = "2021"
-description = "Qobuz / TIDAL Hi-Res online API client for SPlayer-Next headless server (pure Rust, zero Node runtime)"
+description = "Atom native Qobuz/TIDAL provider protocol engine shared by Node Core and Rust tests."
+
+[lib]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -16,9 +14,17 @@ md5 = "0.7"
 thiserror = "2"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2"
-tokio = { version = "1", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync", "fs", "io-util"] }
 base64 = "0.22"
 regex = "1"
+napi = { workspace = true, features = ["napi9", "serde-json", "tokio_rt"] }
+napi-derive = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

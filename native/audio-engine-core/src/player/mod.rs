@@ -9,9 +9,9 @@ use tracing::{debug, info};
 
 use crate::audio_output::{AudioOutput, OutputFailureCallback};
 use crate::decoder;
-#[cfg(any(atom_diretta, test))]
+#[cfg(any(feature = "diretta", test))]
 use crate::direct_runtime::{DirectMonitor, DirectPlayback};
-#[cfg(atom_diretta)]
+#[cfg(feature = "diretta")]
 use crate::direct_runtime::DirectStageHandle;
 use crate::equalizer::{Equalizer, EQ_BAND_COUNT};
 #[cfg(feature = "fft")]
@@ -39,7 +39,7 @@ pub struct InnerPlayer {
     /// 解码线程句柄，join 后可回收 DecoderData 复用于 seek
     decoder_thread: Option<JoinHandle<decoder::DecoderData>>,
     /// Diretta Source Direct 运行时与 normal playback 互斥；仅在 HiFi Direct 分支存在。
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     direct_playback: Option<DirectPlayback>,
     #[cfg(feature = "fft")]
     fft: Arc<FftAnalyzer>,
@@ -165,7 +165,7 @@ impl InnerPlayer {
             playback: None,
             shared: None,
             decoder_thread: None,
-            #[cfg(any(atom_diretta, test))]
+            #[cfg(any(feature = "diretta", test))]
             direct_playback: None,
             #[cfg(feature = "fft")]
             fft: Arc::new(FftAnalyzer::new()),
@@ -257,17 +257,17 @@ impl InnerPlayer {
     }
 
     pub fn direct_active(&self) -> bool {
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         {
             self.direct_playback.is_some()
         }
-        #[cfg(not(any(atom_diretta, test)))]
+        #[cfg(not(any(feature = "diretta", test)))]
         {
             false
         }
     }
 
-    #[cfg(any(atom_diretta, test))]
+    #[cfg(any(feature = "diretta", test))]
     pub fn direct_monitor(&self) -> Option<(DirectMonitor, f64, u64)> {
         self.direct_playback.as_ref().map(|playback| {
             (
@@ -278,12 +278,12 @@ impl InnerPlayer {
         })
     }
 
-    #[cfg(atom_diretta)]
+    #[cfg(feature = "diretta")]
     pub fn direct_stage_handle(&self) -> Option<DirectStageHandle> {
         self.direct_playback.as_ref().map(DirectPlayback::stage_handle)
     }
 
-    #[cfg(atom_diretta)]
+    #[cfg(feature = "diretta")]
     pub fn commit_direct_gapless_boundary(&mut self, source: &str, duration: f64) -> Result<()> {
         let playback = self
             .direct_playback
@@ -335,7 +335,7 @@ impl InnerPlayer {
     /// 恢复播放。Paused 时渐入恢复；Stopped/Idle/已播完时返回 Some(source)，
     /// 由 NAPI 绑定层走 async load 复活——网络源的打开可达数秒，不能在锁内同步执行
     pub fn play(&mut self) -> Result<Option<String>> {
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if self.state == PlayerState::Playing && self.is_finished() {
                 self.stop_internal();
@@ -408,7 +408,7 @@ impl InnerPlayer {
             return Ok(());
         }
 
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if let Some(playback) = self.direct_playback.as_mut() {
                 playback.pause()?;
@@ -452,7 +452,7 @@ impl InnerPlayer {
         if self.state != PlayerState::Playing {
             return Ok(());
         }
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if let Some(playback) = self.direct_playback.as_mut() {
                 playback.pause()?;
@@ -513,7 +513,7 @@ impl InnerPlayer {
         // 2. 停止定时器并等待线程退出（释放 Arc<Shared> 和 Arc<EventEmitter>）
         self.stop_position_timer();
         self.stop_fft_timer();
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.take().is_some() {
             self.output = None;
         }
@@ -571,7 +571,7 @@ impl InnerPlayer {
 
     /// 获取当前播放位置（秒），基于实际消费的采样数
     pub fn position(&self) -> f64 {
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if let Some(playback) = &self.direct_playback {
             return playback.position();
         }
@@ -604,7 +604,7 @@ impl InnerPlayer {
 
     /// 检查播放是否已结束
     pub fn is_finished(&self) -> bool {
-        #[cfg(any(atom_diretta, test))]
+        #[cfg(any(feature = "diretta", test))]
         if let Some(playback) = &self.direct_playback {
             return playback.finished();
         }
@@ -755,7 +755,7 @@ mod tests {
         ));
     }
 
-    #[cfg(not(atom_diretta))]
+    #[cfg(not(feature = "diretta"))]
     #[test]
     fn direct_commit_is_mutually_exclusive_with_normal_audio_runtime() {
         let mut player = InnerPlayer::new().unwrap();
@@ -783,7 +783,7 @@ mod tests {
         assert_eq!(player.state(), PlayerState::Paused);
     }
 
-    #[cfg(not(atom_diretta))]
+    #[cfg(not(feature = "diretta"))]
     #[test]
     fn direct_play_pause_and_position_use_only_direct_runtime() {
         let mut player = InnerPlayer::new().unwrap();
@@ -820,7 +820,7 @@ mod tests {
         assert!(player.is_finished());
     }
 
-    #[cfg(not(atom_diretta))]
+    #[cfg(not(feature = "diretta"))]
     #[test]
     fn direct_rejects_all_sample_altering_controls_and_keeps_runtime_active() {
         let mut player = InnerPlayer::new().unwrap();
@@ -866,7 +866,7 @@ mod tests {
         assert!(player.direct_active());
     }
 
-    #[cfg(not(atom_diretta))]
+    #[cfg(not(feature = "diretta"))]
     #[test]
     fn direct_seek_keeps_mode_exclusive_while_runtime_is_in_flight() {
         let mut player = InnerPlayer::new().unwrap();
@@ -912,7 +912,7 @@ mod tests {
 
     #[test]
     fn napi_event_callback_does_not_hold_the_node_event_loop_open() {
-        let bindings = include_str!("../bindings/player.rs");
+        let bindings = include_str!("../../../audio-engine/src/bindings/player.rs");
         let on_event = bindings
             .split("pub fn on_event")
             .nth(1)
@@ -926,9 +926,9 @@ mod tests {
 
     #[test]
     fn direct_napi_load_and_seek_never_invoke_the_normal_audio_pipeline() {
-        let bindings = include_str!("../bindings/player.rs");
+        let bindings = include_str!("../../../audio-engine/src/bindings/player.rs");
         let direct_load = bindings
-            .split("#[cfg(atom_diretta)]\n        if let Some(selector) = direct_selector {")
+            .split("#[cfg(feature = \"diretta\")]\n        if let Some(selector) = direct_selector {")
             .nth(1)
             .and_then(|tail| tail.split("        let source_for_decoder = source.clone();").next())
             .expect("Direct load branch should exist");
@@ -946,7 +946,7 @@ mod tests {
         }
 
         let direct_seek = bindings
-            .split("#[cfg(atom_diretta)]\n        {\n            let direct_take = {")
+            .split("#[cfg(feature = \"diretta\")]\n        {\n            let direct_take = {")
             .nth(1)
             .and_then(|tail| tail.split("        let take = {").next())
             .expect("Direct seek branch should exist");

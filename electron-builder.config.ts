@@ -70,6 +70,11 @@ const config: Configuration = {
       filter: ["*.node"],
     },
     {
+      from: "native/streaming-api",
+      to: "native",
+      filter: ["*.node"],
+    },
+    {
       from: "native/audio-capture",
       to: "native",
       filter: ["*.node"],

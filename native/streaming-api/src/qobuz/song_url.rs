@@ -35,12 +35,21 @@ impl QobuzClient {
             return Err(StreamingError::InvalidParam("Missing track_id".into()));
         }
 
+        let explicit_format = params
+            .get("format_id")
+            .and_then(|value| value.as_u64().or_else(|| value.as_str()?.parse().ok()))
+            .and_then(|value| u32::try_from(value).ok());
         let level_str = params
             .get("level")
             .and_then(Value::as_str)
             .unwrap_or("hi-res");
-
-        let candidate_formats = format_id_for_level(level_str);
+        let explicit_formats;
+        let candidate_formats = if let Some(format_id) = explicit_format {
+            explicit_formats = [format_id];
+            explicit_formats.as_slice()
+        } else {
+            format_id_for_level(level_str)
+        };
         let creds = get_credentials(&self.http, false).await?;
 
         // 收集所有候选 secrets

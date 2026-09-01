@@ -100,7 +100,7 @@ struct DirettaConnection {
       }
       sync->close();
     } catch (...) {
-      // SDK 清理失败不能穿过 C ABI 或析构边界。
+      // SDK cleanup must never cross the C ABI/destructor boundary.
     }
   }
 };
@@ -170,10 +170,7 @@ void* open_direct_with_format(
       mtu = 1500;
     }
 
-    connection->sync = std::make_unique<DirectSync>(
-      source_context,
-      next_block,
-      release_block);
+    connection->sync = std::make_unique<DirectSync>(source_context, next_block, release_block);
     const auto thread_mode = static_cast<DIRETTA::Sync::THRED_MODE>(5);
     const auto ifno = static_cast<std::uint16_t>(target.get_ifno());
     if (!connection->sync->open(

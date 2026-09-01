@@ -6,15 +6,11 @@ members = [
   "./native/media-ctrl",
   "./native/taskbar-lyric",
   "./native/taskbar-thumbnail",
-  "./native/headless-server",
+  "./native/streaming-api",
   "./native/diretta-sys",
   "./native/opencc",
 ]
 resolver = "3"
-# qqkg-api 自带空 [workspace] 表的独立 crate（上游 members 列表零改动），
-# headless-server 以路径依赖引用它，必须 exclude 防止 multi-root 冲突。
-exclude = ["native/qqkg-api", "native/streaming-api"]
-
 [workspace.dependencies]
 napi = { version = "3.12.1" }
 napi-derive = "3.6.3"

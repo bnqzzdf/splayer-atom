@@ -2,7 +2,7 @@
 name = "audio-engine-core"
 version = "0.1.0"
 edition = "2021"
-description = "Platform-independent audio engine core shared by native bindings and the Linux headless server."
+description = "Platform-independent SPlayer Atom audio engine core shared by native bindings."
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -15,7 +15,7 @@ ffmpeg_audio = { version = "0.3.1", default-features = false, features = [
 ] }
 libc = "0.2"
 parking_lot = "0.12"
-diretta-sys = { path = "../diretta-sys" }
+diretta-sys = { path = "../diretta-sys", optional = true, features = ["sdk"] }
 
 # 错误处理
 anyhow = { workspace = true }
@@ -77,10 +77,11 @@ fft = ["dep:rustfft"]
 midi = ["dep:rustysynth"]
 desktop-audio = ["cpal/pipewire", "cpal/pulseaudio", "dep:pipewire"]
 napi = []
-headless = []
+diretta = ["dep:diretta-sys"]
 windows_device = []
 
 [dev-dependencies]
+base64 = "0.22.1"
 httpmock = "0.8.3"
 tempfile = "3"
 

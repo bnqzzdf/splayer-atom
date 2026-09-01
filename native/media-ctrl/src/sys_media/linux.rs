@@ -16,10 +16,7 @@ use mpris_server::{
 };
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use tempfile::NamedTempFile;
-use tokio::{
-    runtime::Runtime,
-    sync::mpsc::{Receiver, Sender, channel},
-};
+use tokio::sync::mpsc::{Receiver, Sender, channel};
 
 use super::{MediaThreadsafeFunction, SystemMediaControls};
 use crate::model::{

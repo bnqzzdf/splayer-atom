@@ -65,7 +65,7 @@ Core runtime compatibility is `>=24.18.0 <25`; only the release/reference build 
 
 ### Core native flavor
 
-`scripts/atom/build-core-native.ts` builds only `audio-engine.node` with the `core-audio` Cargo feature. On Linux this keeps ALSA and excludes the Desktop PipeWire/PulseAudio feature set and unrelated Desktop native addons.
+`scripts/atom/build-core-native.ts` builds only the native modules required by Core: `audio-engine.node` and `streaming-api.node`. `audio-engine.node` uses the `core-audio` Cargo feature (plus `diretta` only when `DIRETTA_SDK_ROOT` is present); on Linux this keeps ALSA and excludes the Desktop PipeWire/PulseAudio feature set and unrelated Desktop native addons. `streaming-api.node` is the single Qobuz/TIDAL protocol engine used by Node Core.
 
 A normal technical Core build may omit Diretta and records `diretta: false` in native/runtime capability metadata. A build that is explicitly intended to contain Diretta must request it:
 

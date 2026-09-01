@@ -6,7 +6,8 @@ import { spawnSync } from "node:child_process";
 import { DIRETTA_SDK_RELEASE, readDirettaSdkRelease } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const crateDir = path.join(root, "native", "audio-engine");
+const audioCrateDir = path.join(root, "native", "audio-engine");
+const streamingCrateDir = path.join(root, "native", "streaming-api");
 const outputDir = path.join(root, "out", "native");
 const targetDir = path.join(root, "target", "core-audio");
 const napiBin = path.join(root, "node_modules", ".bin", "napi");
@@ -43,40 +44,53 @@ if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
 rmSync(outputDir, { recursive: true, force: true });
 mkdirSync(outputDir, { recursive: true });
 
-const napiArgs = [
+const runNapiBuild = (label: string, cwd: string, buildArgs: string[]): void => {
+  console.log(`[CoreNative] 构建 ${label} (${isDev ? "debug" : "release"})`);
+  const result = spawnSync(napiBin, buildArgs, {
+    cwd,
+    env: childEnv,
+    stdio: "inherit",
+    shell: false,
+  });
+  if (result.error) throw result.error;
+  if (result.signal) throw new Error(`${label} 构建被信号终止: ${result.signal}`);
+  if (result.status !== 0) throw new Error(`${label} 构建失败: ${result.status ?? "unknown"}`);
+};
+
+const commonArgs = [
   "build",
   "--no-const-enum",
-  "--no-default-features",
-  "--features",
-  "core-audio",
   "--target-dir",
   targetDir,
   "--output-dir",
   outputDir,
 ];
-if (!isDev) napiArgs.push("--release");
+if (!isDev) commonArgs.push("--release");
 
-console.log(`[CoreNative] 构建 audio-engine (${isDev ? "debug" : "release"}, ALSA-only)`);
-const build = spawnSync(napiBin, napiArgs, {
-  cwd: crateDir,
-  env: childEnv,
-  stdio: "inherit",
-  shell: false,
-});
-if (build.error) throw build.error;
-if (build.signal) throw new Error(`Core native 构建被信号终止: ${build.signal}`);
-if (build.status !== 0) throw new Error(`Core native 构建失败: ${build.status ?? "unknown"}`);
+const audioFeatures = direttaSdkRoot ? "core-audio,diretta" : "core-audio";
+runNapiBuild(`audio-engine (ALSA-only${direttaSdkRoot ? ", Diretta" : ""})`, audioCrateDir, [
+  ...commonArgs,
+  "--no-default-features",
+  "--features",
+  audioFeatures,
+]);
+runNapiBuild("streaming-api (Qobuz/TIDAL)", streamingCrateDir, commonArgs);
 
-const addonPath = path.join(outputDir, "audio-engine.node");
-if (!existsSync(addonPath)) {
-  throw new Error(`Core native addon 未生成: ${addonPath}`);
+const audioAddonPath = path.join(outputDir, "audio-engine.node");
+const streamingAddonPath = path.join(outputDir, "streaming-api.node");
+for (const addonPath of [audioAddonPath, streamingAddonPath]) {
+  if (!existsSync(addonPath)) {
+    throw new Error(`Core native addon 未生成: ${addonPath}`);
+  }
 }
+
 writeFileSync(
   path.join(outputDir, "build.json"),
   `${JSON.stringify(
     {
       profile: isDev ? "debug" : "release",
       flavor: "core-audio",
+      modules: ["audio-engine", "streaming-api"],
       platform: process.platform,
       arch: process.arch,
       diretta: direttaSdkRoot !== null,
@@ -87,7 +101,7 @@ writeFileSync(
   )}\n`,
 );
 
-const ldd = spawnSync("ldd", [addonPath], { encoding: "utf8" });
+const ldd = spawnSync("ldd", [audioAddonPath], { encoding: "utf8" });
 if (ldd.error) throw ldd.error;
 if (ldd.status !== 0) throw new Error(`ldd 检查失败: ${ldd.stderr || ldd.stdout}`);
 const dynamicDeps = `${ldd.stdout}\n${ldd.stderr}`;
@@ -95,4 +109,5 @@ if (/lib(?:pipewire|pulse)/i.test(dynamicDeps)) {
   throw new Error("Core audio-engine 仍携带 PipeWire/PulseAudio 动态依赖");
 }
 
-console.log(`[CoreNative] PASS ${addonPath}`);
+console.log(`[CoreNative] PASS ${audioAddonPath}`);
+console.log(`[CoreNative] PASS ${streamingAddonPath}`);
