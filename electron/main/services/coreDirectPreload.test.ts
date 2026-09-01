@@ -27,8 +27,12 @@ test("Diretta staging remains active when generic next-track preload is disabled
   assert.equal(preloader.match(/if \(!shouldPrepareNextInput\(\)\)/g)?.length, 2);
 });
 
-test("manual preload consumption cancels staging without deleting the source that normal load will use", () => {
-  assert.match(preloader, /queueDirectCleanup\(prepared\.directSource, false\)/);
+test("manual preload consumption cancels only installed Direct staging without deleting its source", () => {
+  assert.match(preloader, /const hasStagedDirectNext = prepared\.directGeneration !== null/);
+  assert.match(
+    preloader,
+    /queueDirectCleanup\(prepared\.directSource, false, hasStagedDirectNext\)/,
+  );
 });
 
 test("Node Core consumes Direct boundary into the authoritative session", () => {

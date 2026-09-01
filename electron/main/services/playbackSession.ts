@@ -28,6 +28,7 @@ import {
   consumePlaybackPreload,
   invalidatePlaybackPreload,
   schedulePlaybackPreload,
+  waitForPlaybackPreloadIdle,
 } from "@main/services/playbackPreloader";
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
@@ -213,6 +214,8 @@ const loadIndex = async (
   resolvedOverride?: ResolvedPlaybackSource,
 ): Promise<void> => {
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
+  // Direct staging/cancel 与 full load 共享同一个 native runtime；先收敛旧控制命令，避免跨格式重连竞态。
+  await waitForPlaybackPreloadIdle();
   if (isHeadlessMode() && !getPlayer().getSelectedDeviceName()) {
     throw new CorePlaybackLoadError(
       ErrorCode.OUTPUT_DEVICE_REQUIRED,

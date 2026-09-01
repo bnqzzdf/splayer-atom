@@ -83,6 +83,26 @@ test("Direct staging respects Core playback semantics before handing audio to na
   assert.match(sessionSource, /nextPlaybackPreloadIndex/);
 });
 
+test("Full Direct loads wait for preload cleanup and only cancel an installed staged source", () => {
+  assert.match(
+    corePreloaderSource,
+    /export const waitForPlaybackPreloadIdle = \(\): Promise<void> => directStageChain/,
+  );
+  assert.match(
+    corePreloaderSource,
+    /const hasStagedDirectNext = prepared\?\.directGeneration != null/,
+  );
+  assert.match(
+    corePreloaderSource,
+    /queueDirectCleanup\(directSource, true, hasStagedDirectNext\)/,
+  );
+  const coreLoad = between(sessionSource, "const loadIndex = async (", "const loadIndexWithPolicy");
+  const idleIndex = coreLoad.indexOf("await waitForPlaybackPreloadIdle()");
+  const nativeLoadIndex = coreLoad.indexOf("await loadPlayerSource(");
+  assert.ok(idleIndex >= 0);
+  assert.ok(nativeLoadIndex > idleIndex);
+});
+
 test("Core Direct boundary prunes superseded temporary online inputs", () => {
   assert.match(sessionSource, /commitDirectPlaybackBoundary\(prepared\.directSource/);
   assert.match(directGaplessServiceSource, /commitDirectGaplessBoundary/);

@@ -8,6 +8,10 @@ const toolbarSource = readFileSync(
   new URL("../../components/player/Toolbar.vue", import.meta.url),
   "utf8",
 );
+const playerDataSource = readFileSync(
+  new URL("../../components/player/FullPlayer/PlayerData.vue", import.meta.url),
+  "utf8",
+);
 const webOutputSelectorSource = readFileSync(
   new URL("../../web/OutputDeviceSelector.vue", import.meta.url),
   "utf8",
@@ -113,6 +117,10 @@ test("Direct device selection refuses incompatible state before sending the Core
   assert.ok(commandIndex > preflightIndex);
   assert.doesNotMatch(switchFlow, /prepareDirectTrackSource|materializeDirectInput|player\.stop/);
   assert.match(switchFlow, /directMode\.entryBlocked/);
+});
+
+test("Full player does not duplicate Diretta output state as a decorative badge", () => {
+  assert.doesNotMatch(playerDataSource, /Diretta Target|发烧级纯净网络传输|emerald-400/);
 });
 
 test("Existing sample-altering UI is visibly locked while Diretta is selected", () => {

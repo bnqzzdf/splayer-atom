@@ -53,13 +53,19 @@ const buildPreloadKey = (queueIndex: number, item: PlaybackQueueItem): string =>
     store.get("player.outputDevice") ?? "",
   ].join("::");
 
-const queueDirectCleanup = (source: string | null, discardSource = true): void => {
+const queueDirectCleanup = (
+  source: string | null,
+  discardSource = true,
+  cancelStaged = true,
+): void => {
   directStageChain = directStageChain
     .then(async () => {
-      try {
-        cancelDirectPlaybackNext();
-      } catch (error) {
-        playerLog.debug(`[session] Direct preload cancel skipped: ${String(error)}`);
+      if (cancelStaged) {
+        try {
+          cancelDirectPlaybackNext();
+        } catch (error) {
+          playerLog.debug(`[session] Direct preload cancel skipped: ${String(error)}`);
+        }
       }
       if (discardSource && source) await discardDirectInput(source);
     })
@@ -70,15 +76,19 @@ const queueDirectCleanup = (source: string | null, discardSource = true): void =
 
 const clearPrepared = (cleanupDirect: boolean): void => {
   const directSource = prepared?.directSource ?? null;
+  const hasStagedDirectNext = prepared?.directGeneration != null;
   pendingKey = null;
   prepared = null;
-  if (cleanupDirect) queueDirectCleanup(directSource);
+  if (cleanupDirect) queueDirectCleanup(directSource, true, hasStagedDirectNext);
 };
 
 export const invalidatePlaybackPreload = (): void => {
   preloadToken++;
   clearPrepared(true);
 };
+
+/** normal/full load 开始前必须等待旧 Direct staging/control 命令完全静止。 */
+export const waitForPlaybackPreloadIdle = (): Promise<void> => directStageChain;
 
 const prepareDirectSource = async (
   token: number,
@@ -221,8 +231,9 @@ export const consumePlaybackPreload = (
     return null;
   }
   const source = prepared.source;
+  const hasStagedDirectNext = prepared.directGeneration !== null;
   preloadToken++;
-  queueDirectCleanup(prepared.directSource, false);
+  queueDirectCleanup(prepared.directSource, false, hasStagedDirectNext);
   clearPrepared(false);
   return source;
 };

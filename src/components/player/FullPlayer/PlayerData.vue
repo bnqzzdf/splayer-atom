@@ -165,14 +165,6 @@ const alignItems = computed(() => {
       >
         {{ sourceLabel }}
       </span>
-      <span
-        v-if="settings.player.outputDevice?.startsWith('diretta:') || settings.player.outputDevice?.startsWith('diretta@')"
-        class="inline-flex items-center gap-1 leading-none px-1.5 py-1.2 rounded-md border border-solid border-emerald-400/40 text-emerald-300 font-medium"
-        title="Diretta 发烧级纯净网络传输 (Bit-Perfect)"
-      >
-        <span class="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
-        Diretta Target
-      </span>
       <SPopover side="top" :side-offset="8" cover trigger="hover">
         <template #trigger>
           <span

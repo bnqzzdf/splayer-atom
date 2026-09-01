@@ -14,7 +14,7 @@ export interface DirectEntryState {
 
 const F32_EPSILON = 1.1920928955078125e-7;
 
-/** Diretta Target 继续占用 SPlayer 现有 output-device ID 空间。 */
+/** Diretta 输出继续占用 SPlayer 现有 output-device ID 空间。 */
 export const isDirettaOutput = (deviceId: string | null | undefined): boolean =>
   deviceId?.startsWith("diretta:") === true;
 
