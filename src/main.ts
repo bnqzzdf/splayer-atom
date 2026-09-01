@@ -1,4 +1,3 @@
-import "@/services/client/webPolyfill";
 import "virtual:uno.css";
 import "@/styles/global.css";
 import "@/web/runtime.css";
@@ -7,7 +6,11 @@ import piniaPersistedstate from "pinia-plugin-persistedstate";
 import { vRipple } from "./directives/ripple";
 
 const hasElectronApi = (): boolean =>
-  typeof window !== "undefined" && "api" in window && typeof window.api === "object";
+  typeof window !== "undefined" &&
+  "electron" in window &&
+  typeof window.electron === "object" &&
+  window.electron !== null &&
+  "ipcRenderer" in window.electron;
 
 /** 挂载保留的 Headless 工程诊断页。 */
 const mountDebugWeb = async (): Promise<void> => {
