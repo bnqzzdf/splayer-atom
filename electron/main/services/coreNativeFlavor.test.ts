@@ -21,6 +21,10 @@ const buildSource = readFileSync(
   new URL("../../../scripts/atom/build-core-native.ts", import.meta.url),
   "utf8",
 );
+const direttaBuildSource = readFileSync(
+  new URL("../../../native/diretta-sys/build.rs", import.meta.url),
+  "utf8",
+);
 const stageSource = readFileSync(
   new URL("../../../scripts/atom/stage-core-system.ts", import.meta.url),
   "utf8",
@@ -91,6 +95,9 @@ test("Core Diretta build pins the verified SDK release from Release.hpp", () => 
   assert.match(buildSource, /requireDiretta && !direttaSdkRoot/);
   assert.match(buildSource, /direttaSdkRelease !== DIRETTA_SDK_RELEASE/);
   assert.match(buildSource, /Core Diretta 构建固定使用 SDK/);
+  assert.match(direttaBuildSource, /-print-file-name=libstdc\+\+\.a/);
+  assert.match(direttaBuildSource, /rustc-link-lib=static=stdc\+\+/);
+  assert.doesNotMatch(direttaBuildSource, /rustc-link-lib=dylib=stdc\+\+/);
 });
 
 test("Core system staging refuses debug or mismatched native addons", () => {
