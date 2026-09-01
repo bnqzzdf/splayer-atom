@@ -164,6 +164,7 @@ export const defaultSystemConfig: SystemConfig = {
     onboardingCompleted: false,
     agreedAgreementVersion: 1,
     neteaseRealIp: false,
+    kugouLoginVersion: "standard",
     networkProxy: {
       protocol: "off",
       host: "127.0.0.1",

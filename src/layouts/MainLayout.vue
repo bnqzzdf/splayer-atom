@@ -4,13 +4,15 @@ import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useOrpheusProtocol } from "@/composables/useOrpheusProtocol";
 import { isWebRemote } from "@/runtime";
+import { useExternalFileHandler } from "@/composables/useExternalFileHandler";
 
 const route = useRoute();
 const status = useStatusStore();
 const settings = useSettingsStore();
 
-// 接入 orpheus 协议唤起
+// 接入 orpheus 协议唤起与外部音频文件播放
 useOrpheusProtocol();
+if (!isWebRemote()) useExternalFileHandler();
 
 /** Headless Web 常驻播放栏以保留首次输出选择入口；Desktop 延续按曲目显示。 */
 const showPlayerBar = computed(() => isWebRemote() || !!useMediaStore().track);
@@ -113,7 +115,7 @@ const playerBarInnerClass = computed(() => {
 <template>
   <!-- 主界面 -->
   <div
-    class="h-screen flex bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
+    class="h-screen flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
     :class="isPlayerExpanded ? 'scale-95 opacity-0 pointer-events-none' : ''"
   >
     <!-- 侧边栏 -->

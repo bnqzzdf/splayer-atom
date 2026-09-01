@@ -19,7 +19,6 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-
 /** 主模式定义 */
 interface ModeItem {
   key: PersonalFmMode;

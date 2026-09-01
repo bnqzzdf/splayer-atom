@@ -7,8 +7,7 @@
 
 import { ipcMain } from "electron";
 import { mergeNeteaseCookies } from "@main/apis/netease";
-import { mergeQQMusicCookies } from "@main/apis/qqmusic";
-import { openNeteaseLoginWindow, openQQMusicLoginWindow } from "@main/window/login";
+import { openNeteaseLoginWindow } from "@main/window/login";
 import { coreLog } from "@main/utils/logger";
 import {
   callProviderApi,
@@ -44,13 +43,6 @@ export const registerApisIpc = (): void => {
         const cookies = await openNeteaseLoginWindow();
         if (!cookies) return { ok: false, error: "canceled" };
         mergeNeteaseCookies(cookies);
-        publishProviderSessionsIfChanged();
-        return { ok: true };
-      }
-      if (platform === "qqmusic") {
-        const cookies = await openQQMusicLoginWindow();
-        if (!cookies) return { ok: false, error: "canceled" };
-        mergeQQMusicCookies(cookies);
         publishProviderSessionsIfChanged();
         return { ok: true };
       }

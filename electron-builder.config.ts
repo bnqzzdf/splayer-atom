@@ -1,6 +1,17 @@
 import type { Configuration } from "electron-builder";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { SUPPORTED_AUDIO_EXTENSIONS } from "./shared/utils/audioFile";
+
+/** 音频后缀注册为文件关联 */
+const fileAssociations = [...SUPPORTED_AUDIO_EXTENSIONS].map((extension) => {
+  const ext = extension.slice(1);
+  return {
+    ext,
+    description: `${ext.toUpperCase()} Audio File`,
+    role: "Viewer" as const,
+  };
+});
 
 const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version as string;
 const atomCommit =
@@ -37,6 +48,7 @@ const config: Configuration = {
   copyright: "Copyright © SPlayer contributors and SPlayer Atom contributors",
   directories: { buildResources: "public" },
   extraMetadata: { atomCommit, atomSourceDirty, splayerBaseline },
+  fileAssociations,
   afterPack: "./scripts/after-pack.ts",
   compression: "maximum",
   generateUpdatesFilesForAllChannels: true,

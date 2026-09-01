@@ -47,6 +47,7 @@ import {
   extractOrpheusUrl,
   captureOrpheusUrl,
 } from "@main/services/orpheus";
+import { extractAudioFiles, captureAudioFiles } from "@main/services/externalFile";
 
 /**
  * 配置 Chromium 启动参数以优化内存占用
@@ -104,16 +105,24 @@ export const initApp = (): void => {
     return;
   }
   app.on("second-instance", (_event, commandLine) => {
-    if (!isHeadless()) focusMainWindow();
+    if (isHeadless()) return;
+    focusMainWindow();
     const url = extractOrpheusUrl(commandLine);
     if (url) captureOrpheusUrl(url);
+    const files = extractAudioFiles(commandLine);
+    if (files.length > 0) captureAudioFiles(files);
   });
   // macOS 通过 open-url 接收协议唤起
   app.on("open-url", (event, url) => {
     event.preventDefault();
-    captureOrpheusUrl(url);
+    if (!isHeadless()) captureOrpheusUrl(url);
   });
   // 注册缓存与 Desktop 内部 Core Control 协议方案
+  // macOS 通过 open-file 接收外部文件打开
+  app.on("open-file", (event, path) => {
+    event.preventDefault();
+    if (!isHeadless()) captureAudioFiles([path]);
+  });
   registerCacheScheme();
   registerCoreControlScheme();
   // 其他初始化
@@ -149,6 +158,8 @@ export const initApp = (): void => {
       initOrpheusRegistration();
       const coldOrpheusUrl = extractOrpheusUrl(process.argv);
       if (coldOrpheusUrl) captureOrpheusUrl(coldOrpheusUrl);
+      const coldAudioFiles = extractAudioFiles(process.argv);
+      if (coldAudioFiles.length > 0) captureAudioFiles(coldAudioFiles);
       createMainWindow();
       restoreLyricWindows();
       initGlobalHotkey();

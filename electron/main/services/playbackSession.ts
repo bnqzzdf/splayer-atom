@@ -257,6 +257,22 @@ const loadIndex = async (
       .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
   }
 
+  if (track.source === "local") {
+    const mediaInfo = result.data.mediaInfo;
+    const fileName = track.path?.split(/[/\\]/).pop() ?? "";
+    const derivedTitle = fileName.replace(/\.[^.]+$/, "");
+    item.track = {
+      ...track,
+      title:
+        !track.title || track.title === derivedTitle ? mediaInfo.title || track.title : track.title,
+      artists: track.artists.length > 0 ? track.artists : (mediaInfo.artists ?? []),
+      album: track.album ?? mediaInfo.album,
+      duration: track.duration || mediaInfo.duration,
+      cover: track.cover ?? mediaInfo.cover,
+      quality: track.quality ?? mediaInfo.quality,
+    };
+  }
+
   if (mode === "personalFm") {
     queue = alignPersonalFmPool(targetIndex).map((fmTrack) => ({ track: fmTrack }));
     originalQueue = null;
@@ -266,8 +282,9 @@ const loadIndex = async (
   }
   active = index >= 0;
   publish();
-  const duration = Math.max(track.duration || 0, result.data.mediaInfo.duration);
-  nowPlaying.update({ ...track, duration }, [], null);
+  const loadedTrack = item.track;
+  const duration = Math.max(loadedTrack.duration || 0, result.data.mediaInfo.duration);
+  nowPlaying.update({ ...loadedTrack, duration }, [], null);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
   publishTrackLoaded(item, resolved.source, autoPlay, result.data.detail, result.data.mediaInfo);

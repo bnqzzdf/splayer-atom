@@ -680,6 +680,29 @@ export const playNow = async (item: Track, context?: PlaybackContext): Promise<v
   applySessionResult(await sessionClient.selectSessionIndex(insertedIndex, true, true));
 };
 
+/** 将本地音频路径转换为可交给 Core 的轻量 Track。 */
+export const createLocalTrack = (filePath: string): Track => {
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+  return {
+    id: `local:${filePath}`,
+    title: fileName.replace(/\.[^/.]+$/, ""),
+    artists: [],
+    source: "local",
+    path: filePath,
+    duration: 0,
+  };
+};
+
+/** 将一组外部本地文件交给 Core 替换队列并从首项开始播放。 */
+export const playFiles = async (filePaths: string[]): Promise<void> => {
+  if (filePaths.length === 0) return;
+  await playFrom(filePaths.map(createLocalTrack), 0, {
+    originId: "local-files",
+    originType: "track",
+    originName: "本地文件",
+  });
+};
+
 /**
  * 移动队列中的歌曲位置，自动调整 playIndex
  * @param fromIndex - 原位置

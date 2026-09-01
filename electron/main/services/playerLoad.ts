@@ -203,6 +203,9 @@ export const loadPlayerSource = async (
         })),
       },
       mediaInfo: {
+        title: isRemote ? displayTitle : meta.title || displayTitle,
+        artists: isRemote ? authoritative?.artists : parseArtists(meta.artist ?? ""),
+        album: isRemote ? authoritative?.album : parseAlbum(meta.album ?? ""),
         duration: durationMs,
         cover: isRemote ? undefined : toCacheUrl(meta.cover),
         quality,
