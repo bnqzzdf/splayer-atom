@@ -2,6 +2,21 @@
 
 本文只记录真实音频主机的手工验收步骤。源码构建、fixture、fake ALSA/Diretta 与 final-artifact smoke 不能替代真实 DAC、Diretta Target 或 bitstream 证据。
 
+## 当前已取得的开发期实机证据
+
+以下能力已经在真实 Diretta Host / Target / DAC 链路完成，不再作为“未知能力”保留：
+
+- exact PCM Source Direct 已完成 bit-perfect 实机验证，并覆盖到 PCM 768 kHz；其下实际支持的
+  PCM sample-rate 档位均已完成播放验证。
+- Native DSD Source Direct 已完成 logical one-bit sequence 的 bit-perfect 实机验证，并覆盖到
+  DSD512；其下实际支持的 Native DSD rate 档位均已完成播放验证。
+- PCM 与 Native DSD 混合格式队列已完成过夜循环长时间播放，连续 format transition 未观察到
+  播放中断或格式切换异常。
+
+这些结果属于当前开发期硬件基线。正式发布时无需重新证明实现原理，但仍必须使用准备发布的
+**最终 clean artifact** 做一次 release-candidate hardware smoke，以证明发布包、native feature、
+Diretta SDK 与已验证源码路径一致。
+
 ## 1. 前置条件
 
 - 使用从干净 checkout 生成并已通过 final-artifact smoke 的 Linux x86-64 Core `tar.gz`。
@@ -13,8 +28,10 @@
 
 建议队列至少包含：
 
-- 两种以上源采样率的 lossless PCM，包含实际发行要承诺的最高 rate / bit depth / channel count。
-- Native DSD，至少覆盖实际发行要承诺的 DSD rate 与 channel count。
+- 两种以上源采样率的 lossless PCM；当前 Diretta 开发期实机覆盖上限为 768 kHz，release smoke
+  至少复验一个常用 rate 与最高承诺 rate。
+- Native DSD；当前 Diretta 开发期实机覆盖上限为 DSD512，release smoke 至少复验一个常用
+  DSD rate 与最高承诺 rate。
 - 三首连续曲目，用于 Core-owned auto-next 与 long-play。
 - 一个在线 HTTP lossless Track，用于 Diretta exact-byte materialization。
 
@@ -90,11 +107,14 @@ pnpm check:hardware-release -- \
 
 - ALSA: PCM rates / bit depths / channels。
 - ALSA: Native DSD（仅当产品路径明确支持该设备组合）。
-- Diretta: PCM rates / bit depths / channels。
-- Diretta: Native DSD rates / channels / equivalent bit order。
+- Diretta: PCM 已验证到 768 kHz 及其下支持 rate；release candidate 复验代表性 rate / bit depth /
+  channels 与最高承诺 rate。
+- Diretta: Native DSD 已验证到 DSD512 及其下支持 rate；release candidate 复验代表性 DSD rate /
+  channels / equivalent bit order 与最高承诺 rate。
 - 本地文件与在线 HTTP lossless materialization。
 - 单曲开始/停止、三首 auto-next、ALSA ↔ Diretta output switch。
-- 连续播放时长、Track 数、错误/恢复次数、内存趋势。
+- 混合 PCM/DSD 过夜循环已完成；release candidate 记录最终 artifact 的短时连续播放、Track 数、
+  错误/恢复次数和内存趋势即可，除非本次 release 修改了 playback/output lifecycle。
 - systemd start/stop/restart、SIGTERM、升级与回滚。
 
 ## 5. 验收记录模板

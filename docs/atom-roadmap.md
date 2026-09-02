@@ -131,17 +131,29 @@ bridge 必须拒绝，而不是先合入再清理。
 
 ## 5. 真实音频主机验收
 
-以下均为正式发布硬件 gate，当前仍未完成：
+以下为正式发布硬件 gate 的当前状态：
 
 - [ ] 真实 ALSA `hw:*` PCM 播放，覆盖常用 sample rate/channel/bit depth。
-- [ ] Native DSD 播放及 DSF/DFF logical one-bit sequence 验证。
-- [ ] 以 root Host 连接真实 Diretta Target，验证 exact PCM 与 Native DSD Source Direct。
+- [x] Native DSD 播放及 DSF/DFF logical one-bit sequence 已完成实机 bit-perfect 验证。
+- [x] 以 root Host 连接真实 Diretta Target 的 exact PCM Source Direct 已完成实机验证；当前已验证
+      播放素材的源 PCM 数据/格式与 `/proc/asound/card0/stream0` 暴露的实际 USB Audio stream
+      状态及 DAC 显示一致，未观察到 sample rate、channel 或 PCM bit-depth/transport format 偏离。
+- [x] 真实 Diretta Target 上的 Native DSD Source Direct 已完成实机 bit-perfect 验证，确认
+      strict Direct 的 DSF/DFF logical one-bit sequence 在实际播放链路中保持不变。
+- [x] Diretta Source Direct 实机格式覆盖已验证到 PCM 768 kHz 与 Native DSD512；其下实际支持的
+      PCM sample-rate 档位与 Native DSD rate 档位均已完成播放验证。
+- [x] Diretta 混合格式队列已完成过夜循环长时间播放，覆盖不同 PCM rate 与 Native DSD 的连续
+      format transition，未观察到播放中断或格式切换异常。
 - [ ] 在线队列连续自然播放至少三首；关闭全部 Web/Desktop Control 后仍继续推进。
 - [ ] ALSA ↔ Diretta output switch、source recovery、preload/gapless boundary 和连续播放回归。
-- [ ] 长时间播放、停止、重连和进程退出，确认没有连接竞态、资源泄漏或错误重试。
+- [ ] 停止/重连、Core/systemd restart、SIGTERM 与进程退出，确认没有连接竞态、资源泄漏或错误重试。
 
 Diretta 验收必须证明 sample rate、channel count、有效 PCM sample value/bit depth，以及 Native
-DSD logical sequence/rate/channel count 均未改变。编译、fixture 和无 Target smoke 不能替代该证据。
+DSD logical sequence/rate/channel count 均未改变。当前 exact PCM 与 Native DSD Source Direct
+real-target gate 均已有实机 bit-perfect 证据；格式覆盖已实测到 PCM 768 kHz 与 Native DSD512，
+混合格式过夜循环长播也已完成。正式 release candidate 仍必须使用最终 clean artifact 重新执行
+对应硬件 smoke，以及尚未完成的 restart/exit/output-switch 等独立 lifecycle gate。编译、fixture
+和无 Target smoke 不能替代这些发布证据。
 
 # P2 — 在线平台与真实账号验收
 
@@ -270,7 +282,9 @@ Core 不暴露 Direct materialize/stage/commit 低层 API，Control 只发送 ou
    acceptance；软件实现、disabled 零进程和 enabled child-process I/O 隔离已完成。
 2. 当前 `dev` 完成下一轮官方 SPlayer integration，并记录新的 accepted baseline。
 3. 建立受控 Diretta release runner，完成远端 SDK-enabled artifact gate。
-4. 在真实音频主机完成 ALSA、PCM、Native DSD、Diretta、output switch 和长时间连续播放验收。
+4. 在真实音频主机完成剩余 ALSA、output switch、restart/exit lifecycle 验收；Diretta exact PCM
+   与 Native DSD Source Direct 已完成 real-target bit-perfect、PCM 768 kHz / DSD512 覆盖及混合
+   格式过夜循环实机验证。
 5. 依次完成 Netease、Qobuz、TIDAL 真实账号与普通/Diretta 播放验收。
 6. 在同一 release candidate 上完成 clean hosted artifact、部署/升级/回滚和多 Control 验收。
 7. 发布首个正式 Core release。
@@ -284,6 +298,9 @@ Core 不暴露 Direct materialize/stage/commit 低层 API，Control 只发送 ou
 - 本地 library/scanner、authoritative queue、playback policy、cache/preload/recovery；
 - Web/Desktop 统一 Control 与 capability-driven UI；
 - ALSA/Diretta 软件输出链、strict PCM/DSD Direct 测试；
+- Diretta exact PCM 与 Native DSD Source Direct real-target bit-perfect 实机验证；
+- Diretta PCM 最高 768 kHz、Native DSD 最高 DSD512 及其下支持 rate 的实机格式覆盖；
+- Diretta PCM/Native DSD 混合格式过夜循环长时间播放；
 - Netease、Qobuz、TIDAL Core provider 软件链；
 - ListenBrainz Core Scrobble/Now Playing、child-owned durable outbox 与 disabled 零 runtime；
 - 独立 Atom identity、Core protocol、portable artifact、systemd、migration/backup/rollback；
