@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const playerSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+const playerEventsSource = readFileSync(new URL("./events.ts", import.meta.url), "utf8");
 const directModeSource = readFileSync(new URL("./directMode.ts", import.meta.url), "utf8");
 const toolbarSource = readFileSync(
   new URL("../../components/player/Toolbar.vue", import.meta.url),
@@ -121,6 +122,20 @@ test("Direct device selection refuses incompatible state before sending the Core
 
 test("Full player does not duplicate Diretta output state as a decorative badge", () => {
   assert.doesNotMatch(playerDataSource, /Diretta Target|发烧级纯净网络传输|emerald-400/);
+});
+
+test("Web status snapshots can settle a seek without high-frequency position events", () => {
+  const statusProjection = between(playerEventsSource, '    case "status":', '    case "seek":');
+  assert.match(statusProjection, /hasReachedSeekTarget\(event\.data\.position\)/);
+
+  const seekFlow = between(
+    playerSource,
+    "export const seek = async (posMs: number): Promise<void> => {",
+    "/**\n * 标记一次非渲染层发起的 seek",
+  );
+  assert.match(seekFlow, /coreCommand\("\/seek", \{ positionMs: posMs \}\)/);
+  assert.match(seekFlow, /seekTarget = null/);
+  assert.match(seekFlow, /playback\.setSeeking\(false\)/);
 });
 
 test("Existing sample-altering UI is visibly locked while Diretta is selected", () => {

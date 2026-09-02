@@ -17,6 +17,10 @@ const watcherSource = readFileSync(
   new URL("../../../native/audio-engine-core/src/device_watcher/mod.rs", import.meta.url),
   "utf8",
 );
+const nativePlayerBindingSource = readFileSync(
+  new URL("../../../native/audio-engine/src/bindings/player.rs", import.meta.url),
+  "utf8",
+);
 const buildSource = readFileSync(
   new URL("../../../scripts/atom/build-core-native.ts", import.meta.url),
   "utf8",
@@ -64,7 +68,10 @@ test("Linux Core disables the PipeWire device watcher", () => {
 
 test("Core native builder emits only the required audio and streaming addons", () => {
   assert.match(buildSource, /"--no-default-features"/);
-  assert.match(buildSource, /const audioFeatures = direttaSdkRoot \? "core-audio,diretta" : "core-audio"/);
+  assert.match(
+    buildSource,
+    /const audioFeatures = direttaSdkRoot \? "core-audio,diretta" : "core-audio"/,
+  );
   assert.match(buildSource, /streaming-api \(Qobuz\/TIDAL\)/);
   assert.match(buildSource, /modules: \["audio-engine", "streaming-api"\]/);
   assert.match(buildSource, /audio-engine\.node/);
@@ -98,6 +105,21 @@ test("Core Diretta build pins the verified SDK release from Release.hpp", () => 
   assert.match(direttaBuildSource, /-print-file-name=libstdc\+\+\.a/);
   assert.match(direttaBuildSource, /rustc-link-lib=static=stdc\+\+/);
   assert.doesNotMatch(direttaBuildSource, /rustc-link-lib=dylib=stdc\+\+/);
+});
+
+test("Diretta full reconnect keeps one bounded Target stabilization window", () => {
+  assert.match(
+    nativePlayerBindingSource,
+    /DIRECT_FULL_RECONNECT_STABILIZATION: Duration = Duration::from_millis\(800\)/,
+  );
+  assert.match(
+    nativePlayerBindingSource,
+    /let replacing_direct_playback = old_threads\.direct_playback\.is_some\(\)/,
+  );
+  assert.match(
+    nativePlayerBindingSource,
+    /if replacing_direct_playback \{\s*std::thread::sleep\(DIRECT_FULL_RECONNECT_STABILIZATION\)/,
+  );
 });
 
 test("Core system staging refuses debug or mismatched native addons", () => {

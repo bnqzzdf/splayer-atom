@@ -51,6 +51,11 @@ const LOAD_SUPERSEDED_REASON: &str = "[Cancelled] load 已被更新的 load 取�
 #[cfg(feature = "diretta")]
 const DIRECT_START_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Diretta full reconnect 的 Target/DAC 格式稳定窗口。
+/// 仅替换现存 DirectPlayback 时使用；同格式 staged/gapless 不经过此路径。
+#[cfg(feature = "diretta")]
+const DIRECT_FULL_RECONNECT_STABILIZATION: Duration = Duration::from_millis(800);
+
 #[cfg(feature = "diretta")]
 fn wait_for_direct_start(
     playback: &DirectPlayback,
@@ -605,8 +610,12 @@ impl AudioPlayer {
             let source_for_direct = source.clone();
             let load_token_for_direct = Arc::clone(&load_token);
             let result = tokio::task::spawn_blocking(move || {
+                let replacing_direct_playback = old_threads.direct_playback.is_some();
                 if let Some(h) = old_threads.join_aux() {
                     let _ = h.join();
+                }
+                if replacing_direct_playback {
+                    std::thread::sleep(DIRECT_FULL_RECONNECT_STABILIZATION);
                 }
                 if source_for_direct.starts_with("http://")
                     || source_for_direct.starts_with("https://")
