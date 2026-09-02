@@ -10,6 +10,7 @@ const session = read("electron/main/services/playbackSession.ts");
 const coreEvents = read("electron/main/services/corePlayerEvents.ts");
 const webEvents = read("src/core/player/events.ts");
 const playerControl = read("src/core/player/index.ts");
+const nativePlayer = read("native/audio-engine-core/src/player/mod.rs");
 
 test("Core preload prepares Diretta input and stages through the shared main service", () => {
   assert.match(preloader, /stageDirectPlaybackNext/);
@@ -40,6 +41,16 @@ test("Node Core consumes Direct boundary into the authoritative session", () => 
   assert.match(session, /consumeDirectPlaybackBoundary\(generation, queue\)/);
   assert.match(session, /commitDirectPlaybackBoundary/);
   assert.match(session, /scheduleNextPlaybackPreload\(\)/);
+});
+
+test("Direct gapless boundary invalidates the previous raw cover", () => {
+  const boundary = nativePlayer
+    .split("pub fn commit_direct_gapless_boundary")[1]
+    ?.split("pub fn validate_direct_entry")[0];
+  assert.ok(boundary, "Direct gapless boundary implementation should exist");
+  assert.match(boundary, /playback\.commit_gapless_boundary\(source, duration\)/);
+  assert.match(boundary, /self\.cover_raw = None/);
+  assert.ok(boundary.indexOf("self.cover_raw = None") < boundary.indexOf("self.current_source"));
 });
 
 test("Direct recovery fallback stays Desktop-only after Web leaves legacy player events", () => {
