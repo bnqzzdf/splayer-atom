@@ -256,7 +256,8 @@ fn probe_fast_with_directory_cover(
     }
 
     let raw_metadata = reader.metadata();
-    let tags = metadata::extract_tags(&raw_metadata);
+    let tags =
+        metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), path);
 
     let cover = cover_cache_dir.and_then(|dir| {
         metadata::extract_cover_thumbnail_with_directory_cover(&reader, path, dir, directory_cover)
