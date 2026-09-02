@@ -195,12 +195,13 @@ We also thank the open-source projects used by SPlayer-Next and Atom, including:
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html).
 
-- **Modification & distribution:** any modification or distribution must also be released under **AGPL-3.0**, with the complete source code provided.
-- **Derivative works:** must adopt **AGPL-3.0** as well, and must retain this project's license and copyright notice in an appropriate place.
-- **Attribution:** the original author and copyright information must be preserved. You may add your own notice for a derivative work, but you must not remove or alter the original.
-- **Commercial use:** if used for sale or any other for-profit purpose, the source code and a link to the original project must be provided. Because this project relies on third-party services, commercial use may carry legal risk.
-- **No warranty:** the software is provided "as is", without warranty of any kind, as described in the AGPL-3.0.
+- **Commercial use:** AGPL-3.0 does not prohibit commercial use. Commercial and non-commercial use, modification, distribution, and network deployment of modified versions must comply with the source-availability, notice, and network-use requirements of AGPL-3.0.
+- **Modifications and derivatives:** modified or derivative versions of this project must continue to comply with AGPL-3.0 and preserve the applicable copyright, license, and attribution notices.
+- **Third-party components:** Diretta, Qobuz, TIDAL, and other third-party services, APIs, SDKs, media, or brands are governed by their own licenses, developer terms, and service agreements. This repository's AGPL-3.0 license does not grant rights to use, redistribute, or commercially license those third-party materials.
+- **Diretta SDK:** the proprietary Diretta SDK is not part of this repository and will not be distributed with the project as a prebuilt artifact. Users who need that integration must obtain the SDK, credentials, and any required permissions directly from the relevant rights holder.
+- **Source distribution:** this project is currently maintained and distributed as source code and does not promise precompiled release artifacts.
+- **No warranty:** the software is provided "as is", without warranty of any kind, as described in AGPL-3.0.
 
 ## Disclaimer
 
-This project is intended for personal learning and research only, and must not be used for commercial or unlawful purposes. Some features rely on third-party APIs; users are solely responsible for ensuring their use complies with the relevant laws, regulations, and service agreements. The authors accept no liability for any direct or indirect consequences arising from the use of this project.
+Users are responsible for ensuring that their use, modification, or distribution of this project complies with applicable law, AGPL-3.0, and the licenses or terms governing any third-party services, APIs, SDKs, content, or devices they choose to use. This project provides no third-party authorization, service-availability guarantee, or compliance assurance. To the extent permitted by law, the authors accept no liability for direct or indirect consequences arising from use of the project or its third-party integrations.
