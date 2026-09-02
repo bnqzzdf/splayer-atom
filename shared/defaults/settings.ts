@@ -133,6 +133,10 @@ export const defaultSystemConfig: SystemConfig = {
   streaming: {
     enabled: true,
   },
+  listenbrainz: {
+    enabled: false,
+    sendNowPlaying: true,
+  },
   lastfm: {
     enabled: false,
     scrobble: true,

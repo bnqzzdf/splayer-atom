@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, net, safeStorage, utilityProcess } from "electron";
 import { configureRuntimeFetch } from "./atom/runtime/fetch";
 import { configureRuntimePluginHost } from "./atom/runtime/pluginHost";
+import { configureListenBrainzProcess } from "./atom/runtime/listenbrainzProcess";
 import { configureRuntimeSecretCodec } from "./atom/runtime/secrets";
 
 const readDesktopReleaseIdentity = (): {
@@ -58,6 +59,23 @@ const configureElectronRuntime = (): void => {
         onMessage: (listener) => child.on("message", listener),
         onExit: (listener) => child.on("exit", listener),
         postMessage: (message) => child.postMessage(message),
+        kill: () => child.kill(),
+      };
+    },
+  });
+  configureListenBrainzProcess({
+    entry: path.join(app.getAppPath(), "out", "main", "listenbrainz-child.js"),
+    spawn: (entry) => {
+      const child = utilityProcess.fork(entry, [], {
+        serviceName: "splayer-listenbrainz",
+        stdio: "pipe",
+      });
+      return {
+        stdout: child.stdout,
+        stderr: child.stderr,
+        onMessage: (listener) => child.on("message", listener),
+        onExit: (listener) => child.on("exit", listener),
+        send: (message) => child.postMessage(message),
         kill: () => child.kill(),
       };
     },

@@ -8,6 +8,7 @@ import {
   setPreampGain,
 } from "@main/services/engine";
 import { refreshPlaybackPreload } from "@main/services/playbackSession";
+import { applyListenBrainzSettingChange } from "@main/services/listenbrainz";
 import { isCoreSettingPath, type CoreSettingsSnapshot } from "@shared/types/settings";
 
 /** 应用 Core-owned setting 的运行时副作用。 */
@@ -34,6 +35,10 @@ const applyCoreSettingChange = (keyPath: string, value: unknown): void => {
     case "player.fadeDuration":
       setFadeDuration(store.get("player.fadeEnabled") ? store.get("player.fadeDuration") : 0);
       break;
+    case "listenbrainz.enabled":
+    case "listenbrainz.sendNowPlaying":
+      applyListenBrainzSettingChange(keyPath);
+      break;
   }
 };
 
@@ -46,6 +51,7 @@ export const getCoreSettingsSnapshot = (): CoreSettingsSnapshot => ({
   cache: store.get("cache"),
   download: store.get("download"),
   streaming: store.get("streaming"),
+  listenbrainz: store.get("listenbrainz"),
   system: {
     neteaseRealIp: store.get("system.neteaseRealIp"),
     networkProxy: store.get("system.networkProxy"),

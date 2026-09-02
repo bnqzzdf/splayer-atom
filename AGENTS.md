@@ -20,7 +20,7 @@ current file layout.
 
 **SPlayer owns the foundation; Atom owns only the proven delta.** Atom is a continuously updated
 downstream of SPlayer-Next. Its confirmed product deltas are Node Core/Headless Web, the unified
-Desktop/Web Control surface, Qobuz, TIDAL, and Diretta Source Direct.
+Desktop/Web Control surface, Qobuz, TIDAL, ListenBrainz Core Scrobble, and Diretta Source Direct.
 
 The long-term model is **Core / Control / Output**:
 
@@ -197,6 +197,11 @@ gate even when the full Cargo workspace passes. Do not format or rewrite unrelat
   let Control resolve final playable URLs, own retry/skip, or manage Direct staging.
 - Core settings and provider credentials remain Core-owned. Desktop `safeStorage` is only for
   Control-local secrets such as a Core connection credential.
+- ListenBrainz is Core-owned but must be runtime-zero when disabled: no child process, outbox DB,
+  HTTP client, retry timer, or high-frequency listener. When enabled, its SQLite/HTTP/retry work
+  runs only in an isolated child process; playback/audio paths must never await it or perform its
+  synchronous I/O, network, locks, or retry work. Do not create a generic scrobble/provider
+  framework until repeated real consumers justify it.
 - Use scoped main-process loggers from `@main/utils/logger`; never import `electron-log` directly.
 - Preload `onEvent` registration must remove old listeners before adding one, and renderer consumers
   must unsubscribe on unmount.

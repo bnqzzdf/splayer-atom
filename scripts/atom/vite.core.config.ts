@@ -41,6 +41,7 @@ export default defineConfig({
       input: {
         index: resolve(root, "electron/main/core-node/index.ts"),
         "plugin-host": resolve(root, "electron/main/atom/pluginHostNode.ts"),
+        "listenbrainz-child": resolve(root, "electron/main/services/listenbrainzChild.ts"),
       },
       output: {
         format: "es",

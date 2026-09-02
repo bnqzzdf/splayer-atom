@@ -26,14 +26,20 @@ test("Core resolves and materializes the current canonical Track before a Dirett
 
 test("Core output switching restores old output and playback when the switch itself fails", () => {
   assert.match(outputSwitch, /player\.setOutputDevice\(previousPreference \?\? undefined\)/);
-  assert.match(outputSwitch, /await loadIndex\(index, false, false, previousResolved\)/);
+  assert.match(
+    outputSwitch,
+    /resolvedOverride: previousResolved,\s*preserveListenBrainzSession: true/,
+  );
   assert.match(outputSwitch, /if \(resumePositionMs > 0\) await seek\(resumePositionMs\)/);
   assert.match(outputSwitch, /if \(state === "playing"\) await play\(\)/);
 });
 
 test("Core applies pause-on-device-switch policy when restoring playback on the new output", () => {
   assert.match(outputSwitch, /store\.get\("player\.pauseOnDeviceSwitch"\) !== true/);
-  assert.match(outputSwitch, /await loadIndex\(index, false, false, targetResolved\)/);
+  assert.match(
+    outputSwitch,
+    /resolvedOverride: targetResolved,\s*preserveListenBrainzSession: true/,
+  );
   assert.match(outputSwitch, /if \(shouldResumePlaying\) await play\(\)/);
 });
 

@@ -772,6 +772,7 @@
       "musicSpectrum": "音乐频谱",
       "discord": "Discord RPC",
       "providerAccounts": "在线平台账号",
+      "listenbrainz": "ListenBrainz",
       "lastfm": "Last.fm",
       "externalApi": "外部 API",
       "mcp": "MCP",
@@ -1609,6 +1610,14 @@
       "details": "歌曲名",
       "state": "歌手名"
     },
+    "listenbrainzEnabled": {
+      "label": "ListenBrainz",
+      "description": "启用后由 Core 独立进程可靠记录收听；关闭时不创建任何 ListenBrainz 进程"
+    },
+    "listenbrainzNowPlaying": {
+      "label": "发送正在播放",
+      "description": "向 ListenBrainz 同步当前正在播放的歌曲；不进入持久待发送队列"
+    },
     "lastfmEnabled": {
       "label": "Last.fm",
       "description": "连接 Last.fm 账号，记录播放并同步喜欢"
@@ -1643,6 +1652,30 @@
         "clientId": "Client ID（可选，用于刷新）",
         "connected": "已登录：{id} · {country}",
         "refreshable": "当前凭据包含 refresh token 与 client id，可用于后续刷新。"
+      }
+    },
+    "listenbrainz": {
+      "connect": "连接 Token",
+      "disconnect": "断开连接",
+      "connectedAs": "已连接：{name}",
+      "notConnected": "尚未连接 ListenBrainz 账号",
+      "tokenPlaceholder": "ListenBrainz User Token（保存后不回显）",
+      "clearOutbox": "清空待发送记录",
+      "queue": "待发送 {pending} · 异常 {dead}",
+      "state": {
+        "disabled": "已关闭，后台进程未启动",
+        "starting": "正在启动独立提交进程",
+        "unconfigured": "已启用，等待连接 Token",
+        "ready": "已就绪",
+        "retrying": "网络异常，等待重试",
+        "auth_error": "Token 认证失败，请重新连接",
+        "error": "提交进程异常"
+      },
+      "toast": {
+        "connected": "已连接到 ListenBrainz：{name}",
+        "failed": "连接失败：{error}",
+        "disconnected": "已断开 ListenBrainz 连接",
+        "cleared": "已清空 ListenBrainz 待发送记录"
       }
     },
     "lastfm": {

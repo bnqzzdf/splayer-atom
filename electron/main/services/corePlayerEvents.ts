@@ -4,6 +4,7 @@ import { onPlayerCreated } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
+import * as listenbrainz from "@main/services/listenbrainz";
 import { onCorePlayerEnded, onCorePlayerState } from "@main/services/headlessPlayStats";
 import { requestReinit } from "@main/services/device";
 import { wsBroadcast } from "@main/server/broadcast";
@@ -24,6 +25,7 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         onCorePlayerState(state);
         nowPlaying.onPlayStateChange(state);
         neteaseScrobble.onState(state === "playing");
+        listenbrainz.onState(state === "playing");
         publishCoreControlEvent({
           type: "status",
           data: {
@@ -42,12 +44,14 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         const consumedBySession = playbackSession.onNativeEnded();
         wsBroadcast({ type: "ended", data: { consumedBySession } });
         neteaseScrobble.onEnded();
+        listenbrainz.onEnded();
         break;
       }
       case "directTrackBoundary": {
         const duration = toMs(event.duration ?? 0);
         const generation = event.generation ?? 0;
         neteaseScrobble.onEnded();
+        listenbrainz.onEnded();
         const consumedBySession = playbackSession.onNativeDirectTrackBoundary(generation, duration);
         if (!consumedBySession) {
           wsBroadcast({ type: "directTrackBoundary", data: { duration, generation } });
@@ -58,6 +62,7 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         const consumedBySession = playbackSession.onNativeSourceError();
         wsBroadcast({ type: "sourceError", data: { consumedBySession } });
         neteaseScrobble.onState(false);
+        listenbrainz.onState(false);
         break;
       }
       case "position": {

@@ -784,6 +784,7 @@
       "musicSpectrum": "Music Spectrum",
       "discord": "Discord RPC",
       "providerAccounts": "Provider Accounts",
+      "listenbrainz": "ListenBrainz",
       "lastfm": "Last.fm",
       "externalApi": "External API",
       "mcp": "MCP",
@@ -1621,6 +1622,14 @@
       "details": "Song Name",
       "state": "Artist Name"
     },
+    "listenbrainzEnabled": {
+      "label": "ListenBrainz",
+      "description": "When enabled, Core uses an isolated process for reliable scrobbling; disabling creates no ListenBrainz process"
+    },
+    "listenbrainzNowPlaying": {
+      "label": "Send Now Playing",
+      "description": "Send the current track to ListenBrainz without placing it in the durable outbox"
+    },
     "lastfmEnabled": {
       "label": "Last.fm",
       "description": "Connect your Last.fm account to scrobble and sync loves"
@@ -1655,6 +1664,30 @@
         "clientId": "Client ID (optional, for refresh)",
         "connected": "Signed in: {id} · {country}",
         "refreshable": "These credentials include a refresh token and client id for future refreshes."
+      }
+    },
+    "listenbrainz": {
+      "connect": "Connect Token",
+      "disconnect": "Disconnect",
+      "connectedAs": "Connected: {name}",
+      "notConnected": "No ListenBrainz account connected",
+      "tokenPlaceholder": "ListenBrainz User Token (never shown after saving)",
+      "clearOutbox": "Clear Pending Listens",
+      "queue": "Pending {pending} · Dead {dead}",
+      "state": {
+        "disabled": "Disabled; background process is not running",
+        "starting": "Starting isolated submission process",
+        "unconfigured": "Enabled; waiting for a Token",
+        "ready": "Ready",
+        "retrying": "Network error; waiting to retry",
+        "auth_error": "Token authentication failed; reconnect required",
+        "error": "Submission process error"
+      },
+      "toast": {
+        "connected": "Connected to ListenBrainz: {name}",
+        "failed": "Connection failed: {error}",
+        "disconnected": "Disconnected from ListenBrainz",
+        "cleared": "ListenBrainz pending listens cleared"
       }
     },
     "lastfm": {

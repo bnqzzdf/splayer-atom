@@ -45,6 +45,7 @@ export default defineConfig({
             __dirname,
             "electron/main/services/recognition/fingerprint.worker.ts",
           ),
+          "listenbrainz-child": resolve(__dirname, "electron/main/services/listenbrainzChild.ts"),
         },
       },
     },

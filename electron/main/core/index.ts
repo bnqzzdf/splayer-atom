@@ -19,6 +19,7 @@ import { initDatabase, closeDatabase } from "@main/database";
 import { init as initSongCache, shutdown as shutdownSongCache } from "@main/services/songCache";
 import { init as initDownload, shutdown as shutdownDownload } from "@main/services/downloadManager";
 import { shutdownCorePlayStats } from "@main/services/headlessPlayStats";
+import { initListenBrainz, shutdownListenBrainz } from "@main/services/listenbrainz";
 import { pluginRegistry } from "@main/plugins/registry";
 import { isHeadless } from "./mode";
 import {
@@ -151,6 +152,7 @@ export const initApp = (): void => {
     // 初始化插件系统
     pluginRegistry.init();
     registerPluginControlEvents();
+    initListenBrainz();
     // 初始化播放事件桥（需在 pluginRegistry.init 之后，读 hasEnabledControlPlugin）
     initPlaybackBridge();
     if (!headless) {
@@ -197,6 +199,7 @@ export const initApp = (): void => {
     shutdownSongCache();
     shutdownDownload();
     shutdownCorePlayStats();
+    shutdownListenBrainz();
     shutdownMedia();
     closeDatabase();
     void stopServer();

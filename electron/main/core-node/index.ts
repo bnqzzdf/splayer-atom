@@ -15,6 +15,9 @@ process.env.ATOM_LOG_STDIO_ONLY ??= "1";
 process.env.ATOM_RENDERER_DIR ??= fileURLToPath(new URL("../renderer", import.meta.url));
 process.env.ATOM_NATIVE_DIR ??= fileURLToPath(new URL("../native", import.meta.url));
 process.env.ATOM_PLUGIN_HOST_ENTRY ??= fileURLToPath(new URL("./plugin-host.js", import.meta.url));
+process.env.ATOM_LISTENBRAINZ_CHILD_ENTRY ??= fileURLToPath(
+  new URL("./listenbrainz-child.js", import.meta.url),
+);
 // bundled `ws` 不加载可选原生加速模块，避免 Rollup 的 CommonJS 包装破坏其导出形状。
 process.env.WS_NO_BUFFER_UTIL ??= "1";
 process.env.WS_NO_UTF_8_VALIDATE ??= "1";
@@ -37,6 +40,7 @@ const start = async (): Promise<void> => {
     { store },
     { pluginRegistry },
     { registerPluginControlEvents, unregisterPluginControlEvents },
+    listenbrainz,
   ] = await Promise.all([
     import("@main/utils/logger"),
     import("@main/database"),
@@ -49,6 +53,7 @@ const start = async (): Promise<void> => {
     import("@main/store"),
     import("@main/plugins/registry"),
     import("@main/services/pluginControl"),
+    import("@main/services/listenbrainz"),
   ]);
 
   initLogger();
@@ -57,6 +62,7 @@ const start = async (): Promise<void> => {
   await songCache.init();
   pluginRegistry.init();
   registerPluginControlEvents();
+  listenbrainz.initListenBrainz();
   corePlayerEvents.registerCorePlayerEvents();
   await downloadManager.init();
   await playbackSession.initPlaybackSession();
@@ -74,6 +80,7 @@ const start = async (): Promise<void> => {
     songCache.shutdown();
     downloadManager.shutdown();
     corePlayStats.shutdownCorePlayStats();
+    listenbrainz.shutdownListenBrainz();
     unregisterPluginControlEvents();
     await pluginRegistry.shutdown();
     await server.stopServer();

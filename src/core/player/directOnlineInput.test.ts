@@ -36,7 +36,7 @@ test("canonical source resolution is owned by Core before native load", () => {
     "const loadIndexWithPolicy = async (",
   );
   assert.match(loadFlow, /resolvePlaybackSource\(track\)/);
-  assert.match(loadFlow, /loadPlayerSource\(resolved\.source/);
+  assert.match(loadFlow, /loadPlayerSource\(\s*resolved\.source/);
 });
 
 test("main player load materializes every remote source before Diretta native load", () => {
@@ -90,5 +90,5 @@ test("switching any remote HTTP track into Diretta prepares local input in Core"
   assert.ok(coreSwitch);
   assert.match(coreSwitch, /resolvePlaybackSource\(item\.track\)/);
   assert.match(coreSwitch, /materializeDirectInput\(previousResolved\.source\)/);
-  assert.match(coreSwitch, /await loadIndex\(index, false, false, targetResolved\)/);
+  assert.match(coreSwitch, /resolvedOverride: targetResolved,\s*preserveListenBrainzSession: true/);
 });

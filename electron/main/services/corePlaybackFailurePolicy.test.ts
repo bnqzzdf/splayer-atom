@@ -21,7 +21,10 @@ test("sourceError recovery stays a single-track fresh resolve path", () => {
   const recovery = sessionSource.split("export const onNativeSourceError = (): boolean => {")[1];
   assert.ok(recovery, "Core sourceError handler should exist");
   assert.match(recovery, /shouldRetryPlaybackSource\(track, sourceRecoveryAttempts\)/);
-  assert.match(recovery, /loadIndex\(index, true, true\)/);
+  assert.match(
+    recovery,
+    /loadIndex\(index, true, \{\s*sourceRecovery: true,\s*preserveListenBrainzSession: true/,
+  );
   assert.doesNotMatch(recovery.split("export const getOutputDevices")[0], /loadIndexWithPolicy/);
 });
 

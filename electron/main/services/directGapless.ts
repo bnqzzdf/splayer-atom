@@ -13,6 +13,7 @@ import { fetchBytes } from "@main/utils/fetchBytes";
 import { formatArtists } from "@main/utils/metadata";
 import { playerLog } from "@main/utils/logger";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
+import * as listenbrainz from "@main/services/listenbrainz";
 import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 
 /** 使用现有 native Direct runtime 预备同 wire-format 下一首。 */
@@ -95,6 +96,7 @@ export const commitDirectPlaybackBoundary = (
   });
   beginCorePlayStats({ ...track, duration: track.duration || durationMs }, true);
   neteaseScrobble.onTrackLoaded(track, context, durationMs, true);
+  listenbrainz.onTrackLoaded(track, durationMs, true);
 
   if (coverUrl) {
     void fetchBytes(coverUrl).then((coverData) => {

@@ -117,7 +117,7 @@ test("Core reload-current captures native position and play state before fresh l
   const body = reload.split("export const startPersonalFm")[0] ?? reload;
   assert.match(body, /player\.getStatus\(\)\.state/);
   assert.match(body, /toDisplayPositionMs\(toMs\(player\.getPosition\(\)\)\)/);
-  assert.match(body, /await loadIndex\(index, false\)/);
+  assert.match(body, /await loadIndex\(index, false, \{ preserveListenBrainzSession: true \}\)/);
   assert.match(body, /await seek\(resumePositionMs\)/);
   assert.match(body, /if \(shouldPlay\) await play\(\)/);
   assert.doesNotMatch(body, /loadIndexWithPolicy/);

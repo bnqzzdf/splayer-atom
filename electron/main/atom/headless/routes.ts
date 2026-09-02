@@ -53,6 +53,12 @@ import {
 import { store } from "@main/store";
 import { getCoreSettingsSnapshot, setCoreSetting } from "@main/services/coreSettings";
 import {
+  clearListenBrainzOutbox,
+  getListenBrainzStatus,
+  linkListenBrainz,
+  unlinkListenBrainz,
+} from "@main/services/listenbrainz";
+import {
   applyPluginUpdate,
   checkPluginUpdate,
   getPluginMarket,
@@ -190,6 +196,28 @@ export const buildHeadlessRoutes = (): Hono => {
     try {
       setCoreSetting(body.keyPath, body.value);
       return c.json({ ok: true });
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+
+  api.get("/listenbrainz/status", (c) => c.json(getListenBrainzStatus()));
+  api.put("/listenbrainz/link", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { token?: unknown } | null;
+    if (typeof body?.token !== "string" || !body.token.trim()) {
+      return c.json({ error: "token_required" }, 400);
+    }
+    try {
+      return c.json(await linkListenBrainz(body.token));
+    } catch (error) {
+      return commandError(c, error);
+    }
+  });
+  api.delete("/listenbrainz/link", (c) => c.json(unlinkListenBrainz()));
+  api.post("/listenbrainz/outbox/clear", (c) => {
+    try {
+      clearListenBrainzOutbox();
+      return c.json(getListenBrainzStatus());
     } catch (error) {
       return commandError(c, error);
     }

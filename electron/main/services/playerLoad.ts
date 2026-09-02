@@ -11,6 +11,7 @@ import { cancelPendingReinit } from "@main/services/device";
 import { getPlayer } from "@main/services/engine";
 import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
+import * as listenbrainz from "@main/services/listenbrainz";
 import {
   clearActiveCueRange,
   setActiveCueTrack,
@@ -65,9 +66,15 @@ const classifyLoadError = (error: unknown, source: string): ErrorCode => {
  * @param options - 播放选项与权威 Track 元数据
  * @returns 与原 player:load 完全相同的响应
  */
+interface PlayerLoadRuntimeOptions {
+  /** 同一 canonical Track 的基础设施 reload 不重建 ListenBrainz listen session。 */
+  preserveListenBrainzSession?: boolean;
+}
+
 export const loadPlayerSource = async (
   source: string,
   options: LoadOptions = {},
+  runtime: PlayerLoadRuntimeOptions = {},
 ): Promise<IpcResponse<LoadResult>> => {
   cancelPendingReinit();
   const autoPlay = options.autoPlay ?? true;
@@ -169,6 +176,9 @@ export const loadPlayerSource = async (
       autoPlay,
     });
     neteaseScrobble.onTrackLoaded(authoritative, options.context, durationMs, autoPlay);
+    if (!runtime.preserveListenBrainzSession) {
+      listenbrainz.onTrackLoaded(authoritative, durationMs, autoPlay);
+    }
 
     if (coverFetchUrl) {
       void fetchBytes(coverFetchUrl).then((buf) => {

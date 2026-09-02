@@ -207,12 +207,18 @@ const scheduleNextPlaybackPreload = (): void => {
   schedulePlaybackPreload(targetIndex, queue[targetIndex]);
 };
 
+interface LoadIndexRuntimeOptions {
+  sourceRecovery?: boolean;
+  resolvedOverride?: ResolvedPlaybackSource;
+  preserveListenBrainzSession?: boolean;
+}
+
 const loadIndex = async (
   targetIndex: number,
   autoPlay = true,
-  sourceRecovery = false,
-  resolvedOverride?: ResolvedPlaybackSource,
+  runtime: LoadIndexRuntimeOptions = {},
 ): Promise<void> => {
+  const sourceRecovery = runtime.sourceRecovery === true;
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
   // Direct staging/cancel 与 full load 共享同一个 native runtime；先收敛旧控制命令，避免跨格式重连竞态。
   await waitForPlaybackPreloadIdle();
@@ -226,7 +232,7 @@ const loadIndex = async (
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  let resolved = resolvedOverride ?? consumePlaybackPreload(targetIndex, item);
+  let resolved = runtime.resolvedOverride ?? consumePlaybackPreload(targetIndex, item);
   if (!resolved) {
     try {
       resolved = await resolvePlaybackSource(track);
@@ -241,11 +247,15 @@ const loadIndex = async (
   if (generation !== loadGeneration) return;
 
   playerLog.info(`[session] load ${track.source} track: ${track.title}`);
-  const result = await loadPlayerSource(resolved.source, {
-    autoPlay,
-    meta: track,
-    context: item.context,
-  });
+  const result = await loadPlayerSource(
+    resolved.source,
+    {
+      autoPlay,
+      meta: track,
+      context: item.context,
+    },
+    { preserveListenBrainzSession: runtime.preserveListenBrainzSession },
+  );
   if (generation !== loadGeneration) return;
   if (!result.success || !result.data) {
     const code = Object.values(ErrorCode).includes(result.error as ErrorCode)
@@ -561,7 +571,7 @@ export const reloadCurrent = async (forcePlay?: boolean): Promise<boolean> => {
   const resumePositionMs = toDisplayPositionMs(toMs(player.getPosition()));
   invalidatePlaybackPreload();
   try {
-    await loadIndex(index, false);
+    await loadIndex(index, false, { preserveListenBrainzSession: true });
     if (resumePositionMs > 0) await seek(resumePositionMs);
     if (shouldPlay) await play();
     return true;
@@ -888,7 +898,10 @@ export const onNativeSourceError = (): boolean => {
   if (shouldRetryPlaybackSource(track, sourceRecoveryAttempts)) {
     sourceRecoveryAttempts++;
     playerLog.warn(`[session] source error, fresh resolve once: ${track.title}`);
-    void loadIndex(index, true, true).catch(async (error) => {
+    void loadIndex(index, true, {
+      sourceRecovery: true,
+      preserveListenBrainzSession: true,
+    }).catch(async (error) => {
       playerLog.warn(`[session] source recovery failed, advancing: ${String(error)}`);
       try {
         await advance();
@@ -964,7 +977,10 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       try {
         await player.setOutputDevice(previousPreference ?? undefined);
         if (shouldReloadCurrent && previousResolved) {
-          await loadIndex(index, false, false, previousResolved);
+          await loadIndex(index, false, {
+            resolvedOverride: previousResolved,
+            preserveListenBrainzSession: true,
+          });
           if (resumePositionMs > 0) await seek(resumePositionMs);
           if (state === "playing") await play();
         }
@@ -982,7 +998,10 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
 
     if (shouldReloadCurrent && targetResolved) {
       try {
-        await loadIndex(index, false, false, targetResolved);
+        await loadIndex(index, false, {
+          resolvedOverride: targetResolved,
+          preserveListenBrainzSession: true,
+        });
         if (resumePositionMs > 0) await seek(resumePositionMs);
         if (shouldResumePlaying) await play();
       } catch (loadError) {

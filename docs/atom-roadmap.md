@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> 状态日期：2026-09-01
+> 状态日期：2026-09-02
 >
 > 本文只记录当前产品范围、未完成工作和验收门槛。耐久工程规则见
 > `AGENTS.md`；构建、部署、上游同步和类型细节由对应专题文档负责。已完成的迁移过程、
@@ -14,6 +14,7 @@ Atom 只维护已经确认的差异能力：
 - 普通 Node Core 与 Headless Web；
 - Web / Desktop 统一 Control；
 - Qobuz、TIDAL；
+- ListenBrainz Core Scrobble；
 - Diretta strict Source Direct。
 
 长期模型为 **Core / Control / Output**：
@@ -175,7 +176,37 @@ DSD logical sequence/rate/channel count 均未改变。编译、fixture 和无 T
 - [ ] 分别完成 JSON/BTS 与 DASH 的真实播放。
 - [ ] 完成普通 ALSA、Diretta 和无 Control 自动下一首验收。
 
-## 9. QQ Music / Kugou
+## 9. ListenBrainz Scrobble
+
+- [x] ListenBrainz 由 Node Core 持有唯一 listen-session authority；Desktop/Web 只通过现有 Core
+      Control seam 配置并消费 token-free status，不允许 renderer 直连 ListenBrainz，也不建立
+      Electron-only 或第二 playback tracker。
+- [x] 首版实现可靠 Scrobble 与独立 Now Playing；不做 Love/Recording Feedback Sync，也不做
+      MusicBrainz MBID/MSID identity matching。永久 listen 阈值为 `min(duration / 2, 240s)`，按实际
+      playing wall-clock 累计，pause/buffering/forward-seek 跳过区间不计入；Repeat One/replay 和
+      gapless boundary 建立新 listen，同曲 source recovery/reload/output switch 保留原 listen。
+- [x] disabled 时 ListenBrainz runtime 完全不存在：不创建 child process，不打开 outbox SQLite，
+      不建立 HTTP client、retry/restart timer 或高频 position listener；从 enabled 切换为 disabled
+      会终止 child 并释放运行时资源。正式 bundled Core 实测首次 disabled 为 0 child 且无 outbox
+      文件，enabled 恰好 1 个 child，再次 disabled 回到 0 child；既有 durable DB 文件可保留但不再打开。
+- [x] enabled 时所有 SQLite、HTTP、JSON payload、retry/backoff 与 Now Playing 网络工作只在
+      ListenBrainz 独立 child process 中执行。Core playback/audio path 只维护轻量 listen session、
+      wall-clock timer 与非阻塞 IPC，不等待 child，也不执行 ListenBrainz 同步 I/O、网络或数据库。
+- [~] ListenBrainz child crash 已通过进程终止/关闭竞态验证，不会在 disabled 后自行复活；网络超时、
+  401、408、429、5xx 和 durable backlog 已实现隔离与错误分类，但仍需真实 token/故障注入和
+  ALSA/Diretta 连续播放验证，才能完成“任何 ListenBrainz 故障都不影响音频链”的 live gate。
+- [x] 达到阈值的永久 listen 使用稳定 capture id；父 Core 在内存保留未确认 snapshot，child 以幂等
+      SQLite insert 落入 durable outbox 后才回 ACK，再异步提交。retryable failure backoff，auth error
+      保留待恢复，permanent error dead-letter 且不堵后续 listen；child 异常重启会重送未 ACK capture。
+- [x] 复用现有 playback lifecycle、`createPlayProgress()`、Core settings/control、runtime secret codec、
+      `better-sqlite3` 与既有数据目录/child-process seam；未新增 provider registry、sink framework、
+      第二 event bus 或其他为未来 Last.fm 迁移预建的抽象层。
+- [~] 自动化已覆盖 session authority、Direct boundary、pause wall-clock、same-track reload、disabled
+  零进程、child-owned I/O、token-free Control 与构建/进程生命周期；仍需真实 ListenBrainz token
+  完成永久 listen/Now Playing、断网恢复、Core restart pending drain、invalid token、429，以及真实
+  ALSA/Diretta/CUE/在线音源的启用/关闭对比，作为最终 HiFi live acceptance。
+
+## 10. QQ Music / Kugou
 
 - [x] 产品入口冻结，只保留官方 SPlayer 现有 TypeScript compatibility。
 - [x] Atom 不开发登录、权益、resolver、cache、Diretta 专项逻辑或 Rust provider。
@@ -184,7 +215,7 @@ DSD logical sequence/rate/channel count 均未改变。编译、fixture 和无 T
 
 # P3 — Release、部署与 Control 产品验收
 
-## 10. Core artifact 与发布门禁
+## 11. Core artifact 与发布门禁
 
 - [x] Core 支持 Node `>=24.18.0 <25`，release reference runtime 为 `24.18.0`。
 - [x] system-runtime/bundled-runtime 共用同一 Core JS/native contract；最终 `tar.gz` gate 覆盖
@@ -203,7 +234,7 @@ DSD logical sequence/rate/channel count 均未改变。编译、fixture 和无 T
 Linux x86-64 是首个正式 Core 平台。其他架构只有 compile capability，不在没有真实机器完整
 验收时声明支持，也不作为当前主动扩展任务。
 
-## 11. Web / Desktop Control
+## 12. Web / Desktop Control
 
 - [x] Web 与 Desktop 共用 Vue renderer、Core clients、authoritative session projection、Provider
       session、Library、Playlist、Download、Stats、Cache、Settings、Plugin 和统一 Action Model。
@@ -233,25 +264,28 @@ runtime-neutral 的小型 canonical lyric resolver，且不需要搬运 Vue/sett
 Core 不暴露 Direct materialize/stage/commit 低层 API，Control 只发送 output/playback 高层命令；
 该约束与是否增加网络认证无关。
 
-## 12. 当前执行顺序
+## 13. 当前执行顺序
 
-1. 当前 `dev` 完成下一轮官方 SPlayer integration，并记录新的 accepted baseline。
-2. 建立受控 Diretta release runner，完成远端 SDK-enabled artifact gate。
-3. 在真实音频主机完成 ALSA、PCM、Native DSD、Diretta、output switch 和长时间连续播放验收。
-4. 依次完成 Netease、Qobuz、TIDAL 真实账号与普通/Diretta 播放验收。
-5. 在同一 release candidate 上完成 clean hosted artifact、部署/升级/回滚和多 Control 验收。
-6. 发布首个正式 Core release。
+1. 完成 ListenBrainz 真实 token、断网/401/429/Core restart 与 ALSA/Diretta/CUE/在线音源 live
+   acceptance；软件实现、disabled 零进程和 enabled child-process I/O 隔离已完成。
+2. 当前 `dev` 完成下一轮官方 SPlayer integration，并记录新的 accepted baseline。
+3. 建立受控 Diretta release runner，完成远端 SDK-enabled artifact gate。
+4. 在真实音频主机完成 ALSA、PCM、Native DSD、Diretta、output switch 和长时间连续播放验收。
+5. 依次完成 Netease、Qobuz、TIDAL 真实账号与普通/Diretta 播放验收。
+6. 在同一 release candidate 上完成 clean hosted artifact、部署/升级/回滚和多 Control 验收。
+7. 发布首个正式 Core release。
 
 `ffs/dev` 没有固定“整合阶段”；只有出现具体候选提交时，才在上述稳定基线之上创建独立
 `port/ffs-*` 工作并按本 roadmap 的架构和验收门槛判断。
 
-## 13. 已完成且必须持续回归的基线
+## 14. 已完成且必须持续回归的基线
 
 - Node Core 与统一 Core Control Protocol；
 - 本地 library/scanner、authoritative queue、playback policy、cache/preload/recovery；
 - Web/Desktop 统一 Control 与 capability-driven UI；
 - ALSA/Diretta 软件输出链、strict PCM/DSD Direct 测试；
 - Netease、Qobuz、TIDAL Core provider 软件链；
+- ListenBrainz Core Scrobble/Now Playing、child-owned durable outbox 与 disabled 零 runtime；
 - 独立 Atom identity、Core protocol、portable artifact、systemd、migration/backup/rollback；
 - 官方 SPlayer vendor/accepted-baseline/touch-audit 机制；
 - 单一 `audio-engine.node` + `streaming-api.node` Core native runtime。
@@ -259,7 +293,7 @@ Core 不暴露 Direct materialize/stage/commit 低层 API，Control 只发送 ou
 上述“已完成”表示软件基线存在，不替代第 5、6、7、8、10、11 节明确保留的 live/hardware/
 release 验收。
 
-## 14. 文档职责
+## 15. 文档职责
 
 ```text
 AGENTS.md                          耐久架构、实现、来源与 Git 规则
