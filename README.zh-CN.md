@@ -4,7 +4,7 @@
 
 <h2>SPlayer Atom</h2>
 
-<p>🎵 基于 SPlayer-Next 的持续下游版本，聚焦 Core-first 架构、统一 Desktop/Web Control、在线无损服务与 strict HiFi Source Direct</p>
+<p>🎵 SPlayer-Next 的独立下游发行版，聚焦 Core-first 架构、统一 Desktop/Web Control、在线无损服务与 strict HiFi Source Direct</p>
 
 <p>持续跟进官方 <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a> 基线</p>
 
@@ -19,11 +19,11 @@
 
 ---
 
-> **SPlayer Atom 下游说明：** 本仓库是 SPlayer-Next 的下游发行版。SPlayer-Next 仍是正式基础，上游版权与 AGPL-3.0 许可声明保持不变。Atom 只维护已经确认的最小产品差异，并持续集成官方 SPlayer 更新，而不是演化成第二套独立播放器栈。
+> **SPlayer Atom 下游说明：** SPlayer Atom 是基于 SPlayer-Next 持续开发的独立下游发行版，不是 SPlayer-Next 本身，也不代表上游项目。SPlayer-Next 是 Atom 的正式上游；上游版权与 AGPL-3.0 许可声明保持不变。Atom 以自己的 Core / Control / Output 产品架构、HiFi 实现和发布节奏持续维护，同时尽量控制相对上游的长期差异。
 
 ## 为什么是 SPlayer Atom？
 
-SPlayer Atom 保留 SPlayer-Next 的 Desktop 体验、媒体模型、队列、曲库、歌词、UI 与通用播放基础，只在需要不同 ownership 或更严格 HiFi 保证的地方增加少量明确能力。
+SPlayer Atom 从 SPlayer-Next 继承成熟的 Desktop、媒体、歌词、曲库与 UI 基础，并在此之上形成自己的 Core-first 产品架构、Headless/Web Control、在线服务和 strict Source Direct 音频路径。Atom 是一个持续跟进上游的下游产品，而不是把 README、品牌或发布身份继续视为 SPlayer-Next。
 
 | 领域     | SPlayer-Next 基础                        | SPlayer Atom 增量                                                                                         |
 | -------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -49,17 +49,13 @@ Atom 的 Diretta 不是把另一个 output backend 挂到 SPlayer 普通 DSP pip
 
 播放器会在进入 Direct 前检查这些条件；进入后任何会改变 sample 的控制都会被拒绝，直到退出 Direct 模式。
 
-### 内存与拷贝模型
+### 音质依据
 
-Source Direct 追求的是最短且安全的数据路径，但**不宣传为全链路零拷贝，也不是 whole-track RAM 播放**：
+Atom 对 Source Direct 的 HiFi 声明只建立在可验证的数字信号事实之上：**是否改变 sample value / logical DSD bit sequence、sample rate、channel count，以及是否发生 DSP、重采样或格式回退。**
 
-- FFmpeg 已经给出 packed `S16` / `S32` 时，从 decoded frame 经过 Direct ring 到 Diretta SDK callback 走 **zero-copy fast path**；
-- planar PCM 会写入预分配 integer buffer，进行 **bit-perfect repack / interleave**；
-- Native DSD 使用预分配 buffer 做 DSF/DFF layout adaptation；只有 Target wire-order 需要时才做等价 bit-order conversion；
-- Diretta SDK realtime pull callback 只借用已经准备好的 payload pointer + length，不在 callback 内复制或处理 audio sample；
-- HTTP(S) Direct 音源按响应 exact bytes materialize 成本地 seekable 临时文件，不把整首歌先塞进 RAM。
+内存驻留、减少内存复制、降低 CPU 或 I/O 活动可以是性能、实时性和稳定性方面的工程优化，但 Atom **不把“纯内存播放”“零拷贝”或更少数据复制宣传为音质提升来源**。只要数字样本保持完全一致且没有 underrun/dropout，数据来自文件缓存还是 RAM、在软件中是否发生一次正确的无损复制，本身不构成音质更好的依据。
 
-因此这里真正坚持的是：**源数据已经满足 transport layout 时绝不多碰；必须适配时，只做不改变音频语义的最小 repack。**
+因此 strict Direct 的目标不是追求某种“更纯”的内存路径，而是确保任何必要的 decode、layout adaptation 或 transport repack 都不改变最终音频内容；不需要改变音频内容的 DSP 则完全绕开。
 
 ### 实机验证
 
@@ -87,9 +83,9 @@ Web Control ───────► Node Core
 
 Web 与 Desktop 都只是 Control，不成为第二个 domain authority。Desktop 独有的窗口、托盘、热键、updater、本机文件、protocol 与歌词窗口继续作为 Host Capability；音乐业务命令与 snapshot 则统一使用 Core contract。
 
-## 继承自 SPlayer-Next 的能力
+## 来自上游 SPlayer-Next 的基础能力
 
-Atom 继续直接受益于 SPlayer 的完整基础，包括：
+作为 SPlayer-Next 的下游发行版，Atom 直接继承并持续整合上游的大量成熟能力，包括：
 
 - 🎵 **广泛格式支持** —— MP3、FLAC、WAV、AAC、OGG、APE 等，基于 FFmpeg + Rust
 - 📝 **丰富歌词** —— LRC / QRC / YRC / TTML、逐字高亮、翻译与原生歌词窗口
@@ -188,7 +184,9 @@ pnpm test:native      # Rust workspace 测试
 
 ## 致谢
 
-特别感谢以下让 SPlayer-Next 成为可能的开源项目：
+首先感谢 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 及其维护者与贡献者。SPlayer-Next 是 SPlayer Atom 的正式上游，Atom 的 Desktop、媒体模型、歌词、曲库、UI 与大量通用播放器基础都直接源自上游项目。Atom 作为独立下游发行版持续整合这些成果，并保留相应版权与 AGPL-3.0 许可声明。
+
+同时感谢 SPlayer-Next 及 Atom 所依赖的开源项目，包括：
 
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) —— 类 Apple Music 歌词显示组件库
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) —— 网易云音乐 API 备份 + 增强

@@ -4,7 +4,7 @@
 
 <h2>SPlayer Atom</h2>
 
-<p>🎵 SPlayer-Next downstream focused on a Core-first architecture, unified Desktop/Web control, online lossless services, and strict HiFi Source Direct playback.</p>
+<p>🎵 An independent downstream distribution of SPlayer-Next, focused on a Core-first architecture, unified Desktop/Web control, online lossless services, and strict HiFi Source Direct playback.</p>
 
 <p>Continuously updated from the official <a href="https://github.com/SPlayer-Dev/SPlayer-Next">SPlayer-Next</a> foundation.</p>
 
@@ -19,11 +19,11 @@
 
 ---
 
-> **SPlayer Atom downstream:** This repository is a downstream distribution of SPlayer-Next. SPlayer-Next remains the upstream foundation; its copyright and AGPL-3.0 notices are preserved. Atom deliberately keeps its product delta small and integrates official SPlayer updates instead of becoming a second independent player stack.
+> **SPlayer Atom downstream:** SPlayer Atom is an independently maintained downstream distribution built from SPlayer-Next. It is not SPlayer-Next itself and does not represent the upstream project. SPlayer-Next is Atom's official upstream, and its copyright and AGPL-3.0 notices are preserved. Atom maintains its own Core / Control / Output product architecture, HiFi implementation, and release cadence while keeping the long-term downstream delta auditable.
 
 ## Why SPlayer Atom?
 
-SPlayer Atom keeps the SPlayer-Next desktop experience, media model, queue, library, lyrics, UI, and general-purpose playback foundation, then adds a small set of product capabilities that need a different ownership model or stricter HiFi guarantees.
+SPlayer Atom inherits the mature Desktop, media, lyrics, library, and UI foundation from SPlayer-Next, then builds its own Core-first product architecture, Headless/Web Control, online services, and strict Source Direct audio path on top. Atom is a downstream product that continuously integrates upstream work; its README, branding, architecture, and releases describe Atom rather than presenting it as SPlayer-Next.
 
 | Area               | SPlayer-Next foundation                             | SPlayer Atom delta                                                                                                                      |
 | ------------------ | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -49,17 +49,13 @@ Diretta in Atom is not another output backend attached to the normal SPlayer DSP
 
 The player validates these conditions before entering Direct mode and rejects later controls that would alter samples until Direct mode is exited.
 
-### Memory and copy model
+### Basis for the HiFi claim
 
-Source Direct is optimized for the smallest safe data path, but it is **not marketed as whole-chain zero-copy or whole-track RAM playback**:
+Atom's Source Direct claims are limited to verifiable digital-signal facts: **whether sample values / the logical DSD bit sequence, sample rate, or channel count change, and whether DSP, resampling, or format fallback occurs.**
 
-- packed FFmpeg `S16` / `S32` frames use a **zero-copy fast path** from the decoded frame through the Direct ring to the Diretta SDK callback;
-- planar PCM is interleaved into preallocated integer buffers with a **bit-perfect repack**;
-- Native DSD uses preallocated buffers for DSF/DFF layout adaptation and, only when required by the Target, equivalent bit-order conversion;
-- the Diretta SDK realtime pull callback only borrows the already prepared payload pointer and length; it does not copy or process audio samples;
-- HTTP(S) Direct sources are materialized as exact response bytes into a local seekable temporary file instead of loading an entire track into RAM.
+Keeping data resident in memory, reducing memory copies, or lowering CPU/I/O activity can be useful engineering optimizations for performance, realtime behavior, and stability, but Atom **does not present “pure-memory playback”, “zero-copy”, or fewer data copies as a source of better sound quality**. If the digital samples remain identical and playback has no underrun or dropout, whether the bytes came from a file cache or RAM, or passed through a correct lossless memory copy, is not itself evidence of improved audio quality.
 
-This lets Atom avoid touching audio data whenever the source is already in the required transport layout, while still supporting lossless codecs and formats whose decoded/container layout must be adapted without changing their audio meaning.
+Strict Direct therefore aims to keep every required decode, layout adaptation, or transport repack audio-content preserving, while completely bypassing processing that would unnecessarily alter the signal.
 
 ### Real-hardware validation
 
@@ -87,9 +83,9 @@ Web Control ───────► Node Core
 
 Web and Desktop are Controls, not secondary domain authorities. Desktop-only window, tray, hotkey, updater, native-file, protocol, and lyric-window behavior stays a Host Capability; music-domain commands and snapshots use the same Core contract.
 
-## Features inherited from SPlayer-Next
+## Foundation inherited from upstream SPlayer-Next
 
-Atom continues to benefit from the broad SPlayer foundation, including:
+As a downstream distribution of SPlayer-Next, Atom directly inherits and continuously integrates a broad set of mature upstream capabilities, including:
 
 - 🎵 **Broad format support** — MP3, FLAC, WAV, AAC, OGG, APE and more through FFmpeg/Rust
 - 📝 **Rich lyrics** — LRC / QRC / YRC / TTML, word-by-word highlighting, translations, and native lyric surfaces
@@ -188,7 +184,9 @@ For upstream synchronization and the rules that keep the Atom delta auditable, s
 
 ## Acknowledgements
 
-Special thanks to the open-source projects that make SPlayer-Next possible:
+First and foremost, thanks to [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) and its maintainers and contributors. SPlayer-Next is the official upstream of SPlayer Atom, and Atom's Desktop, media model, lyrics, library, UI, and much of its general player foundation come directly from that project. Atom continues those foundations as an independently maintained downstream distribution while preserving the applicable copyright and AGPL-3.0 notices.
+
+We also thank the open-source projects used by SPlayer-Next and Atom, including:
 
 - [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) — Apple Music-style lyrics display component library
 - [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) — NetEase Cloud Music API (backup + enhanced)
