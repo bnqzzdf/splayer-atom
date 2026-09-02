@@ -14,10 +14,21 @@ const writeClipboardTextWithSelection = (text: string): void => {
   document.body.append(textarea);
   textarea.focus();
   textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  const handleCopy = (event: ClipboardEvent): void => {
+    if (!event.clipboardData) return;
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+  };
+  document.addEventListener("copy", handleCopy, { once: true });
 
   try {
-    if (!document.execCommand("copy")) throw new Error("浏览器拒绝复制文本");
+    if (typeof document.execCommand !== "function" || !document.execCommand("copy")) {
+      throw new Error("浏览器拒绝复制文本");
+    }
   } finally {
+    document.removeEventListener("copy", handleCopy);
     textarea.remove();
     activeElement?.focus();
   }

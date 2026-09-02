@@ -42,8 +42,17 @@ describe("writeClipboardText", () => {
 
   it("uses a temporary selection for LAN HTTP", async () => {
     setSecureContext(false);
+    const setData = vi.fn();
     const execCommand = vi.fn(() => {
-      expect(document.querySelector("textarea")?.value).toBe("局域网复制");
+      const textarea = document.querySelector("textarea");
+      expect(textarea?.value).toBe("局域网复制");
+      expect(textarea?.selectionStart).toBe(0);
+      expect(textarea?.selectionEnd).toBe("局域网复制".length);
+      const event = new Event("copy", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { setData },
+      });
+      document.dispatchEvent(event);
       return true;
     });
     setExecCommand(execCommand);
@@ -51,6 +60,7 @@ describe("writeClipboardText", () => {
     await writeClipboardText("局域网复制");
 
     expect(execCommand).toHaveBeenCalledWith("copy");
+    expect(setData).toHaveBeenCalledWith("text/plain", "局域网复制");
     expect(document.querySelector("textarea")).toBeNull();
   });
 });
