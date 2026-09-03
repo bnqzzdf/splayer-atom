@@ -11,6 +11,9 @@ const coreEvents = read("electron/main/services/corePlayerEvents.ts");
 const webEvents = read("src/core/player/events.ts");
 const playerControl = read("src/core/player/index.ts");
 const nativePlayer = read("native/audio-engine-core/src/player/mod.rs");
+const directPcm = read("native/audio-engine-core/src/direct_pcm.rs");
+const directDsd = read("native/audio-engine-core/src/direct_dsd.rs");
+const nativeBinding = read("native/audio-engine/src/bindings/player.rs");
 
 test("Core preload prepares Diretta input and stages through the shared main service", () => {
   assert.match(preloader, /stageDirectPlaybackNext/);
@@ -28,11 +31,37 @@ test("Diretta staging remains active when generic next-track preload is disabled
   assert.equal(preloader.match(/if \(!shouldPrepareNextInput\(\)\)/g)?.length, 2);
 });
 
-test("manual preload consumption cancels only installed Direct staging without deleting its source", () => {
-  assert.match(preloader, /const hasStagedDirectNext = prepared\.directGeneration !== null/);
+test("preload invalidation cancels native staging immediately without touching the active producer", () => {
+  assert.match(preloader, /const cancelDirectStageNow = \(\): void =>/);
+  assert.match(preloader, /cancelDirectPlaybackNext\(\)/);
   assert.match(
     preloader,
-    /queueDirectCleanup\(prepared\.directSource, false, hasStagedDirectNext\)/,
+    /const clearPrepared = [\s\S]*if \(cleanupDirect\) \{\s*cancelDirectStageNow\(\);/,
+  );
+  assert.doesNotMatch(preloader, /queueDirectCleanup\([^)]*cancelStaged/);
+});
+
+test("queue edits never run next-source preparation on the active Direct producer", () => {
+  const pcmProducer = directPcm
+    .split('.name("diretta-direct-decode".into())')[1]
+    ?.split('.context("启动 Source Direct decoder producer 失败")')[0];
+  const dsdProducer = directDsd
+    .split('.name("diretta-direct-dsd".into())')[1]
+    ?.split('.context("启动 Native DSD producer 失败")')[0];
+  assert.ok(pcmProducer, "PCM Direct producer should exist");
+  assert.ok(dsdProducer, "DSD Direct producer should exist");
+
+  assert.doesNotMatch(directPcm, /StageLocal|CancelStaged/);
+  assert.doesNotMatch(directDsd, /StageLocal|CancelStaged/);
+  assert.doesNotMatch(pcmProducer, /prepare_staged_pcm_source/);
+  assert.doesNotMatch(dsdProducer, /prepare_staged_dsd_source/);
+  assert.match(directPcm, /struct DirectPcmStaging[\s\S]*candidate: Mutex/);
+  assert.match(directDsd, /struct DirectDsdStaging[\s\S]*candidate: Mutex/);
+  assert.match(pcmProducer, /producer_ring\.finished[\s\S]*producer_staging\.take_current\(\)/);
+  assert.match(dsdProducer, /producer_ring\.finished[\s\S]*producer_staging\.take_current\(\)/);
+  assert.match(
+    nativeBinding,
+    /spawn_blocking\(move \|\| \{\s*handle\.stage_local\(&source, duration_secs, u64::from\(generation\)\)/,
   );
 });
 

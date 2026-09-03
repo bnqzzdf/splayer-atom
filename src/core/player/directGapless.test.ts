@@ -83,19 +83,22 @@ test("Direct staging respects Core playback semantics before handing audio to na
   assert.match(sessionSource, /nextPlaybackPreloadIndex/);
 });
 
-test("Full Direct loads wait for preload cleanup and only cancel an installed staged source", () => {
+test("Full Direct loads wait for background preload cleanup while queue invalidation cancels immediately", () => {
   assert.match(
     corePreloaderSource,
     /export const waitForPlaybackPreloadIdle = \(\): Promise<void> => directStageChain/,
   );
+  assert.match(corePreloaderSource, /const cancelDirectStageNow = \(\): void =>/);
   assert.match(
     corePreloaderSource,
-    /const hasStagedDirectNext = prepared\?\.directGeneration != null/,
+    /const clearPrepared = [\s\S]*if \(cleanupDirect\) \{\s*cancelDirectStageNow\(\);/,
   );
-  assert.match(
+  const cleanupFlow = between(
     corePreloaderSource,
-    /queueDirectCleanup\(directSource, true, hasStagedDirectNext\)/,
+    "const queueDirectCleanup =",
+    "const clearPrepared =",
   );
+  assert.doesNotMatch(cleanupFlow, /cancelDirectPlaybackNext\(\)/);
   const coreLoad = between(sessionSource, "const loadIndex = async (", "const loadIndexWithPolicy");
   const idleIndex = coreLoad.indexOf("await waitForPlaybackPreloadIdle()");
   const nativeLoadIndex = coreLoad.indexOf("await loadPlayerSource(");

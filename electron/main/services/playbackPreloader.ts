@@ -53,21 +53,20 @@ const buildPreloadKey = (queueIndex: number, item: PlaybackQueueItem): string =>
     store.get("player.outputDevice") ?? "",
   ].join("::");
 
-const queueDirectCleanup = (
-  source: string | null,
-  discardSource = true,
-  cancelStaged = true,
-): void => {
+/** 立即作废 native staged generation；新实现只改后台 staging slot，不触碰当前 producer/ring。 */
+const cancelDirectStageNow = (): void => {
+  try {
+    cancelDirectPlaybackNext();
+  } catch (error) {
+    playerLog.debug(`[session] Direct preload cancel skipped: ${String(error)}`);
+  }
+};
+
+const queueDirectCleanup = (source: string | null, discardSource = true): void => {
+  if (!discardSource || !source) return;
   directStageChain = directStageChain
     .then(async () => {
-      if (cancelStaged) {
-        try {
-          cancelDirectPlaybackNext();
-        } catch (error) {
-          playerLog.debug(`[session] Direct preload cancel skipped: ${String(error)}`);
-        }
-      }
-      if (discardSource && source) await discardDirectInput(source);
+      await discardDirectInput(source);
     })
     .catch((error) =>
       playerLog.debug(`[session] Direct preload cleanup skipped: ${String(error)}`),
@@ -76,10 +75,12 @@ const queueDirectCleanup = (
 
 const clearPrepared = (cleanupDirect: boolean): void => {
   const directSource = prepared?.directSource ?? null;
-  const hasStagedDirectNext = prepared?.directGeneration != null;
   pendingKey = null;
   prepared = null;
-  if (cleanupDirect) queueDirectCleanup(directSource, true, hasStagedDirectNext);
+  if (cleanupDirect) {
+    cancelDirectStageNow();
+    queueDirectCleanup(directSource);
+  }
 };
 
 export const invalidatePlaybackPreload = (): void => {
@@ -128,15 +129,11 @@ const stageDirectSource = async (
   const generation = nextDirectGeneration;
   const operation = directStageChain.then(async (): Promise<DirectStageResult | null> => {
     if (token !== preloadToken) return null;
-    try {
-      cancelDirectPlaybackNext();
-    } catch {}
+    cancelDirectStageNow();
     if (token !== preloadToken) return null;
     const result = await stageDirectPlaybackNext(directSource, track.duration ?? 0, generation);
     if (token !== preloadToken && result.staged) {
-      try {
-        cancelDirectPlaybackNext();
-      } catch {}
+      cancelDirectStageNow();
       return null;
     }
     return result;
@@ -231,9 +228,8 @@ export const consumePlaybackPreload = (
     return null;
   }
   const source = prepared.source;
-  const hasStagedDirectNext = prepared.directGeneration !== null;
   preloadToken++;
-  queueDirectCleanup(prepared.directSource, false, hasStagedDirectNext);
+  cancelDirectStageNow();
   clearPrepared(false);
   return source;
 };

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -690,13 +690,6 @@ enum DirectPcmCommand {
         path: PathBuf,
         response: mpsc::SyncSender<Result<DirectPcmFormat>>,
     },
-    StageLocal {
-        path: PathBuf,
-        duration_micros: u64,
-        generation: u64,
-        response: mpsc::SyncSender<Result<()>>,
-    },
-    CancelStaged,
 }
 
 struct DirectPcmRing {
@@ -874,6 +867,93 @@ struct StagedPcmSource {
     generation: u64,
 }
 
+type StagedPcmEntry = (u64, StagedPcmSource);
+
+/// 下一首预备态完全独立于当前 Direct producer。
+/// 队列编辑只会在后台准备/替换这里的 candidate；producer 仅在自然边界消费。
+struct DirectPcmStaging {
+    epoch: AtomicU64,
+    candidate: Mutex<Option<StagedPcmEntry>>,
+}
+
+impl DirectPcmStaging {
+    fn new() -> Self {
+        Self {
+            epoch: AtomicU64::new(0),
+            candidate: Mutex::new(None),
+        }
+    }
+
+    fn stage(
+        &self,
+        path: &Path,
+        current_format: DirectPcmFormat,
+        duration_micros: u64,
+        generation: u64,
+    ) -> Result<bool> {
+        // 每次新预载先使旧 generation 失效；慢 I/O/解码发生在调用线程，不进入 producer。
+        let epoch = self.epoch.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
+        let candidate =
+            prepare_staged_pcm_source(path, current_format, duration_micros, generation)?;
+        if self.epoch.load(Ordering::Acquire) != epoch {
+            return Ok(false);
+        }
+        let previous = {
+            let mut slot = self
+                .candidate
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if self.epoch.load(Ordering::Acquire) != epoch {
+                return Ok(false);
+            }
+            slot.replace((epoch, candidate))
+        };
+        // decoder/frame 的析构也留在后台调用线程，绝不占用当前 producer。
+        drop(previous);
+        Ok(true)
+    }
+
+    fn cancel(&self) {
+        self.epoch.fetch_add(1, Ordering::AcqRel);
+        let previous = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        drop(previous);
+    }
+
+    /// 只允许在当前音源自然结束的边界调用。
+    fn take_current(&self) -> Option<StagedPcmEntry> {
+        let epoch = self.epoch.load(Ordering::Acquire);
+        let entry = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        match entry {
+            Some((entry_epoch, candidate)) if entry_epoch == epoch => {
+                Some((entry_epoch, candidate))
+            }
+            _ => None,
+        }
+    }
+
+    /// 边界处 slot 暂不可写时，把仍有效的 candidate 放回等待下一轮。
+    fn restore(&self, entry: StagedPcmEntry) {
+        if self.epoch.load(Ordering::Acquire) != entry.0 {
+            return;
+        }
+        let mut slot = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.epoch.load(Ordering::Acquire) == entry.0 && slot.is_none() {
+            *slot = Some(entry);
+        }
+    }
+}
+
 fn prepare_staged_pcm_source(
     path: &Path,
     current_format: DirectPcmFormat,
@@ -1028,11 +1108,12 @@ impl DirectPcmMonitor {
 
 #[derive(Clone)]
 pub struct DirectPcmStageHandle {
-    control_tx: mpsc::Sender<DirectPcmCommand>,
+    staging: Arc<DirectPcmStaging>,
+    format: DirectPcmFormat,
 }
 
 impl DirectPcmStageHandle {
-    pub fn stage_local(&self, path: &Path, duration_secs: f64, generation: u64) -> Result<()> {
+    pub fn stage_local(&self, path: &Path, duration_secs: f64, generation: u64) -> Result<bool> {
         ensure!(
             duration_secs.is_finite() && duration_secs >= 0.0,
             "Source Direct staged duration 无效"
@@ -1040,22 +1121,12 @@ impl DirectPcmStageHandle {
         let duration_micros = (duration_secs * 1_000_000.0)
             .round()
             .clamp(0.0, u64::MAX as f64) as u64;
-        let (response_tx, response_rx) = mpsc::sync_channel(0);
-        self.control_tx
-            .send(DirectPcmCommand::StageLocal {
-                path: path.to_owned(),
-                duration_micros,
-                generation,
-                response: response_tx,
-            })
-            .context("提交 Source Direct PCM staged source 失败")?;
-        response_rx
-            .recv()
-            .context("等待 Source Direct PCM staged source 结果失败")?
+        self.staging
+            .stage(path, self.format, duration_micros, generation)
     }
 
     pub fn cancel(&self) {
-        let _ = self.control_tx.send(DirectPcmCommand::CancelStaged);
+        self.staging.cancel();
     }
 }
 
@@ -1063,6 +1134,7 @@ pub struct DirectPcmSource {
     ring: Arc<DirectPcmRing>,
     format: DirectPcmFormat,
     control_tx: mpsc::Sender<DirectPcmCommand>,
+    staging: Arc<DirectPcmStaging>,
     producer: Option<JoinHandle<()>>,
 }
 
@@ -1114,12 +1186,13 @@ impl DirectPcmSource {
         first_slot.state.store(SLOT_READY, Ordering::Release);
 
         let (control_tx, control_rx) = mpsc::channel();
+        let staging = Arc::new(DirectPcmStaging::new());
         let producer_ring = Arc::clone(&ring);
+        let producer_staging = Arc::clone(&staging);
         let producer = thread::Builder::new()
             .name("diretta-direct-decode".into())
             .spawn(move || {
                 let mut active_format = format;
-                let mut staged: Option<StagedPcmSource> = None;
                 let mut next_slot = 1 % producer_ring.slots.len();
                 while !producer_ring.stopped.load(Ordering::Acquire) {
                     match control_rx.try_recv() {
@@ -1146,7 +1219,7 @@ impl DirectPcmSource {
                                 Ok((new_decoder, new_format)) => {
                                     decoder = new_decoder;
                                     active_format = new_format;
-                                    staged = None;
+                                    producer_staging.cancel();
                                     let _ = response.send(Ok(new_format));
                                     next_slot = 1 % producer_ring.slots.len();
                                 }
@@ -1154,32 +1227,6 @@ impl DirectPcmSource {
                                     let _ = response.send(Err(error));
                                 }
                             }
-                            continue;
-                        }
-                        Ok(DirectPcmCommand::StageLocal {
-                            path,
-                            duration_micros,
-                            generation,
-                            response,
-                        }) => {
-                            match prepare_staged_pcm_source(
-                                &path,
-                                active_format,
-                                duration_micros,
-                                generation,
-                            ) {
-                                Ok(candidate) => {
-                                    staged = Some(candidate);
-                                    let _ = response.send(Ok(()));
-                                }
-                                Err(error) => {
-                                    let _ = response.send(Err(error));
-                                }
-                            }
-                            continue;
-                        }
-                        Ok(DirectPcmCommand::CancelStaged) => {
-                            staged = None;
                             continue;
                         }
                         Err(mpsc::TryRecvError::Disconnected) => return,
@@ -1190,7 +1237,7 @@ impl DirectPcmSource {
                         continue;
                     }
                     if producer_ring.finished.load(Ordering::Acquire) {
-                        let Some(candidate) = staged.take() else {
+                        let Some(entry) = producer_staging.take_current() else {
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         };
@@ -1205,11 +1252,11 @@ impl DirectPcmSource {
                             )
                             .is_err()
                         {
-                            staged = Some(candidate);
+                            producer_staging.restore(entry);
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         }
-                        match install_staged_pcm_slot(candidate, slot) {
+                        match install_staged_pcm_slot(entry.1, slot) {
                             Ok((new_decoder, new_format)) => {
                                 decoder = new_decoder;
                                 active_format = new_format;
@@ -1270,8 +1317,8 @@ impl DirectPcmSource {
                             next_slot = (next_slot + 1) % producer_ring.slots.len();
                         }
                         Ok(false) => {
-                            if let Some(candidate) = staged.take() {
-                                match install_staged_pcm_slot(candidate, slot) {
+                            if let Some(entry) = producer_staging.take_current() {
+                                match install_staged_pcm_slot(entry.1, slot) {
                                     Ok((new_decoder, new_format)) => {
                                         decoder = new_decoder;
                                         active_format = new_format;
@@ -1302,6 +1349,7 @@ impl DirectPcmSource {
                 ring,
                 format,
                 control_tx,
+                staging,
                 producer: Some(producer),
             },
             actual_position,
@@ -1321,7 +1369,8 @@ impl DirectPcmSource {
 
     pub fn stage_handle(&self) -> DirectPcmStageHandle {
         DirectPcmStageHandle {
-            control_tx: self.control_tx.clone(),
+            staging: Arc::clone(&self.staging),
+            format: self.format,
         }
     }
 

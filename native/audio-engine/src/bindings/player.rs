@@ -1003,15 +1003,15 @@ impl AudioPlayer {
             let Some(handle) = self.inner.lock().direct_stage_handle() else {
                 return Ok(false);
             };
-            tokio::task::spawn_blocking(move || {
+            let staged = tokio::task::spawn_blocking(move || {
                 handle.stage_local(&source, duration_secs, u64::from(generation))
             })
-                .await
-                .map_err(|error| {
-                    Error::from_reason(format!("direct gapless stage task join error: {error}"))
-                })?
-                .into_napi()?;
-            Ok(true)
+            .await
+            .map_err(|error| {
+                Error::from_reason(format!("direct gapless stage task join error: {error}"))
+            })?
+            .into_napi()?;
+            Ok(staged)
         }
         #[cfg(not(feature = "diretta"))]
         {

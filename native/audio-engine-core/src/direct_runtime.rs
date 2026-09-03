@@ -98,7 +98,7 @@ pub enum DirectStageHandle {
 
 #[cfg(feature = "diretta")]
 impl DirectStageHandle {
-    pub fn stage_local(&self, source: &str, duration_secs: f64, generation: u64) -> Result<()> {
+    pub fn stage_local(&self, source: &str, duration_secs: f64, generation: u64) -> Result<bool> {
         if source.starts_with("http://") || source.starts_with("https://") {
             bail!("[Direct] 当前 gapless staging 仅支持本地 seekable 音源");
         }

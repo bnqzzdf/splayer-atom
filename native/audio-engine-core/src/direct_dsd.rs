@@ -5,7 +5,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -597,12 +597,6 @@ enum DirectDsdCommand {
         path: PathBuf,
         response: mpsc::SyncSender<Result<DirectDsdFormat>>,
     },
-    StageLocal {
-        path: PathBuf,
-        generation: u64,
-        response: mpsc::SyncSender<Result<()>>,
-    },
-    CancelStaged,
 }
 
 struct DirectDsdRing {
@@ -756,6 +750,82 @@ struct StagedDsdSource {
     generation: u64,
 }
 
+type StagedDsdEntry = (u64, StagedDsdSource);
+
+/// 下一首 DSD 预备态与当前 Direct producer 隔离；producer 只在自然边界消费。
+struct DirectDsdStaging {
+    epoch: AtomicU64,
+    candidate: Mutex<Option<StagedDsdEntry>>,
+}
+
+impl DirectDsdStaging {
+    fn new() -> Self {
+        Self {
+            epoch: AtomicU64::new(0),
+            candidate: Mutex::new(None),
+        }
+    }
+
+    fn stage(&self, path: &Path, current_format: DirectDsdFormat, generation: u64) -> Result<bool> {
+        let epoch = self.epoch.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
+        let candidate = prepare_staged_dsd_source(path, current_format, generation)?;
+        if self.epoch.load(Ordering::Acquire) != epoch {
+            return Ok(false);
+        }
+        let previous = {
+            let mut slot = self
+                .candidate
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if self.epoch.load(Ordering::Acquire) != epoch {
+                return Ok(false);
+            }
+            slot.replace((epoch, candidate))
+        };
+        drop(previous);
+        Ok(true)
+    }
+
+    fn cancel(&self) {
+        self.epoch.fetch_add(1, Ordering::AcqRel);
+        let previous = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        drop(previous);
+    }
+
+    /// 只允许在当前音源自然结束的边界调用。
+    fn take_current(&self) -> Option<StagedDsdEntry> {
+        let epoch = self.epoch.load(Ordering::Acquire);
+        let entry = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        match entry {
+            Some((entry_epoch, candidate)) if entry_epoch == epoch => {
+                Some((entry_epoch, candidate))
+            }
+            _ => None,
+        }
+    }
+
+    fn restore(&self, entry: StagedDsdEntry) {
+        if self.epoch.load(Ordering::Acquire) != entry.0 {
+            return;
+        }
+        let mut slot = self
+            .candidate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.epoch.load(Ordering::Acquire) == entry.0 && slot.is_none() {
+            *slot = Some(entry);
+        }
+    }
+}
+
 fn prepare_staged_dsd_source(
     path: &Path,
     current_format: DirectDsdFormat,
@@ -864,26 +934,17 @@ impl DirectDsdMonitor {
 
 #[derive(Clone)]
 pub struct DirectDsdStageHandle {
-    control_tx: mpsc::Sender<DirectDsdCommand>,
+    staging: Arc<DirectDsdStaging>,
+    format: DirectDsdFormat,
 }
 
 impl DirectDsdStageHandle {
-    pub fn stage_local(&self, path: &Path, _duration_secs: f64, generation: u64) -> Result<()> {
-        let (response_tx, response_rx) = mpsc::sync_channel(0);
-        self.control_tx
-            .send(DirectDsdCommand::StageLocal {
-                path: path.to_owned(),
-                generation,
-                response: response_tx,
-            })
-            .context("提交 Native DSD staged source 失败")?;
-        response_rx
-            .recv()
-            .context("等待 Native DSD staged source 结果失败")?
+    pub fn stage_local(&self, path: &Path, _duration_secs: f64, generation: u64) -> Result<bool> {
+        self.staging.stage(path, self.format, generation)
     }
 
     pub fn cancel(&self) {
-        let _ = self.control_tx.send(DirectDsdCommand::CancelStaged);
+        self.staging.cancel();
     }
 }
 
@@ -891,6 +952,7 @@ pub struct DirectDsdSource {
     ring: Arc<DirectDsdRing>,
     format: DirectDsdFormat,
     control_tx: mpsc::Sender<DirectDsdCommand>,
+    staging: Arc<DirectDsdStaging>,
     producer: Option<JoinHandle<()>>,
 }
 
@@ -917,13 +979,14 @@ impl DirectDsdSource {
             .context("Native DSD 音源没有可播放 payload")?;
 
         let (control_tx, control_rx) = mpsc::channel();
+        let staging = Arc::new(DirectDsdStaging::new());
         let producer_ring = Arc::clone(&ring);
+        let producer_staging = Arc::clone(&staging);
         let producer = thread::Builder::new()
             .name("diretta-direct-dsd".into())
             .spawn(move || {
                 let mut active_format = format;
                 let mut wire_bit_order = format.bit_order;
-                let mut staged: Option<StagedDsdSource> = None;
                 let mut next_slot = 1 % producer_ring.slots.len();
                 while !producer_ring.stopped.load(Ordering::Acquire) {
                     match control_rx.try_recv() {
@@ -976,7 +1039,7 @@ impl DirectDsdSource {
                                 Ok((new_reader, new_format)) => {
                                     reader = new_reader;
                                     active_format = new_format;
-                                    staged = None;
+                                    producer_staging.cancel();
                                     let _ = response.send(Ok(new_format));
                                     next_slot = 1 % producer_ring.slots.len();
                                 }
@@ -984,26 +1047,6 @@ impl DirectDsdSource {
                                     let _ = response.send(Err(error));
                                 }
                             }
-                            continue;
-                        }
-                        Ok(DirectDsdCommand::StageLocal {
-                            path,
-                            generation,
-                            response,
-                        }) => {
-                            match prepare_staged_dsd_source(&path, active_format, generation) {
-                                Ok(candidate) => {
-                                    staged = Some(candidate);
-                                    let _ = response.send(Ok(()));
-                                }
-                                Err(error) => {
-                                    let _ = response.send(Err(error));
-                                }
-                            }
-                            continue;
-                        }
-                        Ok(DirectDsdCommand::CancelStaged) => {
-                            staged = None;
                             continue;
                         }
                         Err(mpsc::TryRecvError::Disconnected) => return,
@@ -1014,7 +1057,7 @@ impl DirectDsdSource {
                         continue;
                     }
                     if producer_ring.finished.load(Ordering::Acquire) {
-                        let Some(candidate) = staged.take() else {
+                        let Some(entry) = producer_staging.take_current() else {
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         };
@@ -1029,11 +1072,11 @@ impl DirectDsdSource {
                             )
                             .is_err()
                         {
-                            staged = Some(candidate);
+                            producer_staging.restore(entry);
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         }
-                        match install_staged_dsd_slot(candidate, slot, wire_bit_order) {
+                        match install_staged_dsd_slot(entry.1, slot, wire_bit_order) {
                             Ok((new_reader, new_format)) => {
                                 reader = new_reader;
                                 active_format = new_format;
@@ -1064,8 +1107,8 @@ impl DirectDsdSource {
                     match fill_claimed_slot(&mut reader, slot, wire_bit_order) {
                         Ok(Some(())) => next_slot = (next_slot + 1) % producer_ring.slots.len(),
                         Ok(None) => {
-                            if let Some(candidate) = staged.take() {
-                                match install_staged_dsd_slot(candidate, slot, wire_bit_order) {
+                            if let Some(entry) = producer_staging.take_current() {
+                                match install_staged_dsd_slot(entry.1, slot, wire_bit_order) {
                                     Ok((new_reader, new_format)) => {
                                         reader = new_reader;
                                         active_format = new_format;
@@ -1096,6 +1139,7 @@ impl DirectDsdSource {
                 ring,
                 format,
                 control_tx,
+                staging,
                 producer: Some(producer),
             },
             actual_position,
@@ -1119,7 +1163,8 @@ impl DirectDsdSource {
 
     pub fn stage_handle(&self) -> DirectDsdStageHandle {
         DirectDsdStageHandle {
-            control_tx: self.control_tx.clone(),
+            staging: Arc::clone(&self.staging),
+            format: self.format,
         }
     }
 
