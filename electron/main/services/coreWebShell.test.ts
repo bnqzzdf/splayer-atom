@@ -8,6 +8,7 @@ const read = (relative: string): string =>
 const mainSource = read("src/main.ts");
 const runtimeCssSource = read("src/web/runtime.css");
 const mainLayoutSource = read("src/layouts/MainLayout.vue");
+const fullPlayerSource = read("src/components/player/FullPlayer/index.vue");
 
 test("Web Control runtime detection happens before any window.api compatibility layer", () => {
   assert.doesNotMatch(mainSource, /services\/client\/webPolyfill/);
@@ -24,4 +25,11 @@ test("Web Control keeps the Atom navigation shell and persistent player bar", ()
     /showPlayerBar = computed\(\(\) => isWebRemote\(\) \|\| !!useMediaStore\(\)\.track\)/,
   );
   assert.match(runtimeCssSource, /html\[data-atom-runtime="web"\].*window-control-button/s);
+});
+
+test("FullPlayer remains the pointer-event shield while modal menus lock the body", () => {
+  assert.match(
+    fullPlayerSource,
+    /class="fixed inset-0 z-200 overflow-hidden text-cover pointer-events-auto"/,
+  );
 });
