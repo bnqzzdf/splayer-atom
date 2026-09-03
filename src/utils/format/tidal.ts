@@ -1,6 +1,7 @@
 import type { Track, AudioQuality, Artist, Album, Playlist } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
 import { coverSizePair } from "../streamingSettings";
+import { coreApiOrigin } from "../../core/controlClient";
 
 /**
  * 将 TIDAL CDN 图片 URL 改写为经部署服务器代理的地址。
@@ -14,7 +15,7 @@ const proxyTidalImage = (url: string | undefined | null): string | undefined => 
   try {
     const u = new URL(url);
     if ((u.protocol === "http:" || u.protocol === "https:") && TIDAL_IMG_HOST_RE.test(u.hostname)) {
-      return "/api/proxy/image?url=" + encodeURIComponent(url);
+      return `${coreApiOrigin}/api/proxy/image?url=${encodeURIComponent(url)}`;
     }
   } catch {
     /* 非法 URL 直接返回原值 */
@@ -164,7 +165,9 @@ interface TidalTrack {
 interface TidalAlbum {
   id: number | string;
   title?: string;
-  artist?: TidalArtistRef;
+  artist?: TidalArtistRef | string;
+  /** 搜索接口主要返回 artists[]，详情接口可能返回 artist。 */
+  artists?: TidalArtistRef[];
   /** 封面 ID（UUID 或 URL） */
   cover?: TidalImageField;
   image?: TidalImageField;
@@ -191,7 +194,7 @@ interface TidalArtist {
 }
 
 interface TidalPlaylist {
-  id: number | string;
+  id?: number | string;
   /** TIDAL v2 API returns uuid instead of id for playlists */
   uuid?: string | number;
   title?: string;
@@ -375,6 +378,10 @@ export const songsToTracks = (tracks: TidalTrack[] | undefined | null): Track[] 
 /** Core/provider fixture compatibility name. */
 export const tidalTrackToTrack = songToTrack;
 
+const albumArtistName = (album: TidalAlbum): string | undefined =>
+  (typeof album.artist === "string" ? album.artist : album.artist?.name) ??
+  album.artists?.[0]?.name;
+
 /**
  * Tidal album → 应用层 Album
  */
@@ -382,7 +389,7 @@ export const toAlbum = (raw: TidalAlbum): Album => ({
   id: String(raw.id),
   name: raw.title ?? "",
   cover: resolveTidalCover(raw, coverSizePair("tidal").small),
-  artist: raw.artist?.name,
+  artist: albumArtistName(raw),
   trackCount: raw.numberOfTracks,
   year: raw.releaseDate ? new Date(raw.releaseDate).getFullYear() : undefined,
 });
@@ -394,7 +401,7 @@ export const albumToCover = (album: TidalAlbum): CoverItem => ({
   id: String(album.id),
   title: album.title ?? "",
   cover: resolveTidalCover(album, coverSizePair("tidal").small),
-  subtitle: album.artist?.name ?? "",
+  subtitle: albumArtistName(album) ?? "",
   trackCount: album.numberOfTracks ?? 0,
 });
 

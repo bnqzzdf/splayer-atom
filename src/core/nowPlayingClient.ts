@@ -17,6 +17,11 @@ const mapTrack = (track: Track): Track => ({
 export const nowPlayingClient = {
   getLyricOffset: async (): Promise<number> =>
     (await request<LightNowPlayingSnapshot>("/now-playing")).lyricOffsetMs,
+  /** 读取 Core 已实际加载完成的当前 Track，用于 Control 投影一致性恢复。 */
+  getCurrentTrack: async (): Promise<Track | null> => {
+    const light = await request<LightNowPlayingSnapshot>("/now-playing");
+    return light.track ? mapTrack(light.track) : null;
+  },
   requestSnapshot: async (): Promise<NowPlayingSnapshot> => {
     const [light, lyric] = await Promise.all([
       request<LightNowPlayingSnapshot>("/now-playing"),

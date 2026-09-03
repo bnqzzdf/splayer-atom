@@ -294,12 +294,14 @@ const loadIndex = async (
     index = targetIndex;
   }
   active = index >= 0;
-  publish();
   const loadedTrack = item.track;
   const duration = Math.max(loadedTrack.duration || 0, result.data.mediaInfo.duration);
+  // 成功加载后的 session publish 必须晚于 NowPlaying 提交：Control 即使漏掉一次
+  // trackLoaded，也能用 session.current 与 /now-playing 做一致性恢复。
   nowPlaying.update({ ...loadedTrack, duration }, [], null);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
+  publish();
   publishTrackLoaded(item, resolved.source, autoPlay, result.data.detail, result.data.mediaInfo);
   scheduleNextPlaybackPreload();
 };

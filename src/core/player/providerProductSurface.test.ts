@@ -20,6 +20,10 @@ const dailyPageSource = readFileSync(new URL("../../pages/Daily.vue", import.met
 const cloudPageSource = readFileSync(new URL("../../pages/Cloud.vue", import.meta.url), "utf8");
 const userStoreSource = readFileSync(new URL("../../stores/user.ts", import.meta.url), "utf8");
 const neteaseApiSource = readFileSync(new URL("../../apis/netease.ts", import.meta.url), "utf8");
+const providerSessionsSource = readFileSync(
+  new URL("../../stores/providerSessions.ts", import.meta.url),
+  "utf8",
+);
 
 test("Atom formal search surface freezes QQ Music and Kugou without deleting compatibility", () => {
   assert.match(
@@ -29,7 +33,14 @@ test("Atom formal search surface freezes QQ Music and Kugou without deleting com
   assert.match(searchPageSource, /atomSearchPlatforms\.has\(status\.searchPlatform\)/);
   assert.match(
     searchPageSource,
-    /ALL_PLATFORMS\.filter\(\(key\) => atomSearchPlatforms\.has\(key\)\)/,
+    /atomSearchPlatforms\.has\(key\) && isSearchPlatformAvailable\(key\)/,
+  );
+  assert.match(searchPageSource, /providerSessions\.isAuthenticated\(platform\)/);
+  assert.match(searchPageSource, /providerSessions\.initialized/);
+  assert.match(providerSessionsSource, /const initialized = ref\(false\)/);
+  assert.doesNotMatch(
+    searchPageSource,
+    /searchSource\.value === "qobuz" \|\| searchSource\.value === "tidal"[\s\S]{0,80}items\.slice\(0, 1\)/,
   );
   assert.match(statusStoreSource, /searchPlatform = ref<Platform>\("netease"\)/);
 

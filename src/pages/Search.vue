@@ -11,6 +11,7 @@ import CoverList from "@/components/list/CoverList.vue";
 import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
+import { useProviderSessionsStore } from "@/stores/providerSessions";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { isWebRemote } from "@/runtime";
 import { libraryClient } from "@/core/libraryClient";
@@ -19,6 +20,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
+const providerSessions = useProviderSessionsStore();
 const webRemote = isWebRemote();
 const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
 if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
@@ -46,18 +48,37 @@ const tabs = computed(() => {
     { key: "playlists", label: t("search.tabs.playlists") },
   ];
   if (searchSource.value === "local") return items.slice(0, 3);
-  return searchSource.value === "qobuz" || searchSource.value === "tidal"
-    ? items.slice(0, 1)
-    : items;
+  return items;
 });
 
+/** NCM 搜索允许匿名使用；Qobuz/TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
+const isSearchPlatformAvailable = (platform: Platform): boolean =>
+  platform === "netease" ||
+  ((platform === "qobuz" || platform === "tidal") && providerSessions.isAuthenticated(platform));
+
 const platformTabs = computed(() => {
-  const online = ALL_PLATFORMS.filter((key) => atomSearchPlatforms.has(key)).map((key) => ({
-    key,
-    label: PLATFORM_SHORT_NAME[key],
-  }));
+  const online = ALL_PLATFORMS.filter(
+    (key) => atomSearchPlatforms.has(key) && isSearchPlatformAvailable(key),
+  ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
   return [{ key: "local", label: t("search.source.local") }, ...online];
 });
+
+watch(
+  () =>
+    [
+      providerSessions.initialized,
+      providerSessions.sessions.qobuz.authenticated,
+      providerSessions.sessions.tidal.authenticated,
+    ] as const,
+  ([initialized]) => {
+    if (!initialized) return;
+    const source = searchSource.value;
+    if ((source === "qobuz" || source === "tidal") && !providerSessions.isAuthenticated(source)) {
+      searchSource.value = "local";
+    }
+  },
+  { immediate: true },
+);
 
 interface TabState<T> {
   items: T[];
@@ -219,11 +240,7 @@ const syncFromRoute = (): void => {
       ? (route.query.tab as TabKey)
       : "songs";
   const tab: TabKey =
-    searchSource.value === "qobuz" || searchSource.value === "tidal"
-      ? "songs"
-      : searchSource.value === "local" && requestedTab === "playlists"
-        ? "songs"
-        : requestedTab;
+    searchSource.value === "local" && requestedTab === "playlists" ? "songs" : requestedTab;
   if (tab !== requestedTab) void router.replace({ query: { ...route.query, tab } });
 
   activeTab.value = tab;

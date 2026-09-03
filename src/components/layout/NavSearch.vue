@@ -321,7 +321,6 @@ onMounted(() => {
           v-model="searchQuery"
           :placeholder="t('nav.searchPlaceholder')"
           @keydown="onKeydown"
-          @search="submit"
         />
       </div>
       <div class="overflow-hidden transition-[height] duration-300 ease-out" :style="bodyStyle">

@@ -120,6 +120,7 @@ import { toMs } from "@main/utils/time";
 import { testNetworkProxy } from "@main/utils/proxy";
 import { getDownloadDir } from "@main/utils/config";
 import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFilesystem";
+import { fetchProviderImage, parseProviderImageUrl } from "@main/services/providerImageProxy";
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -171,6 +172,23 @@ export const buildHeadlessRoutes = (): Hono => {
   const api = new Hono();
 
   api.get("/info", (c) => c.json(getCoreInfo()));
+
+  api.get("/proxy/image", async (c) => {
+    const url = c.req.query("url");
+    if (!parseProviderImageUrl(url))
+      return c.json({ error: "unsupported provider image URL" }, 400);
+    try {
+      const asset = await fetchProviderImage(url!);
+      return new Response(asset.bytes, {
+        headers: {
+          "Content-Type": asset.contentType,
+          "Cache-Control": "public, max-age=86400",
+        },
+      });
+    } catch (error) {
+      return c.json({ error: errorText(error) }, 502);
+    }
+  });
 
   api.get("/status", (c) => {
     const raw = getPlayer().getStatus();

@@ -71,4 +71,37 @@ describe("NowPlaying Core Protocol client", () => {
     expect(snapshot.lyric).toEqual([]);
     expect(snapshot.source).toBeNull();
   });
+
+  it("queries the loaded current Track for projection reconciliation", async () => {
+    document.documentElement.dataset.atomRuntime = "web";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          track: {
+            id: "loaded-1",
+            title: "Loaded",
+            source: "local",
+            artists: [],
+            duration: 1000,
+            cover: "cache://covers/loaded.jpg",
+          },
+          position: 0,
+          playing: true,
+          state: "playing",
+          speed: 1,
+          lyricOffsetMs: 0,
+          sendTimestamp: 1,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { nowPlayingClient } = await import("./nowPlayingClient");
+    const track = await nowPlayingClient.getCurrentTrack();
+
+    expect(track?.id).toBe("loaded-1");
+    expect(track?.cover).toMatch(/\/cache\/covers\/loaded\.jpg$/);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toMatch(/\/api\/now-playing$/);
+  });
 });

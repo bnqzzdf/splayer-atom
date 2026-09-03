@@ -32,6 +32,27 @@ test("Control projects Core-loaded tracks into media, lyric, cover and history s
   assert.doesNotMatch(section, /resolveTrackSource/);
 });
 
+test("successful loads publish a recoverable snapshot before the transient trackLoaded event", () => {
+  const loadIndex = session
+    .split("const loadIndex = async (")[1]
+    ?.split("const loadIndexWithPolicy = async")[0];
+  assert.ok(loadIndex, "loadIndex should exist");
+  const nowPlayingIndex = loadIndex.indexOf("nowPlaying.update(");
+  const publishIndex = loadIndex.indexOf("publish();", nowPlayingIndex);
+  const trackLoadedIndex = loadIndex.indexOf("publishTrackLoaded(", publishIndex);
+  assert.ok(nowPlayingIndex >= 0, "loadIndex should commit NowPlaying after a successful load");
+  assert.ok(publishIndex > nowPlayingIndex, "post-load session must follow NowPlaying commit");
+  assert.ok(trackLoadedIndex > publishIndex, "trackLoaded remains the fast transient projection");
+});
+
+test("Control reconciles a missed trackLoaded event only against Core loaded state", () => {
+  assert.match(rendererEvents, /nowPlayingClient\.getCurrentTrack\(\)/);
+  assert.match(rendererEvents, /isSameTrackIdentity\(loaded, expected\)/);
+  const section = rendererEvents.split('case "session": {')[1]?.split("break;")[0];
+  assert.ok(section, "session projection handler should exist");
+  assert.match(section, /reconcileSessionPresentation\(event\.data\)/);
+});
+
 test("Direct Core boundary publishes the same loaded-track projection contract", () => {
   assert.match(session, /publishTrackLoaded\(prepared\.item, prepared\.directSource/);
 });

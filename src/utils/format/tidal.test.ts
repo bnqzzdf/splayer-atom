@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { tidalTrackToTrack } from "./tidal";
+import { albumToCover, tidalTrackToTrack } from "./tidal";
 
 describe("tidalTrackToTrack", () => {
   it("maps TIDAL metadata into the canonical SPlayer Track", () => {
@@ -44,5 +44,20 @@ describe("tidalTrackToTrack", () => {
     assert.equal(track.duration, 0);
     assert.deepEqual(track.artists, [{ name: "Solo Artist" }]);
     assert.equal(track.cover, undefined);
+  });
+
+  it("maps TIDAL search album artwork and artists[] through the Core image proxy", () => {
+    const album = albumToCover({
+      id: 23324600,
+      title: "Greatest Hits (Deluxe)",
+      cover: "b7168034-1b47-4d3b-ac36-eb478ab30373",
+      artists: [{ id: 1736, name: "Dido" }],
+      numberOfTracks: 31,
+    });
+
+    assert.equal(album.subtitle, "Dido");
+    assert.equal(album.trackCount, 31);
+    assert.match(album.cover ?? "", /\/api\/proxy\/image\?url=/);
+    assert.match(decodeURIComponent(album.cover ?? ""), /resources\.tidal\.com\/images/);
   });
 });

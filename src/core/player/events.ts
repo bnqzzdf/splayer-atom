@@ -1,4 +1,4 @@
-import type { PlayerEvent } from "@shared/types/player";
+import type { PlaybackSessionSnapshot, PlayerEvent, Track } from "@shared/types/player";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useHistoryStore } from "@/stores/history";
@@ -13,6 +13,7 @@ import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
 import { handleError } from "@/utils/errors";
 import { ErrorCode } from "@shared/types/errors";
+import { nowPlayingClient } from "@/core/nowPlayingClient";
 import {
   hasReachedSeekTarget,
   insertManyToQueue,
@@ -34,6 +35,66 @@ import {
 
 /** 防止 ended 事件重入 */
 let endedGuard = false;
+
+/** session 投影恢复代次；新 session/trackLoaded 会废弃旧的异步核对。 */
+let sessionTrackReconcileGeneration = 0;
+
+/** Control 侧只比较 canonical Track 身份，不用标题/封面等可变展示字段判等。 */
+const isSameTrackIdentity = (
+  left: Track | null | undefined,
+  right: Track | null | undefined,
+): boolean => {
+  if (!left || !right) return left == null && right == null;
+  if (left.source !== right.source || left.id !== right.id) return false;
+  if (left.source !== "streaming") return true;
+  return (left.serverId ?? "") === (right.serverId ?? "");
+};
+
+/**
+ * 用 Core 已加载的 NowPlaying 状态修复漏失 trackLoaded 后的 Control 展示投影。
+ * session.current 可能在真正 load 前就先变化，因此只有两边身份一致时才提交 UI。
+ */
+const reconcileSessionTrack = async (
+  session: PlaybackSessionSnapshot,
+  generation: number,
+): Promise<void> => {
+  const expected = session.current;
+  if (!expected) return;
+  try {
+    const loaded = await nowPlayingClient.getCurrentTrack();
+    if (generation !== sessionTrackReconcileGeneration || !loaded) return;
+    const status = useStatusStore();
+    if (!isSameTrackIdentity(status.currentTrack, expected)) return;
+    if (!isSameTrackIdentity(loaded, expected)) return;
+    const media = useMediaStore();
+    if (isSameTrackIdentity(media.track, expected)) return;
+
+    // trackLoaded 丢失时旧 detail/歌词也属于上一曲；先原子清掉旧 presentation 再恢复已加载 Track。
+    media.clear();
+    media.setTrack(loaded);
+    media.setPlaybackContext(queue.getQueueItem(session.index)?.context);
+    status.duration = loaded.duration || status.duration;
+    playback.setDuration(status.duration);
+    void lyricLoader.loadForTrack(null);
+    extractColorFromUrl(loaded.cover ?? loaded.coverOriginal ?? null);
+    void coverLoader.loadCoverForTrack(loaded);
+    void useHistoryStore().record(loaded);
+  } catch {
+    // 短暂断线由下一次 session snapshot / WS 重连继续恢复，不制造额外错误状态。
+  }
+};
+
+/** session 快照只在与当前展示不一致时查询一次已加载状态。 */
+const reconcileSessionPresentation = (session: PlaybackSessionSnapshot): void => {
+  const generation = ++sessionTrackReconcileGeneration;
+  const media = useMediaStore();
+  if (!session.current) {
+    media.clear();
+    return;
+  }
+  if (isSameTrackIdentity(media.track, session.current)) return;
+  void reconcileSessionTrack(session, generation);
+};
 
 /** 按当前播放模式结算并进入下一步 */
 const finishCurrentTrack = async (): Promise<void> => {
@@ -66,6 +127,7 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
   const status = useStatusStore();
   switch (event.type) {
     case "trackLoaded": {
+      sessionTrackReconcileGeneration++;
       const media = useMediaStore();
       media.setTrack(event.data.track, event.data.detail);
       media.setPlaybackContext(event.data.context);
@@ -200,7 +262,7 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       status.shuffleMode = event.data.shuffle;
       status.fmMode = event.data.mode === "personalFm";
       autoClose.applySnapshot(event.data.autoClose);
-      if (!event.data.current) useMediaStore().clear();
+      reconcileSessionPresentation(event.data);
       break;
     }
   }
