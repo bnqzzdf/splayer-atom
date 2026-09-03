@@ -8,6 +8,7 @@ const read = (path: string): string => readFileSync(resolve(process.cwd(), path)
 const sharedPlayer = read("shared/types/player.ts");
 const session = read("electron/main/services/playbackSession.ts");
 const rendererEvents = read("src/core/player/events.ts");
+const trackInfo = read("src/components/player/TrackInfo.vue");
 
 test("Core exposes a loaded-track projection event without persisting resolved URLs in the session", () => {
   assert.match(sharedPlayer, /type: "trackLoaded"/);
@@ -51,6 +52,16 @@ test("Control reconciles a missed trackLoaded event only against Core loaded sta
   const section = rendererEvents.split('case "session": {')[1]?.split("break;")[0];
   assert.ok(section, "session projection handler should exist");
   assert.match(section, /reconcileSessionPresentation\(event\.data\)/);
+});
+
+test("Control reuses session current as loading presentation without mutating loaded media", () => {
+  assert.match(rendererEvents, /status\.trackLoading = session\.active/);
+  assert.match(
+    trackInfo,
+    /trackLoading\.value \? \(status\.currentTrack \?\? media\.track\) : media\.track/,
+  );
+  assert.match(trackInfo, /player\.preparingAudio/);
+  assert.match(trackInfo, /<slot v-if="!trackLoading" name="title-trailing" \/>/);
 });
 
 test("Direct Core boundary publishes the same loaded-track projection contract", () => {

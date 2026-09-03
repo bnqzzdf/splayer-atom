@@ -73,6 +73,7 @@ const reconcileSessionTrack = async (
     media.clear();
     media.setTrack(loaded);
     media.setPlaybackContext(queue.getQueueItem(session.index)?.context);
+    status.trackLoading = false;
     status.duration = loaded.duration || status.duration;
     playback.setDuration(status.duration);
     void lyricLoader.loadForTrack(null);
@@ -87,12 +88,20 @@ const reconcileSessionTrack = async (
 /** session 快照只在与当前展示不一致时查询一次已加载状态。 */
 const reconcileSessionPresentation = (session: PlaybackSessionSnapshot): void => {
   const generation = ++sessionTrackReconcileGeneration;
+  const status = useStatusStore();
   const media = useMediaStore();
   if (!session.current) {
+    status.trackLoading = false;
     media.clear();
     return;
   }
-  if (isSameTrackIdentity(media.track, session.current)) return;
+  if (isSameTrackIdentity(media.track, session.current)) {
+    status.trackLoading = false;
+    return;
+  }
+  // session.current 是 Core 已接受的目标曲，media.track 仍只代表真正加载成功的曲目。
+  // 两者不一致时复用现有 loading 状态给 Control 即时反馈，不创建第二套 pending 状态机。
+  status.trackLoading = session.active;
   void reconcileSessionTrack(session, generation);
 };
 
@@ -195,6 +204,7 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       playback.setFftFrame(event.data.ldata, event.data.rdata);
       break;
     case "error":
+      status.trackLoading = false;
       if (event.data.error === ErrorCode.OUTPUT_DEVICE_REQUIRED) {
         status.outputSelectionRequest++;
       }

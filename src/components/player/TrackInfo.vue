@@ -17,8 +17,12 @@ withDefaults(
 const status = useStatusStore();
 const media = useMediaStore();
 const settings = useSettingsStore();
-const { isPlayerExpanded, isPlaying } = storeToRefs(status);
+const { isPlayerExpanded, isPlaying, trackLoading } = storeToRefs(status);
 const hasTrack = computed(() => media.track !== null);
+/** 加载阶段仅用于播放栏反馈目标曲；media.track 仍保持 Core 已实际加载成功的曲目。 */
+const displayTrack = computed(() =>
+  trackLoading.value ? (status.currentTrack ?? media.track) : media.track,
+);
 
 /** 仅有实际曲目时允许展开全屏播放器。 */
 const expandPlayer = (): void => {
@@ -26,7 +30,7 @@ const expandPlayer = (): void => {
 };
 
 /** 当前歌曲中可展示的歌手 */
-const artists = computed(() => getValidArtists(media.track?.artists));
+const artists = computed(() => getValidArtists(displayTrack.value?.artists));
 
 /** 主歌词行 */
 const mainLines = computed(() => media.parsedLyric.filter((l) => !l.isBG));
@@ -34,6 +38,7 @@ const mainLines = computed(() => media.parsedLyric.filter((l) => !l.isBG));
 /** 当前播放栏歌词 */
 const currentBarLyric = computed(() => {
   if (
+    trackLoading.value ||
     !settings.player.showLyricInBar ||
     !isPlaying.value ||
     media.lyricIndex < 0 ||
@@ -51,8 +56,9 @@ const currentBarLyric = computed(() => {
 
 /** 歌手是否可跳转：非本地需有真实 id */
 const isArtistLinkable = (artist: Artist): boolean => {
+  if (trackLoading.value) return false;
   if (!artist.name) return false;
-  const source = media.track?.source;
+  const source = displayTrack.value?.source;
   if (source && source !== "local") return !!artist.id;
   return true;
 };
@@ -69,7 +75,7 @@ const isArtistLinkable = (artist: Artist): boolean => {
       ]"
       @click="expandPlayer"
     >
-      <SImg :src="media.track?.cover" class="size-full" />
+      <SImg :src="displayTrack?.cover" class="size-full" />
       <div
         v-if="hasTrack"
         class="absolute inset-0 z-10 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-200"
@@ -82,7 +88,7 @@ const isArtistLinkable = (artist: Artist): boolean => {
     </div>
     <!-- 歌曲信息 -->
     <Transition name="slide-left" mode="out-in">
-      <div v-if="media.track" :key="media.track.id" class="min-w-0 flex-1">
+      <div v-if="displayTrack" :key="displayTrack.id" class="min-w-0 flex-1">
         <div class="flex items-center gap-1 min-w-0">
           <SMarquee
             fit
@@ -91,12 +97,20 @@ const isArtistLinkable = (artist: Artist): boolean => {
               compact ? 'font-medium text-sm leading-tight' : 'font-bold text-base leading-snug'
             "
           >
-            {{ media.track.title }}
+            {{ displayTrack.title }}
           </SMarquee>
-          <slot name="title-trailing" />
+          <slot v-if="!trackLoading" name="title-trailing" />
         </div>
         <Transition name="slide-up" mode="out-in">
-          <div v-if="currentBarLyric" :key="currentBarLyric.key" class="min-w-0">
+          <div
+            v-if="trackLoading"
+            key="preparing-audio"
+            class="text-on-surface-variant truncate"
+            :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
+          >
+            {{ $t("player.preparingAudio") }}
+          </div>
+          <div v-else-if="currentBarLyric" :key="currentBarLyric.key" class="min-w-0">
             <SMarquee
               class="text-on-surface-variant"
               :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
@@ -121,7 +135,7 @@ const isArtistLinkable = (artist: Artist): boolean => {
                   @click.stop="
                     isArtistLinkable(artist) &&
                     navigateToArtist(artist.name, {
-                      source: media.track?.source,
+                      source: displayTrack?.source,
                       artistId: artist.id,
                     })
                   "

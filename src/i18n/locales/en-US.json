@@ -472,6 +472,7 @@
     "prev": "Previous",
     "next": "Next",
     "notPlaying": "Not playing",
+    "preparingAudio": "Preparing audio…",
     "heartMode": {
       "needLogin": "Sign in to use Heart Mode",
       "noSeed": "No seed track available for Heart Mode",
