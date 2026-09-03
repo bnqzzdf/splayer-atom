@@ -18,9 +18,7 @@ const updaterSource = read("electron/main/services/updater.ts");
 const coreSource = read("electron/main/core/index.ts");
 const electronEntrySource = read("electron/main/index.ts");
 const devUpdateSource = read("dev-app-update.yml");
-const releaseWorkflowSource = read(".github/workflows/release.yml");
 const devWorkflowSource = read(".github/workflows/dev.yml");
-const releaseAssetsSource = read(".github/scripts/prepare-release-assets.cjs");
 const defaultsSource = read("shared/defaults/settings.ts");
 const orpheusSource = read("electron/main/services/orpheus.ts");
 const musicBrainzSource = read("electron/main/apis/musicbrainz.ts");
@@ -64,7 +62,7 @@ test("Atom installer does not silently steal the upstream Orpheus protocol", () 
 });
 
 test("Atom updater and publish targets can never silently fall back to SPlayer-Next", () => {
-  for (const source of [builderSource, updaterSource, devUpdateSource, releaseWorkflowSource]) {
+  for (const source of [builderSource, updaterSource, devUpdateSource]) {
     assert.doesNotMatch(
       source,
       /SPlayer-Dev\/SPlayer-Next|owner:\s*"?SPlayer-Dev|repo:\s*"?SPlayer-Next/,
@@ -78,19 +76,9 @@ test("Atom updater and publish targets can never silently fall back to SPlayer-N
   assert.match(devUpdateSource, /updaterCacheDirName: splayer-atom-updater/);
 });
 
-test("formal release workflow is pinned to the Atom repository and a clean source tree", () => {
-  assert.match(releaseWorkflowSource, /GITHUB_REPOSITORY.*bnqzzdf\/splayer-atom/);
-  assert.match(releaseWorkflowSource, /git status --porcelain --untracked-files=normal/);
-  assert.match(releaseWorkflowSource, /正式 release 必须来自 clean source tree/);
-});
-
-test("formal Atom release channels are stable and beta only", () => {
+test("Atom packaging channels are stable and beta only", () => {
   assert.match(builderSource, /releaseChannel !== "stable" && releaseChannel !== "beta"/);
   assert.match(builderSource, /releaseChannel === "stable" \? "latest" : "beta"/);
-  assert.match(releaseWorkflowSource, /UPDATE_CHANNEL=stable/);
-  assert.match(releaseWorkflowSource, /UPDATE_CHANNEL=beta/);
-  assert.doesNotMatch(releaseWorkflowSource, /UPDATE_CHANNEL=alpha|\*-alpha/);
-  assert.doesNotMatch(releaseAssetsSource, /\balpha\b/);
 });
 
 test("runtime integrations identify the current product as SPlayer Atom", () => {
@@ -114,9 +102,7 @@ test("runtime integrations identify the current product as SPlayer Atom", () => 
   assert.match(serverSource, /c\.header\("Cache-Control", "no-store"\)/);
 });
 
-test("CI artifact labels expose Atom rather than upstream product identity", () => {
-  assert.doesNotMatch(releaseWorkflowSource, /SPlayer-Next-/);
+test("Dev CI artifact labels expose Atom rather than upstream product identity", () => {
   assert.doesNotMatch(devWorkflowSource, /SPlayer-Next-/);
-  assert.match(releaseWorkflowSource, /SPlayer-Atom-\$\{\{ matrix\.name \}\}/);
   assert.match(devWorkflowSource, /SPlayer-Atom-Windows-setup/);
 });

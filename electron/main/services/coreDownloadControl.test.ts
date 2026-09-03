@@ -121,6 +121,8 @@ test("Download jobs capture Control lyric preferences before entering Core", () 
   assert.doesNotMatch(downloadStoreSource, /initDownloadResolver/);
   assert.match(downloadComposableSource, /prepareDownloadLyrics\(req\)/);
   assert.match(downloadComposableSource, /const req = await prepareRequest\(track, opts\)/);
+  assert.match(downloadComposableSource, /crypto\.getRandomValues\(new Uint8Array\(16\)\)/);
+  assert.match(downloadComposableSource, /toast\.error\(t\("download\.enqueueFailed"\)\)/);
 });
 
 test("Web uses the Core directory browser instead of a browser-local picker or explorer", () => {

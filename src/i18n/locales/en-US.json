@@ -685,6 +685,7 @@
     "alreadyDownloaded": "Already downloaded to Core",
     "started": "Added to Core downloads: {title}",
     "enqueued": "Added {count} to Core downloads",
+    "enqueueFailed": "Unable to add to the download queue. Please try again",
     "status": {
       "queued": "Queued",
       "downloading": "Downloading",
@@ -946,6 +947,8 @@
       "qqmusic": "Prefer QM",
       "kugou": "Prefer KG",
       "netease": "Prefer NCM",
+      "qobuz": "Prefer Qobuz (Unavailable)",
+      "tidal": "Prefer TIDAL (Unavailable)",
       "self": "Follow Self"
     },
     "lyricSourceOrder": {

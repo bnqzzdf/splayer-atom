@@ -18,6 +18,10 @@ const buildSource = readFileSync(
   new URL("../../../scripts/atom/build-core-system.ts", import.meta.url),
   "utf8",
 );
+const pluginSmokeSource = readFileSync(
+  new URL("../../../scripts/atom/check-core-plugin-host.mjs", import.meta.url),
+  "utf8",
+);
 const webConfigSource = readFileSync(
   new URL("../../../scripts/atom/vite.web.config.ts", import.meta.url),
   "utf8",
@@ -96,13 +100,19 @@ test("formal Core system build always rebuilds before staging and checks the fin
   const coreBuild = buildSource.indexOf("vite.core.config.ts");
   const webBuild = buildSource.indexOf("vite.web.config.ts");
   const audit = buildSource.indexOf("check-core-build.mjs");
+  const pluginSmoke = buildSource.indexOf("check-core-plugin-host.mjs");
   const stage = buildSource.indexOf("stage-core-system.ts");
   const artifact = buildSource.indexOf("check-core-artifact.ts");
   assert.ok(nativeBuild < coreBuild);
-  assert.ok(coreBuild < webBuild);
+  assert.ok(coreBuild < pluginSmoke);
+  assert.ok(pluginSmoke < webBuild);
   assert.ok(webBuild < audit);
   assert.ok(audit < stage);
   assert.ok(stage < artifact);
+  assert.match(pluginSmokeSource, /fork\(entry/);
+  assert.match(pluginSmokeSource, /message\.kind === "hostReady"/);
+  assert.match(pluginSmokeSource, /child\.send\(\{ kind: "ping" \}\)/);
+  assert.match(pluginSmokeSource, /message\.kind === "pong"/);
 });
 
 test("system-runtime launcher and systemd unit execute the same Core entry", () => {

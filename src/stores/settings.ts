@@ -8,10 +8,10 @@ import type {
 import {
   DEFAULT_LYRIC_FORMAT_ORDER,
   DEFAULT_LYRIC_SOURCE_ORDER,
+  SUPPORTED_LYRIC_PLATFORMS,
   SPRING_PRESETS,
 } from "@/types/settings";
 import { isCoreSettingPath, type SystemConfig, type LocaleCode } from "@shared/types/settings";
-import { ALL_PLATFORMS } from "@shared/types/platform";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
 import { hasHostCapability } from "@/runtime";
@@ -294,7 +294,13 @@ export const useSettingsStore = defineStore(
         if (typeof lyric.detectBackgroundLyrics !== "boolean") {
           lyric.detectBackgroundLyrics = true;
         }
-        lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, ALL_PLATFORMS);
+        lyric.lyricSourceOrder = reconcileOrder(
+          lyric.lyricSourceOrder,
+          SUPPORTED_LYRIC_PLATFORMS,
+        );
+        if (lyric.lyricSourcePreference === "qobuz" || lyric.lyricSourcePreference === "tidal") {
+          lyric.lyricSourcePreference = "auto";
+        }
         lyric.lyricFormatOrder = reconcileOrder(lyric.lyricFormatOrder, DEFAULT_LYRIC_FORMAT_ORDER);
       },
     },

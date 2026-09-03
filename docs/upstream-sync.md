@@ -105,15 +105,11 @@ node scripts/atom/upstream-sync.mjs report
 
 报告会验证 accepted baseline、vendor 与官方 `splayer/dev` 的 ancestry，并用 Git merge-tree 检查当前 Atom `dev` 与候选上游是否存在 merge conflict。
 
-`.github/workflows/upstream-sync.yml` 每周与手动运行时会：
+仓库当前不再保留独立的 upstream-sync GitHub Actions workflow。候选检查由维护者在本地或
+受控环境中显式执行 `report`；真正开始整合时，再按本文流程创建专用 sync branch/worktree，
+并依据 `AGENTS.md` 对实际改动运行相称的 lint、typecheck、tests、build 与 touch audit。
 
-- fetch 官方 `splayer/dev` 与 Atom `vendor/splayer`；
-- 验证 vendor 仍是官方历史中的纯净 commit；
-- 先检查 merge conflict，再在 CI checkout 中临时 merge 最新上游；
-- 以 `splayer/dev` 为 candidate baseline 重新计算 Atom touch inventory；
-- 运行 lint、typecheck、Node/Web tests、production build 与 Linux `audio-engine` tests。
-
-该 workflow 只报告候选整合状态，不自动修改 `vendor/splayer`、accepted baseline 或 Atom `dev`。
+`report` 只报告候选整合状态，不自动修改 `vendor/splayer`、accepted baseline 或 Atom `dev`。
 
 ## Upstream contribution branches
 

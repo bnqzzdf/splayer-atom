@@ -17,6 +17,16 @@ interface EnqueueOptions {
 /** 可下载音质档位（展示顺序） */
 const DOWNLOAD_QUALITY_LEVELS: QualityLevel[] = ["hi-res", "lossless", "hq", "sq", "lq"];
 
+/** 生成下载任务 UUID；LAN HTTP 下 randomUUID 不可用时回退到 getRandomValues。 */
+export const createDownloadTaskId = (): string => {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 /**
  * 构建下载音质菜单项
  * @param defaultLabel - 「跟随默认」项文案
@@ -56,7 +66,7 @@ export const useDownload = () => {
     };
     const req: DownloadRequest = {
       destination: "core",
-      taskId: opts.taskId ?? crypto.randomUUID(),
+      taskId: opts.taskId ?? createDownloadTaskId(),
       track,
       qualityLevel: level,
       coverUrl: track.coverOriginal ?? track.cover,
@@ -73,29 +83,42 @@ export const useDownload = () => {
    * @returns 是否成功入队
    */
   const enqueue = async (track: Track, opts: EnqueueOptions = {}): Promise<boolean> => {
-    const req = await prepareRequest(track, opts);
-    if (!req) return false;
-    const res = opts.taskId ? await downloadClient.retry(req) : await downloadClient.start(req);
-    if (!res.ok) {
-      toast.warning(
-        res.reason === "downloaded" ? t("download.alreadyDownloaded") : t("download.alreadyQueued"),
-      );
+    try {
+      const req = await prepareRequest(track, opts);
+      if (!req) return false;
+      const res = opts.taskId ? await downloadClient.retry(req) : await downloadClient.start(req);
+      if (!res.ok) {
+        toast.warning(
+          res.reason === "downloaded"
+            ? t("download.alreadyDownloaded")
+            : t("download.alreadyQueued"),
+        );
+        return false;
+      }
+      if (opts.taskId === undefined) toast.success(t("download.started", { title: track.title }));
+      return true;
+    } catch (error) {
+      console.warn("[download] enqueue failed:", error);
+      toast.error(t("download.enqueueFailed"));
       return false;
     }
-    if (opts.taskId === undefined) toast.success(t("download.started", { title: track.title }));
-    return true;
   };
 
   /** 批量下载 */
   const enqueueMany = async (tracks: Track[]): Promise<void> => {
-    const requests: DownloadRequest[] = [];
-    for (const track of tracks) {
-      const req = await prepareRequest(track, {});
-      if (req) requests.push(req);
+    try {
+      const requests: DownloadRequest[] = [];
+      for (const track of tracks) {
+        const req = await prepareRequest(track, {});
+        if (req) requests.push(req);
+      }
+      const results = await downloadClient.startMany(requests);
+      const count = results.filter((result) => result?.ok).length;
+      if (count > 0) toast.success(t("download.enqueued", { count }));
+    } catch (error) {
+      console.warn("[download] batch enqueue failed:", error);
+      toast.error(t("download.enqueueFailed"));
     }
-    const results = await downloadClient.startMany(requests).catch(() => []);
-    const count = results.filter((result) => result?.ok).length;
-    if (count > 0) toast.success(t("download.enqueued", { count }));
   };
 
   /** 重试：用任务保存的完整 Track 重新入队（复用 taskId） */

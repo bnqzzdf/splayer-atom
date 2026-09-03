@@ -199,7 +199,7 @@
     "library": "音乐库",
     "liked": "我喜欢的音乐",
     "history": "播放历史",
-    "download": "Core 下载管理",
+    "download": "下载管理",
     "favorites": "我的收藏",
     "cloud": "我的云盘",
     "streaming": "媒体源",
@@ -647,7 +647,7 @@
     "clearConfirmContent": "确认清空全部播放历史吗？此操作不可撤销！"
   },
   "download": {
-    "title": "Core 下载管理",
+    "title": "下载管理",
     "activeCount": "{count} 个进行中",
     "clearFinished": "清空已完成",
     "clearConfirmTitle": "清空已完成任务",
@@ -673,6 +673,7 @@
     "alreadyDownloaded": "该歌曲已下载到 Core",
     "started": "已加入 Core 下载：{title}",
     "enqueued": "已加入 {count} 首 Core 下载",
+    "enqueueFailed": "无法加入下载队列，请重试",
     "status": {
       "queued": "排队中",
       "downloading": "下载中",
@@ -934,6 +935,8 @@
       "qqmusic": "优先 QM",
       "kugou": "优先 KG",
       "netease": "优先 NCM",
+      "qobuz": "优先 Qobuz（暂不可用）",
+      "tidal": "优先 TIDAL（暂不可用）",
       "self": "跟随自身"
     },
     "lyricSourceOrder": {
