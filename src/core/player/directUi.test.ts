@@ -127,6 +127,7 @@ test("Full player does not duplicate Diretta output state as a decorative badge"
 test("Web status snapshots can settle a seek without high-frequency position events", () => {
   const statusProjection = between(playerEventsSource, '    case "status":', '    case "seek":');
   assert.match(statusProjection, /hasReachedSeekTarget\(event\.data\.position\)/);
+  assert.match(statusProjection, /updateLyricIndex\(adjusted \+ status\.lyricOffsetMs\)/);
 
   const seekFlow = between(
     playerSource,

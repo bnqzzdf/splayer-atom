@@ -163,7 +163,10 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       // Web Control 不接收高频 position event，只轮询 status snapshot；
       // 因此 status 也必须能确认 seek 已到目标，否则 seekTarget 会永久卡住。
       if (!isSeeking() || hasReachedSeekTarget(event.data.position)) {
-        status.position = playback.setCurrentTime(event.data.position);
+        const adjusted = playback.setCurrentTime(event.data.position);
+        status.position = adjusted;
+        // Web 的播放栏歌词同样依赖 status snapshot 推进，不能只等 Desktop position event。
+        useMediaStore().updateLyricIndex(adjusted + status.lyricOffsetMs);
       }
       status.duration = event.data.duration;
       status.volume = event.data.volume;
