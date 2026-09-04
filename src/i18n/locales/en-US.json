@@ -553,6 +553,7 @@
     "context": {
       "play": "Play",
       "playNext": "Play Next",
+      "addToQueue": "Add to Queue",
       "showInExplorer": "Open Location",
       "copyPath": "Copy File Path",
       "editTags": "Edit Metadata",
@@ -580,7 +581,9 @@
       "fileConfirm": "Permanently delete {count} files from disk? This cannot be undone"
     },
     "toast": {
-      "addedToNext": "Added to play next"
+      "addedToNext": "Added to play next",
+      "addedToQueue": "Added to queue",
+      "alreadyInQueue": "Song is already in the queue"
     }
   },
   "quality": {

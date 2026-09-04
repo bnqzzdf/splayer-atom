@@ -16,6 +16,7 @@ import { getTrackShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
 import IconPlay from "~icons/lucide/play";
 import IconListEnd from "~icons/lucide/list-end";
+import IconListMusic from "~icons/lucide/list-music";
 import IconListPlus from "~icons/lucide/list-plus";
 import IconFolderOpen from "~icons/lucide/folder-open";
 import IconSquarePen from "~icons/lucide/square-pen";
@@ -99,6 +100,13 @@ export const useTrackMenu = (
         icon: markRaw(IconListEnd),
         visible: showPlay,
         coreCommand: "player.insertQueueNext",
+      }),
+      action({
+        id: "addToQueue",
+        label: t("songList.context.addToQueue"),
+        icon: markRaw(IconListMusic),
+        visible: showPlay,
+        coreCommand: "player.insertQueueEnd",
       }),
       action({
         id: "addToPlaylist",
@@ -261,6 +269,12 @@ export const useTrackMenu = (
         player.insertToQueue(current, undefined, options.playbackContext?.value);
         toast.success(t("songList.toast.addedToNext"));
         break;
+      case "addToQueue": {
+        const count = player.insertManyToQueue([current], "end", options.playbackContext?.value);
+        if (count > 0) toast.success(t("songList.toast.addedToQueue"));
+        else toast.warning(t("songList.toast.alreadyInQueue"));
+        break;
+      }
       case "addToPlaylist":
         options.onAddToPlaylist?.(current);
         break;

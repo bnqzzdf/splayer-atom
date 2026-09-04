@@ -7,6 +7,7 @@ const trackMenuSource = readFileSync(
   new URL("../composables/useTrackMenu.ts", import.meta.url),
   "utf8",
 );
+const playerSource = readFileSync(new URL("../core/player/index.ts", import.meta.url), "utf8");
 const songListSource = readFileSync(
   new URL("../components/list/SongList.vue", import.meta.url),
   "utf8",
@@ -43,6 +44,7 @@ test("Track actions declare Core commands and Host requirements once", () => {
   assert.match(trackMenuSource, /const actions = computed<ControlAction\[\]>/);
   assert.match(trackMenuSource, /id: "play"[\s\S]*coreCommand: "player\.playNow"/);
   assert.match(trackMenuSource, /id: "playNext"[\s\S]*coreCommand: "player\.insertQueueNext"/);
+  assert.match(trackMenuSource, /id: "addToQueue"[\s\S]*coreCommand: "player\.insertQueueEnd"/);
   assert.match(trackMenuSource, /id: "download"[\s\S]*coreCommand: "download\.start"/);
   assert.match(
     trackMenuSource,
@@ -53,6 +55,21 @@ test("Track actions declare Core commands and Host requirements once", () => {
     trackMenuSource,
     /id: "showInExplorer"[\s\S]*requiredCapability: "hostFileExplorer"/,
   );
+});
+
+test("Track add-to-queue appends once by Track id for every SongList source", () => {
+  assert.match(trackMenuSource, /id: "addToQueue"[\s\S]*visible: showPlay[\s\S]*case "addToQueue"/);
+  assert.match(
+    trackMenuSource,
+    /player\.insertManyToQueue\(\[current\], "end", options\.playbackContext\?\.value\)/,
+  );
+  assert.doesNotMatch(trackMenuSource, /id: "addToQueue"[\s\S]*source ===/);
+  assert.match(
+    playerSource,
+    /const seen = new Set\(queue\.queue\.value\.map\(\(track\) => track\.id\)\)/,
+  );
+  assert.match(playerSource, /if \(seen\.has\(item\.id\)\) continue;/);
+  assert.match(playerSource, /seen\.add\(item\.id\);/);
 });
 
 test("Track right-click and row more button project the same Action Model", () => {
