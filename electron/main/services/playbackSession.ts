@@ -247,6 +247,14 @@ const loadIndex = async (
   if (generation !== loadGeneration) return;
 
   playerLog.info(`[session] load ${track.source} track: ${track.title}`);
+  let cacheStartedFromDirectInput = false;
+  const cacheResolvedSource = (materializedSource?: string): void => {
+    if (!resolved.cacheAfterLoad) return;
+    if (materializedSource) cacheStartedFromDirectInput = true;
+    void resolved
+      .cacheAfterLoad(materializedSource)
+      .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
+  };
   const result = await loadPlayerSource(
     resolved.source,
     {
@@ -254,7 +262,10 @@ const loadIndex = async (
       meta: track,
       context: item.context,
     },
-    { preserveListenBrainzSession: runtime.preserveListenBrainzSession },
+    {
+      preserveListenBrainzSession: runtime.preserveListenBrainzSession,
+      onDirectMaterialized: cacheResolvedSource,
+    },
   );
   if (generation !== loadGeneration) return;
   if (!result.success || !result.data) {
@@ -264,11 +275,7 @@ const loadIndex = async (
     throw new CorePlaybackLoadError(code, `${track.source} session load failed: ${code}`);
   }
 
-  if (resolved.cacheAfterLoad) {
-    void resolved
-      .cacheAfterLoad()
-      .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
-  }
+  if (resolved.cacheAfterLoad && !cacheStartedFromDirectInput) cacheResolvedSource();
 
   if (track.source === "local") {
     const mediaInfo = result.data.mediaInfo;

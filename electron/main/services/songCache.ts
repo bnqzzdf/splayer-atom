@@ -20,7 +20,7 @@ import {
   upsert,
 } from "@main/database/songCache";
 
-/** 下载并发上限 */
+/** 缓存写入任务并发上限（远端 fetch 与本地 import 共用） */
 const MAX_CONCURRENT = 2;
 /** 一批 LRU 淘汰数 */
 const EVICT_BATCH = 8;
@@ -67,7 +67,7 @@ interface InFlight {
 
 /** 当前生效的歌曲缓存目录 */
 let cacheDir = getSongCacheDir();
-/** 进行中的下载，按 cacheKey 去重 */
+/** 进行中的缓存写入任务，按 cacheKey 去重 */
 const inFlight = new Map<string, InFlight>();
 /** 等待槽位的队列；只存 starter，槽位空出来时取队头执行 */
 const waiting: Array<() => void> = [];
@@ -280,6 +280,79 @@ const runDownload = async (
   }
 };
 
+/**
+ * 把已经由 Core 完整物化的本地音频复制进持久歌曲缓存。
+ * Direct 首播已经拿到完整字节时复用这份文件，避免为了填充 song cache 再请求一次远端 URL。
+ * @param cacheKey - 缓存键
+ * @param source - 来源
+ * @param sourcePath - 已完整写入的本地音频路径
+ * @param controller - 与同 cacheKey 下载共用的取消控制器
+ * @returns 持久缓存文件路径
+ */
+const runImport = async (
+  cacheKey: string,
+  source: TrackSource,
+  sourcePath: string,
+  controller: AbortController,
+): Promise<string | null> => {
+  const start = Date.now();
+  const filename = filenameFor(cacheKey);
+  const finalPath = absPath(filename);
+  const partPath = `${finalPath}.part`;
+
+  try {
+    if (controller.signal.aborted) return null;
+    const sourceStat = await fsp.stat(sourcePath);
+    if (!sourceStat.isFile() || sourceStat.size === 0) {
+      songCacheLog.warn(`[import] empty key=${cacheKey} path=${sourcePath}`);
+      return null;
+    }
+    if (sourceStat.size > sizeLimitBytes()) {
+      songCacheLog.warn(`[import] skip oversize key=${cacheKey} actual=${sourceStat.size}`);
+      return null;
+    }
+    if (!(await looksLikeAudio(sourcePath))) {
+      songCacheLog.warn(`[import] not audio key=${cacheKey} path=${sourcePath}`);
+      return null;
+    }
+
+    await fsp.mkdir(cacheDir, { recursive: true });
+    if (path.resolve(sourcePath) !== path.resolve(finalPath)) {
+      await fsp.copyFile(sourcePath, partPath);
+      if (controller.signal.aborted) {
+        await fsp.unlink(partPath).catch(() => {});
+        return null;
+      }
+      await fsp.rm(finalPath, { force: true });
+      await fsp.rename(partPath, finalPath);
+    }
+
+    const stat = await fsp.stat(finalPath);
+    const now = Date.now();
+    upsert({
+      cacheKey,
+      source,
+      filename,
+      size: stat.size,
+      mime: null,
+      cachedAt: now,
+      lastUsedAt: now,
+    });
+    await evictIfNeeded();
+
+    songCacheLog.info(`[import] done key=${cacheKey} size=${stat.size} ms=${Date.now() - start}`);
+    return finalPath;
+  } catch (err) {
+    await fsp.unlink(partPath).catch(() => {});
+    if (controller.signal.aborted) {
+      songCacheLog.info(`[import] cancel key=${cacheKey}`);
+    } else {
+      songCacheLog.error(`[import] error key=${cacheKey}`, err);
+    }
+    return null;
+  }
+};
+
 /** 启动初始化：建目录 + 孤儿清理 */
 export const init = async (): Promise<void> => {
   cacheDir = getSongCacheDir();
@@ -342,7 +415,38 @@ export const fetchAsync = (
 };
 
 /**
- * 取消正在进行的下载
+ * 异步把 Core 已物化的本地完整音频写入歌曲缓存。
+ * 与远端 fetch 共用 cacheKey in-flight 去重，避免同一首同时复制和下载。
+ * @param cacheKey - 缓存键
+ * @param source - 来源
+ * @param sourcePath - 本地完整音频路径
+ * @returns 持久缓存文件路径
+ */
+export const importFileAsync = (
+  cacheKey: string,
+  source: TrackSource,
+  sourcePath: string,
+): Promise<string | null> => {
+  if (!isCacheEnabled()) return Promise.resolve(null);
+  const existing = inFlight.get(cacheKey);
+  if (existing) return existing.promise;
+
+  const controller = new AbortController();
+  const promise = (async () => {
+    await acquireSlot();
+    try {
+      return await runImport(cacheKey, source, sourcePath, controller);
+    } finally {
+      inFlight.delete(cacheKey);
+      releaseSlot();
+    }
+  })();
+  inFlight.set(cacheKey, { promise, controller });
+  return promise;
+};
+
+/**
+ * 取消正在进行的缓存写入任务
  * @param cacheKey - 缓存键
  */
 export const cancel = (cacheKey: string): void => {

@@ -19,6 +19,14 @@ const coreSessionSource = readFileSync(
   new URL("../../../electron/main/services/playbackSession.ts", import.meta.url),
   "utf8",
 );
+const sourceResolverSource = readFileSync(
+  new URL("../../../electron/main/services/playbackSourceResolver.ts", import.meta.url),
+  "utf8",
+);
+const songCacheSource = readFileSync(
+  new URL("../../../electron/main/services/songCache.ts", import.meta.url),
+  "utf8",
+);
 
 const between = (source: string, start: string, end: string): string => {
   const afterStart = source.split(start)[1];
@@ -50,6 +58,35 @@ test("main player load materializes every remote source before Diretta native lo
   assert.match(loadFlow, /loadSource = await materializeDirectInput\(source\)/);
   assert.match(loadFlow, /inst\.load\(loadSource/);
   assert.doesNotMatch(loadFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
+});
+
+test("Direct materialization seeds song cache without a second remote fetch", () => {
+  const playerLoadFlow = between(
+    mainPlayerLoadSource,
+    "export const loadPlayerSource = async (",
+    "playerLog.debug(`加载成功: ${displayTitle}`)",
+  );
+  assert.match(playerLoadFlow, /runtime\.onDirectMaterialized\?\.\(loadSource\)/);
+  assert.ok(
+    playerLoadFlow.indexOf("runtime.onDirectMaterialized?.(loadSource)") <
+      playerLoadFlow.indexOf("pruneDirectInputs(loadSource)"),
+  );
+
+  const sessionLoadFlow = between(
+    coreSessionSource,
+    "const loadIndex = async (",
+    "const loadIndexWithPolicy = async (",
+  );
+  assert.match(sessionLoadFlow, /onDirectMaterialized: cacheResolvedSource/);
+  assert.match(sessionLoadFlow, /\.cacheAfterLoad\(materializedSource\)/);
+  assert.match(sessionLoadFlow, /!cacheStartedFromDirectInput/);
+
+  assert.match(
+    sourceResolverSource,
+    /materializedSource[\s\S]*songCache\.importFileAsync\(cacheKey, track\.source, materializedSource\)/,
+  );
+  assert.match(songCacheSource, /export const importFileAsync = \(/);
+  assert.match(songCacheSource, /fsp\.copyFile\(sourcePath, partPath\)/);
 });
 
 test("Diretta next-track staging is owned by Core rather than renderer Control", () => {

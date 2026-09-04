@@ -69,6 +69,8 @@ const classifyLoadError = (error: unknown, source: string): ErrorCode => {
 interface PlayerLoadRuntimeOptions {
   /** 同一 canonical Track 的基础设施 reload 不重建 ListenBrainz listen session。 */
   preserveListenBrainzSession?: boolean;
+  /** Direct 首播完成 native load 后，把已经完整物化的本地输入交回 Core session 复用。 */
+  onDirectMaterialized?: (sourcePath: string) => void;
 }
 
 export const loadPlayerSource = async (
@@ -146,6 +148,7 @@ export const loadPlayerSource = async (
     }
 
     const meta = await inst.load(loadSource, cueRange ? false : autoPlay);
+    if (loadSource !== source) runtime.onDirectMaterialized?.(loadSource);
     void pruneDirectInputs(loadSource);
     if (cueRange) {
       await inst.seek(cueRange.startMs / 1000);
