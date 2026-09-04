@@ -28,14 +28,14 @@ export const getLibrarySnapshot = (serverId: string): StreamingLibrarySnapshot =
 });
 
 /**
- * 在 SQLite 快照中搜索歌曲、专辑和歌手
+ * 在 SQLite 快照中搜索歌曲、专辑、歌手和歌单
  * @param serverId - 服务器 ID
  * @param query - 搜索词
  * @returns 聚合搜索结果
  */
 export const searchLibrary = (serverId: string, query: string): StreamingSearchResult => {
   const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return { songs: [], albums: [], artists: [] };
+  if (!needle) return { songs: [], albums: [], artists: [], playlists: [] };
   return {
     songs: searchTracks(serverId, query),
     albums: getAlbums(serverId).filter(
@@ -45,6 +45,11 @@ export const searchLibrary = (serverId: string, query: string): StreamingSearchR
     ),
     artists: getArtists(serverId).filter((artist) =>
       artist.name.toLocaleLowerCase().includes(needle),
+    ),
+    playlists: getPlaylists(serverId).filter(
+      (playlist) =>
+        playlist.name.toLocaleLowerCase().includes(needle) ||
+        playlist.description?.toLocaleLowerCase().includes(needle),
     ),
   };
 };

@@ -9,6 +9,7 @@ const controlService = read("electron/main/services/streaming/control.ts");
 const ipcSource = read("electron/main/ipc/streaming.ts");
 const routesSource = read("electron/main/atom/headless/routes.ts");
 const syncSource = read("electron/main/services/streaming/sync.ts");
+const librarySource = read("electron/main/services/streaming/library.ts");
 const preloadSource = read("electron/preload/index.ts");
 const sharedTypes = read("shared/types/streaming.ts");
 const eventTypes = read("shared/types/coreEvents.ts");
@@ -98,4 +99,10 @@ test("Streaming library refresh uses the shared Core event envelope", () => {
   assert.doesNotMatch(syncSource, /sendToMain\("streaming:libraryUpdated"/);
   assert.doesNotMatch(preloadSource, /streaming:libraryUpdated/);
   assert.match(storeSource, /streamingClient\.onLibraryUpdated/);
+});
+
+test("Streaming search stays Core-owned and includes playlists", () => {
+  assert.match(controlService, /searchLibrary\(serverId, query\.slice\(0, 200\)\)/);
+  assert.match(librarySource, /playlists: getPlaylists\(serverId\)\.filter/);
+  assert.match(sharedTypes, /playlists: Playlist\[\]/);
 });

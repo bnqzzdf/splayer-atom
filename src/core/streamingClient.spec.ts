@@ -81,16 +81,34 @@ describe("Streaming Core Protocol client", () => {
           artists: [],
           playlists: [],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          songs: [],
+          albums: [],
+          artists: [],
+          playlists: [
+            {
+              id: "playlist-1",
+              name: "Mix",
+              cover: "streaming-cover://image?serverId=server-1&coverId=playlist-cover&size=300",
+            },
+          ],
+        }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
     const { streamingClient } = await import("./streamingClient");
     const { serverAssetUrl } = await import("./controlAssets");
     const snapshot = await streamingClient.getSnapshot("server-1");
+    const search = await streamingClient.search("server-1", "Mix");
     const webCover = snapshot.songs[0]?.cover;
 
     expect(webCover).toContain("/api/streaming/cover?serverId=server-1&coverId=cover-1&size=300");
     expect(snapshot.albums[0]?.cover).toContain("/api/streaming/cover?");
+    expect(search.playlists[0]?.cover).toContain(
+      "/api/streaming/cover?serverId=server-1&coverId=playlist-cover&size=300",
+    );
     expect(serverAssetUrl(webCover)).toBe(
       "streaming-cover://image?serverId=server-1&coverId=cover-1&size=300",
     );

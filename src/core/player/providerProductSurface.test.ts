@@ -24,6 +24,10 @@ const providerSessionsSource = readFileSync(
   new URL("../../stores/providerSessions.ts", import.meta.url),
   "utf8",
 );
+const streamingStoreSource = readFileSync(
+  new URL("../../stores/streaming.ts", import.meta.url),
+  "utf8",
+);
 
 test("Atom formal search surface freezes QQ Music and Kugou without deleting compatibility", () => {
   assert.match(
@@ -59,6 +63,18 @@ test("Desktop and Web reuse the library API for local song album and artist sear
   assert.match(searchPageSource, /source: searchSource, albumId: item\.id/);
   assert.match(searchPageSource, /source: searchSource, artistId: item\.id/);
   assert.doesNotMatch(searchPageSource, /webSearchPlatforms/);
+});
+
+test("Media source search reuses the Core streaming search projection", () => {
+  assert.match(searchPageSource, /type SearchSource = Platform \| "local" \| "streaming"/);
+  assert.match(searchPageSource, /useStreamingStore\(\)/);
+  assert.match(searchPageSource, /void streaming\.init\(\)/);
+  assert.match(searchPageSource, /key: "streaming", label: t\("search\.source\.streaming"\)/);
+  assert.match(searchPageSource, /response = await streaming\.search\(requestKeyword\)/);
+  assert.match(searchPageSource, /response\.playlists\.map/);
+  assert.match(searchPageSource, /source: searchSource, name: item\.title/);
+  assert.match(streamingStoreSource, /streamingClient\.search\(activeServerId\.value, query\)/);
+  assert.doesNotMatch(searchPageSource, /atomSearchPlatforms = new Set<Platform>\([^\n]*streaming/);
 });
 
 test("Headless Web Netease account pages reuse the shared Core provider surface", () => {

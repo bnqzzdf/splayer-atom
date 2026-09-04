@@ -82,6 +82,8 @@ export interface StreamingSearchResult {
   albums: Album[];
   /** 匹配的歌手列表 */
   artists: Artist[];
+  /** 匹配的歌单列表 */
+  playlists: Playlist[];
 }
 
 /** 流媒体服务器媒体快照 */

@@ -12,6 +12,7 @@ import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { isWebRemote } from "@/runtime";
 import { libraryClient } from "@/core/libraryClient";
@@ -21,11 +22,13 @@ const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
 const providerSessions = useProviderSessionsStore();
+const streaming = useStreamingStore();
 const webRemote = isWebRemote();
 const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
 if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
+void streaming.init();
 
-type SearchSource = Platform | "local";
+type SearchSource = Platform | "local" | "streaming";
 type TabKey = "songs" | "albums" | "artists" | "playlists";
 
 const TAB_KEYS: readonly TabKey[] = ["songs", "albums", "artists", "playlists"];
@@ -60,7 +63,10 @@ const platformTabs = computed(() => {
   const online = ALL_PLATFORMS.filter(
     (key) => atomSearchPlatforms.has(key) && isSearchPlatformAvailable(key),
   ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
-  return [{ key: "local", label: t("search.source.local") }, ...online];
+  const mediaSource = streaming.activeServer
+    ? [{ key: "streaming", label: t("search.source.streaming") }]
+    : [];
+  return [{ key: "local", label: t("search.source.local") }, ...mediaSource, ...online];
 });
 
 watch(
@@ -78,6 +84,13 @@ watch(
     }
   },
   { immediate: true },
+);
+
+watch(
+  () => streaming.activeServerId,
+  (serverId) => {
+    if (!serverId && searchSource.value === "streaming") searchSource.value = "local";
+  },
 );
 
 interface TabState<T> {
@@ -179,6 +192,37 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
       }
       const items = all.slice(offset, offset + PAGE_SIZE);
       result = { items, total: all.length, hasMore: offset + items.length < all.length };
+    } else if (requestSource === "streaming") {
+      const response = await streaming.search(requestKeyword);
+      let all: Array<Track | CoverItem>;
+      if (tab === "songs") {
+        all = response.songs;
+      } else if (tab === "albums") {
+        all = response.albums.map((album) => ({
+          id: album.id ?? album.name,
+          title: album.name,
+          subtitle: album.artist,
+          cover: album.cover,
+          trackCount: album.trackCount ?? 0,
+        }));
+      } else if (tab === "artists") {
+        all = response.artists.map((artist) => ({
+          id: artist.id ?? artist.name,
+          title: artist.name,
+          cover: artist.avatar,
+          trackCount: artist.albumCount ?? 0,
+        }));
+      } else {
+        all = response.playlists.map((playlist) => ({
+          id: playlist.id ?? playlist.name,
+          title: playlist.name,
+          subtitle: playlist.description,
+          cover: playlist.cover,
+          trackCount: playlist.trackCount ?? 0,
+        }));
+      }
+      const items = all.slice(offset, offset + PAGE_SIZE);
+      result = { items, total: all.length, hasMore: offset + items.length < all.length };
     } else {
       result = await (fetchers[tab] as typeof searchSongs)(
         requestSource,
@@ -230,6 +274,7 @@ const resetStates = (): void => {
 
 let lastLoadedKeyword = "";
 let lastLoadedSource = searchSource.value;
+let lastLoadedStreamingServerId = streaming.activeServerId;
 
 /** 仅在当前处于搜索路由时同步路由参数，避免离开到其他页面时因 query 为空而误清空状态 */
 const syncFromRoute = (): void => {
@@ -248,10 +293,13 @@ const syncFromRoute = (): void => {
 
   const keywordChanged = q !== lastLoadedKeyword;
   const sourceChanged = searchSource.value !== lastLoadedSource;
+  const streamingServerChanged =
+    searchSource.value === "streaming" && streaming.activeServerId !== lastLoadedStreamingServerId;
 
-  if (keywordChanged || sourceChanged) {
+  if (keywordChanged || sourceChanged || streamingServerChanged) {
     lastLoadedKeyword = q;
     lastLoadedSource = searchSource.value;
+    lastLoadedStreamingServerId = streaming.activeServerId;
     resetStates();
     if (q) fetchTab(tab, false);
   } else if (q && !states[tab].loaded) {
@@ -259,9 +307,11 @@ const syncFromRoute = (): void => {
   }
 };
 
-watch(() => [route.name, route.query.q, route.query.tab, searchSource.value], syncFromRoute, {
-  immediate: true,
-});
+watch(
+  () => [route.name, route.query.q, route.query.tab, searchSource.value, streaming.activeServerId],
+  syncFromRoute,
+  { immediate: true },
+);
 
 const onTabSwitch = (key: string): void => {
   router.replace({ query: { ...route.query, tab: key } });
@@ -270,6 +320,10 @@ const onTabSwitch = (key: string): void => {
 const onPlatformSwitch = (key: string): void => {
   if (key === "local") {
     searchSource.value = "local";
+    return;
+  }
+  if (key === "streaming") {
+    searchSource.value = "streaming";
     return;
   }
   const platform = key as Platform;
@@ -301,6 +355,7 @@ const isEmptyResult = computed(() => {
 });
 
 const isAuthError = computed(() => {
+  if (searchSource.value === "local" || searchSource.value === "streaming") return false;
   if (!error.value) return false;
   const lower = error.value.toLowerCase();
   return (
@@ -350,7 +405,12 @@ const onLoginDialogClose = (open: boolean): void => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0" :class="webRemote ? 'w-64' : 'w-80 max-w-full'">
+        <div
+          class="shrink-0"
+          :class="
+            streaming.activeServer ? 'w-104 max-w-full' : webRemote ? 'w-64' : 'w-80 max-w-full'
+          "
+        >
           <STabs
             :model-value="searchSource"
             :tabs="platformTabs"
@@ -492,9 +552,7 @@ const onLoginDialogClose = (open: boolean): void => {
         :padding-bottom="20"
         :has-more="states.playlists.hasMore"
         :loading-more="states.playlists.loadingMore"
-        @click="
-          (item) => navigateToPlaylist(item.id, { source: status.searchPlatform, name: item.title })
-        "
+        @click="(item) => navigateToPlaylist(item.id, { source: searchSource, name: item.title })"
         @reach-bottom="onReachBottom('playlists')"
       />
     </div>

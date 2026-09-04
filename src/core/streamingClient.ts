@@ -40,6 +40,7 @@ const mapSearch = (result: StreamingSearchResult): StreamingSearchResult => ({
   songs: result.songs.map(mapTrack),
   albums: result.albums.map(mapAlbum),
   artists: result.artists.map(mapArtist),
+  playlists: result.playlists.map(mapPlaylist),
 });
 
 /** Desktop 与 Web 共用的 Streaming Core Protocol client；不暴露最终 playable URL。 */

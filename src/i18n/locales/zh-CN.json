@@ -394,7 +394,8 @@
     "noResultsHint": "换个关键词或切换音源试试",
     "errorTitle": "搜索失败",
     "source": {
-      "local": "本地"
+      "local": "本地",
+      "streaming": "媒体源"
     },
     "tabs": {
       "songs": "单曲",

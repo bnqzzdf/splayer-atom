@@ -406,7 +406,8 @@
     "noResultsHint": "Try another keyword or switch the source",
     "errorTitle": "Search failed",
     "source": {
-      "local": "Local"
+      "local": "Local",
+      "streaming": "Media Source"
     },
     "tabs": {
       "songs": "Songs",
