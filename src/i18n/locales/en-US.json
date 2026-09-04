@@ -227,6 +227,10 @@
       "history": "Recent searches",
       "hot": "Trending"
     },
+    "menu": {
+      "hideFromSidebar": "Hide from sidebar",
+      "customizeSidebar": "Customize sidebar"
+    },
     "link": {
       "song": "Play [{id}]",
       "album": "Go to album [{id}]",
@@ -759,7 +763,6 @@
       "community": "Community",
       "update": "Update",
       "language": "Language",
-      "playback": "Player",
       "playControl": "Playback Control",
       "audioSource": "Audio Source",
       "scrobble": "Scrobble",
@@ -778,6 +781,8 @@
       "appearanceStyle": "Appearance Style",
       "layout": "Layout",
       "font": "Fonts",
+      "playerBar": "Player Bar",
+      "nowPlaying": "Now Playing",
       "media": "Media Controls",
       "device": "Output Device",
       "hotkeys": "Hotkeys",
@@ -1494,6 +1499,10 @@
       "default": "Default",
       "fullscreen": "Fullscreen"
     },
+    "coverLyricRatio": {
+      "label": "Cover/Lyrics Ratio",
+      "description": "Width ratio between cover and lyric areas in Now Playing"
+    },
     "themeMode": {
       "label": "Theme Mode",
       "description": "Application color theme",
@@ -1564,6 +1573,23 @@
     "sidebarPlaylistCover": {
       "label": "Show Playlist Covers",
       "description": "Show playlist covers instead of default icons in the sidebar"
+    },
+    "sidebarCustomize": {
+      "label": "Customize Sidebar",
+      "description": "Group, reorder and toggle sidebar navigation items",
+      "hint": "Drag handles to reorder and regroup; click the eye to toggle visibility",
+      "nav": "Navigation",
+      "groups": "Playlist Groups",
+      "group": "Group {n}",
+      "addGroup": "Add Group",
+      "emptyGroup": "Drag items here",
+      "noPlaylists": "No playlists",
+      "keepEmptyDivider": "Keep dividers for empty groups",
+      "nameWithDivider": "Show dividers alongside group names",
+      "showName": "Show group name in sidebar",
+      "confirmResetTitle": "Reset to defaults?",
+      "confirmResetDesc": "Groups, names, order and visibility will be reset to defaults!",
+      "featureDisabled": "Feature disabled"
     },
     "showStatsInSidebar": {
       "label": "Show Play Stats Entry",
