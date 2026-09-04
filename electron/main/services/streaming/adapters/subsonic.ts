@@ -7,6 +7,7 @@ import type { StreamingAdapter } from "./types";
 const API_VERSION = "1.16.1";
 const CLIENT_NAME = "SPlayer Atom";
 const REQUEST_TIMEOUT_MS = 15_000;
+const ALBUM_FALLBACK_PAGE_SIZE = 500;
 
 interface SubsonicSong {
   id: string;
@@ -58,11 +59,12 @@ interface SubsonicPlaylist {
 /**
  * 生成 Subsonic 请求鉴权参数
  * @param config - 主进程服务器配置
+ * @param restData - 是否请求 JSON 数据接口
  * @returns 每次请求独立的鉴权参数
  */
-const buildAuth = (config: StreamingRuntimeConfig): URLSearchParams => {
+const buildAuth = (config: StreamingRuntimeConfig, restData = true): URLSearchParams => {
   const salt = randomBytes(6).toString("hex");
-  return new URLSearchParams({
+  const params = new URLSearchParams({
     u: config.username,
     t: createHash("md5")
       .update(config.password + salt)
@@ -70,8 +72,9 @@ const buildAuth = (config: StreamingRuntimeConfig): URLSearchParams => {
     s: salt,
     v: API_VERSION,
     c: CLIENT_NAME,
-    f: "json",
   });
+  if (restData) params.set("f", "json");
+  return params;
 };
 
 /**
@@ -79,14 +82,16 @@ const buildAuth = (config: StreamingRuntimeConfig): URLSearchParams => {
  * @param config - 主进程服务器配置
  * @param endpoint - API 端点
  * @param extra - 业务参数
+ * @param restData - 是否请求 JSON 数据接口
  * @returns 完整请求地址
  */
 const buildUrl = (
   config: StreamingRuntimeConfig,
   endpoint: string,
   extra: Record<string, string | number> = {},
+  restData = true,
 ): string => {
-  const params = buildAuth(config);
+  const params = buildAuth(config, restData);
   for (const [key, value] of Object.entries(extra)) params.set(key, String(value));
   return `${config.url.replace(/\/+$/, "")}/rest/${endpoint}?${params.toString()}`;
 };
@@ -115,6 +120,59 @@ const callApi = async <T>(
     throw new Error(error?.message ?? `Subsonic error code ${error?.code}`);
   }
   return result as T;
+};
+
+/**
+ * 通过专辑目录确定性分页读取歌曲，兼容不支持空 query search3 的服务器。
+ * @param config - 主进程服务器配置
+ * @param offset - 歌曲偏移量
+ * @param limit - 返回上限
+ * @returns 对应分页窗口内的歌曲
+ */
+const listSongsByAlbums = async (
+  config: StreamingRuntimeConfig,
+  offset: number,
+  limit: number,
+): Promise<Track[]> => {
+  const tracks: Track[] = [];
+  let songOffset = 0;
+  let albumOffset = 0;
+
+  while (tracks.length < limit) {
+    const result = await callApi<{ albumList2?: { album?: SubsonicAlbum[] } }>(
+      config,
+      "getAlbumList2",
+      {
+        type: "alphabeticalByName",
+        size: ALBUM_FALLBACK_PAGE_SIZE,
+        offset: albumOffset,
+      },
+    );
+    const albums = result.albumList2?.album ?? [];
+    if (albums.length === 0) break;
+
+    for (const album of albums) {
+      const knownCount = album.songCount;
+      if (knownCount !== undefined && songOffset + knownCount <= offset) {
+        songOffset += knownCount;
+        continue;
+      }
+
+      const albumResult = await callApi<{ album?: SubsonicAlbum }>(config, "getAlbum", {
+        id: album.id,
+      });
+      for (const song of albumResult.album?.song ?? []) {
+        if (songOffset >= offset && tracks.length < limit) tracks.push(toTrack(config, song));
+        songOffset++;
+        if (tracks.length >= limit) return tracks;
+      }
+    }
+
+    albumOffset += albums.length;
+    if (albums.length < ALBUM_FALLBACK_PAGE_SIZE) break;
+  }
+
+  return tracks;
 };
 
 /**
@@ -232,14 +290,26 @@ export const subsonicAdapter: StreamingAdapter = {
    * @returns 歌曲列表
    */
   async listSongs(config, params) {
-    const result = await callApi<{ searchResult3?: { song?: SubsonicSong[] } }>(config, "search3", {
-      query: "",
-      songCount: params?.limit ?? 100,
-      songOffset: params?.offset ?? 0,
-      artistCount: 0,
-      albumCount: 0,
-    });
-    return (result.searchResult3?.song ?? []).map((song) => toTrack(config, song));
+    const offset = Math.max(0, params?.offset ?? 0);
+    const limit = Math.max(1, params?.limit ?? 100);
+    try {
+      const result = await callApi<{ searchResult3?: { song?: SubsonicSong[] } }>(
+        config,
+        "search3",
+        {
+          query: "",
+          songCount: limit,
+          songOffset: offset,
+          artistCount: 0,
+          albumCount: 0,
+        },
+      );
+      const songs = result.searchResult3?.song ?? [];
+      if (songs.length > 0) return songs.map((song) => toTrack(config, song));
+    } catch {
+      // 部分 Subsonic/Navidrome 实现不接受空 query，改用确定性的专辑目录分页。
+    }
+    return listSongsByAlbums(config, offset, limit);
   },
 
   /**
@@ -356,12 +426,7 @@ export const subsonicAdapter: StreamingAdapter = {
    * @returns 播放地址
    */
   async getStreamUrl(config, trackId) {
-    return buildUrl(config, "stream", {
-      id: trackId,
-      estimateContentLength: "true",
-      format: "raw",
-      maxBitRate: 0,
-    });
+    return buildUrl(config, "stream", { id: trackId }, false);
   },
 
   /**
@@ -411,6 +476,6 @@ export const subsonicAdapter: StreamingAdapter = {
    * @returns 真实封面地址
    */
   async getCoverUrl(config, coverId, size) {
-    return buildUrl(config, "getCoverArt", { id: coverId, size });
+    return buildUrl(config, "getCoverArt", { id: coverId, size }, false);
   },
 };
