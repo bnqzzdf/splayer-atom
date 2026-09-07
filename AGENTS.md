@@ -12,7 +12,8 @@ current file layout.
   should win or silently reconcile the two documents.
 - `task_plan.md`, `findings.md`, and `progress.md` contain the current working state.
 - `docs/atom-development.md`, `docs/types.md`, `docs/upstream-sync.md`,
-  `docs/build-flavors.md`, and `docs/core-deployment.md` own their respective operational details.
+  `docs/build-flavors.md`, `docs/core-deployment.md`, and `docs/upnp-output-plan.md` own their
+  respective operational/design details.
 - When documentation and current source disagree, inspect the implementation and update the
   stale document; do not preserve an obsolete architecture for compatibility with prose.
 
@@ -20,7 +21,8 @@ current file layout.
 
 **SPlayer owns the foundation; Atom owns only the proven delta.** Atom is a continuously updated
 downstream of SPlayer-Next. Its confirmed product deltas are Node Core/Headless Web, the unified
-Desktop/Web Control surface, Qobuz, TIDAL, ListenBrainz Core Scrobble, and Diretta Source Direct.
+Desktop/Web Control surface, Qobuz, TIDAL, ListenBrainz Core Scrobble, Diretta Source Direct, and
+single-renderer UPnP source-preserving output.
 
 The long-term model is **Core / Control / Output**:
 
@@ -34,8 +36,10 @@ The long-term model is **Core / Control / Output**:
 - Desktop and Web music-business requests use the same Core Control Protocol. Keep Electron IPC for
   shell/Host integration and temporarily retained event transport, not for a new parallel business
   API when a Core contract exists.
-- Core Local Output is the first Output and uses the shared `audio-engine` through ALSA or Diretta.
-  A Desktop Output Agent is not current scope; if a concrete requirement accepts one later, it may
+- Core Local Output uses the shared `audio-engine` through ALSA or Diretta. UPnP is an Atom-owned
+  remote execution path below the same Core playback authority; it must not become a second player,
+  queue, provider/cache authority, or generic Output framework. See `docs/upnp-output-plan.md`.
+- A Desktop Output Agent is not current scope; if a concrete requirement accepts one later, it may
   execute Core jobs but must not own queue/provider/playback policy.
 - Do not restore or publish Electron Headless or Pure Rust Headless as a product. The supported
   Headless product is the ordinary Node Core. Historical implementations and artifacts are behavior

@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> 状态日期：2026-09-02
+> 状态日期：2026-09-07
 >
 > 本文只记录当前产品范围、未完成工作和验收门槛。耐久工程规则见
 > `AGENTS.md`；构建、部署、上游同步和类型细节由对应专题文档负责。已完成的迁移过程、
@@ -15,7 +15,8 @@ Atom 只维护已经确认的差异能力：
 - Web / Desktop 统一 Control；
 - Qobuz、TIDAL；
 - ListenBrainz Core Scrobble；
-- Diretta strict Source Direct。
+- Diretta strict Source Direct；
+- 单 Renderer UPnP 源保真输出。
 
 长期模型为 **Core / Control / Output**：
 
@@ -24,8 +25,9 @@ Atom 只维护已经确认的差异能力：
   materialization 的唯一权威。
 - Web 与 Desktop 只发送高层命令并消费 Core snapshot/event。Desktop 的窗口、托盘、热键、
   updater、协议、本机文件和歌词窗口属于 Host Capability。
-- Core Local Output 通过唯一 `audio-engine` 实现 ALSA 或 Diretta；`audio-engine-core` 是音频实现，
-  `audio-engine` 只是 NAPI shim。
+- Core Local Output 通过唯一 `audio-engine` 实现 ALSA 或 Diretta；UPnP 是同一 Core playback
+  authority 下的 Atom-owned 远端输出执行路径，不成为第二播放器或第二业务权威。
+  `audio-engine-core` 是音频实现，`audio-engine` 只是 NAPI shim。
 - Qobuz/TIDAL 的协议实现只存在于 Rust `native/streaming-api`；Node 只持有 auth/session/policy
   adapter。Netease 保持现有 TypeScript 实现。
 - QQ Music/Kugou 只继承官方 SPlayer 的冻结兼容面，不形成 Atom provider 产品路线。
@@ -155,6 +157,32 @@ real-target gate 均已有实机 bit-perfect 证据；格式覆盖已实测到 P
 对应硬件 smoke，以及尚未完成的 restart/exit/output-switch 等独立 lifecycle gate。编译、fixture
 和无 Target smoke 不能替代这些发布证据。
 
+## 5.1 UPnP 源保真输出
+
+UPnP 的实施设计由 `docs/upnp-output-plan.md` 负责。长期约束是：优先复用现有 Core
+queue/resolver/cache/Control，只在 Atom-owned seam 增加单 Renderer 执行路径；不为 UPnP 建立
+通用 Output framework，不改写现有 native/local/Diretta 播放链。
+
+- [ ] 建立 `discovery.ts` / `transport.ts` / `output.ts` / `media.ts` 四个稳定 Atom-owned seam，
+      完成参考 Renderer 的 SSDP、AVTransport、独立 media HTTP listener 和普通本地文件单曲闭环。
+- [ ] 把 `upnp:<UDN>` 接入现有 `/output/devices`、`/output/select`、`/status` 与
+      `playbackSession`；Desktop/Web 继续使用现有 `AudioDevice`/Core Protocol schema。
+- [ ] 完成关闭全部 Control 后的三首连续播放、repeat、pause/resume、seek、手动 next，以及
+      UPnP ↔ ALSA/Diretta 切换；首版不要求 GENA eventing、ConnectionManager 或 gapless。
+- [ ] 在线音源继续复用 `resolvePlaybackSource()`、现有 cache 和 exact-byte materialization，
+      不增加 provider 协议实现或边下边播 relay。
+- [ ] CUE 使用现有 strict integer PCM reader 生成 exact PCM WAV/WAVE_FORMAT_EXTENSIBLE；
+      SACD ISO 使用现有 stereo SACD/DST reader 生成 DFF；Native DSD 原文件优先，必要时只做
+      logical one-bit sequence 保持的 DSF/DFF 等价封装。
+- [ ] native 分轨如确有需要，只新增现有 reader 的隔离离线 consumer 和 Atom-specific 薄 NAPI
+      导出；不修改 `AudioPlayer` API、正常 decoder/DSP、Diretta runtime 或 Direct playback 语义。
+- [ ] 完成普通/CUE/ISO/DSD 真机兼容矩阵、长播资源稳定性与最终 artifact gate；分别记录 Core
+      byte/sample/DSD sequence 保持、Renderer 容器兼容和可获得的 DAC 实测结果。
+
+UPnP 首版不以完整协议覆盖为目标。GENA eventing、ConnectionManager、SetNextAVTransportURI、
+quirk registry、persistent representation cache 和 RenderingControl 只有真实设备需求出现后才在
+既有 UPnP seam 内增加，不作为基础输出前置条件。
+
 # P2 — 在线平台与真实账号验收
 
 ## 6. Netease
@@ -280,14 +308,17 @@ Core 不暴露 Direct materialize/stage/commit 低层 API，Control 只发送 ou
 
 1. 完成 ListenBrainz 真实 token、断网/401/429/Core restart 与 ALSA/Diretta/CUE/在线音源 live
    acceptance；软件实现、disabled 零进程和 enabled child-process I/O 隔离已完成。
-2. 当前 `dev` 完成下一轮官方 SPlayer integration，并记录新的 accepted baseline。
-3. 建立受控 Diretta release runner，完成远端 SDK-enabled artifact gate。
-4. 在真实音频主机完成剩余 ALSA、output switch、restart/exit lifecycle 验收；Diretta exact PCM
+2. 当前 `dev` 完成下一轮官方 SPlayer integration，并记录新的 accepted baseline，保证 UPnP 从
+   最新接受的 SPlayer foundation 开始实施。
+3. 按 `docs/upnp-output-plan.md` 依次完成普通文件闭环、Core 接入、在线源、CUE/ISO/DSD 和真机
+   验收；每阶段优先保持 Atom-owned delta，不以 UPnP 扩大共享 schema/native player 改动面。
+4. 建立受控 Diretta release runner，完成远端 SDK-enabled artifact gate。
+5. 在真实音频主机完成剩余 ALSA、output switch、restart/exit lifecycle 验收；Diretta exact PCM
    与 Native DSD Source Direct 已完成 real-target bit-perfect、PCM 768 kHz / DSD512 覆盖及混合
    格式过夜循环实机验证。
-5. 依次完成 Netease、Qobuz、TIDAL 真实账号与普通/Diretta 播放验收。
-6. 在同一 release candidate 上完成 clean hosted artifact、部署/升级/回滚和多 Control 验收。
-7. 发布首个正式 Core release。
+6. 依次完成 Netease、Qobuz、TIDAL 真实账号与普通/Diretta/UPnP 播放验收。
+7. 在同一 release candidate 上完成 clean hosted artifact、部署/升级/回滚和多 Control 验收。
+8. 发布首个正式 Core release。
 
 `ffs/dev` 没有固定“整合阶段”；只有出现具体候选提交时，才在上述稳定基线之上创建独立
 `port/ffs-*` 工作并按本 roadmap 的架构和验收门槛判断。
@@ -319,6 +350,7 @@ docs/upstream-sync.md              官方 SPlayer 同步、baseline 与 contribu
 docs/atom-development.md           开发环境与常用门禁
 docs/build-flavors.md              Desktop/Core flavor 与 Diretta SDK release 规则
 docs/core-deployment.md            安装、数据、升级、回滚与 systemd
+docs/upnp-output-plan.md            UPnP 源保真输出设计、阶段与专项验收
 docs/hardware-release-checklist.md 真实 ALSA/Diretta/DAC 验收
 docs/live-provider-acceptance.md   Netease/Qobuz/TIDAL 真实账号验收
 task_plan.md / findings.md / progress.md
