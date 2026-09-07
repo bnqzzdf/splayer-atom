@@ -4,7 +4,7 @@
 //! 1. 2048 字节光盘扇区读取器 (`IsoReader`)；
 //! 2. ScarletBook Master TOC & Area TOC & Text 元数据解析 (`SacdDisc`, `SacdTrack`)；
 //! 3. 纯 Rust MPEG-4 DST 算术无损解压算法 (`dst::DstDecoder`)；
-//! 4. 实时音频帧提取与 DSD2PCM / Diretta 直通流读取器 (`SacdTrackReader`)。
+//! 4. 双声道音频帧提取，输出逐字节交错的 MSB-first DSD (`SacdTrackReader`)。
 
 pub mod dst;
 pub mod iso_reader;

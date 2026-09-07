@@ -103,7 +103,7 @@ impl DstDecoder {
         }
     }
 
-    /// 解码单帧 DST 压缩数据，将结果解压并写入 `out_dsd`（交错或 Planar 格式）
+    /// 解码结果使用 MSB-first planar：每声道连续 4704 字节，由调用方负责交错。
     pub fn decode_frame(&mut self, dst_data: &[u8], out_dsd: &mut [u8]) -> Result<usize> {
         if dst_data.is_empty() {
             return Ok(0);

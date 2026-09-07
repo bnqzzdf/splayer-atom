@@ -136,11 +136,11 @@ impl SacdDisc {
             anyhow::bail!("Not a valid ScarletBook SACD ISO: Master TOC magic missing");
         }
 
-        let area1_toc1_start = u32::from_be_bytes(master_data[32..36].try_into()?);
-        let area1_toc_size = u16::from_be_bytes(master_data[46..48].try_into()?);
+        let area1_toc1_start = u32::from_be_bytes(master_data[64..68].try_into()?);
+        let area1_toc_size = u16::from_be_bytes(master_data[84..86].try_into()?);
 
-        let area2_toc1_start = u32::from_be_bytes(master_data[40..44].try_into()?);
-        let area2_toc_size = u16::from_be_bytes(master_data[48..50].try_into()?);
+        let area2_toc1_start = u32::from_be_bytes(master_data[72..76].try_into()?);
+        let area2_toc_size = u16::from_be_bytes(master_data[86..88].try_into()?);
 
         // 解析 Master Text (扇区 511 ~ 518)
         let mut album_title: Option<String> = None;
@@ -252,15 +252,19 @@ impl SacdDisc {
         iso_reader.read_sectors(start_lsn, size_lsn, &mut area_data)?;
 
         let magic = &area_data[0..8];
-        if magic != b"TWOCHTOC" && magic != b"MULCHTOC" {
+        let expected_magic = match area_type {
+            AreaType::Stereo => b"TWOCHTOC",
+            AreaType::MultiChannel => b"MULCHTOC",
+        };
+        if magic != expected_magic {
             anyhow::bail!("Invalid Area TOC magic");
         }
 
-        let channel_count = area_data[24];
-        let frame_format = area_data[13] & 0x0F;
+        let channel_count = area_data[32];
+        let frame_format = area_data[21] & 0x0F;
         let is_dst = frame_format == 0; // 0 = DST compressed, 2/3 = uncompressed DSD
 
-        let track_count = area_data[61];
+        let track_count = area_data[69];
 
         // 遍历查找 SACDTRL1, SACDTRL2, SACDTTxt
         let mut track_start_lsn: Vec<u32> = Vec::new();
@@ -278,16 +282,14 @@ impl SacdDisc {
             if sec_magic == b"SACDTRL1" {
                 // 读取各分轨的 LSN 偏移与长度
                 for i in 0..track_count as usize {
-                    let entry_off = 8 + i * 8;
-                    if entry_off + 8 <= sector_chunk.len() {
-                        let s_lsn =
-                            u32::from_be_bytes(sector_chunk[entry_off..entry_off + 4].try_into()?);
-                        let l_lsn = u32::from_be_bytes(
-                            sector_chunk[entry_off + 4..entry_off + 8].try_into()?,
-                        );
-                        track_start_lsn.push(s_lsn);
-                        track_len_lsn.push(l_lsn);
-                    }
+                    let start = 8 + i * 4;
+                    let length = 8 + 255 * 4 + i * 4;
+                    track_start_lsn.push(u32::from_be_bytes(
+                        sector_chunk[start..start + 4].try_into()?,
+                    ));
+                    track_len_lsn.push(u32::from_be_bytes(
+                        sector_chunk[length..length + 4].try_into()?,
+                    ));
                 }
             } else if sec_magic == b"SACDTRL2" {
                 // 读取各分轨的时间戳 (minutes, seconds, frames -> 75 fps)
