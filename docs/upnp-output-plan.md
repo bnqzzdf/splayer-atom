@@ -254,14 +254,14 @@ create unique .part
 
 ## 7. 格式与保真策略
 
-| 输入 | 首选交付 | 保证 |
-| --- | --- | --- |
-| 独立普通文件 | 原文件 | byte-identical |
-| 整数无损 PCM CUE | 独立 PCM WAV/WAVE_FORMAT_EXTENSIBLE | rate/channel/有效位深/sample value 保持 |
-| SACD ISO stereo track | 未压缩 DFF | 轨道范围与 logical DSD sequence 保持 |
-| 独立 DSF/DFF | 原文件 | byte-identical |
-| DSD CUE | 独立 DSF/DFF | logical DSD sequence/rate/channel 保持 |
-| 必要的 DSF<->DFF 兼容封装 | 等价容器 | 仅布局/bit-order 机械适配，不改 logical DSD sequence |
+| 输入                     | 首选交付                            | 保证                                                 |
+| ------------------------ | ----------------------------------- | ---------------------------------------------------- |
+| 独立普通文件             | 原文件                              | byte-identical                                       |
+| 整数无损 PCM CUE         | 独立 PCM WAV/WAVE_FORMAT_EXTENSIBLE | rate/channel/有效位深/sample value 保持              |
+| SACD ISO stereo track    | DSF                                 | 轨道范围与 logical DSD sequence 保持                 |
+| 独立 DSF/DFF             | 原文件                              | byte-identical                                       |
+| DSD CUE                  | 独立 DSF                            | logical DSD sequence/rate/channel 保持               |
+| 必要的 DFF->DSF 分轨封装 | 等价容器                            | 仅布局/bit-order 机械适配，不改 logical DSD sequence |
 
 MP3/AAC 等有损源仍可作为独立文件原格式发送，但不把其 CUE 分轨声明为无损整数 PCM 提取。
 浮点 PCM CUE、未知有效位深、未知声道布局或不能精确确定边界的输入明确不支持。
@@ -279,15 +279,16 @@ seam 增加 FLAC writer，而 Core、UPnP protocol 和 media server 均无需改
 
 ### SACD ISO
 
-只接受明确 stereo area/2ch track。复用现有 `SacdTrackReader`；UPnP 不负责修正 SACD reader
-或 DST decoder。未压缩 DSD 直接读取 logical DSD stream；compressed DST 只有在现有 decoder
-独立 correctness gate 通过时才支持，否则该输入明确失败。
+只接受明确 stereo area/2ch track。复用现有 `SacdTrackReader`。SACD reader / DST decoder 的
+正确性仍属于 `audio-engine-core` 自身维护；UPnP 只消费其已验证 logical DSD 输出。未压缩 DSD
+直接读取 logical DSD stream；compressed DST 先无损解压为同一 logical DSD stream，再封装为 DSF。
+当前 DST correctness gate 已由两张不同真实 ISO 对独立 `sacd_extract/libdstdec` 全轨逐字节验证通过。
 
-首选写出未压缩双声道 DFF。DSF 兼容封装只有真实 Renderer 需要时再增加。
+首选写出双声道 DSF。参考 AudioSys Renderer 的真实验证表明原始/生成 DSF 能正常计时并自然结束，而生成 DFF 虽被其 `GetProtocolInfo` 声明支持，却保持 PLAYING 且不推进 position；因此首版不保留未使用的 DFF writer。以后若其他真实 Renderer 明确需要生成 DFF，只在同一 extraction seam 增加，不改变 Core。
 
 ### Native DSD
 
-独立 DSF/DFF 能原文件播放就不改写。必要的 DSF/DFF 等价封装只允许声道布局重排和每字节
+独立 DSF/DFF 能原文件播放就不改写。DSD CUE 或 SACD 需要生成独立资源时首选 DSF；DFF 母版分轨到 DSF 只允许声道布局重排和每字节
 bit-order 转换，保持有效 sample/bit count、rate、channel identity 与 logical one-bit sequence。
 padding 不计入有效序列；无法等价表示时明确失败，不补静音 bit、不转 PCM。
 
@@ -307,11 +308,14 @@ native/audio-engine-core/src/media_extract.rs
 cue/*
 DirectPcmDecoder / DirectPcmFrame
 SacdTrackReader
-DsfReader / DffReader
-现有 DST decoder
+DsfReader / DffReader（仅在其已独立验证的能力范围内）
+现有 DST decoder（已通过独立全轨 correctness gate）
 ```
 
 不修改 `player/*`、normal decoder/DSP、Diretta runtime 或 existing Direct playback semantics。
+如果现有 reader 的独立 correctness 问题会把无关修复带入 UPnP，离线 consumer 可以只实现当前
+文件生成所需的最小容器读取逻辑，而不是借 UPnP 修改该 reader；该逻辑仍不得成为第二套播放
+reader 或通用容器框架。
 
 NAPI 不向 `AudioPlayer` 增加 UPnP 方法。若 Node Core 必须调用 native extraction，则新增一个
 Atom-specific 薄导出文件，例如：
@@ -355,17 +359,17 @@ UPnP 观察到实际 PLAYING 后才开始/恢复 playing wall-clock；Pause/Stop
 
 ## 11. 实施阶段
 
-| 阶段 | 工作 | 完成证据 |
-| --- | --- | --- |
-| P0 | 同步 scope；锁定 SSDP/XML 依赖；建立四模块骨架 | AGENTS/roadmap/方案一致；无共享 schema 扩张 |
-| P1 | 发现、SOAP、DIDL、独立 media listener、普通本地文件 | 参考 Renderer 单曲闭环；原文件 hash/Range 一致 |
-| P2 | playbackSession/output/status/切换/自动 next 接入 | 三首无 Control 连续播放；native/local/Diretta 路径回归 |
-| P3 | 在线 source 完整物化，复用 resolver/cache/exact-byte helper | Netease/Qobuz/TIDAL/streaming source 不新增协议实现 |
-| P4a | CUE -> exact PCM WAV | 多 FILE/INDEX/pregap/边界/有效位深逐样本对照 |
-| P4b | SACD ISO -> DFF | stereo track 首/中/末轨 logical DSD 序列对照；mch 拒绝 |
-| P4c | DSD CUE 与必要 DSF/DFF 等价封装 | 多 DSD rate、padding、bit-order/声道身份对照 |
-| P5 | 根据真实设备补必须的 UPnP compatibility | 新能力局限在 UPnP seam，不扩大 Core architecture |
-| P6 | 故障、长播、最终 artifact 与兼容矩阵 | UPnP<->ALSA/Diretta 回归、资源稳定、真机记录 |
+| 阶段 | 工作                                                                    | 完成证据                                               |
+| ---- | ----------------------------------------------------------------------- | ------------------------------------------------------ |
+| P0   | 同步 scope；锁定 SSDP/XML 依赖；建立四模块骨架                          | AGENTS/roadmap/方案一致；无共享 schema 扩张            |
+| P1   | 发现、SOAP、DIDL、独立 media listener、普通本地文件                     | 参考 Renderer 单曲闭环；原文件 hash/Range 一致         |
+| P2   | playbackSession/output/status/切换/自动 next 接入                       | 三首无 Control 连续播放；native/local/Diretta 路径回归 |
+| P3   | 在线 source 完整物化，复用 resolver/cache/exact-byte helper             | Netease/Qobuz/TIDAL/streaming source 不新增协议实现    |
+| P4a  | CUE -> exact PCM WAV                                                    | 多 FILE/INDEX/pregap/边界/有效位深逐样本对照           |
+| P4b  | SACD ISO -> DSF                                                         | stereo track 首/中/末轨 logical DSD 序列对照；mch 拒绝 |
+| P4c  | DSD CUE；独立 DSF/DFF 继续原文件优先                                    | 多 DSD rate、padding、bit-order/声道身份对照           |
+| P5   | 根据真实设备补必须的 UPnP compatibility；当前参考 AudioSys 采用生成 DSF | 新能力局限在 UPnP seam，不扩大 Core architecture       |
+| P6   | 故障、长播、最终 artifact 与兼容矩阵                                    | UPnP<->ALSA/Diretta 回归、资源稳定、真机记录           |
 
 ## 12. 测试与发布门禁
 
@@ -384,7 +388,9 @@ UPnP 观察到实际 PLAYING 后才开始/恢复 playing wall-clock；Pause/Stop
 - CUE 使用逐样本 pattern 比较输出 WAV 解码后的 PCM 与母版区间，覆盖 16/20/24/32 valid bits、
   常见 sample rate、相邻轨、末轨、INDEX 00/01、多 FILE 与无 seektable 输入。
 - ISO 使用已知 DSD pattern 或独立结果逐声道逐 bit 对照；Track 1/中间/末轨、缺失 stereo area、
-  compressed DST failure 都有明确 fixture。
+  malformed/truncated DST 都明确失败；有效 compressed DST 必须与独立 decoder 的 logical DSD 全轨一致。
+- 曲库扫描必须把物理 SACD ISO 的 stereo area 展开为逐轨稳定虚拟 path；每轨使用自身 title/track/duration，
+  不允许把 area 总时长写进单个 Track 1。legacy physical-ISO 聚合记录由增量扫描原地迁移，未变化 ISO 不重复解析。
 - DSF/DFF 等价封装按统一 logical sequence 比较，padding 不参与序列；多声道明确拒绝。
 - native extraction worker 不打开 ALSA/Diretta，不进入实时 callback，不向 JS 返回整轨 PCM/DSD
   buffer。
@@ -392,10 +398,23 @@ UPnP 观察到实际 PLAYING 后才开始/恢复 playing wall-clock；Pause/Stop
 ### 真机
 
 - 指定参考 Renderer 的普通 FLAC/WAV/MP3/AAC/M4A 与其实际支持的格式/rate。
-- CUE WAV、SACD DFF、原文件 DSF/DFF；设备不支持的组合明确失败。
+- CUE WAV、SACD DSF、DSD CUE DSF、原文件 DSF/DFF；设备不支持的组合明确失败。
 - 自动三首、repeat、pause/resume、seek、手动 next、关闭全部 Control。
 - UPnP <-> ALSA/Diretta 双向切换以及 Core restart/SIGTERM。
 - 长时间混合普通/CUE/ISO/DSD 队列，确认 FD/socket/timer/temp file/RSS 不随曲目数持续增长。
+
+当前 AudioSys 参考实机已经完成普通格式、CUE WAV、原始/生成 DSF、真实未压缩与 DST stereo SACD ISO、
+无人 Control 自动 next/repeat、ALSA/Diretta 双向切换、Core restart/SIGTERM，以及 Netease/TIDAL
+真实账号在线源验证。两家平台都通过 canonical Track -> 现有 provider resolver -> 完整物化/cache ->
+AudioSys，并用短在线曲目验证自然结束后 Core 自动 next。真实未压缩 SACD Track 1 的生成 DSF 与 ISO reader
+logical DSD sequence 全轨逐声道一致；DST 另以两张不同真实 ISO 对独立 `sacd_extract/libdstdec` 分别完成
+246,480,192 与 235,077,696 logical DSD bytes 的全轨逐字节一致性验证，其中 Beethoven Sonatas DST Track 3
+已通过 AudioSys 播放、seek 与自然 next。独立 DFF 因当前无外部样本暂不列入已验证矩阵。资源压力已有
+60 次 CUE 切换无 FD/temp 线性增长证据；首轮约 11 小时 12 分、约 29 个完整循环的七类混合队列长播
+功能上无 playback/UPnP/DST 错误，但暴露 AudioSys 提前断开原始 DSF HTTP 请求时 `ReadStream` FD 每轮
+泄漏 1 个。media listener 已改用 `stream.pipeline()`，新增 Renderer abort 后 FD 必须关闭的回归，并在修复
+artifact 上连续 30 次原始 DSF 强制 reload 验证残留目标 FD=0、总 FD 回落到 41。当前继续第二轮长播，
+在持续运行再次确认 FD/socket/temp/RSS 不随轮数增长前不提前关闭最终稳定性门禁。
 
 真实 Renderer 能接收资源不等于 DAC bit-perfect。最终兼容矩阵分开记录：Core byte/sample/DSD
 序列保持、Renderer 接受的容器/rate，以及有测量条件时的实际 DAC 输出结果。

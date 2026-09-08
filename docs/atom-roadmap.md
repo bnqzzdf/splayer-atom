@@ -163,25 +163,45 @@ UPnP 的实施设计由 `docs/upnp-output-plan.md` 负责。长期约束是：�
 queue/resolver/cache/Control，只在 Atom-owned seam 增加单 Renderer 执行路径；不为 UPnP 建立
 通用 Output framework，不改写现有 native/local/Diretta 播放链。
 
-- [ ] 建立 `discovery.ts` / `transport.ts` / `output.ts` / `media.ts` 四个稳定 Atom-owned seam，
-      完成参考 Renderer 的 SSDP、AVTransport、独立 media HTTP listener 和普通本地文件单曲闭环。
-- [ ] 把 `upnp:<UDN>` 接入现有 `/output/devices`、`/output/select`、`/status` 与
-      `playbackSession`；Desktop/Web 继续使用现有 `AudioDevice`/Core Protocol schema。
-- [ ] 完成关闭全部 Control 后的三首连续播放、repeat、pause/resume、seek、手动 next，以及
-      UPnP ↔ ALSA/Diretta 切换；首版不要求 GENA eventing、ConnectionManager 或 gapless。
-- [ ] 在线音源继续复用 `resolvePlaybackSource()`、现有 cache 和 exact-byte materialization，
-      不增加 provider 协议实现或边下边播 relay。
-- [ ] CUE 使用现有 strict integer PCM reader 生成 exact PCM WAV/WAVE_FORMAT_EXTENSIBLE；
-      SACD ISO 使用现有 stereo SACD/DST reader 生成 DFF；Native DSD 原文件优先，必要时只做
-      logical one-bit sequence 保持的 DSF/DFF 等价封装。
-- [ ] native 分轨如确有需要，只新增现有 reader 的隔离离线 consumer 和 Atom-specific 薄 NAPI
-      导出；不修改 `AudioPlayer` API、正常 decoder/DSP、Diretta runtime 或 Direct playback 语义。
-- [ ] 完成普通/CUE/ISO/DSD 真机兼容矩阵、长播资源稳定性与最终 artifact gate；分别记录 Core
-      byte/sample/DSD sequence 保持、Renderer 容器兼容和可获得的 DAC 实测结果。
+- [x] `discovery.ts` / `transport.ts` / `output.ts` / `media.ts` 四个稳定 Atom-owned seam 已实现；
+      参考 AudioSys Renderer 已完成 SSDP、SetURI/Play/Pause/Seek/Stop、自然结束及普通
+      WAV/FLAC/MP3/AAC/M4A 真机验证。
+- [x] `upnp:<UDN>` 已接入现有 `/output/devices`、`/output/select`、`/status` 与
+      `playbackSession`；Desktop/Web 继续使用原有 `AudioDevice`/Core Protocol schema，没有建立
+      通用 Output framework。
+- [x] Core 的状态观察、自然结束、repeat/next、pause/resume/seek、手动 next 和输出切换已完成
+      真机闭环；关闭全部 Control 后三首可持续自动循环，AudioSys ↔ HiBy FC4 ALSA 与
+      AudioSys ↔ DX5 II Diretta Source Direct 双向切换均通过。
+- [x] 在线源继续复用 `resolvePlaybackSource()`、现有 cache 和 Atom exact-byte helper；真实
+      Netease 与 TIDAL 账号都已完成 canonical Track -> provider resolver -> 完整物化 -> cache ->
+      AudioSys 真机闭环，并分别验证短在线曲目自然结束后由 Core 自动推进。Qobuz 本轮无账号，
+      不作为 UPnP 架构门禁。
+- [x] 整数无损 PCM CUE -> WAV、DSD CUE -> DSF、SACD stereo（未压缩 DSD / compressed DST）-> DSF 已落在隔离提取 seam。
+      AudioSys 已真实通过 CUE WAV、原始 DSF、生成 DSF 与真实 SACD ISO；未压缩 SACD Track 1 的
+      ISO reader 与生成 DSF 左右声道 logical DSD sequence 全轨逐字节一致，并能自然推进下一轨。
+      DST correctness 已使用两张不同真实 ISO 与独立 `sacd_extract/libdstdec` 做全轨 logical DSD 逐字节对照，
+      分别比较 246,480,192 与 235,077,696 bytes 均 100% 一致；AudioSys 已验证 DST->DSF 播放、seek 与自然 next。
+      曲库扫描已把物理 SACD ISO 的 stereo area 展开为稳定 `iso|TrackNN|...` 虚拟分轨；旧版“整盘总时长 + Track 1”
+      聚合记录会在下一次增量扫描自动迁移，未变化 ISO 后续仍按物理 mtime/size 跳过。独立 DFF 样本本轮缺失，
+      继续按原文件优先策略。
+- [x] native 分轨只新增 `audio-engine-core::media_extract` 离线 consumer 和 Atom-specific 薄 NAPI
+      导出；`AudioPlayer` API、正常 decoder/DSP、Diretta runtime 与 Direct playback 语义未因 UPnP
+      改写。正式 system-runtime + Diretta release artifact 已完成 build/audit/stage/启动/SIGTERM smoke。
+- [~] 资源压力除两轮共 60 次真实 CUE 生成/播放切换外，已完成约 11 小时 12 分的 7 首混合
+  TIDAL/Netease/CUE/SACD/FLAC/原始 DSF/DST 队列过夜运行，约 29 个完整循环且无 playback/UPnP/DST
+  错误。该过夜门禁发现 AudioSys 提前结束原始 DSF HTTP 请求时 `ReadStream` FD 会每轮泄漏 1 个；media
+  listener 已改用 `stream.pipeline()` 绑定 source/destination 生命周期并新增 abort 回归。修复 artifact 真机连续
+  30 次原始 DSF 强制 reload 后目标文件残留 FD=0、总 FD 回落到 41；现已用修复版本重新开始混合队列
+  长播，待第二轮持续运行确认后关闭最终稳定性门禁。
 
 UPnP 首版不以完整协议覆盖为目标。GENA eventing、ConnectionManager、SetNextAVTransportURI、
 quirk registry、persistent representation cache 和 RenderingControl 只有真实设备需求出现后才在
 既有 UPnP seam 内增加，不作为基础输出前置条件。
+
+当前参考 Renderer：AudioSys `DirettaRenderer v1.0-245-g32a77fc`。其基础 AVTransport 与
+DSF/WAV 路径无需设备特例；`GetProtocolInfo` 声明 DFF，但生成 DFF 在真机上不推进 position/不自然
+结束，因此首版使用生成 DSF，不以 capability 声明替代真实行为。长 MP3/FLAC 的 position 初始上报
+可能延迟数秒，Core 继续按实际观测而非固定启动时延判断结束。
 
 # P2 — 在线平台与真实账号验收
 
