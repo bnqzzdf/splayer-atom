@@ -27,3 +27,14 @@ test("Diretta preload stages the same generated SACD DSF and keeps it through bo
   assert.match(preloader, /discardSacdPlaybackInput/);
   assert.match(directGapless, /pruneSacdPlaybackInputs\(source\)/);
 });
+
+test("terminal native SACD commands invalidate an in-flight Direct preload", () => {
+  assert.match(
+    session,
+    /export const stop = \(\): void => \{[\s\S]*?invalidatePlaybackPreload\(\);[\s\S]*?pruneSacdPlaybackInputs\(""\)/,
+  );
+  assert.match(
+    session,
+    /export const shutdownPlaybackSession = async \(\): Promise<void> => \{[\s\S]*?invalidatePlaybackPreload\(\);[\s\S]*?cleanupSacdPlaybackInputs\(\)/,
+  );
+});

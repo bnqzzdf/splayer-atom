@@ -743,6 +743,7 @@ export const initPlaybackSession = async (): Promise<void> => {
 /** 释放 Atom-owned 远端输出运行态；本地 audio-engine 继续使用既有 lifecycle。 */
 export const shutdownPlaybackSession = async (): Promise<void> => {
   ++loadGeneration;
+  invalidatePlaybackPreload();
   clearAutoCloseTimer();
   setUpnpOutputObserver(null);
   await cleanupSacdPlaybackInputs();
@@ -940,6 +941,7 @@ export const pause = (): void => {
 };
 export const stop = (): void => {
   ++loadGeneration;
+  invalidatePlaybackPreload();
   clearActiveCueRange();
   stopCurrentOutputBestEffort();
   void pruneSacdPlaybackInputs("");
