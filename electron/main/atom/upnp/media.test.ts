@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readdir, readlink, rm, writeFile } from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -50,6 +51,51 @@ test("UPnP media listener serves immutable file bytes with HEAD and single Range
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test(
+  "aborted Renderer request closes the media file descriptor",
+  { skip: process.platform !== "linux" },
+  async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "splayer-atom-upnp-abort-"));
+    const filePath = path.join(dir, "fixture.dsf");
+    await writeFile(filePath, Buffer.alloc(8 * 1024 * 1024, 0x96));
+    const resource = await registerMediaFile(filePath, {
+      rendererHost: "127.0.0.1",
+      title: "Abort fixture",
+    });
+
+    const countOpenHandles = async (): Promise<number> => {
+      const names = await readdir("/proc/self/fd");
+      let count = 0;
+      for (const name of names) {
+        try {
+          const target = (await readlink(`/proc/self/fd/${name}`)).replace(/ \(deleted\)$/, "");
+          if (target === filePath) count += 1;
+        } catch {}
+      }
+      return count;
+    };
+
+    try {
+      await new Promise<void>((resolve) => {
+        const request = http.get(resource.url, (response) => {
+          response.once("data", () => {
+            response.destroy();
+            resolve();
+          });
+          response.once("error", () => resolve());
+        });
+        request.once("error", () => resolve());
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(await countOpenHandles(), 0);
+    } finally {
+      await releaseMediaResource(resource);
+      await shutdownUpnpMedia();
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
 
 test("inferUpnpMime keeps real container MIME and recovers cache MIME from codec", () => {
   assert.equal(inferUpnpMime("/music/track.dsdiff", "unknown"), "audio/x-dff");

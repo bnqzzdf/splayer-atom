@@ -5,6 +5,7 @@ import fsp from "node:fs/promises";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { writeExactHttpInput } from "@main/atom/exactInput";
 
 export interface UpnpMediaResource {
@@ -177,7 +178,21 @@ const sendResource = async (
     return;
   }
 
-  fs.createReadStream(resource.filePath, { start, end }).pipe(response);
+  const stream = fs.createReadStream(resource.filePath, { start, end });
+  try {
+    await pipeline(stream, response);
+  } catch (error) {
+    const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+    if (
+      code === "ERR_STREAM_PREMATURE_CLOSE" ||
+      request.aborted ||
+      request.destroyed ||
+      response.destroyed
+    ) {
+      return;
+    }
+    throw error;
+  }
 };
 
 const handleRequest = (request: IncomingMessage, response: ServerResponse): void => {
