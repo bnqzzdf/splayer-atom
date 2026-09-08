@@ -77,6 +77,7 @@ const start = async (): Promise<void> => {
     shuttingDown = true;
     coreLog.info(`Atom Core 收到 ${signal}，开始停止服务`);
     store.flushImmediate();
+    await playbackSession.shutdownPlaybackSession();
     songCache.shutdown();
     downloadManager.shutdown();
     corePlayStats.shutdownCorePlayStats();

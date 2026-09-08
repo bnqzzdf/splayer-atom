@@ -10,14 +10,17 @@ const controlSource = readFileSync(
 );
 
 const outputSwitch = sessionSource.split("export const setOutputDevice = async (")[1] ?? "";
+const nativeOutputSwitch = outputSwitch.split("const state = player.getStatus().state;")[1] ?? "";
 
 test("Core resolves and materializes the current canonical Track before a Diretta switch", () => {
-  const resolveIndex = outputSwitch.indexOf("resolvePlaybackSource(item.track)");
-  const materializeIndex = outputSwitch.indexOf("materializeDirectInput(previousResolved.source)");
-  const stopIndex = outputSwitch.indexOf("player.stop()");
-  const switchIndex = outputSwitch.indexOf("player.setOutputDevice(deviceId ?? undefined)");
+  const resolveIndex = nativeOutputSwitch.indexOf("resolvePlaybackSource(item.track)");
+  const materializeIndex = nativeOutputSwitch.indexOf(
+    "materializeDirectInput(previousResolved.source)",
+  );
+  const stopIndex = nativeOutputSwitch.indexOf("player.stop()");
+  const switchIndex = nativeOutputSwitch.indexOf("player.setOutputDevice(deviceId ?? undefined)");
   assert.ok(resolveIndex >= 0);
-  const identityGuardIndex = outputSwitch.indexOf("loadGeneration !== playbackGeneration");
+  const identityGuardIndex = nativeOutputSwitch.indexOf("loadGeneration !== playbackGeneration");
   assert.ok(materializeIndex > resolveIndex);
   assert.ok(identityGuardIndex > materializeIndex);
   assert.ok(stopIndex > identityGuardIndex);

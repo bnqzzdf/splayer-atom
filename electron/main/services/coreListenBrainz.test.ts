@@ -70,10 +70,14 @@ test("same-track Core reloads preserve the current ListenBrainz listen session",
     playbackSessionSource,
     /sourceRecovery: true,[\s\S]{0,120}preserveListenBrainzSession: true/,
   );
+  const outputReloads = playbackSessionSource.match(
+    /resolvedOverride: (?:previousResolved|targetResolved)/g,
+  );
   const preservedOutputReloads = playbackSessionSource.match(
     /resolvedOverride: (?:previousResolved|targetResolved),\s*preserveListenBrainzSession: true/g,
   );
-  assert.equal(preservedOutputReloads?.length, 2);
+  assert.ok((outputReloads?.length ?? 0) >= 2);
+  assert.equal(preservedOutputReloads?.length, outputReloads?.length);
 });
 
 test("ListenBrainz durable I/O and network work live only in the child process", () => {

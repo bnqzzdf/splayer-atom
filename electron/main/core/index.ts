@@ -36,7 +36,7 @@ import {
   registerCoreControlScheme,
 } from "@main/atom/controlProtocol";
 import { startServer, stopServer } from "@main/server";
-import { initPlaybackSession } from "@main/services/playbackSession";
+import { initPlaybackSession, shutdownPlaybackSession } from "@main/services/playbackSession";
 import { startMcpServer, stopMcpServer } from "@main/services/mcp/http";
 import { initUpdater, disposeUpdater } from "@main/services/updater";
 import { coreLog, initLogger } from "@main/utils/logger";
@@ -196,6 +196,7 @@ export const initApp = (): void => {
   app.on("before-quit", () => {
     coreLog.info("应用即将退出，清理资源");
     store.flushImmediate();
+    void shutdownPlaybackSession();
     shutdownSongCache();
     shutdownDownload();
     shutdownCorePlayStats();

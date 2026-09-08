@@ -4,6 +4,7 @@
 //! 路径无需修改即可解析到 core 实现，从而与上游 audio-engine 的绑定层
 //! 保持逐字一致，便于后续同步。
 
+mod atom_media_extract;
 mod bindings;
 
 pub use audio_engine_core::direct_dsd;
@@ -28,4 +29,5 @@ pub use audio_engine_core::shared;
 pub use audio_engine_core::source;
 pub use audio_engine_core::tempo;
 
+pub use atom_media_extract::*;
 pub use bindings::*;

@@ -1,7 +1,6 @@
 import type { DirectStageResult, PlaybackQueueItem } from "@shared/types/player";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import { cancelDirectPlaybackNext, stageDirectPlaybackNext } from "@main/services/directGapless";
-import { getPlayer } from "@main/services/engine";
 import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
 import {
@@ -36,7 +35,7 @@ let directStageChain: Promise<void> = Promise.resolve();
 /** Diretta 连续播放必须准备下一输入；普通输出仍尊重用户预载设置。 */
 const shouldPrepareNextInput = (): boolean =>
   store.get("player.preloadNextTrack") === true ||
-  getPlayer().getSelectedDeviceName()?.startsWith("diretta:") === true;
+  store.get("player.outputDevice")?.startsWith("diretta:") === true;
 
 /** 只包含会改变实际播放输入的 Core policy；Control 展示状态不参与。 */
 const buildPreloadKey = (queueIndex: number, item: PlaybackQueueItem): string =>
@@ -96,7 +95,7 @@ const prepareDirectSource = async (
   track: PlaybackQueueItem["track"],
   resolved: ResolvedPlaybackSource,
 ): Promise<{ source: ResolvedPlaybackSource; directSource: string } | null> => {
-  if (getPlayer().getSelectedDeviceName()?.startsWith("diretta:") !== true) return null;
+  if (store.get("player.outputDevice")?.startsWith("diretta:") !== true) return null;
   if (track.cueStartMs != null || track.cueEndMs != null) return null;
 
   let directSource = resolved.source;

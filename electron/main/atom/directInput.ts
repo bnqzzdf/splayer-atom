@@ -3,8 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import { writeExactHttpInput } from "@main/atom/exactInput";
 
 interface InFlightMaterialization {
   controller: AbortController;
@@ -38,34 +37,6 @@ const isReusable = async (filePath: string): Promise<boolean> => {
   }
 };
 
-const downloadExactBytes = async (
-  source: string,
-  filePath: string,
-  controller: AbortController,
-): Promise<void> => {
-  const response = await fetch(source, {
-    headers: { "Accept-Encoding": "identity" },
-    signal: controller.signal,
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`Direct input 下载失败: HTTP ${response.status}`);
-  }
-
-  await fsp.mkdir(path.dirname(filePath), { recursive: true });
-  const partPath = `${filePath}.part`;
-  try {
-    const input = Readable.fromWeb(response.body as never);
-    await pipeline(input, fs.createWriteStream(partPath));
-    const stat = await fsp.stat(partPath);
-    if (stat.size === 0) throw new Error("Direct input 下载结果为空");
-    await fsp.rm(filePath, { force: true });
-    await fsp.rename(partPath, filePath);
-  } catch (error) {
-    await fsp.rm(partPath, { force: true }).catch(() => {});
-    throw error;
-  }
-};
-
 /**
  * 把远端音频按响应字节原样落成本地 seekable 临时文件。
  * 不解码、不转码、不修改 payload，仅为 strict Direct 提供本地文件语义。
@@ -90,7 +61,7 @@ export const materializeDirectInput = async (source: string): Promise<string> =>
   if (existing) return existing.promise;
 
   const controller = new AbortController();
-  const promise = downloadExactBytes(source, finalPath, controller)
+  const promise = writeExactHttpInput(source, finalPath, controller.signal)
     .then(() => finalPath)
     .finally(() => inFlight.delete(source));
   inFlight.set(source, { controller, promise });

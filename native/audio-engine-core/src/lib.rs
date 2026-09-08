@@ -21,6 +21,7 @@ pub mod fft;
 pub mod hdcd;
 pub mod logger;
 pub mod loudness;
+pub mod media_extract;
 pub mod metadata;
 #[cfg(feature = "midi")]
 pub mod midi;

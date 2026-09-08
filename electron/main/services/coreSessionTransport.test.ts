@@ -111,12 +111,13 @@ test("Desktop renderer session and queue commands use the shared Core Protocol c
   assert.doesNotMatch(fmDialogSource, sessionIpc);
 });
 
-test("Core reload-current captures native position and play state before fresh loading", () => {
+test("Core reload-current captures current output position and play state before fresh loading", () => {
   const reload = sessionSource.split("export const reloadCurrent = async (")[1];
   assert.ok(reload, "Core reload-current command should exist");
   const body = reload.split("export const startPersonalFm")[0] ?? reload;
-  assert.match(body, /player\.getStatus\(\)\.state/);
-  assert.match(body, /toDisplayPositionMs\(toMs\(player\.getPosition\(\)\)\)/);
+  assert.match(body, /const currentStatus = getPlaybackStatus\(\)/);
+  assert.match(body, /const state = currentStatus\.state/);
+  assert.match(body, /const resumePositionMs = currentStatus\.position/);
   assert.match(body, /await loadIndex\(index, false, \{ preserveListenBrainzSession: true \}\)/);
   assert.match(body, /await seek\(resumePositionMs\)/);
   assert.match(body, /if \(shouldPlay\) await play\(\)/);

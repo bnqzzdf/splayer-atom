@@ -19,14 +19,15 @@ test("Core preload prepares Diretta input and stages through the shared main ser
   assert.match(preloader, /stageDirectPlaybackNext/);
   assert.match(preloader, /materializeDirectInput/);
   assert.match(preloader, /resolved\.cacheAfterLoad \? await resolved\.cacheAfterLoad\(\) : null/);
-  assert.match(preloader, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
+  assert.match(preloader, /store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\)/);
+  assert.doesNotMatch(preloader, /getSelectedDeviceName\(\)/);
   assert.doesNotMatch(preloader, /window\.api/);
 });
 
 test("Diretta staging remains active when generic next-track preload is disabled", () => {
   assert.match(
     preloader,
-    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\) === true/,
+    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\) === true/,
   );
   assert.equal(preloader.match(/if \(!shouldPrepareNextInput\(\)\)/g)?.length, 2);
 });

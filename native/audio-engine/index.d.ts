@@ -141,6 +141,15 @@ export declare class AudioPlayer {
 /** 取消正在进行的扫描任务 */
 export declare function cancelScan(): void
 
+/** Atom UPnP 使用的离线 DSD CUE -> DSF 提取。 */
+export declare function extractCueDsf(cuePath: string, trackNum: number, outputPath: string): Promise<JsDsdExtractResult>
+
+/** Atom UPnP 使用的离线 CUE WAV 提取；不创建 AudioPlayer 或音频设备。 */
+export declare function extractCueWav(cuePath: string, trackNum: number, outputPath: string): Promise<JsCueWavExtractResult>
+
+/** Atom UPnP 使用的离线 SACD stereo track -> DSF 提取。 */
+export declare function extractSacdDsf(isoPath: string, trackNum: number, outputPath: string): Promise<JsDsdExtractResult>
+
 /** 已有文件记录，用于增量扫描比对 */
 export interface FileRecord {
   path: string
@@ -160,6 +169,22 @@ export interface JsAudioDevice {
   name: string
   /** 是否为系统默认设备 */
   isDefault: boolean
+}
+
+export interface JsCueWavExtractResult {
+  sampleRate: number
+  channels: number
+  validBits: number
+  storageBits: number
+  samplesPerChannel: number
+  durationMs: number
+}
+
+export interface JsDsdExtractResult {
+  sampleRate: number
+  channels: number
+  bitsPerChannel: number
+  durationMs: number
 }
 
 /** 一条外部歌词，返回给 JS 侧（仅格式和路径，内容按需加载） */

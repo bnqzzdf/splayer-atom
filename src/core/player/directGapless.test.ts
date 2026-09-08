@@ -76,7 +76,11 @@ test("Direct staging respects Core playback semantics before handing audio to na
     preloaderSource,
     /stageDirectNext|cancelDirectNext|directGeneration|materializeDirectInput/,
   );
-  assert.match(corePreloaderSource, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
+  assert.match(
+    corePreloaderSource,
+    /store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\)/,
+  );
+  assert.doesNotMatch(corePreloaderSource, /getSelectedDeviceName\(\)/);
   assert.match(corePreloaderSource, /track\.cueStartMs != null \|\| track\.cueEndMs != null/);
   assert.match(corePreloaderSource, /stageDirectPlaybackNext/);
   assert.match(sessionSource, /autoClose\.enabled && autoClose\.waitSongEnd/);

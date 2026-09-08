@@ -309,11 +309,12 @@ test("production Web mounts the shared SPlayer Control while HeadlessApp stays d
   assert.match(mainSource, /await router\.replace\("\/library"\)/);
 });
 
-test("Headless Web output selector only exposes real ALSA hardware and Diretta", () => {
+test("Headless Web output selector exposes real ALSA hardware, Diretta and UPnP", () => {
   assert.match(toolbarSource, /OutputDeviceSelector/);
   assert.doesNotMatch(toolbarSource, /DirettaCastPopover/);
   assert.match(outputDevicesSource, /isDirectAlsaHardwareOutput/);
   assert.match(outputDevicesSource, /startsWith\("diretta:"\)/);
+  assert.match(outputDevicesSource, /startsWith\("upnp:"\)/);
   assert.match(webOutputSelectorSource, /ALSA ·/);
   assert.match(webOutputSelectorSource, /await switchDevice/);
   assert.match(webOutputSelectorSource, /await refreshDevices/);

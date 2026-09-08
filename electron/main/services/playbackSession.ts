@@ -10,6 +10,7 @@ import type {
   TrackDetail,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
+import { fileURLToPath } from "node:url";
 import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
@@ -34,6 +35,7 @@ import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import {
   clearActiveCueRange,
+  toDisplayDurationMs,
   toDisplayPositionMs,
   toEnginePositionMs,
 } from "@main/services/playerTimeline";
@@ -44,8 +46,41 @@ import { playerLog } from "@main/utils/logger";
 import { toMs } from "@main/utils/time";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@shared/utils/djMode";
-import { selectInitialHeadlessOutput } from "@shared/utils/outputDevice";
+import { isUpnpOutput, selectInitialHeadlessOutput } from "@shared/utils/outputDevice";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
+import type { PlayerStatus } from "@shared/types/player";
+import {
+  getSelectedUpnpOutput,
+  getUpnpOutputStatus,
+  loadUpnpFile,
+  pauseUpnpOutput,
+  playUpnpOutput,
+  prepareUpnpOutput,
+  releaseUpnpOutput,
+  scanUpnpDevices,
+  seekUpnpOutput,
+  selectUpnpOutput,
+  setUpnpOutputObserver,
+  stopUpnpOutput,
+  type UpnpOutputObservation,
+  type UpnpOutputStatus,
+} from "@main/atom/upnp/output";
+import {
+  discardUpnpInput,
+  extractUpnpCueDsf,
+  extractUpnpCueWav,
+  extractUpnpSacdDsf,
+  inferUpnpMime,
+  materializeUpnpInput,
+} from "@main/atom/upnp/media";
+import {
+  notifyPlaybackTrackLoaded,
+  updatePlaybackPresentation,
+} from "@main/atom/runtime/playbackPresentation";
+import { formatArtists } from "@main/utils/metadata";
+import * as neteaseScrobble from "@main/services/neteaseScrobble";
+import * as listenbrainz from "@main/services/listenbrainz";
+import { beginCorePlayStats, onCorePlayerState } from "@main/services/headlessPlayStats";
 import {
   advancePersonalFmPool,
   alignPersonalFmPool,
@@ -73,8 +108,15 @@ let autoClose = {
   pendingStopOnEnd: false,
 };
 let autoCloseTimer: NodeJS.Timeout | null = null;
+let upnpObservedGeneration = -1;
+let upnpSeenPlaying = false;
+let upnpEndedGeneration = -1;
 
 const MAX_CONSECUTIVE_LOAD_FAILURES = 5;
+
+const selectedOutputId = (): string | null => store.get("player.outputDevice") ?? null;
+
+const isUpnpSelected = (): boolean => isUpnpOutput(selectedOutputId());
 
 class CorePlaybackLoadError extends Error {
   constructor(
@@ -152,7 +194,13 @@ const onAutoCloseDeadline = (): void => {
     publish();
     return;
   }
-  getPlayer().pause();
+  if (isUpnpSelected()) {
+    void pauseUpnpOutput().catch((error) =>
+      playerLog.warn(`[upnp] auto-close pause failed: ${String(error)}`),
+    );
+  } else {
+    getPlayer().pause();
+  }
   resetAutoClose();
   publish();
   scheduleNextPlaybackPreload();
@@ -184,6 +232,234 @@ const publishTrackLoaded = (
     },
   };
   publishCoreControlEvent(event);
+};
+
+const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatus()): void => {
+  const player = getPlayer();
+  const playing = remote.state === "playing";
+  onCorePlayerState(remote.state);
+  nowPlaying.onPlayStateChange(remote.state);
+  nowPlaying.onPosition(remote.position, playing);
+  neteaseScrobble.onState(playing);
+  neteaseScrobble.onPosition(remote.position);
+  listenbrainz.onState(playing);
+  publishCoreControlEvent({
+    type: "status",
+    data: {
+      state: remote.state,
+      position: remote.position,
+      duration: remote.duration,
+      volume: player.getVolume(),
+      speed: player.getSpeed(),
+      isFinished: remote.isFinished,
+    },
+  });
+  publishCoreControlEvent({
+    type: "position",
+    data: { position: remote.position, duration: remote.duration },
+  });
+};
+
+const isNearUpnpEnd = (remote: UpnpOutputStatus): boolean => {
+  if (remote.duration <= 0) return false;
+  const tolerance = Math.max(2000, Math.min(5000, Math.round(remote.duration * 0.02)));
+  return remote.position >= Math.max(0, remote.duration - tolerance);
+};
+
+const handleUpnpNaturalEnd = (): void => {
+  if (!ownsPlayback()) return;
+  if (autoClose.pendingStopOnEnd) {
+    resetAutoClose();
+    publish();
+    scheduleNextPlaybackPreload();
+    return;
+  }
+  const advance =
+    mode !== "personalFm" && repeat === "one"
+      ? selectIndex(index, true, true).then(() => true)
+      : next();
+  void advance.catch((error) => playerLog.error("[session] UPnP automatic next failed", error));
+};
+
+const handleUpnpObservation = (observation: UpnpOutputObservation): void => {
+  if (!isUpnpSelected() || getSelectedUpnpOutput() !== selectedOutputId()) return;
+  if (observation.generation !== upnpObservedGeneration) {
+    upnpObservedGeneration = observation.generation;
+    upnpSeenPlaying = false;
+  }
+  const remote = observation.status;
+  if (remote.state === "playing") upnpSeenPlaying = true;
+  publishUpnpObservedStatus(remote);
+  if (
+    remote.state === "stopped" &&
+    upnpSeenPlaying &&
+    observation.generation !== upnpEndedGeneration &&
+    isNearUpnpEnd(remote)
+  ) {
+    upnpEndedGeneration = observation.generation;
+    handleUpnpNaturalEnd();
+  }
+};
+
+const stopCurrentOutputBestEffort = (): void => {
+  if (isUpnpSelected()) {
+    void stopUpnpOutput().catch((error) => playerLog.warn(`[upnp] stop failed: ${String(error)}`));
+    return;
+  }
+  getPlayer().stop();
+};
+
+const cueTrackNumber = (item: PlaybackQueueItem): number | null => {
+  if (!item.track.cuePath) return null;
+  const value = item.track.track;
+  return Number.isInteger(value) && (value ?? 0) > 0 ? value! : null;
+};
+
+const isDsdCueTrack = (item: PlaybackQueueItem): boolean => {
+  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
+  const source = item.track.cueAudioPath?.toLowerCase() ?? "";
+  return codec === "dsd_dsf" || codec === "dsd_dff" || /\.(?:dsf|dff|dsdiff)$/.test(source);
+};
+
+const isIntegerLosslessCueTrack = (item: PlaybackQueueItem): boolean => {
+  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
+  return /^(?:flac|ape|alac|wavpack|tta|shorten|pcm_[su])/.test(codec);
+};
+
+const sacdTrackSource = (
+  item: PlaybackQueueItem,
+  resolved: ResolvedPlaybackSource,
+): { isoPath: string; trackNum: number } | null => {
+  const source = resolved.source.startsWith("file:")
+    ? fileURLToPath(resolved.source)
+    : resolved.source;
+  const virtual = /^(.*\.iso)\|Track(\d+)\|/i.exec(source);
+  if (virtual) {
+    return { isoPath: virtual[1], trackNum: Number(virtual[2]) };
+  }
+  if (/\.iso$/i.test(source)) {
+    const trackNum = item.track.track ?? 1;
+    return Number.isInteger(trackNum) && trackNum > 0 ? { isoPath: source, trackNum } : null;
+  }
+  return null;
+};
+
+const assertUpnpResolvedTrackSupported = (
+  item: PlaybackQueueItem,
+  resolved: ResolvedPlaybackSource,
+): void => {
+  const track = item.track;
+  if (track.quality?.channels && track.quality.channels !== 2) {
+    throw new CorePlaybackLoadError(
+      ErrorCode.UNKNOWN,
+      "UPnP output currently supports stereo only",
+    );
+  }
+  if (track.cuePath && cueTrackNumber(item) === null) {
+    throw new CorePlaybackLoadError(ErrorCode.UNKNOWN, "UPnP CUE track number is unavailable");
+  }
+  if (track.cuePath && !isDsdCueTrack(item) && !isIntegerLosslessCueTrack(item)) {
+    throw new CorePlaybackLoadError(
+      ErrorCode.UNKNOWN,
+      "UPnP CUE requires integer lossless PCM or native DSD source",
+    );
+  }
+  const sourceLooksSacd = /\.iso(?:$|\|Track\d+\|)/i.test(resolved.source);
+  if (sourceLooksSacd && sacdTrackSource(item, resolved) === null) {
+    throw new CorePlaybackLoadError(ErrorCode.UNKNOWN, "UPnP SACD track identity is unavailable");
+  }
+};
+
+const loadUpnpResolvedTrack = async (
+  item: PlaybackQueueItem,
+  resolved: ResolvedPlaybackSource,
+  autoPlay: boolean,
+  preserveListenBrainzSession: boolean,
+  expectedGeneration: number,
+): Promise<MediaInfo | null> => {
+  const track = item.track;
+  assertUpnpResolvedTrackSupported(item, resolved);
+  let filePath: string;
+  let temporaryInput: string | null = null;
+  let representationDurationMs = track.duration;
+  const cueNum = cueTrackNumber(item);
+  const sacd = sacdTrackSource(item, resolved);
+
+  if (track.cuePath && cueNum != null) {
+    const generated = isDsdCueTrack(item)
+      ? await extractUpnpCueDsf(track.cuePath, cueNum)
+      : await extractUpnpCueWav(track.cuePath, cueNum);
+    temporaryInput = generated.filePath;
+    filePath = generated.filePath;
+    representationDurationMs = generated.durationMs;
+  } else if (sacd) {
+    const generated = await extractUpnpSacdDsf(sacd.isoPath, sacd.trackNum);
+    temporaryInput = generated.filePath;
+    filePath = generated.filePath;
+    representationDurationMs = generated.durationMs;
+  } else if (/^https?:\/\//i.test(resolved.source)) {
+    temporaryInput = await materializeUpnpInput(resolved.source);
+    if (expectedGeneration !== loadGeneration) {
+      await discardUpnpInput(temporaryInput);
+      return null;
+    }
+    filePath = temporaryInput;
+    if (resolved.cacheAfterLoad) {
+      void resolved
+        .cacheAfterLoad(temporaryInput)
+        .catch((error) => playerLog.warn(`[upnp] source cache failed: ${String(error)}`));
+    }
+  } else {
+    filePath = resolved.source.startsWith("file:")
+      ? fileURLToPath(resolved.source)
+      : resolved.source;
+  }
+  if (expectedGeneration !== loadGeneration) {
+    if (temporaryInput) await discardUpnpInput(temporaryInput);
+    return null;
+  }
+  try {
+    await loadUpnpFile({
+      filePath,
+      title: track.title || filePath.split(/[/\\]/).pop() || filePath,
+      durationMs: representationDurationMs,
+      mime: inferUpnpMime(filePath, track.quality?.codec),
+      autoPlay: false,
+      deleteOnRelease: temporaryInput != null,
+    });
+  } catch (error) {
+    if (temporaryInput) await discardUpnpInput(temporaryInput);
+    throw error;
+  }
+  const observed = getUpnpOutputStatus();
+  const duration = Math.max(representationDurationMs || 0, observed.duration || 0);
+  const artist = formatArtists(track.artists ?? []);
+  updatePlaybackPresentation({
+    title: track.title,
+    artist,
+    album: track.album?.name ?? "",
+    coverUrl: track.coverOriginal ?? track.cover,
+    durationMs: duration,
+    autoPlay,
+  });
+  notifyPlaybackTrackLoaded(track, item.context, {
+    title: track.title,
+    artist: track.artists?.[0]?.name ?? artist,
+    album: track.album?.name ?? "",
+    durationMs: duration,
+    autoPlay,
+  });
+  neteaseScrobble.onTrackLoaded(track, item.context, duration, false);
+  if (!preserveListenBrainzSession) listenbrainz.onTrackLoaded(track, duration, false);
+  beginCorePlayStats({ ...track, duration }, false);
+  return {
+    title: track.title,
+    artists: track.artists,
+    album: track.album,
+    duration,
+    cover: track.cover,
+    quality: track.quality,
+  };
 };
 
 const scheduleNextPlaybackPreload = (): void => {
@@ -222,7 +498,7 @@ const loadIndex = async (
   if (targetIndex < 0 || targetIndex >= queue.length) throw new Error("queue index out of range");
   // Direct staging/cancel 与 full load 共享同一个 native runtime；先收敛旧控制命令，避免跨格式重连竞态。
   await waitForPlaybackPreloadIdle();
-  if (isHeadlessMode() && !getPlayer().getSelectedDeviceName()) {
+  if (isHeadlessMode() && !selectedOutputId()) {
     throw new CorePlaybackLoadError(
       ErrorCode.OUTPUT_DEVICE_REQUIRED,
       "Headless Core output device must be selected before playback",
@@ -247,6 +523,40 @@ const loadIndex = async (
   if (generation !== loadGeneration) return;
 
   playerLog.info(`[session] load ${track.source} track: ${track.title}`);
+  if (isUpnpSelected()) {
+    const mediaInfo = await loadUpnpResolvedTrack(
+      item,
+      resolved,
+      autoPlay,
+      runtime.preserveListenBrainzSession === true,
+      generation,
+    );
+    if (!mediaInfo || generation !== loadGeneration) return;
+    if (mode === "personalFm") {
+      queue = alignPersonalFmPool(targetIndex).map((fmTrack) => ({ track: fmTrack }));
+      originalQueue = null;
+      index = queue.length > 0 ? 0 : -1;
+    } else {
+      index = targetIndex;
+    }
+    active = index >= 0;
+    if (mediaInfo.quality) item.track = { ...item.track, quality: mediaInfo.quality };
+    const duration = Math.max(item.track.duration || 0, mediaInfo.duration);
+    nowPlaying.update({ ...item.track, duration }, [], null);
+    publish();
+    publishTrackLoaded(
+      item,
+      resolved.source,
+      autoPlay,
+      mediaInfo.quality ? { quality: mediaInfo.quality, externalLyrics: [] } : undefined,
+      mediaInfo,
+    );
+    if (autoPlay) await playUpnpOutput();
+    else publishUpnpObservedStatus();
+    scheduleNextPlaybackPreload();
+    return;
+  }
+
   let cacheStartedFromDirectInput = false;
   const cacheResolvedSource = (materializedSource?: string): void => {
     if (!resolved.cacheAfterLoad) return;
@@ -344,7 +654,7 @@ const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promis
 
   ++loadGeneration;
   invalidatePlaybackPreload();
-  getPlayer().stop();
+  stopCurrentOutputBestEffort();
   active = false;
   nowPlaying.onPlayStateChange("stopped");
   publish();
@@ -354,6 +664,7 @@ const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promis
 export const initPlaybackSession = async (): Promise<void> => {
   if (initialized) return;
   initialized = true;
+  setUpnpOutputObserver(handleUpnpObservation);
   const persisted = loadPlaybackSession();
   if (persisted) {
     queue = cloneQueue(persisted.queue);
@@ -375,8 +686,12 @@ export const initPlaybackSession = async (): Promise<void> => {
   const output = store.get("player.outputDevice");
   if (output) {
     try {
-      assertHeadlessDirettaPrivilege(output);
-      await player.setOutputDevice(output);
+      if (isUpnpOutput(output)) {
+        selectUpnpOutput(output);
+      } else {
+        assertHeadlessDirettaPrivilege(output);
+        await player.setOutputDevice(output);
+      }
     } catch (error) {
       playerLog.warn(`[session] persisted output not activated: ${String(error)}`);
     }
@@ -392,6 +707,19 @@ export const initPlaybackSession = async (): Promise<void> => {
       }
     }
   }
+};
+
+/** 释放 Atom-owned 远端输出运行态；本地 audio-engine 继续使用既有 lifecycle。 */
+export const shutdownPlaybackSession = async (): Promise<void> => {
+  clearAutoCloseTimer();
+  setUpnpOutputObserver(null);
+  if (!getSelectedUpnpOutput()) return;
+  try {
+    await stopUpnpOutput();
+  } catch (error) {
+    playerLog.warn(`[upnp] shutdown stop failed: ${String(error)}`);
+  }
+  await releaseUpnpOutput();
 };
 
 export const getPlaybackSession = (): PlaybackSessionSnapshot => snapshot();
@@ -548,25 +876,40 @@ export const clearQueue = async (stop = false): Promise<void> => {
   active = false;
   nowPlaying.clear();
   clearActiveCueRange();
-  if (stop) getPlayer().stop();
+  if (stop) stopCurrentOutputBestEffort();
   publish();
 };
 
 export const play = async (): Promise<void> => {
-  if (queue.length > 0 && (index < 0 || getPlayer().getStatus().state === "stopped")) {
+  const state = isUpnpSelected() ? getUpnpOutputStatus().state : getPlayer().getStatus().state;
+  if (queue.length > 0 && (index < 0 || state === "stopped")) {
     await loadIndexWithPolicy(Math.max(0, index), true);
+    return;
+  }
+  if (isUpnpSelected()) {
+    await playUpnpOutput();
     return;
   }
   await getPlayer().play();
 };
 
-export const pause = (): void => getPlayer().pause();
+export const pause = (): void => {
+  if (isUpnpSelected()) {
+    void pauseUpnpOutput().catch((error) =>
+      playerLog.warn(`[upnp] pause failed: ${String(error)}`),
+    );
+    return;
+  }
+  getPlayer().pause();
+};
 export const stop = (): void => {
   clearActiveCueRange();
-  getPlayer().stop();
+  stopCurrentOutputBestEffort();
 };
 export const seek = (positionMs: number): Promise<void> =>
-  getPlayer().seek(toEnginePositionMs(Math.max(0, positionMs)) / 1000);
+  isUpnpSelected()
+    ? seekUpnpOutput(Math.max(0, positionMs))
+    : getPlayer().seek(toEnginePositionMs(Math.max(0, positionMs)) / 1000);
 
 /**
  * 重新解析并热替换当前 canonical Track。
@@ -574,10 +917,10 @@ export const seek = (positionMs: number): Promise<void> =>
  */
 export const reloadCurrent = async (forcePlay?: boolean): Promise<boolean> => {
   if (!ownsPlayback() || index < 0 || index >= queue.length) return false;
-  const player = getPlayer();
-  const state = player.getStatus().state;
+  const currentStatus = getPlaybackStatus();
+  const state = currentStatus.state;
   const shouldPlay = forcePlay ?? state === "playing";
-  const resumePositionMs = toDisplayPositionMs(toMs(player.getPosition()));
+  const resumePositionMs = currentStatus.position;
   invalidatePlaybackPreload();
   try {
     await loadIndex(index, false, { preserveListenBrainzSession: true });
@@ -612,7 +955,7 @@ const advancePersonalFm = async (loadCurrent = true): Promise<boolean> => {
   invalidatePlaybackPreload();
   const tracks = await advancePersonalFmPool();
   if (!applyPersonalFmPool(tracks)) {
-    getPlayer().stop();
+    stopCurrentOutputBestEffort();
     nowPlaying.onPlayStateChange("stopped");
     publish();
     return false;
@@ -628,7 +971,7 @@ export const dislikePersonalFm = async (playedSec?: number): Promise<PlaybackSes
   invalidatePlaybackPreload();
   const tracks = await dislikePersonalFmCurrent(playedSec);
   if (!applyPersonalFmPool(tracks)) {
-    getPlayer().stop();
+    stopCurrentOutputBestEffort();
     nowPlaying.onPlayStateChange("stopped");
     publish();
     return snapshot();
@@ -927,12 +1270,182 @@ export const onNativeSourceError = (): boolean => {
 
 export const getOutputDevices = (): AudioDevice[] => getPlayer().getOutputDevices();
 export const scanDirettaDevices = (): Promise<AudioDevice[]> => getPlayer().scanDirettaDevices();
+export const scanUpnpOutputDevices = (): Promise<AudioDevice[]> =>
+  scanUpnpDevices().catch((error) => {
+    playerLog.debug(`[upnp] discovery skipped: ${String(error)}`);
+    return [];
+  });
 
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertHeadlessDirettaPrivilege(deviceId);
   invalidatePlaybackPreload();
   const player = getPlayer();
   const previousPreference = store.get("player.outputDevice");
+
+  if (isUpnpOutput(deviceId)) {
+    await prepareUpnpOutput(deviceId!);
+    if (deviceId === previousPreference) {
+      selectUpnpOutput(deviceId!);
+      scheduleNextPlaybackPreload();
+      return;
+    }
+    const previousWasUpnp = isUpnpOutput(previousPreference);
+    const state = previousWasUpnp
+      ? getUpnpOutputStatus().state
+      : (player.getStatus().state as PlayerStatus["state"]);
+    const shouldReloadCurrent =
+      ownsPlayback() &&
+      index >= 0 &&
+      index < queue.length &&
+      (state === "playing" || state === "paused");
+    const resumePositionMs = shouldReloadCurrent
+      ? previousWasUpnp
+        ? getUpnpOutputStatus().position
+        : toDisplayPositionMs(toMs(player.getPosition()))
+      : 0;
+    const shouldResumePlaying =
+      state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+    const playbackGeneration = loadGeneration;
+    const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
+    let previousResolved: ResolvedPlaybackSource | null = null;
+
+    if (shouldReloadCurrent) {
+      previousResolved = await resolvePlaybackSource(queue[index].track);
+      assertUpnpResolvedTrackSupported(queue[index], previousResolved);
+      if (loadGeneration !== playbackGeneration || queue[index]?.track.id !== currentTrackId) {
+        throw new Error("playback changed while preparing UPnP output switch");
+      }
+    }
+
+    try {
+      if (previousWasUpnp) await stopUpnpOutput();
+      else if (shouldReloadCurrent) player.stop();
+
+      selectUpnpOutput(deviceId!);
+      store.set("player.outputDevice", deviceId);
+      publishCoreControlEvent({
+        type: "deviceChanged",
+        data: { defaultDevice: player.getDefaultDeviceName() ?? null },
+      });
+
+      if (shouldReloadCurrent && previousResolved) {
+        await loadIndex(index, false, {
+          resolvedOverride: previousResolved,
+          preserveListenBrainzSession: true,
+        });
+        if (resumePositionMs > 0) await seek(resumePositionMs);
+        if (shouldResumePlaying) await play();
+      }
+    } catch (switchError) {
+      try {
+        if (previousWasUpnp && previousPreference) {
+          selectUpnpOutput(previousPreference);
+          store.set("player.outputDevice", previousPreference);
+        } else {
+          store.set("player.outputDevice", previousPreference ?? null);
+          await releaseUpnpOutput();
+          await player.setOutputDevice(previousPreference ?? undefined);
+        }
+        if (shouldReloadCurrent && previousResolved) {
+          await loadIndex(index, false, {
+            resolvedOverride: previousResolved,
+            preserveListenBrainzSession: true,
+          });
+          if (resumePositionMs > 0) await seek(resumePositionMs);
+          if (state === "playing") await play();
+        }
+      } catch (rollbackError) {
+        playerLog.error(`[session] UPnP output rollback failed: ${String(rollbackError)}`);
+      }
+      throw switchError;
+    } finally {
+      scheduleNextPlaybackPreload();
+    }
+    return;
+  }
+
+  if (isUpnpOutput(previousPreference)) {
+    const remote = getUpnpOutputStatus();
+    const state = remote.state;
+    const shouldReloadCurrent =
+      ownsPlayback() &&
+      index >= 0 &&
+      index < queue.length &&
+      (state === "playing" || state === "paused");
+    const resumePositionMs = shouldReloadCurrent ? remote.position : 0;
+    const shouldResumePlaying =
+      state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+    const playbackGeneration = loadGeneration;
+    const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
+    let previousResolved: ResolvedPlaybackSource | null = null;
+    let targetResolved: ResolvedPlaybackSource | null = null;
+    let managedDirectInput: string | null = null;
+
+    if (shouldReloadCurrent) {
+      previousResolved = await resolvePlaybackSource(queue[index].track);
+      targetResolved = previousResolved;
+      if (
+        deviceId?.startsWith("diretta:") === true &&
+        /^https?:\/\//i.test(previousResolved.source)
+      ) {
+        const cached = previousResolved.cacheAfterLoad
+          ? await previousResolved.cacheAfterLoad()
+          : null;
+        const source = cached ?? (await materializeDirectInput(previousResolved.source));
+        if (!cached) managedDirectInput = source;
+        targetResolved = {
+          ...previousResolved,
+          source,
+          provider: cached ? "cache" : previousResolved.provider,
+          cacheAfterLoad: undefined,
+        };
+      }
+      if (loadGeneration !== playbackGeneration || queue[index]?.track.id !== currentTrackId) {
+        if (managedDirectInput) void discardDirectInput(managedDirectInput);
+        throw new Error("playback changed while preparing native output switch");
+      }
+    }
+
+    try {
+      await stopUpnpOutput();
+      await player.setOutputDevice(deviceId ?? undefined);
+      store.set("player.outputDevice", deviceId);
+      await releaseUpnpOutput();
+      publishCoreControlEvent({
+        type: "deviceChanged",
+        data: { defaultDevice: player.getDefaultDeviceName() ?? null },
+      });
+      if (shouldReloadCurrent && targetResolved) {
+        await loadIndex(index, false, {
+          resolvedOverride: targetResolved,
+          preserveListenBrainzSession: true,
+        });
+        if (resumePositionMs > 0) await seek(resumePositionMs);
+        if (shouldResumePlaying) await play();
+      }
+    } catch (switchError) {
+      if (managedDirectInput) void discardDirectInput(managedDirectInput);
+      try {
+        selectUpnpOutput(previousPreference!);
+        store.set("player.outputDevice", previousPreference);
+        if (shouldReloadCurrent && previousResolved) {
+          await loadIndex(index, false, {
+            resolvedOverride: previousResolved,
+            preserveListenBrainzSession: true,
+          });
+          if (resumePositionMs > 0) await seek(resumePositionMs);
+          if (state === "playing") await play();
+        }
+      } catch (rollbackError) {
+        playerLog.error(`[session] UPnP output rollback failed: ${String(rollbackError)}`);
+      }
+      throw switchError;
+    } finally {
+      scheduleNextPlaybackPreload();
+    }
+    return;
+  }
+
   const state = player.getStatus().state;
   const shouldReloadCurrent =
     ownsPlayback() &&
@@ -1025,4 +1538,31 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
 
 /** 当前 Native 实际选择的输出设备，而不是仅返回持久化偏好。 */
 export const getSelectedOutputDevice = (): string | null =>
-  getPlayer().getSelectedDeviceName() ?? null;
+  isUpnpOutput(store.get("player.outputDevice"))
+    ? (getSelectedUpnpOutput() ?? store.get("player.outputDevice") ?? null)
+    : (getPlayer().getSelectedDeviceName() ?? null);
+
+/** Core Control 使用的当前输出状态；UPnP 不改变既有 PlayerStatus schema。 */
+export const getPlaybackStatus = (): PlayerStatus => {
+  const player = getPlayer();
+  if (isUpnpSelected()) {
+    const remote = getUpnpOutputStatus();
+    return {
+      state: remote.state,
+      position: remote.position,
+      duration: remote.duration,
+      volume: player.getVolume(),
+      speed: player.getSpeed(),
+      isFinished: remote.isFinished,
+    };
+  }
+  const raw = player.getStatus();
+  return {
+    state: raw.state as PlayerStatus["state"],
+    position: toDisplayPositionMs(toMs(raw.position)),
+    duration: toDisplayDurationMs(toMs(raw.duration)),
+    volume: raw.volume,
+    speed: player.getSpeed(),
+    isFinished: raw.isFinished,
+  };
+};

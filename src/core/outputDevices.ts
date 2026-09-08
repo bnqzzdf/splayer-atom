@@ -19,5 +19,6 @@ export const projectOutputDevices = (devices: AudioDevice[], webRemote: boolean)
   const diretta = devices
     .filter((device) => device.id.startsWith("diretta:"))
     .map((device) => ({ ...device, name: `${device.name} · Diretta` }));
-  return [...filterWebSystemOutputs(devices), ...diretta];
+  const upnp = devices.filter((device) => device.id.startsWith("upnp:"));
+  return [...filterWebSystemOutputs(devices), ...diretta, ...upnp];
 };

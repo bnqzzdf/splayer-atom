@@ -76,6 +76,7 @@ import {
   appendQueue,
   clearQueue,
   getOutputDevices,
+  getPlaybackStatus,
   getPlaybackSession,
   getSelectedOutputDevice,
   insertQueue,
@@ -91,6 +92,7 @@ import {
   replaceQueue,
   reloadCurrent,
   scanDirettaDevices,
+  scanUpnpOutputDevices,
   seek,
   selectIndex,
   setOutputDevice,
@@ -104,7 +106,6 @@ import {
   updateQueueItem,
   updateQueueTracks,
 } from "@main/services/playbackSession";
-import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
 import { getLibraryStats } from "@main/database";
 import {
   getPlayHistoryDaily,
@@ -116,7 +117,6 @@ import {
   insertFavoriteEvent,
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
-import { toMs } from "@main/utils/time";
 import { testNetworkProxy } from "@main/utils/proxy";
 import { getDownloadDir } from "@main/utils/config";
 import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFilesystem";
@@ -191,15 +191,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.get("/status", (c) => {
-    const raw = getPlayer().getStatus();
-    return c.json({
-      state: raw.state,
-      position: toDisplayPositionMs(toMs(raw.position)),
-      duration: toDisplayDurationMs(toMs(raw.duration)),
-      volume: raw.volume,
-      speed: getPlayer().getSpeed(),
-      isFinished: raw.isFinished,
-    });
+    return c.json(getPlaybackStatus());
   });
 
   api.get("/settings/core", (c) => c.json(getCoreSettingsSnapshot()));
@@ -1060,11 +1052,12 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.get("/output/devices", async (c) => {
     try {
-      const [diretta, local] = await Promise.all([
+      const [diretta, upnp, local] = await Promise.all([
         scanDirettaDevices(),
+        scanUpnpOutputDevices(),
         Promise.resolve(getOutputDevices()),
       ]);
-      return c.json({ selected: getSelectedOutputDevice(), data: [...local, ...diretta] });
+      return c.json({ selected: getSelectedOutputDevice(), data: [...local, ...diretta, ...upnp] });
     } catch (error) {
       return c.json({ error: errorText(error) }, 500);
     }
