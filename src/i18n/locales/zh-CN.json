@@ -895,8 +895,15 @@
       "description": "选择音频输出设备",
       "default": "系统默认",
       "required": "需要选择输出设备",
-      "requiredHint": "请选择一个 ALSA 或 Diretta 输出设备后再播放。",
-      "noneAvailable": "未检测到可用的 ALSA 或 Diretta 输出设备"
+      "requiredHint": "请选择一个 ALSA、Diretta 或 UPnP 输出设备后再播放。",
+      "noneAvailable": "未检测到可用的输出设备",
+      "noneInGroup": "未发现设备",
+      "refresh": "刷新设备",
+      "groups": {
+        "alsa": "ALSA",
+        "diretta": "Diretta",
+        "upnp": "UPnP"
+      }
     },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",

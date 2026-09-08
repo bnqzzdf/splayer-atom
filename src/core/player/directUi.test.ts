@@ -309,15 +309,26 @@ test("production Web mounts the shared SPlayer Control while HeadlessApp stays d
   assert.match(mainSource, /await router\.replace\("\/library"\)/);
 });
 
-test("Headless Web output selector exposes real ALSA hardware, Diretta and UPnP", () => {
+test("Headless Web output selector opens one grouped list with live network refresh", () => {
   assert.match(toolbarSource, /OutputDeviceSelector/);
   assert.doesNotMatch(toolbarSource, /DirettaCastPopover/);
   assert.match(outputDevicesSource, /isDirectAlsaHardwareOutput/);
   assert.match(outputDevicesSource, /startsWith\("diretta:"\)/);
   assert.match(outputDevicesSource, /startsWith\("upnp:"\)/);
-  assert.match(webOutputSelectorSource, /ALSA ·/);
-  assert.match(webOutputSelectorSource, /await switchDevice/);
-  assert.match(webOutputSelectorSource, /await refreshDevices/);
+  assert.doesNotMatch(webOutputSelectorSource, /<SSelect/);
+  assert.match(webOutputSelectorSource, /v-for="group in groups"/);
+  assert.match(webOutputSelectorSource, /kind: "alsa"/);
+  assert.match(webOutputSelectorSource, /kind: "diretta"/);
+  assert.match(webOutputSelectorSource, /kind: "upnp"/);
+  assert.match(webOutputSelectorSource, /IconLucideRefreshCw/);
+  assert.match(webOutputSelectorSource, /await refreshDevices\(\)/);
+  const selectionFlow = between(
+    webOutputSelectorSource,
+    "const onSelect = async",
+    "onMounted(() =>",
+  );
+  assert.match(selectionFlow, /await switchDevice\(deviceId\)/);
+  assert.doesNotMatch(selectionFlow, /refreshDevices/);
   assert.doesNotMatch(webOutputSelectorSource, /SYSTEM_DEFAULT|system-default/);
 });
 

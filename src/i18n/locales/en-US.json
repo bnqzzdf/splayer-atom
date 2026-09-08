@@ -907,8 +907,15 @@
       "description": "Select audio output device",
       "default": "System Default",
       "required": "Output device required",
-      "requiredHint": "Select an ALSA or Diretta output device before playing.",
-      "noneAvailable": "No available ALSA or Diretta output device was detected"
+      "requiredHint": "Select an ALSA, Diretta, or UPnP output device before playing.",
+      "noneAvailable": "No available output device was detected",
+      "noneInGroup": "No devices found",
+      "refresh": "Refresh devices",
+      "groups": {
+        "alsa": "ALSA",
+        "diretta": "Diretta",
+        "upnp": "UPnP"
+      }
     },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",
