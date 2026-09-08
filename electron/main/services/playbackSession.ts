@@ -711,6 +711,7 @@ export const initPlaybackSession = async (): Promise<void> => {
 
 /** 释放 Atom-owned 远端输出运行态；本地 audio-engine 继续使用既有 lifecycle。 */
 export const shutdownPlaybackSession = async (): Promise<void> => {
+  ++loadGeneration;
   clearAutoCloseTimer();
   setUpnpOutputObserver(null);
   if (!getSelectedUpnpOutput()) return;
@@ -903,6 +904,7 @@ export const pause = (): void => {
   getPlayer().pause();
 };
 export const stop = (): void => {
+  ++loadGeneration;
   clearActiveCueRange();
   stopCurrentOutputBestEffort();
 };

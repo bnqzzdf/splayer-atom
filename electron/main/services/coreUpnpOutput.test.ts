@@ -55,6 +55,23 @@ test("UPnP online input reuses exact-byte materialization without provider or Di
   assert.doesNotMatch(upnpLoad, /materializeDirectInput/);
 });
 
+test("terminal Core commands invalidate pending slow UPnP media preparation", () => {
+  const stopBody = session.split("export const stop = (): void => {")[1]?.split("};")[0];
+  const shutdownBody = session
+    .split("export const shutdownPlaybackSession = async (): Promise<void> => {")[1]
+    ?.split("};")[0];
+  const upnpLoad = session
+    .split("const loadUpnpResolvedTrack = async (")[1]
+    ?.split("const scheduleNextPlaybackPreload")[0];
+  assert.ok(stopBody);
+  assert.ok(shutdownBody);
+  assert.ok(upnpLoad);
+  assert.match(stopBody, /\+\+loadGeneration/);
+  assert.match(shutdownBody, /\+\+loadGeneration/);
+  assert.match(upnpLoad, /expectedGeneration !== loadGeneration/);
+  assert.match(upnpLoad, /await discardUpnpInput\(temporaryInput\)/);
+});
+
 test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   const media = read("electron/main/atom/upnp/media.ts");
   const atomExtract = read("native/audio-engine/src/atom_media_extract.rs");
