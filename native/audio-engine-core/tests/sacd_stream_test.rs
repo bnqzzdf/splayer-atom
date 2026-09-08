@@ -141,6 +141,33 @@ fn seek_decodes_frames_instead_of_estimating_sector_position() {
 }
 
 #[test]
+fn dst_track_start_ignores_leading_continuation_until_first_frame_start() {
+    let expected = pattern(0x5a);
+    let mut raw_dst = Vec::with_capacity(expected.len() + 1);
+    raw_dst.push(0); // DSTCoded=0, DstXBit=0, stuffing=0.
+    raw_dst.extend_from_slice(&expected);
+
+    let mut leading = [0xa5; SACD_SECTOR_SIZE];
+    let continuation = [0xde, 0xad, 0xbe, 0xef];
+    leading[0] = (1 << 5) | 1; // one packet, no frame info, DST sector
+    leading[1] = (2 << 3) | ((continuation.len() >> 8) as u8); // audio, no frame_start
+    leading[2] = continuation.len() as u8;
+    leading[3..3 + continuation.len()].copy_from_slice(&continuation);
+
+    let mut audio = vec![leading];
+    audio.extend(sectors(&raw_dst, 0, true));
+    let (_dir, path) = fixture(&audio, 1, 0, true, true, 2);
+    let mut reader = SacdTrackReader::open_track(path, 1).unwrap();
+    let mut actual = vec![0; FRAME_BYTES];
+    assert_eq!(
+        reader.read_interleaved_dsd(&mut actual).unwrap(),
+        FRAME_BYTES
+    );
+    assert_eq!(actual, expected);
+    assert_eq!(reader.read_interleaved_dsd(&mut actual).unwrap(), 0);
+}
+
+#[test]
 fn dst_error_is_propagated_and_reader_cannot_resume_after_failure() {
     let audio = sectors(&[0xff], 0, true);
     let (_dir, path) = fixture(&audio, 1, 0, true, true, 2);

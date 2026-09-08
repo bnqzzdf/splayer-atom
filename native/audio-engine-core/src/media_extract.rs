@@ -790,10 +790,6 @@ pub fn extract_sacd_track_to_dsf(
 ) -> Result<DsdExtractResult> {
     let mut reader = SacdTrackReader::open_track(iso_path, track_num)?;
     ensure!(reader.channels == 2, "UPnP SACD 仅支持双声道");
-    ensure!(
-        !reader.track.is_dst,
-        "UPnP compressed DST 需要独立 correctness gate，通过前明确不支持"
-    );
     let sample_rate = reader.sample_rate;
     ensure!(
         sample_rate % 75 == 0,

@@ -229,7 +229,17 @@ impl SacdTrackReader {
                     frame_index += 1;
                     self.frame_started = true;
                 }
-                ensure!(self.frame_started, "SACD 音频帧缺少起始 packet");
+                if !self.frame_started {
+                    // Track LSN 边界可能落在上一音频帧的 continuation packet 中间。
+                    // 在本轨第一个 frame_start 出现前丢弃这些前导数据；一旦本轨已开始，
+                    // frame_started 会在同一 packet 分支内恢复为 true，因此后续缺失起点仍会失败。
+                    ensure!(
+                        self.current_frame == 0 && self.frame_buf.is_empty(),
+                        "SACD 音频帧缺少起始 packet"
+                    );
+                    offset = end;
+                    continue;
+                }
                 let limit = if dst { MAX_DST_BYTES } else { FRAME_BYTES };
                 ensure!(
                     self.frame_buf.len() + length <= limit,
