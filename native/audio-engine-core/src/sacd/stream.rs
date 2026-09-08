@@ -220,6 +220,17 @@ impl SacdTrackReader {
                         .start_frame
                         .checked_add(self.current_frame)
                         .context("SACD 帧时间溢出")?;
+                    if self.current_frame == 0
+                        && self.frame_buf.is_empty()
+                        && time < self.track.start_frame
+                    {
+                        // SACDTRL1 的 Track_Start_Address 可以包含节目起点之前的完整
+                        // pre-roll frame。与 ScarletBook Track 时间窗一致，只从
+                        // SACDTRL2 start_frame 开始输出；更早的完整 frame 整帧丢弃。
+                        frame_index += 1;
+                        offset = end;
+                        continue;
+                    }
                     ensure!(time == expected, "SACD 帧时间不连续或轨道起点不匹配");
                     if dst {
                         ensure!(sector[info + 3] & 3 == 0, "SACD DST 多声道不支持");

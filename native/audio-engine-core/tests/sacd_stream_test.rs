@@ -168,6 +168,32 @@ fn dst_track_start_ignores_leading_continuation_until_first_frame_start() {
 }
 
 #[test]
+fn track_start_ignores_complete_preroll_frames_before_toc_start() {
+    let preroll_a = pattern(0x11);
+    let preroll_b = pattern(0x22);
+    let preroll_c = pattern(0x33);
+    let expected_a = pattern(0x44);
+    let expected_b = pattern(0x55);
+    let mut audio = sectors(&preroll_a, 97, false);
+    audio.extend(sectors(&preroll_b, 98, false));
+    audio.extend(sectors(&preroll_c, 99, false));
+    audio.extend(sectors(&expected_a, 100, false));
+    audio.extend(sectors(&expected_b, 101, false));
+
+    let (_dir, path) = fixture(&audio, 2, 100, false, true, 2);
+    let mut reader = SacdTrackReader::open_track(path, 1).unwrap();
+    let mut actual = vec![0; FRAME_BYTES * 2];
+    assert_eq!(
+        reader.read_interleaved_dsd(&mut actual).unwrap(),
+        FRAME_BYTES * 2
+    );
+    assert_eq!(&actual[..FRAME_BYTES], expected_a.as_slice());
+    assert_eq!(&actual[FRAME_BYTES..], expected_b.as_slice());
+    assert_eq!(reader.current_frame, 2);
+    assert_eq!(reader.read_interleaved_dsd(&mut actual).unwrap(), 0);
+}
+
+#[test]
 fn dst_error_is_propagated_and_reader_cannot_resume_after_failure() {
     let audio = sectors(&[0xff], 0, true);
     let (_dir, path) = fixture(&audio, 1, 0, true, true, 2);
