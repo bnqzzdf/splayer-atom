@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { filterWebSystemOutputs } from "./outputDevices";
 
 const resetRuntime = (): void => {
   delete document.documentElement.dataset.atomRuntime;
@@ -49,6 +50,7 @@ describe("shared player processing Core Protocol client", () => {
       { id: "alsa:default", name: "System Default", isDefault: true },
       { id: "alsa:plughw:CARD=USB,DEV=0", name: "USB DAC", isDefault: false },
       { id: "alsa:hw:CARD=USB,DEV=0", name: "USB DAC", isDefault: false },
+      { id: "alsa:hw:CARD=Generic,DEV=3", name: "HD-Audio Generic, HDMI 0", isDefault: false },
       { id: "diretta:dx5", name: "DX5 II", isDefault: false },
     ];
     const fetchMock = vi
@@ -72,10 +74,32 @@ describe("shared player processing Core Protocol client", () => {
       success: true,
       data: {
         selected: devices[2].id,
-        data: [devices[2], { ...devices[3], name: "DX5 II · Diretta" }],
+        data: [devices[2], { ...devices[4], name: "DX5 II · Diretta" }],
       },
     });
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/output/devices");
+  });
+
+  it("hides display-audio ALSA endpoints by default but preserves an explicit selection", () => {
+    const devices = [
+      { id: "alsa:hw:CARD=Generic,DEV=3", name: "HD-Audio Generic, HDMI 0", isDefault: false },
+      {
+        id: "alsa:hw:CARD=Generic_1,DEV=0",
+        name: "HD-Audio Generic, ALC897 Analog",
+        isDefault: false,
+      },
+      { id: "alsa:hw:CARD=FC4,DEV=0", name: "HiBy FC4, USB Audio", isDefault: false },
+    ];
+
+    expect(filterWebSystemOutputs(devices).map((device) => device.id)).toEqual([
+      devices[1].id,
+      devices[2].id,
+    ]);
+    expect(filterWebSystemOutputs(devices, devices[0].id).map((device) => device.id)).toEqual([
+      devices[0].id,
+      devices[1].id,
+      devices[2].id,
+    ]);
   });
 
   it("uses shared helper routes for FFT, cover and external lyric reads", async () => {

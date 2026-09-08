@@ -46,7 +46,7 @@ const mapOutputSnapshot = async (
     success: true,
     data: {
       selected: resolved.data.selected,
-      data: projectOutputDevices(resolved.data.data, isWebRemote()),
+      data: projectOutputDevices(resolved.data.data, isWebRemote(), resolved.data.selected),
     },
   };
 };

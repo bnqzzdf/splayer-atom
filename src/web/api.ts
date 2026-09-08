@@ -391,9 +391,10 @@ const playerApi: PlayerApi = {
       request("/player/pitch-sync", { method: "POST", body: JSON.stringify({ enabled }) }),
     ),
   getOutputDevices: () =>
-    asIpc(async () =>
-      filterWebSystemOutputs((await request<OutputSnapshot>("/output/devices")).data),
-    ),
+    asIpc(async () => {
+      const snapshot = await request<OutputSnapshot>("/output/devices");
+      return filterWebSystemOutputs(snapshot.data, snapshot.selected);
+    }),
   scanDirettaDevices: () =>
     asIpc(async () =>
       (await request<OutputSnapshot>("/output/devices")).data
