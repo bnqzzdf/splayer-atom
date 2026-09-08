@@ -1,19 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isSacdPlaybackInput, parseSacdPlaybackSource } from "./sacdInput";
+import { parseSacdPlaybackSource, toNativeSacdPlaybackSource } from "./sacdInput";
 
-test("SACD playback input resolves virtual track identity without treating the virtual path as a file", () => {
-  assert.deepEqual(parseSacdPlaybackSource("/music/album.iso|Track04|656.080|157219|49206"), {
+test("SACD native source keeps virtual identity and normalizes legacy plain ISO without IO", () => {
+  const virtual = "/music/album.iso|Track04|656.080|157219|49206";
+  assert.deepEqual(parseSacdPlaybackSource(virtual), {
     isoPath: "/music/album.iso",
     trackNum: 4,
   });
-  assert.deepEqual(parseSacdPlaybackSource("/music/album.iso", 6), {
-    isoPath: "/music/album.iso",
-    trackNum: 6,
-  });
-  assert.equal(parseSacdPlaybackSource("/music/album.flac", 1), null);
-});
-
-test("SACD generated input ownership is process-scoped", () => {
-  assert.equal(isSacdPlaybackInput("/tmp/not-owned.dsf"), false);
+  assert.equal(toNativeSacdPlaybackSource(virtual, 1, 1), virtual);
+  assert.equal(
+    toNativeSacdPlaybackSource("/music/album.iso", 6, 704720),
+    "/music/album.iso|Track06|704.720|0|0",
+  );
+  assert.equal(toNativeSacdPlaybackSource("/music/album.flac", 1, 1000), null);
 });

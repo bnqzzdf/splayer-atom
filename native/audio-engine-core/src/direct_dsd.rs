@@ -11,6 +11,33 @@ use std::time::Duration;
 
 use anyhow::{bail, ensure, Context, Result};
 
+trait DirectDsdIo: Read + Seek + Send {}
+impl<T: Read + Seek + Send> DirectDsdIo for T {}
+
+struct DsdInput {
+    inner: Box<dyn DirectDsdIo>,
+}
+
+impl DsdInput {
+    fn new<T: Read + Seek + Send + 'static>(source: T) -> Self {
+        Self {
+            inner: Box::new(source),
+        }
+    }
+}
+
+impl Read for DsdInput {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.inner.read(buf)
+    }
+}
+
+impl Seek for DsdInput {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.inner.seek(pos)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectDsdBitOrder {
     LsbFirst,
@@ -49,7 +76,7 @@ enum DirectDsdLayout {
 }
 
 pub struct DirectDsdReader {
-    file: File,
+    file: DsdInput,
     format: DirectDsdFormat,
     layout: DirectDsdLayout,
     input: Vec<u8>,
@@ -58,16 +85,29 @@ pub struct DirectDsdReader {
 
 impl DirectDsdReader {
     pub fn open_local(path: &Path) -> Result<Self> {
-        let mut file = File::open(path).context("打开 Source Direct DSD 文件失败")?;
-        let file_len = usize::try_from(file.metadata()?.len()).context("DSD 文件过大")?;
+        if let Some(source) = path
+            .to_str()
+            .filter(|value| crate::sacd::parse_sacd_virtual_path(value).is_some())
+        {
+            let stream = crate::sacd::SacdDsfStream::open_virtual_path(source)
+                .context("打开 Source Direct SACD 虚拟分轨失败")?;
+            let file_len = usize::try_from(stream.len()).context("SACD virtual DSF 过大")?;
+            return Self::open_dsf(DsdInput::new(stream), file_len);
+        }
+
+        let mut local = File::open(path).context("打开 Source Direct DSD 文件失败")?;
+        let file_len = usize::try_from(local.metadata()?.len()).context("DSD 文件过大")?;
         let mut magic = [0_u8; 4];
-        file.read_exact(&mut magic).context("读取 DSD 文件头失败")?;
-        file.seek(SeekFrom::Start(0))?;
+        local
+            .read_exact(&mut magic)
+            .context("读取 DSD 文件头失败")?;
+        local.seek(SeekFrom::Start(0))?;
+        let file = DsdInput::new(local);
 
         match &magic {
             b"DSD " => Self::open_dsf(file, file_len),
             b"FRM8" => Self::open_dff(file, file_len),
-            _ => bail!("Source Direct Native DSD 仅支持 DSF/DFF"),
+            _ => bail!("Source Direct Native DSD 仅支持 DSF/DFF/SACD virtual track"),
         }
     }
 
@@ -241,7 +281,7 @@ impl DirectDsdReader {
         }
     }
 
-    fn open_dsf(mut file: File, file_len: usize) -> Result<Self> {
+    fn open_dsf(mut file: DsdInput, file_len: usize) -> Result<Self> {
         let mut header = [0_u8; 28];
         file.read_exact(&mut header)
             .context("读取 DSF DSD chunk 失败")?;
@@ -330,7 +370,7 @@ impl DirectDsdReader {
         })
     }
 
-    fn open_dff(mut file: File, file_len: usize) -> Result<Self> {
+    fn open_dff(mut file: DsdInput, file_len: usize) -> Result<Self> {
         let mut form = [0_u8; 16];
         file.read_exact(&mut form).context("读取 DFF FRM8 失败")?;
         ensure!(
@@ -458,7 +498,7 @@ fn parse_dff_properties(payload: &[u8]) -> Result<DffProperties> {
     Ok(result)
 }
 
-fn find_dsf_data_chunk(file: &mut File, file_len: usize) -> Result<(usize, usize)> {
+fn find_dsf_data_chunk(file: &mut DsdInput, file_len: usize) -> Result<(usize, usize)> {
     loop {
         let offset = usize::try_from(file.stream_position()?)?;
         ensure!(offset + 12 <= file_len, "DSF 未找到 data chunk");

@@ -1,6 +1,6 @@
-use anyhow::Result;
 #[cfg(feature = "diretta")]
 use anyhow::bail;
+use anyhow::Result;
 
 use crate::direct_dsd::{DirectDsdFormat, DirectDsdMonitor};
 use crate::direct_pcm::{DirectPcmFormat, DirectPcmMonitor};
@@ -90,6 +90,19 @@ impl DirectMonitor {
 }
 
 #[cfg(feature = "diretta")]
+fn is_native_dsd_source(source: &str) -> bool {
+    if crate::sacd::parse_sacd_virtual_path(source).is_some() {
+        return true;
+    }
+    let extension = Path::new(source)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    matches!(extension.as_str(), "dsf" | "dff" | "dsdiff")
+}
+
+#[cfg(feature = "diretta")]
 #[derive(Clone)]
 pub enum DirectStageHandle {
     Pcm(DirectPcmStageHandle),
@@ -103,20 +116,16 @@ impl DirectStageHandle {
             bail!("[Direct] 当前 gapless staging 仅支持本地 seekable 音源");
         }
         let path = Path::new(source);
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let native_dsd = is_native_dsd_source(source);
         match self {
             Self::Pcm(value) => {
-                if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+                if native_dsd {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
                 value.stage_local(path, duration_secs, generation)
             }
             Self::Dsd(value) => {
-                if !matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+                if !native_dsd {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
                 value.stage_local(path, duration_secs, generation)
@@ -203,13 +212,9 @@ impl DirectPlayback {
             bail!("[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源");
         }
         let path = Path::new(source);
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let native_dsd = is_native_dsd_source(source);
 
-        let (transport, seek_base) = if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+        let (transport, seek_base) = if native_dsd {
             let (connection, actual_position) =
                 DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?;
             (DirectTransport::Dsd(connection), actual_position)
@@ -247,14 +252,10 @@ impl DirectPlayback {
         duration: f64,
     ) -> Result<DirectFormat> {
         let path = Path::new(source);
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let native_dsd = is_native_dsd_source(source);
         let format = match &mut self.transport {
             DirectTransport::Pcm(value) => {
-                if matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+                if native_dsd {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
                 let format = value.replace_local_source_while_paused(path)?;
@@ -262,7 +263,7 @@ impl DirectPlayback {
                 DirectFormat::Pcm(format)
             }
             DirectTransport::Dsd(value) => {
-                if !matches!(extension.as_str(), "dsf" | "dff" | "dsdiff") {
+                if !native_dsd {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
                 let format = value.replace_local_source_while_paused(path)?;

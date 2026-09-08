@@ -410,6 +410,14 @@ fn open_source(
     source: &str,
     cancel_handle: HttpCancelHandle,
 ) -> Result<(AudioReader, Option<HttpCancelHandle>)> {
+    if crate::sacd::parse_sacd_virtual_path(source).is_some() {
+        let stream = crate::sacd::SacdDsfStream::open_virtual_path(source)
+            .with_context(|| format!("打开 SACD 虚拟分轨失败: {source}"))?;
+        let reader = AudioReader::new(stream)
+            .with_context(|| format!("打开 SACD 虚拟 DSF 流失败: {source}"))?;
+        return Ok((reader, None));
+    }
+
     if let Some(cue_info) = crate::cue::parse_cue_virtual_path(source) {
         let file = File::open(&cue_info.physical_path)
             .with_context(|| format!("打开 CUE 关联母版音频失败: {}", cue_info.physical_path))?;

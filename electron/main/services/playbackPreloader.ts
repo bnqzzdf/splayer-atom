@@ -1,10 +1,6 @@
 import type { DirectStageResult, PlaybackQueueItem } from "@shared/types/player";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
-import {
-  discardSacdPlaybackInput,
-  parseSacdPlaybackSource,
-  prepareSacdPlaybackInput,
-} from "@main/atom/sacdInput";
+import { toNativeSacdPlaybackSource } from "@main/atom/sacdInput";
 import { cancelDirectPlaybackNext, stageDirectPlaybackNext } from "@main/services/directGapless";
 import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
@@ -70,7 +66,7 @@ const queueDirectCleanup = (source: string | null, discardSource = true): void =
   if (!discardSource || !source) return;
   directStageChain = directStageChain
     .then(async () => {
-      await Promise.all([discardDirectInput(source), discardSacdPlaybackInput(source)]);
+      await discardDirectInput(source);
     })
     .catch((error) =>
       playerLog.debug(`[session] Direct preload cleanup skipped: ${String(error)}`),
@@ -103,23 +99,10 @@ const prepareDirectSource = async (
   if (store.get("player.outputDevice")?.startsWith("diretta:") !== true) return null;
   if (track.cueStartMs != null || track.cueEndMs != null) return null;
 
-  let directSource = resolved.source;
+  let directSource =
+    toNativeSacdPlaybackSource(resolved.source, track.track, track.duration) ?? resolved.source;
   let preparedSource = resolved;
-  const sacd = parseSacdPlaybackSource(directSource, track.track);
-  if (sacd) {
-    const generated = await prepareSacdPlaybackInput(sacd);
-    directSource = generated.filePath;
-    if (token !== preloadToken) {
-      await discardSacdPlaybackInput(directSource);
-      return null;
-    }
-    preparedSource = {
-      ...resolved,
-      source: directSource,
-      provider: "local",
-      cacheAfterLoad: undefined,
-    };
-  } else if (/^https?:\/\//i.test(directSource)) {
+  if (/^https?:\/\//i.test(directSource)) {
     const cached = resolved.cacheAfterLoad ? await resolved.cacheAfterLoad() : null;
     if (token !== preloadToken) return null;
     directSource = cached ?? (await materializeDirectInput(directSource));
@@ -201,10 +184,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         directSource = directPrepared.directSource;
         const staged = await stageDirectSource(token, item.track, directSource);
         if (token !== preloadToken) {
-          await Promise.all([
-            discardDirectInput(directSource),
-            discardSacdPlaybackInput(directSource),
-          ]);
+          await discardDirectInput(directSource);
           return;
         }
         if (staged) {

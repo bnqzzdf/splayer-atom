@@ -6,35 +6,38 @@ import test from "node:test";
 const read = (file: string): string => readFileSync(resolve(process.cwd(), file), "utf8");
 const session = read("electron/main/services/playbackSession.ts");
 const preloader = read("electron/main/services/playbackPreloader.ts");
-const directGapless = read("electron/main/services/directGapless.ts");
 const sacdInput = read("electron/main/atom/sacdInput.ts");
-const nativePlayer = read("native/audio-engine/src/bindings/player.rs");
+const decoder = read("native/audio-engine-core/src/decoder.rs");
+const directDsd = read("native/audio-engine-core/src/direct_dsd.rs");
+const directRuntime = read("native/audio-engine-core/src/direct_runtime.rs");
+const virtualDsf = read("native/audio-engine-core/src/sacd/virtual_dsf.rs");
 
-test("native outputs materialize SACD virtual tracks before AudioPlayer load", () => {
-  assert.match(sacdInput, /parseSacdPlaybackSource/);
-  assert.match(sacdInput, /getEngine\(\)\.extractSacdDsf/);
-  assert.match(session, /parseSacdPlaybackSource\(resolved\.source, track\.track\)/);
-  assert.match(session, /await prepareSacdPlaybackInput\(sacd\)/);
-  assert.match(session, /loadPlayerSource\(\s*nativeResolved\.source/);
-  assert.match(session, /pruneSacdPlaybackInputs\(managedSacdInput \?\? ""\)/);
-  assert.doesNotMatch(nativePlayer, /parseSacdPlaybackSource|SacdTrackReader|extractSacdDsf/);
+test("ALSA streams SACD virtual tracks through a lazy seekable DSF view", () => {
+  assert.match(sacdInput, /toNativeSacdPlaybackSource/);
+  assert.doesNotMatch(sacdInput, /extractSacdDsf|mkdtemp|\.dsf\.part/);
+  assert.match(session, /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/);
+  assert.match(session, /loadPlayerSource\(\s*nativeSource/);
+  assert.match(decoder, /SacdDsfStream::open_virtual_path\(source\)/);
+  assert.match(virtualDsf, /impl Read for SacdDsfStream/);
+  assert.match(virtualDsf, /impl Seek for SacdDsfStream/);
 });
 
-test("Diretta preload stages the same generated SACD DSF and keeps it through boundary", () => {
-  assert.match(preloader, /parseSacdPlaybackSource\(directSource, track\.track\)/);
-  assert.match(preloader, /await prepareSacdPlaybackInput\(sacd\)/);
+test("Diretta opens and stages the same SACD virtual DSD stream without materializing a file", () => {
+  assert.match(preloader, /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/);
   assert.match(preloader, /stageDirectPlaybackNext\(directSource/);
-  assert.match(preloader, /discardSacdPlaybackInput/);
-  assert.match(directGapless, /pruneSacdPlaybackInputs\(source\)/);
+  assert.doesNotMatch(preloader, /prepareSacdPlaybackInput|extractSacdDsf/);
+  assert.match(directRuntime, /parse_sacd_virtual_path\(source\)/);
+  assert.match(directDsd, /SacdDsfStream::open_virtual_path\(source\)/);
 });
 
-test("terminal native SACD commands invalidate an in-flight Direct preload", () => {
+test("terminal commands invalidate Direct staging without owning generated SACD files", () => {
   assert.match(
     session,
-    /export const stop = \(\): void => \{[\s\S]*?invalidatePlaybackPreload\(\);[\s\S]*?pruneSacdPlaybackInputs\(""\)/,
+    /export const stop = \(\): void => \{[\s\S]*?invalidatePlaybackPreload\(\);[\s\S]*?stopCurrentOutputBestEffort\(\)/,
   );
   assert.match(
     session,
-    /export const shutdownPlaybackSession = async \(\): Promise<void> => \{[\s\S]*?invalidatePlaybackPreload\(\);[\s\S]*?cleanupSacdPlaybackInputs\(\)/,
+    /export const shutdownPlaybackSession = async \(\): Promise<void> => \{[\s\S]*?invalidatePlaybackPreload\(\);/,
   );
+  assert.doesNotMatch(session, /cleanupSacdPlaybackInputs|pruneSacdPlaybackInputs/);
 });

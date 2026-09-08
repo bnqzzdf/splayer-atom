@@ -10,6 +10,7 @@ pub mod dst;
 pub mod iso_reader;
 pub mod scarletbook;
 pub mod stream;
+pub mod virtual_dsf;
 
 pub use dst::{ArithmeticDecoder, DstDecoder};
 pub use iso_reader::{IsoReader, SACD_SECTOR_SIZE};
@@ -18,6 +19,7 @@ pub use scarletbook::{
     SACD_SAMPLING_FREQUENCY, START_OF_MASTER_TOC,
 };
 pub use stream::SacdTrackReader;
+pub use virtual_dsf::SacdDsfStream;
 
 /// SACD 虚拟分轨解析信息
 #[derive(Debug, Clone, PartialEq)]

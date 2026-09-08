@@ -270,15 +270,10 @@ impl SacdTrackReader {
         Ok(())
     }
 
-    /// 按 75 fps 向下对齐定位，从轨道起点逐帧跳过，避免按扇区比例猜测 DST 位置。
-    pub fn seek_seconds(&mut self, target_sec: f64) -> Result<()> {
+    /// 精确定位到轨内 75fps frame；只在 seek 时从轨道起点重建 decoder 状态。
+    pub fn seek_frame(&mut self, target: u32) -> Result<()> {
         ensure!(!self.failed, "SACD 读取已失败，请重新打开轨道");
-        ensure!(
-            target_sec.is_finite() && target_sec >= 0.0,
-            "SACD seek 时间无效"
-        );
-        let target =
-            ((target_sec * f64::from(SACD_FRAME_RATE)).floor() as u32).min(self.total_frames);
+        let target = target.min(self.total_frames);
         self.current_sector = self.track.start_lsn;
         self.current_frame = 0;
         self.frame_buf.clear();
@@ -295,5 +290,16 @@ impl SacdTrackReader {
             );
         }
         Ok(())
+    }
+
+    /// 按 75 fps 向下对齐定位，保持 ScarletBook frame grid。
+    pub fn seek_seconds(&mut self, target_sec: f64) -> Result<()> {
+        ensure!(
+            target_sec.is_finite() && target_sec >= 0.0,
+            "SACD seek 时间无效"
+        );
+        let target =
+            ((target_sec * f64::from(SACD_FRAME_RATE)).floor() as u32).min(self.total_frames);
+        self.seek_frame(target)
     }
 }

@@ -34,12 +34,8 @@ import {
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import {
-  cleanupSacdPlaybackInputs,
-  discardSacdPlaybackInput,
-  isSacdPlaybackInput,
   parseSacdPlaybackSource,
-  prepareSacdPlaybackInput,
-  pruneSacdPlaybackInputs,
+  toNativeSacdPlaybackSource,
 } from "@main/atom/sacdInput";
 import {
   clearActiveCueRange,
@@ -553,35 +549,8 @@ const loadIndex = async (
     return;
   }
 
-  let nativeResolved = resolved;
-  let managedSacdInput: string | null = isSacdPlaybackInput(resolved.source)
-    ? resolved.source
-    : null;
-  const sacd = parseSacdPlaybackSource(resolved.source, track.track);
-  if (sacd) {
-    try {
-      const generated = await prepareSacdPlaybackInput(sacd);
-      managedSacdInput = generated.filePath;
-      if (generation !== loadGeneration) {
-        await discardSacdPlaybackInput(generated.filePath);
-        return;
-      }
-      nativeResolved = {
-        ...resolved,
-        source: generated.filePath,
-        provider: "local",
-        cacheAfterLoad: undefined,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const code = /not found|No such file|不存在/i.test(message)
-        ? ErrorCode.FILE_NOT_FOUND
-        : ErrorCode.FILE_DECODE_ERROR;
-      throw new CorePlaybackLoadError(code, "SACD native input preparation failed", {
-        cause: error,
-      });
-    }
-  }
+  const nativeSource =
+    toNativeSacdPlaybackSource(resolved.source, track.track, track.duration) ?? resolved.source;
 
   let cacheStartedFromDirectInput = false;
   const cacheResolvedSource = (materializedSource?: string): void => {
@@ -592,7 +561,7 @@ const loadIndex = async (
       .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
   };
   const result = await loadPlayerSource(
-    nativeResolved.source,
+    nativeSource,
     {
       autoPlay,
       meta: track,
@@ -603,12 +572,8 @@ const loadIndex = async (
       onDirectMaterialized: cacheResolvedSource,
     },
   );
-  if (generation !== loadGeneration) {
-    if (managedSacdInput) await discardSacdPlaybackInput(managedSacdInput);
-    return;
-  }
+  if (generation !== loadGeneration) return;
   if (!result.success || !result.data) {
-    if (managedSacdInput) await discardSacdPlaybackInput(managedSacdInput);
     const code = Object.values(ErrorCode).includes(result.error as ErrorCode)
       ? (result.error as ErrorCode)
       : ErrorCode.UNKNOWN;
@@ -616,8 +581,6 @@ const loadIndex = async (
   }
 
   if (resolved.cacheAfterLoad && !cacheStartedFromDirectInput) cacheResolvedSource();
-  void pruneSacdPlaybackInputs(managedSacdInput ?? "");
-
   if (track.source === "local") {
     const mediaInfo = result.data.mediaInfo;
     const fileName = track.path?.split(/[/\\]/).pop() ?? "";
@@ -746,7 +709,6 @@ export const shutdownPlaybackSession = async (): Promise<void> => {
   invalidatePlaybackPreload();
   clearAutoCloseTimer();
   setUpnpOutputObserver(null);
-  await cleanupSacdPlaybackInputs();
   if (!getSelectedUpnpOutput()) return;
   try {
     await stopUpnpOutput();
@@ -910,10 +872,7 @@ export const clearQueue = async (stop = false): Promise<void> => {
   active = false;
   nowPlaying.clear();
   clearActiveCueRange();
-  if (stop) {
-    stopCurrentOutputBestEffort();
-    void pruneSacdPlaybackInputs("");
-  }
+  if (stop) stopCurrentOutputBestEffort();
   publish();
 };
 
@@ -944,7 +903,6 @@ export const stop = (): void => {
   invalidatePlaybackPreload();
   clearActiveCueRange();
   stopCurrentOutputBestEffort();
-  void pruneSacdPlaybackInputs("");
 };
 export const seek = (positionMs: number): Promise<void> =>
   isUpnpSelected()

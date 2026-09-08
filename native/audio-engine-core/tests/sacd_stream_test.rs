@@ -1,4 +1,7 @@
-use audio_engine_core::sacd::{AreaType, SacdTrackReader, SACD_SECTOR_SIZE};
+use audio_engine_core::direct_dsd::{DirectDsdBitOrder, DirectDsdReader};
+use audio_engine_core::sacd::{AreaType, SacdDsfStream, SacdTrackReader, SACD_SECTOR_SIZE};
+use audio_engine_core::{decoder, HttpCancelHandle};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 const FRAME_BYTES: usize = 4704 * 2;
@@ -291,4 +294,71 @@ fn dst_channel_and_packet_count_mismatch_fail_before_decode() {
         let error = reader.read_interleaved_dsd(&mut [0; 8]).unwrap_err();
         assert!(!error.to_string().contains("解码失败"));
     }
+}
+
+
+#[test]
+fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
+    let first = pattern(0x31);
+    let second = pattern(0x72);
+    let mut audio = sectors(&first, 0, false);
+    audio.extend(sectors(&second, 1, false));
+    let (_dir, path) = fixture(&audio, 2, 0, false, true, 2);
+
+    let mut expected = first;
+    expected.extend_from_slice(&second);
+    let expected_per_channel = expected.len() / 2;
+
+    let mut stream = SacdDsfStream::open(&path, 1).unwrap();
+    let virtual_len = stream.len();
+    let mut bytes = Vec::new();
+    stream.read_to_end(&mut bytes).unwrap();
+    assert_eq!(bytes.len() as u64, virtual_len);
+    assert_eq!(&bytes[..4], b"DSD ");
+    assert_eq!(&bytes[28..32], b"fmt ");
+    assert_eq!(&bytes[80..84], b"data");
+    assert_eq!(u64::from_le_bytes(bytes[64..72].try_into().unwrap()), (expected_per_channel as u64) * 8);
+    assert_eq!(u32::from_le_bytes(bytes[72..76].try_into().unwrap()), 4096);
+
+    let mut actual = Vec::with_capacity(expected.len());
+    let mut remaining = expected_per_channel;
+    for group in bytes[92..].chunks_exact(8192) {
+        if remaining == 0 { break; }
+        let take = remaining.min(4096);
+        for index in 0..take {
+            actual.push(audio_engine_core::dsd::reverse_byte(group[index]));
+            actual.push(audio_engine_core::dsd::reverse_byte(group[4096 + index]));
+        }
+        remaining -= take;
+    }
+    assert_eq!(actual, expected);
+
+    // A random DSF block starts inside an SACD 75fps frame (4096 < 4704 bytes/ch).
+    // The virtual stream must still seek to the exact logical byte, not merely the frame boundary.
+    let mut stream = SacdDsfStream::open(&path, 1).unwrap();
+    stream.seek(SeekFrom::Start(92 + 8192)).unwrap();
+    let mut block = vec![0; 8192];
+    stream.read_exact(&mut block).unwrap();
+    let logical_start = 4096usize;
+    for index in 0..32 {
+        assert_eq!(
+            audio_engine_core::dsd::reverse_byte(block[index]),
+            expected[(logical_start + index) * 2]
+        );
+        assert_eq!(
+            audio_engine_core::dsd::reverse_byte(block[4096 + index]),
+            expected[(logical_start + index) * 2 + 1]
+        );
+    }
+
+    let source = format!("{}|Track01|0.027|0|2", path.display());
+    let metadata = decoder::probe_metadata(&source, None, HttpCancelHandle::new()).unwrap();
+    assert_eq!(metadata.channels, 2);
+    assert!(metadata.duration_secs > 0.02 && metadata.duration_secs < 0.04);
+
+    let mut direct = DirectDsdReader::open_local(std::path::Path::new(&source)).unwrap();
+    assert_eq!(direct.format().bit_order, DirectDsdBitOrder::LsbFirst);
+    assert_eq!(direct.format().bit_rate, 2_822_400);
+    let mut direct_block = vec![0; direct.max_output_len()];
+    assert!(direct.read_block(&mut direct_block).unwrap().unwrap() > 0);
 }

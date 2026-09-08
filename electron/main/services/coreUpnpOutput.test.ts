@@ -92,6 +92,11 @@ test("library scanner expands SACD ISO through the Atom-owned sync seam", () => 
   assert.match(session, /parseSacdPlaybackSource/);
 });
 
+test("native SACD streaming does not reuse the UPnP generated media seam", () => {
+  assert.doesNotMatch(session, /prepareSacdPlaybackInput|extractSacdDsf\(sacd/);
+  assert.match(session, /toNativeSacdPlaybackSource/);
+});
+
 test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   const media = read("electron/main/atom/upnp/media.ts");
   const atomExtract = read("native/audio-engine/src/atom_media_extract.rs");
