@@ -4,6 +4,7 @@ import { getPlayer } from "@main/services/engine";
 import { clearActiveCueRange } from "@main/services/playerTimeline";
 import { isCurrentPlayerLoadSeq, nextPlayerLoadSeq } from "@main/services/playerLoad";
 import { pruneDirectInputs } from "@main/atom/directInput";
+import { pruneSacdPlaybackInputs } from "@main/atom/sacdInput";
 import {
   notifyPlaybackTrackLoaded,
   setPlaybackPresentationCover,
@@ -77,6 +78,7 @@ export const commitDirectPlaybackBoundary = (
 ): void => {
   getPlayer().commitDirectGaplessBoundary(source, Math.max(0, durationMs) / 1000);
   void pruneDirectInputs(source);
+  void pruneSacdPlaybackInputs(source);
   clearActiveCueRange();
   const seq = nextPlayerLoadSeq();
   if (!track) return;

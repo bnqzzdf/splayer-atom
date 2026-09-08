@@ -44,7 +44,9 @@ test("canonical source resolution is owned by Core before native load", () => {
     "const loadIndexWithPolicy = async (",
   );
   assert.match(loadFlow, /resolvePlaybackSource\(track\)/);
-  assert.match(loadFlow, /loadPlayerSource\(\s*resolved\.source/);
+  assert.match(loadFlow, /let nativeResolved = resolved/);
+  assert.match(loadFlow, /parseSacdPlaybackSource\(resolved\.source, track\.track\)/);
+  assert.match(loadFlow, /loadPlayerSource\(\s*nativeResolved\.source/);
 });
 
 test("main player load materializes every remote source before Diretta native load", () => {

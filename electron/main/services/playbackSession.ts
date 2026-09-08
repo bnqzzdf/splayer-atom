@@ -34,6 +34,14 @@ import {
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import {
+  cleanupSacdPlaybackInputs,
+  discardSacdPlaybackInput,
+  isSacdPlaybackInput,
+  parseSacdPlaybackSource,
+  prepareSacdPlaybackInput,
+  pruneSacdPlaybackInputs,
+} from "@main/atom/sacdInput";
+import {
   clearActiveCueRange,
   toDisplayDurationMs,
   toDisplayPositionMs,
@@ -327,24 +335,6 @@ const isIntegerLosslessCueTrack = (item: PlaybackQueueItem): boolean => {
   return /^(?:flac|ape|alac|wavpack|tta|shorten|pcm_[su])/.test(codec);
 };
 
-const sacdTrackSource = (
-  item: PlaybackQueueItem,
-  resolved: ResolvedPlaybackSource,
-): { isoPath: string; trackNum: number } | null => {
-  const source = resolved.source.startsWith("file:")
-    ? fileURLToPath(resolved.source)
-    : resolved.source;
-  const virtual = /^(.*\.iso)\|Track(\d+)\|/i.exec(source);
-  if (virtual) {
-    return { isoPath: virtual[1], trackNum: Number(virtual[2]) };
-  }
-  if (/\.iso$/i.test(source)) {
-    const trackNum = item.track.track ?? 1;
-    return Number.isInteger(trackNum) && trackNum > 0 ? { isoPath: source, trackNum } : null;
-  }
-  return null;
-};
-
 const assertUpnpResolvedTrackSupported = (
   item: PlaybackQueueItem,
   resolved: ResolvedPlaybackSource,
@@ -366,7 +356,7 @@ const assertUpnpResolvedTrackSupported = (
     );
   }
   const sourceLooksSacd = /\.iso(?:$|\|Track\d+\|)/i.test(resolved.source);
-  if (sourceLooksSacd && sacdTrackSource(item, resolved) === null) {
+  if (sourceLooksSacd && parseSacdPlaybackSource(resolved.source, item.track.track) === null) {
     throw new CorePlaybackLoadError(ErrorCode.UNKNOWN, "UPnP SACD track identity is unavailable");
   }
 };
@@ -384,7 +374,7 @@ const loadUpnpResolvedTrack = async (
   let temporaryInput: string | null = null;
   let representationDurationMs = track.duration;
   const cueNum = cueTrackNumber(item);
-  const sacd = sacdTrackSource(item, resolved);
+  const sacd = parseSacdPlaybackSource(resolved.source, item.track.track);
 
   if (track.cuePath && cueNum != null) {
     const generated = isDsdCueTrack(item)
@@ -563,6 +553,36 @@ const loadIndex = async (
     return;
   }
 
+  let nativeResolved = resolved;
+  let managedSacdInput: string | null = isSacdPlaybackInput(resolved.source)
+    ? resolved.source
+    : null;
+  const sacd = parseSacdPlaybackSource(resolved.source, track.track);
+  if (sacd) {
+    try {
+      const generated = await prepareSacdPlaybackInput(sacd);
+      managedSacdInput = generated.filePath;
+      if (generation !== loadGeneration) {
+        await discardSacdPlaybackInput(generated.filePath);
+        return;
+      }
+      nativeResolved = {
+        ...resolved,
+        source: generated.filePath,
+        provider: "local",
+        cacheAfterLoad: undefined,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = /not found|No such file|不存在/i.test(message)
+        ? ErrorCode.FILE_NOT_FOUND
+        : ErrorCode.FILE_DECODE_ERROR;
+      throw new CorePlaybackLoadError(code, "SACD native input preparation failed", {
+        cause: error,
+      });
+    }
+  }
+
   let cacheStartedFromDirectInput = false;
   const cacheResolvedSource = (materializedSource?: string): void => {
     if (!resolved.cacheAfterLoad) return;
@@ -572,7 +592,7 @@ const loadIndex = async (
       .catch((error) => playerLog.warn(`[session] source cache failed: ${String(error)}`));
   };
   const result = await loadPlayerSource(
-    resolved.source,
+    nativeResolved.source,
     {
       autoPlay,
       meta: track,
@@ -583,8 +603,12 @@ const loadIndex = async (
       onDirectMaterialized: cacheResolvedSource,
     },
   );
-  if (generation !== loadGeneration) return;
+  if (generation !== loadGeneration) {
+    if (managedSacdInput) await discardSacdPlaybackInput(managedSacdInput);
+    return;
+  }
   if (!result.success || !result.data) {
+    if (managedSacdInput) await discardSacdPlaybackInput(managedSacdInput);
     const code = Object.values(ErrorCode).includes(result.error as ErrorCode)
       ? (result.error as ErrorCode)
       : ErrorCode.UNKNOWN;
@@ -592,6 +616,7 @@ const loadIndex = async (
   }
 
   if (resolved.cacheAfterLoad && !cacheStartedFromDirectInput) cacheResolvedSource();
+  void pruneSacdPlaybackInputs(managedSacdInput ?? "");
 
   if (track.source === "local") {
     const mediaInfo = result.data.mediaInfo;
@@ -720,6 +745,7 @@ export const shutdownPlaybackSession = async (): Promise<void> => {
   ++loadGeneration;
   clearAutoCloseTimer();
   setUpnpOutputObserver(null);
+  await cleanupSacdPlaybackInputs();
   if (!getSelectedUpnpOutput()) return;
   try {
     await stopUpnpOutput();
@@ -883,7 +909,10 @@ export const clearQueue = async (stop = false): Promise<void> => {
   active = false;
   nowPlaying.clear();
   clearActiveCueRange();
-  if (stop) stopCurrentOutputBestEffort();
+  if (stop) {
+    stopCurrentOutputBestEffort();
+    void pruneSacdPlaybackInputs("");
+  }
   publish();
 };
 
@@ -913,6 +942,7 @@ export const stop = (): void => {
   ++loadGeneration;
   clearActiveCueRange();
   stopCurrentOutputBestEffort();
+  void pruneSacdPlaybackInputs("");
 };
 export const seek = (positionMs: number): Promise<void> =>
   isUpnpSelected()
