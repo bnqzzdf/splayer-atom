@@ -21,8 +21,36 @@ pub struct JsDsdExtractResult {
     pub duration_ms: f64,
 }
 
+#[napi(object)]
+pub struct JsMediaQuality {
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub bits_per_sample: u32,
+    pub bit_rate: i64,
+    pub codec: String,
+}
+
 fn napi_error(error: impl std::fmt::Display) -> Error {
     Error::from_reason(error.to_string())
+}
+
+/// Atom UPnP 对已经落到本地的媒体文件读取真实编码参数；不创建 AudioPlayer。
+#[napi]
+pub async fn probe_media_quality(path: String) -> Result<JsMediaQuality> {
+    let probe_path = path.clone();
+    let track = tokio::task::spawn_blocking(move || {
+        audio_engine_core::scanner::probe_fast(&probe_path, None)
+    })
+    .await
+    .map_err(napi_error)?
+    .ok_or_else(|| Error::from_reason(format!("无法读取媒体编码参数: {path}")))?;
+    Ok(JsMediaQuality {
+        sample_rate: track.sample_rate,
+        channels: track.channels,
+        bits_per_sample: track.bits_per_sample,
+        bit_rate: track.bit_rate,
+        codec: track.codec,
+    })
 }
 
 /// Atom UPnP 使用的离线 CUE WAV 提取；不创建 AudioPlayer 或音频设备。

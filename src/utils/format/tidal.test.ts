@@ -33,6 +33,25 @@ describe("tidalTrackToTrack", () => {
     assert.match(decodeURIComponent(track.cover ?? ""), /resources\.tidal\.com\/images/);
   });
 
+  it("keeps Hi-Res as a tier without inventing an exact 96 kHz sample rate", () => {
+    const track = tidalTrackToTrack({
+      id: 415532247,
+      title: "Born Again",
+      duration: 220,
+      artists: [{ id: 1, name: "LISA" }],
+      mediaMetadata: { tags: ["LOSSLESS", "HIRES_LOSSLESS"] },
+      audioQuality: "HIRES_LOSSLESS",
+    });
+
+    assert.deepEqual(track.quality, {
+      codec: "flac",
+      sampleRate: 0,
+      bitsPerSample: 24,
+      bitRate: 0,
+      channels: 2,
+    });
+  });
+
   it("accepts a single string artist and clamps missing duration to zero", () => {
     const track = tidalTrackToTrack({
       id: "track-1",

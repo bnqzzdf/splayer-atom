@@ -4,14 +4,7 @@ import type { AudioQuality } from "@shared/types/player";
 export type QualityLevel = "hi-res" | "lossless" | "hq" | "sq" | "lq";
 
 /** 扩展展示音质等级 */
-export type DisplayQualityLevel =
-  | QualityLevel
-  | "dsd"
-  | "sacd"
-  | "mqa"
-  | "hdcd"
-  | "dts"
-  | "midi";
+export type DisplayQualityLevel = QualityLevel | "dsd" | "sacd" | "mqa" | "hdcd" | "dts" | "midi";
 
 /** 无损与发烧级编解码器集合 */
 const LOSSLESS_CODECS = new Set([
@@ -43,8 +36,7 @@ const LOSSLESS_CODECS = new Set([
  * @param codec - 编解码器名称
  * @returns 是否为无损格式
  */
-export const isLosslessCodec = (codec: string): boolean =>
-  LOSSLESS_CODECS.has(codec.toLowerCase());
+export const isLosslessCodec = (codec: string): boolean => LOSSLESS_CODECS.has(codec.toLowerCase());
 
 /** 等级短码文案 */
 export const QUALITY_LABELS: Record<QualityLevel, string> = {
@@ -95,11 +87,7 @@ export const getDisplayQualityLevel = (quality: AudioQuality | undefined): Displ
   // 3. PCM 无损与高解析
   const isLossless = isLosslessCodec(lowerCodec);
   if (isLossless) {
-    if (
-      (quality.sampleRate >= 88_200 && quality.bitsPerSample >= 24) ||
-      quality.sampleRate >= 96_000 ||
-      quality.bitsPerSample >= 32
-    ) {
+    if (quality.bitsPerSample > 16 || quality.sampleRate > 48_000) {
       return "hi-res";
     }
     return "lossless";

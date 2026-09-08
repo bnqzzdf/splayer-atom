@@ -7,6 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { writeExactHttpInput } from "@main/atom/exactInput";
+import { getEngine } from "@main/services/engine";
+import type { AudioQuality } from "@shared/types/player";
 
 export interface UpnpMediaResource {
   id: string;
@@ -250,6 +252,23 @@ const stopServerIfIdle = async (): Promise<void> => {
   server = null;
   port = 0;
   await new Promise<void>((resolve) => current.close(() => resolve()));
+};
+
+/** 对 Renderer 实际拉取的本地文件读取真实编码参数；失败时由调用方回退 canonical metadata。 */
+export const probeUpnpMediaQuality = async (filePath: string): Promise<AudioQuality | null> => {
+  try {
+    const quality = await getEngine().probeMediaQuality(filePath);
+    if (!quality.codec || quality.sampleRate <= 0 || quality.channels <= 0) return null;
+    return {
+      codec: quality.codec,
+      sampleRate: quality.sampleRate,
+      channels: quality.channels,
+      bitsPerSample: quality.bitsPerSample,
+      bitRate: quality.bitRate,
+    };
+  } catch {
+    return null;
+  }
 };
 
 /** 注册一个已经准备完成的本地媒体文件并返回 Renderer 可访问 URL。 */

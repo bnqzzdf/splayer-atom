@@ -47,7 +47,7 @@ const pickQuality = (song: NeteaseTrackSource): AudioQuality | undefined => {
   if (song.hr) {
     return {
       codec: "flac",
-      sampleRate: Math.max(song.hr.sr ?? 0, 96000),
+      sampleRate: song.hr.sr,
       bitsPerSample: 24,
       bitRate: song.hr.br,
       channels: 2,

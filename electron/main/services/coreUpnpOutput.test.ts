@@ -72,6 +72,13 @@ test("terminal Core commands invalidate pending slow UPnP media preparation", ()
   assert.match(upnpLoad, /await discardUpnpInput\(temporaryInput\)/);
 });
 
+test("UPnP projects quality from the actual local representation", () => {
+  assert.match(upnpMedia, /getEngine\(\)\.probeMediaQuality\(filePath\)/);
+  assert.match(session, /probeUpnpMediaQuality\(filePath\)/);
+  assert.match(session, /item\.track = \{ \.\.\.item\.track, quality: mediaInfo\.quality \}/);
+  assert.match(session, /quality: mediaInfo\.quality, externalLyrics: \[\]/);
+});
+
 test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   const media = read("electron/main/atom/upnp/media.ts");
   const atomExtract = read("native/audio-engine/src/atom_media_extract.rs");

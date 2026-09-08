@@ -72,6 +72,7 @@ import {
   extractUpnpSacdDsf,
   inferUpnpMime,
   materializeUpnpInput,
+  probeUpnpMediaQuality,
 } from "@main/atom/upnp/media";
 import {
   notifyPlaybackTrackLoaded,
@@ -418,12 +419,17 @@ const loadUpnpResolvedTrack = async (
     if (temporaryInput) await discardUpnpInput(temporaryInput);
     return null;
   }
+  const representationQuality = (await probeUpnpMediaQuality(filePath)) ?? track.quality;
+  if (expectedGeneration !== loadGeneration) {
+    if (temporaryInput) await discardUpnpInput(temporaryInput);
+    return null;
+  }
   try {
     await loadUpnpFile({
       filePath,
       title: track.title || filePath.split(/[/\\]/).pop() || filePath,
       durationMs: representationDurationMs,
-      mime: inferUpnpMime(filePath, track.quality?.codec),
+      mime: inferUpnpMime(filePath, representationQuality?.codec ?? track.quality?.codec),
       autoPlay: false,
       deleteOnRelease: temporaryInput != null,
     });
@@ -451,14 +457,14 @@ const loadUpnpResolvedTrack = async (
   });
   neteaseScrobble.onTrackLoaded(track, item.context, duration, false);
   if (!preserveListenBrainzSession) listenbrainz.onTrackLoaded(track, duration, false);
-  beginCorePlayStats({ ...track, duration }, false);
+  beginCorePlayStats({ ...track, duration, quality: representationQuality }, false);
   return {
     title: track.title,
     artists: track.artists,
     album: track.album,
     duration,
     cover: track.cover,
-    quality: track.quality,
+    quality: representationQuality,
   };
 };
 

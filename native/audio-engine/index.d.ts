@@ -201,6 +201,14 @@ export interface JsFftData {
   rdata: Array<number>
 }
 
+export interface JsMediaQuality {
+  sampleRate: number
+  channels: number
+  bitsPerSample: number
+  bitRate: number
+  codec: string
+}
+
 /** 歌曲完整元信息，返回给 JS 侧（load 时一次性返回） */
 export interface JsMusicMetadata {
   title?: string
@@ -354,6 +362,9 @@ export interface JsTrackTags {
  * 渲染层只拿小缩略图，避免整图解码成位图占用大量内存
  */
 export declare function makeImageThumbnail(data: Buffer, maxSize: number): Promise<Buffer>
+
+/** Atom UPnP 对已经落到本地的媒体文件读取真实编码参数；不创建 AudioPlayer。 */
+export declare function probeMediaQuality(path: string): Promise<JsMediaQuality>
 
 /** 读取文件的可编辑标签（异步，阻塞 IO 在 tokio 阻塞线程执行） */
 export declare function readTrackTags(path: string): Promise<JsTrackTags>

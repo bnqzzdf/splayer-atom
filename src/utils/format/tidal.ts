@@ -285,7 +285,7 @@ const buildArtists = (track: TidalTrack): Artist[] => {
  * 例：Jay Chou《床边故事》用 HiFi/Master 套餐拉取：
  *   - audioQuality: "LOSSLESS"        ← 套餐默认
  *   - mediaMetadata.tags: [ "LOSSLESS", "HIRES_LOSSLESS" ]
- *   实际可拉到 96k/24bit FLAC，前端徽章必须显示 Hi-Res 而不是 Lossless。
+ *   实际播放参数要等 playback manifest/物化文件才能确定；标签只用于显示 Hi-Res 档位，不能伪造 96kHz。
  *
  * 注：HIRES_LOSSLESS 与 HI_RES_LOSSLESS 是 TIDAL 不同时段同义标签；
  *     HI_RES 是早期 v2 名字，已统一到 HIRES_LOSSLESS，三者都按 hi-res 处理。
@@ -304,13 +304,13 @@ const pickFromTag = (tag: string): AudioQuality | undefined => {
     case "HIRES_LOSSLESS":
     case "HI_RES_LOSSLESS":
     case "HI_RES":
-      return { codec: "flac", sampleRate: 96000, bitsPerSample: 24, bitRate: 0, channels: 2 };
+      return { codec: "flac", sampleRate: 0, bitsPerSample: 24, bitRate: 0, channels: 2 };
     case "LOSSLESS":
-      return { codec: "flac", sampleRate: 44100, bitsPerSample: 16, bitRate: 0, channels: 2 };
+      return { codec: "flac", sampleRate: 0, bitsPerSample: 16, bitRate: 0, channels: 2 };
     case "HIGH":
-      return { codec: "aac", sampleRate: 44100, bitsPerSample: 16, bitRate: 320000, channels: 2 };
+      return { codec: "aac", sampleRate: 0, bitsPerSample: 16, bitRate: 320000, channels: 2 };
     case "LOW":
-      return { codec: "aac", sampleRate: 44100, bitsPerSample: 16, bitRate: 96000, channels: 2 };
+      return { codec: "aac", sampleRate: 0, bitsPerSample: 16, bitRate: 96000, channels: 2 };
     default:
       return undefined;
   }
