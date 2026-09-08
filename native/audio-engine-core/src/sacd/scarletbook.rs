@@ -273,6 +273,10 @@ impl SacdDisc {
         let mut track_dur_frames: Vec<u32> = Vec::new();
         let mut track_titles: Vec<Option<String>> = vec![None; track_count as usize];
         let mut track_artists: Vec<Option<String>> = vec![None; track_count as usize];
+        // 第一份 SACDTTxt 对应 Area TOC languages[0]。语言表从 byte 88 开始，
+        // locale 的 character_set 是第 3 byte；没有声明时保持 ISO-8859-1 兼容回退。
+        let track_text_charset = area_data.get(90).copied().unwrap_or(2);
+        let mut sacd_text_idx = 0usize;
 
         let mut offset = SACD_SECTOR_SIZE;
         while offset + SACD_SECTOR_SIZE <= area_data.len() {
@@ -314,44 +318,61 @@ impl SacdDisc {
                     }
                 }
             } else if sec_magic == b"SACDTTxt" {
-                // 解析分轨标题与艺术家
-                for i in 0..track_count as usize {
-                    let pos_off = 8 + i * 2;
-                    if pos_off + 2 <= sector_chunk.len() {
+                // ScarletBook 的 track_text_position 是相对整个 SACDTTxt block 起点的
+                // 16-bit offset，真实盘常跨越后续多个 2048-byte sector。这里只取
+                // 第一语言文本区，与 Area TOC languages[0] charset 对齐。
+                if sacd_text_idx == 0 {
+                    for i in 0..track_count as usize {
+                        let pos_off = offset + 8 + i * 2;
+                        if pos_off + 2 > area_data.len() {
+                            break;
+                        }
                         let text_pos =
-                            u16::from_be_bytes(sector_chunk[pos_off..pos_off + 2].try_into()?)
+                            u16::from_be_bytes(area_data[pos_off..pos_off + 2].try_into()?)
                                 as usize;
-                        if text_pos > 0 && text_pos < SACD_SECTOR_SIZE {
-                            let text_ptr = &sector_chunk[text_pos..];
-                            let track_amount = text_ptr[0];
-                            let mut p = 4;
-                            for _ in 0..track_amount {
-                                if p >= text_ptr.len() {
-                                    break;
-                                }
-                                let track_type = text_ptr[p];
-                                p += 2; // skip type and padding
-                                let start_p = p;
-                                while p < text_ptr.len() && text_ptr[p] != 0 {
-                                    p += 1;
-                                }
-                                let item_str = decode_scarletbook_charset(&text_ptr[start_p..p], 2);
-                                if track_type == 0x01
-                                    && track_titles[i].is_none()
-                                    && !item_str.is_empty()
-                                {
-                                    track_titles[i] = Some(item_str);
-                                } else if track_type == 0x02
-                                    && track_artists[i].is_none()
-                                    && !item_str.is_empty()
-                                {
-                                    track_artists[i] = Some(item_str);
-                                }
-                                p += 1; // skip null terminator
+                        let Some(text_start) = offset.checked_add(text_pos) else {
+                            continue;
+                        };
+                        if text_pos == 0 || text_start + 4 > area_data.len() {
+                            continue;
+                        }
+
+                        let text_ptr = &area_data[text_start..];
+                        let track_amount = text_ptr[0];
+                        let mut p = 4usize;
+                        for _ in 0..track_amount {
+                            if p + 2 > text_ptr.len() {
+                                break;
                             }
+                            let track_type = text_ptr[p];
+                            p += 2; // type + ScarletBook reserved/0x20 byte
+                            let start_p = p;
+                            while p < text_ptr.len() && text_ptr[p] != 0 {
+                                p += 1;
+                            }
+                            if p >= text_ptr.len() {
+                                break;
+                            }
+                            let item_str = decode_scarletbook_charset(
+                                &text_ptr[start_p..p],
+                                track_text_charset,
+                            );
+                            if track_type == 0x01
+                                && track_titles[i].is_none()
+                                && !item_str.is_empty()
+                            {
+                                track_titles[i] = Some(item_str);
+                            } else if track_type == 0x02
+                                && track_artists[i].is_none()
+                                && !item_str.is_empty()
+                            {
+                                track_artists[i] = Some(item_str);
+                            }
+                            p += 1; // null terminator
                         }
                     }
                 }
+                sacd_text_idx += 1;
             }
             offset += SACD_SECTOR_SIZE;
         }

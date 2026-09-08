@@ -64,6 +64,9 @@ fn test_synthetic_sacd_iso_parsing() {
     iso_bytes[area_toc_off + 21] = 0x00; // DST 编码
     iso_bytes[area_toc_off + 32] = 2; // 双声道
     iso_bytes[area_toc_off + 69] = 2; // 两首轨道
+    iso_bytes[area_toc_off + 80] = 1; // 一个文本语言区
+    iso_bytes[area_toc_off + 88..area_toc_off + 90].copy_from_slice(b"en");
+    iso_bytes[area_toc_off + 90] = 1; // ISO-646
 
     // 4. Sector 521: SACDTRL1 (Track start & length LSN)
     let trl1_off = 521 * SACD_SECTOR_SIZE;
@@ -100,21 +103,25 @@ fn test_synthetic_sacd_iso_parsing() {
     // 6. Sector 523: SACDTTxt
     let ttxt_off = 523 * SACD_SECTOR_SIZE;
     iso_bytes[ttxt_off..ttxt_off + 8].copy_from_slice(b"SACDTTxt");
-    // Track 1 text position: 30, Track 2 text position: 60
-    iso_bytes[ttxt_off + 8..ttxt_off + 10].copy_from_slice(&30u16.to_be_bytes());
-    iso_bytes[ttxt_off + 10..ttxt_off + 12].copy_from_slice(&60u16.to_be_bytes());
+    // Track text position 可跨越当前 2048-byte sector；真实盘常见 4096+ offset。
+    let t1_text_pos = 4096usize;
+    let t2_text_pos = 4192usize;
+    iso_bytes[ttxt_off + 8..ttxt_off + 10].copy_from_slice(&(t1_text_pos as u16).to_be_bytes());
+    iso_bytes[ttxt_off + 10..ttxt_off + 12].copy_from_slice(&(t2_text_pos as u16).to_be_bytes());
 
     // Track 1 text: 1 item, type 0x01 (Title), text "Come Together\0"
-    iso_bytes[ttxt_off + 30] = 1; // 1 item
-    iso_bytes[ttxt_off + 34] = 0x01; // Title
+    iso_bytes[ttxt_off + t1_text_pos] = 1;
+    iso_bytes[ttxt_off + t1_text_pos + 4] = 0x01;
     let t1_name = b"Come Together\0";
-    iso_bytes[ttxt_off + 36..ttxt_off + 36 + t1_name.len()].copy_from_slice(t1_name);
+    iso_bytes[ttxt_off + t1_text_pos + 6..ttxt_off + t1_text_pos + 6 + t1_name.len()]
+        .copy_from_slice(t1_name);
 
     // Track 2 text: 1 item, type 0x01 (Title), text "Something\0"
-    iso_bytes[ttxt_off + 60] = 1;
-    iso_bytes[ttxt_off + 64] = 0x01;
+    iso_bytes[ttxt_off + t2_text_pos] = 1;
+    iso_bytes[ttxt_off + t2_text_pos + 4] = 0x01;
     let t2_name = b"Something\0";
-    iso_bytes[ttxt_off + 66..ttxt_off + 66 + t2_name.len()].copy_from_slice(t2_name);
+    iso_bytes[ttxt_off + t2_text_pos + 6..ttxt_off + t2_text_pos + 6 + t2_name.len()]
+        .copy_from_slice(t2_name);
 
     let mut file = File::create(&iso_path).unwrap();
     file.write_all(&iso_bytes).unwrap();

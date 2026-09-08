@@ -27,6 +27,7 @@ let scanGeneration = 0;
 let pendingSacdSyncs: Promise<number>[] = [];
 
 const SACD_VIRTUAL_PATH = /^(.*\.iso)\|Track\d+\|/i;
+const SACD_PLACEHOLDER_TITLE = /^Track\s*0*\d+$/i;
 
 /** SACD 虚拟分轨 -> 物理 ISO；普通路径返回 null。 */
 const sacdIsoPathFromVirtual = (value: string | undefined): string | null => {
@@ -122,11 +123,21 @@ const syncSacdTracks = async (aggregate: JsScannedTrack, generation: number): Pr
  * 旧版 physical.iso 聚合记录故意不投影，以便即使文件没变化也强制迁移一次。
  */
 const buildIncrementalData = () => {
+  // 旧虚拟分轨已经有正确 path/mtime，但标题可能仍是 Track NN。这样的 ISO 必须
+  // 再 probe 一次，让修正后的 SACDTTxt 元数据覆盖占位标题；成功后下次恢复正常增量跳过。
+  const sacdMetadataRefresh = new Set(
+    getAllTracks().flatMap((track) => {
+      const isoPath = sacdIsoPathFromVirtual(track.path);
+      return isoPath && SACD_PLACEHOLDER_TITLE.test(track.title ?? "") ? [pathKey(isoPath)] : [];
+    }),
+  );
+
   const physical = new Map<string, ReturnType<typeof getFileRecords>[number]>();
   for (const record of getFileRecords()) {
     const virtualIso = sacdIsoPathFromVirtual(record.path);
     if (virtualIso) {
       const key = pathKey(virtualIso);
+      if (sacdMetadataRefresh.has(key)) continue; // placeholder title: force metadata refresh
       if (!physical.has(key)) physical.set(key, { ...record, path: virtualIso });
       continue;
     }
