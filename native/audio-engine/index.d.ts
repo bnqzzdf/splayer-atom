@@ -366,6 +366,9 @@ export declare function makeImageThumbnail(data: Buffer, maxSize: number): Promi
 /** Atom UPnP 对已经落到本地的媒体文件读取真实编码参数；不创建 AudioPlayer。 */
 export declare function probeMediaQuality(path: string): Promise<JsMediaQuality>
 
+/** Atom 曲库把一个 SACD ISO 展开为稳定虚拟分轨；解析工作在阻塞线程完成。 */
+export declare function probeSacdTracks(isoPath: string): Promise<Array<JsScannedTrack>>
+
 /** 读取文件的可编辑标签（异步，阻塞 IO 在 tokio 阻塞线程执行） */
 export declare function readTrackTags(path: string): Promise<JsTrackTags>
 

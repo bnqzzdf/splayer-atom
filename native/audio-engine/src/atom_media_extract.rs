@@ -34,6 +34,17 @@ fn napi_error(error: impl std::fmt::Display) -> Error {
     Error::from_reason(error.to_string())
 }
 
+/// Atom 曲库把一个 SACD ISO 展开为稳定虚拟分轨；解析工作在阻塞线程完成。
+#[napi]
+pub async fn probe_sacd_tracks(iso_path: String) -> Result<Vec<crate::bindings::JsScannedTrack>> {
+    let tracks = tokio::task::spawn_blocking(move || {
+        audio_engine_core::scanner::probe_sacd_tracks(&iso_path)
+    })
+    .await
+    .map_err(napi_error)?;
+    Ok(tracks.into_iter().map(Into::into).collect())
+}
+
 /// Atom UPnP 对已经落到本地的媒体文件读取真实编码参数；不创建 AudioPlayer。
 #[napi]
 pub async fn probe_media_quality(path: String) -> Result<JsMediaQuality> {

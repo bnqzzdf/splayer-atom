@@ -23,6 +23,19 @@ import { readFileAutoEncoding } from "@main/utils/encoding";
 
 let scanning = false;
 let currentScanProgress: ScanProgress = { phase: "done", total: 0, scanned: 0 };
+let scanGeneration = 0;
+let pendingSacdSyncs: Promise<number>[] = [];
+
+const SACD_VIRTUAL_PATH = /^(.*\.iso)\|Track\d+\|/i;
+
+/** SACD 虚拟分轨 -> 物理 ISO；普通路径返回 null。 */
+const sacdIsoPathFromVirtual = (value: string | undefined): string | null => {
+  if (!value) return null;
+  return SACD_VIRTUAL_PATH.exec(value)?.[1] ?? null;
+};
+
+const isSacdAggregate = (track: JsScannedTrack): boolean =>
+  /\.iso$/i.test(track.path) && /^sacd_/i.test(track.codec);
 
 const publishScanProgress = (progress: ScanProgress): void => {
   currentScanProgress = progress;
@@ -59,6 +72,88 @@ export const scannedToUpsert = (track: JsScannedTrack): UpsertTrack => {
     mtime: track.mtime,
     ctime: track.ctime,
   };
+};
+
+/**
+ * 扫描器仍以物理 ISO 为文件粒度；Atom 在这里把其展开为曲库虚拟分轨。
+ * 只在完整解析成功后替换旧记录，临时 I/O/解析失败不会清空既有 SACD。
+ */
+const syncSacdTracks = async (aggregate: JsScannedTrack, generation: number): Promise<number> => {
+  const isoPath = aggregate.path;
+  try {
+    const scanned = await getEngine().probeSacdTracks(isoPath);
+    if (!scanning || generation !== scanGeneration) return 0;
+    if (scanned.length === 0) {
+      libraryLog.warn(`解析 SACD 分轨为空，保留既有记录 [${isoPath}]`);
+      return 0;
+    }
+
+    const isoKey = pathKey(isoPath);
+    const existingPaths = getAllTracks()
+      .filter((track) => {
+        if (!track.path) return false;
+        const source =
+          sacdIsoPathFromVirtual(track.path) ?? (/\.iso$/i.test(track.path) ? track.path : null);
+        return source != null && pathKey(source) === isoKey;
+      })
+      .map((track) => track.path!);
+
+    const normalized = scanned.map((track) => ({
+      ...track,
+      cover: track.cover ?? aggregate.cover,
+      fileSize: aggregate.fileSize || track.fileSize,
+      mtime: aggregate.mtime || track.mtime,
+      ctime: aggregate.ctime || track.ctime,
+    }));
+    const nextPaths = new Set(normalized.map((track) => track.path));
+    upsertTracks(normalized.map(scannedToUpsert));
+
+    const stalePaths = existingPaths.filter((trackPath) => !nextPaths.has(trackPath));
+    if (stalePaths.length > 0) deleteTracksByPaths(stalePaths);
+    return normalized.length;
+  } catch (error) {
+    libraryLog.warn(`解析 SACD 失败 [${isoPath}]:`, error);
+    return 0;
+  }
+};
+
+/**
+ * Rust 增量扫描仍按物理文件 mtime/size 工作。SACD 虚拟轨只向它投影一个物理 ISO record；
+ * 旧版 physical.iso 聚合记录故意不投影，以便即使文件没变化也强制迁移一次。
+ */
+const buildIncrementalData = () => {
+  const physical = new Map<string, ReturnType<typeof getFileRecords>[number]>();
+  for (const record of getFileRecords()) {
+    const virtualIso = sacdIsoPathFromVirtual(record.path);
+    if (virtualIso) {
+      const key = pathKey(virtualIso);
+      if (!physical.has(key)) physical.set(key, { ...record, path: virtualIso });
+      continue;
+    }
+    if (/\.iso$/i.test(record.path)) continue; // legacy SACD aggregate: force one migration scan
+    physical.set(pathKey(record.path), record);
+  }
+
+  return [...physical.values()].flatMap(({ cover, ...record }) => {
+    const coverPath = fromCacheUrl(cover);
+    if (cover?.startsWith("cache://") && !coverPath) return [];
+    return [{ ...record, coverPath }];
+  });
+};
+
+/** deleted physical ISO 必须同时展开到数据库里的全部 virtual Track path。 */
+const expandRemovedPaths = (removedPaths: string[]): string[] => {
+  if (removedPaths.length === 0) return [];
+  const result = new Set(removedPaths);
+  const removedIsoKeys = new Set(
+    removedPaths.filter((value) => /\.iso$/i.test(value)).map((value) => pathKey(value)),
+  );
+  if (removedIsoKeys.size === 0) return [...result];
+  for (const track of getAllTracks()) {
+    const isoPath = sacdIsoPathFromVirtual(track.path);
+    if (isoPath && removedIsoKeys.has(pathKey(isoPath))) result.add(track.path!);
+  }
+  return [...result];
 };
 
 /** 同步 CUE 虚拟曲目到曲库 */
@@ -152,19 +247,31 @@ const syncCueTracks = async (
 };
 
 /** 完成 Rust 扫描后的收尾同步 */
-const finishScan = async (dirs: string[], event: JsScanEvent): Promise<void> => {
-  if (event.removedPaths && event.removedPaths.length > 0) {
-    deleteTracksByPaths(event.removedPaths);
-    libraryLog.info(`清理 ${event.removedPaths.length} 个已删除文件`);
+const finishScan = async (
+  dirs: string[],
+  event: JsScanEvent,
+  generation: number,
+): Promise<void> => {
+  const sacdCounts = await Promise.all(pendingSacdSyncs);
+  pendingSacdSyncs = [];
+  if (generation !== scanGeneration) return;
+
+  const removedPaths = expandRemovedPaths(event.removedPaths ?? []);
+  if (removedPaths.length > 0) {
+    deleteTracksByPaths(removedPaths);
+    libraryLog.info(`清理 ${removedPaths.length} 个已删除文件/虚拟分轨`);
   }
   const cueCount = await syncCueTracks(event.cueFiles ?? [], dirs, event.unavailableDirs ?? []);
+  const sacdCount = sacdCounts.reduce((sum, count) => sum + count, 0);
   scanning = false;
   publishScanProgress({
     phase: "done",
     total: event.total,
     scanned: event.scanned,
   });
-  libraryLog.info(`扫描完成: ${event.scanned}/${event.total} 个文件，CUE 分轨 ${cueCount} 首`);
+  libraryLog.info(
+    `扫描完成: ${event.scanned}/${event.total} 个文件，CUE 分轨 ${cueCount} 首，SACD 分轨 ${sacdCount} 首`,
+  );
 };
 
 /** 是否正在扫描 */
@@ -189,17 +296,13 @@ export const startScan = (dirs: string[], incremental = true): void => {
   }
 
   scanning = true;
+  const generation = ++scanGeneration;
+  pendingSacdSyncs = [];
   currentScanProgress = { phase: "scanning", total: 0, scanned: 0 };
   libraryLog.info(`开始扫描 ${dirs.length} 个目录 (增量=${incremental})`);
 
   // Rust 端同时校验音频指纹与可重建封面缓存；非法 cache 引用直接强制重新探测。
-  const incrementalData = incremental
-    ? getFileRecords().flatMap(({ cover, ...record }) => {
-        const coverPath = fromCacheUrl(cover);
-        if (cover?.startsWith("cache://") && !coverPath) return [];
-        return [{ ...record, coverPath }];
-      })
-    : undefined;
+  const incrementalData = incremental ? buildIncrementalData() : undefined;
 
   const engine = getEngine();
   engine.scanDirs(
@@ -209,9 +312,13 @@ export const startScan = (dirs: string[], incremental = true): void => {
         case "progress": {
           // 已取消则丢弃滞后批次，避免写回已删除目录的曲目
           if (!scanning) break;
-          // 批量写入数据库
+          // 普通文件直接写库；SACD 聚合探测结果由 Atom seam 异步展开成虚拟分轨。
           if (event.tracks && event.tracks.length > 0) {
-            upsertTracks(event.tracks.map(scannedToUpsert));
+            const ordinary = event.tracks.filter((track) => !isSacdAggregate(track));
+            if (ordinary.length > 0) upsertTracks(ordinary.map(scannedToUpsert));
+            for (const track of event.tracks.filter(isSacdAggregate)) {
+              pendingSacdSyncs.push(syncSacdTracks(track, generation));
+            }
           }
           publishScanProgress({
             phase: "scanning",
@@ -222,7 +329,7 @@ export const startScan = (dirs: string[], incremental = true): void => {
           break;
         }
         case "done": {
-          void finishScan(dirs, event).catch((error) => {
+          void finishScan(dirs, event, generation).catch((error) => {
             scanning = false;
             libraryLog.error("扫描收尾失败:", error);
             publishScanProgress({
@@ -246,6 +353,8 @@ export const cancelScan = (): void => {
   const engine = getEngine();
   engine.cancelScan();
   scanning = false;
+  ++scanGeneration;
+  pendingSacdSyncs = [];
   currentScanProgress = { ...currentScanProgress, phase: "done" };
   libraryLog.info("已发送扫描取消信号");
 };

@@ -13,6 +13,7 @@ const upnpMedia = read("electron/main/atom/upnp/media.ts");
 const sharedPlayer = read("shared/types/player.ts");
 const nativePlayer = read("native/audio-engine/src/bindings/player.rs");
 const nativeCore = read("native/audio-engine-core/src/lib.rs");
+const scannerService = read("electron/main/services/scanner.ts");
 
 test("UPnP remains an Atom-owned early branch without a generic output framework", () => {
   assert.match(session, /if \(isUpnpSelected\(\)\) \{/);
@@ -77,6 +78,14 @@ test("UPnP projects quality from the actual local representation", () => {
   assert.match(session, /probeUpnpMediaQuality\(filePath\)/);
   assert.match(session, /item\.track = \{ \.\.\.item\.track, quality: mediaInfo\.quality \}/);
   assert.match(session, /quality: mediaInfo\.quality, externalLyrics: \[\]/);
+});
+
+test("library scanner expands SACD ISO through the Atom-owned sync seam", () => {
+  assert.match(scannerService, /getEngine\(\)\.probeSacdTracks\(isoPath\)/);
+  assert.match(scannerService, /SACD_VIRTUAL_PATH/);
+  assert.match(scannerService, /legacy SACD aggregate: force one migration scan/);
+  assert.match(scannerService, /pendingSacdSyncs/);
+  assert.match(session, /\^\(\.\*\\\.iso\)\\\|Track\(\\d\+\)\\\|/);
 });
 
 test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
