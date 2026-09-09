@@ -23,6 +23,7 @@ test("Core native player event router stays Electron-free and owns session lifec
   const source = readFileSync(coreEventsPath, "utf8");
 
   assert.doesNotMatch(source, /from ["']electron["']/);
+  assert.match(source, /playbackSession\.onNativePosition\(enginePositionMs\)/);
   assert.match(source, /playbackSession\.onNativeEnded\(\)/);
   assert.match(source, /playbackSession\.onNativeSourceError\(\)/);
   assert.match(source, /requestReinit\(player\)/);

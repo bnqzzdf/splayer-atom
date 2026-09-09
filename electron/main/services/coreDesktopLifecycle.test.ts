@@ -12,6 +12,7 @@ const rendererPreloaderSource = readFileSync(
 
 test("Desktop and Node share the same Core native lifecycle handlers", () => {
   for (const marker of [
+    "export const onNativePosition = (enginePositionMs: number): boolean => {",
     "export const onNativeEnded = (): boolean => {",
     "export const onNativeSourceError = (): boolean => {",
     "export const onNativeDirectTrackBoundary = (",
@@ -21,12 +22,31 @@ test("Desktop and Node share the same Core native lifecycle handlers", () => {
     assert.doesNotMatch(section.split("};")[0], /isHeadlessMode/);
   }
 
+  assert.match(desktopBridgeSource, /playbackSession\.onNativePosition\(enginePositionMs\)/);
   assert.match(desktopBridgeSource, /playbackSession\.onNativeEnded\(\)/);
   assert.match(desktopBridgeSource, /playbackSession\.onNativeSourceError\(\)/);
   assert.match(
     desktopBridgeSource,
     /playbackSession\.onNativeDirectTrackBoundary\(generation, duration\)/,
   );
+});
+
+test("Core owns CUE virtual-track end boundaries instead of renderer Control", () => {
+  const cueBoundary = sessionSource.split(
+    "export const onNativePosition = (enginePositionMs: number): boolean => {",
+  )[1];
+  assert.ok(cueBoundary);
+  const body = cueBoundary.split("/** Native ended")[0];
+  assert.match(body, /const cueEndMs = track\?\.cueEndMs/);
+  assert.match(body, /enginePositionMs < cueEndMs/);
+  assert.match(body, /getPlayer\(\)\.pauseImmediately\(\)/);
+  assert.match(body, /advanceAfterNaturalEnd\(\)/);
+
+  const rendererEventsSource = readFileSync(
+    new URL("../../../src/core/player/events.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(rendererEventsSource, /track\?\.cueEndMs/);
 });
 
 test("renderer only receives lifecycle events that Core did not consume", () => {
@@ -65,9 +85,9 @@ test("Core is the only playable-input and Direct preload owner for Desktop too",
 });
 
 test("Personal FM natural lifecycle ignores stale repeat-one and keeps provider pool aligned", () => {
-  const ended = sessionSource.split("export const onNativeEnded = (): boolean => {")[1];
+  const ended = sessionSource.split("const advanceAfterNaturalEnd = (): void => {")[1];
   assert.ok(ended);
-  assert.match(ended, /mode !== "personalFm" && repeat === "one"/);
+  assert.match(ended.split("};")[0], /mode !== "personalFm" && repeat === "one"/);
 
   const direct = sessionSource.split("export const onNativeDirectTrackBoundary = (")[1];
   assert.ok(direct);

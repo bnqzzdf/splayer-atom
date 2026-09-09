@@ -197,10 +197,6 @@ export const handleEvent = async (event: PlayerEvent): Promise<void> => {
       abLoop.checkLoop(adjusted);
       // 推进延时缓存调度
       cacheScheduler.tick(adjusted);
-      const track = useMediaStore().track;
-      if (track?.cueEndMs != null && status.isPlaying && status.duration > 0) {
-        if (adjusted >= status.duration - 250) await finishCurrentTrack();
-      }
       break;
     }
     case "fftData":

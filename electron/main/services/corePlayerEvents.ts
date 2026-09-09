@@ -66,7 +66,15 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         break;
       }
       case "position": {
-        const positionMs = toDisplayPositionMs(toMs(event.position ?? 0));
+        const enginePositionMs = toMs(event.position ?? 0);
+        if (playbackSession.onNativePosition(enginePositionMs)) {
+          onCorePlayerEnded();
+          wsBroadcast({ type: "ended", data: { consumedBySession: true } });
+          neteaseScrobble.onEnded();
+          listenbrainz.onEnded();
+          break;
+        }
+        const positionMs = toDisplayPositionMs(enginePositionMs);
         const durationMs = toDisplayDurationMs(toMs(event.duration ?? 0));
         nowPlaying.onPosition(positionMs, true);
         neteaseScrobble.onPosition(positionMs);

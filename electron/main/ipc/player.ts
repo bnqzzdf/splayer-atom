@@ -135,7 +135,17 @@ const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"
         break;
       }
       case "position": {
-        const posMs = toDisplayPositionMs(toMs(event.position ?? 0));
+        const enginePositionMs = toMs(event.position ?? 0);
+        if (playbackSession.onNativePosition(enginePositionMs)) {
+          onCorePlayerEnded();
+          wsBroadcast({ type: "ended", data: { consumedBySession: true } });
+          mediaService.setPlayState({ status: "Paused" });
+          lastfm.onEnded();
+          neteaseScrobble.onEnded();
+          setTaskbarProgress(-1);
+          break;
+        }
+        const posMs = toDisplayPositionMs(enginePositionMs);
         const durMs = toDisplayDurationMs(toMs(event.duration ?? 0));
         const positionEvent = {
           type: "position" as const,

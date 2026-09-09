@@ -105,6 +105,7 @@ let active = false;
 let mode: PlaybackSessionMode = "queue";
 let initialized = false;
 let loadGeneration = 0;
+let cueBoundaryGeneration = -1;
 let sourceRecoveryAttempts = 0;
 let autoClose = {
   enabled: false,
@@ -1237,15 +1238,40 @@ const consumeAutoCloseOnEnded = (): boolean => {
   return true;
 };
 
-/** Native ended 由唯一 Core session 消费；Control 不再拥有 auto-next。 */
-export const onNativeEnded = (): boolean => {
-  if (!ownsPlayback()) return false;
-  if (consumeAutoCloseOnEnded()) return true;
+const advanceAfterNaturalEnd = (): void => {
+  if (consumeAutoCloseOnEnded()) return;
   const advance =
     mode !== "personalFm" && repeat === "one"
       ? selectIndex(index, true, true).then(() => true)
       : next();
   void advance.catch((error) => playerLog.error("[session] automatic next failed", error));
+};
+
+/** CUE 使用母版文件播放时，由 Core 在虚拟分轨结束位置收口并推进权威队列。 */
+export const onNativePosition = (enginePositionMs: number): boolean => {
+  if (!ownsPlayback() || isUpnpSelected()) return false;
+  const track = queue[index]?.track;
+  const cueEndMs = track?.cueEndMs;
+  if (
+    cueEndMs == null ||
+    !Number.isFinite(cueEndMs) ||
+    getPlayer().getStatus().state !== "playing" ||
+    enginePositionMs < cueEndMs
+  ) {
+    return false;
+  }
+  if (cueBoundaryGeneration === loadGeneration) return true;
+
+  cueBoundaryGeneration = loadGeneration;
+  getPlayer().pauseImmediately();
+  advanceAfterNaturalEnd();
+  return true;
+};
+
+/** Native ended 由唯一 Core session 消费；Control 不再拥有 auto-next。 */
+export const onNativeEnded = (): boolean => {
+  if (!ownsPlayback()) return false;
+  advanceAfterNaturalEnd();
   return true;
 };
 
