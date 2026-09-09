@@ -123,7 +123,9 @@ fn open_backend(
     _on_failure: &OutputFailureCallback,
 ) -> Result<OutputBackend> {
     if device_id.is_some_and(|selector| selector.starts_with("diretta:")) {
-        return Err(anyhow!("[Direct] Diretta selector 必须通过 Source Direct runtime"));
+        return Err(anyhow!(
+            "[Direct] Diretta selector 必须通过 Source Direct runtime"
+        ));
     }
     let (device, config) = open_device(device_id, requested_sample_rate)?;
     Ok(OutputBackend::Cpal { device, config })
@@ -180,7 +182,9 @@ mod mta {
                 let _ = result_tx.send(f());
             }))
             .map_err(|_| anyhow!("MTA 线程已退出"))?;
-        result_rx.recv().map_err(|_| anyhow!("MTA 线程发生 panic"))?
+        result_rx
+            .recv()
+            .map_err(|_| anyhow!("MTA 线程发生 panic"))?
     }
 }
 

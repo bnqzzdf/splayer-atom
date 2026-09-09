@@ -136,7 +136,10 @@ impl DirectPcmFrame {
         let frame = unsafe { self.raw.as_ref() };
         let total_samples =
             usize::try_from(frame.nb_samples).context("Source Direct sample count 越界")?;
-        ensure!(start_sample < total_samples, "Source Direct planar seek offset 越界");
+        ensure!(
+            start_sample < total_samples,
+            "Source Direct planar seek offset 越界"
+        );
         let samples = total_samples - start_sample;
         let channels =
             usize::try_from(frame.ch_layout.nb_channels).context("Source Direct 声道数越界")?;
@@ -650,7 +653,9 @@ impl DirectPcmDecoder {
                 frame.trim_start_samples(offset_samples)?;
             }
             let actual_us = frame_start_us.saturating_add(
-                i64::try_from(u64::try_from(offset_samples)?.saturating_mul(1_000_000) / sample_rate)
+                i64::try_from(
+                    u64::try_from(offset_samples)?.saturating_mul(1_000_000) / sample_rate,
+                )
                 .unwrap_or(i64::MAX),
             );
             self.seek_packet_timeline = None;
@@ -2205,16 +2210,17 @@ mod tests {
         let expected_ptr = first_frame.payload_ptr().unwrap();
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_pcm_next_block(source.callback_context(), &mut data, &mut len)
-        });
+        assert!(unsafe { direct_pcm_next_block(source.callback_context(), &mut data, &mut len) });
         assert_eq!(data, expected_ptr);
         assert_eq!(
             unsafe { slice::from_raw_parts(data, len) },
             &pcm[target_frame * 4..target_frame * 4 + len]
         );
         unsafe { direct_pcm_release_block(source.callback_context()) };
-        assert_eq!(source.consumed_position(), len as f64 / 4.0 / f64::from(sample_rate));
+        assert_eq!(
+            source.consumed_position(),
+            len as f64 / 4.0 / f64::from(sample_rate)
+        );
     }
 
     #[test]
@@ -2239,9 +2245,7 @@ mod tests {
         assert_eq!(source.callback_context(), context_before);
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_pcm_next_block(source.callback_context(), &mut data, &mut len)
-        });
+        assert!(unsafe { direct_pcm_next_block(source.callback_context(), &mut data, &mut len) });
         assert_eq!(
             unsafe { slice::from_raw_parts(data, len) },
             &pcm[target_frame * 4..target_frame * 4 + len]
@@ -2263,8 +2267,8 @@ mod tests {
             .expect("解码 WavPack handoff fixture 失败");
         let replacement = TempAudioFile::from_bytes("wv", &replacement_bytes);
         let expected = [
-            -32768_i16, 32767, -12345, 12345, -1, 1, 0, 42, -22222, 22222, -7, 7, 1024,
-            -1024, 30000, -30000,
+            -32768_i16, 32767, -12345, 12345, -1, 1, 0, 42, -22222, 22222, -7, 7, 1024, -1024,
+            30000, -30000,
         ];
         let expected_bytes: Vec<u8> = expected
             .iter()
@@ -2284,13 +2288,14 @@ mod tests {
         assert_eq!(new_format.sample_rate, 44_100);
         assert_eq!(new_format.channels, 2);
         assert_eq!(new_format.storage_bits, 16);
-        assert_eq!(new_format.memory_path, DirectPcmMemoryPath::BitPerfectRepack);
+        assert_eq!(
+            new_format.memory_path,
+            DirectPcmMemoryPath::BitPerfectRepack
+        );
 
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_pcm_next_block(source.callback_context(), &mut data, &mut len)
-        });
+        assert!(unsafe { direct_pcm_next_block(source.callback_context(), &mut data, &mut len) });
         assert_eq!(unsafe { slice::from_raw_parts(data, len) }, expected_bytes);
         unsafe { direct_pcm_release_block(source.callback_context()) };
     }
@@ -2342,9 +2347,7 @@ mod tests {
         {
             let mut data = ptr::null();
             let mut len = 0_usize;
-            if unsafe {
-                direct_pcm_next_block(source.callback_context(), &mut data, &mut len)
-            } {
+            if unsafe { direct_pcm_next_block(source.callback_context(), &mut data, &mut len) } {
                 collected.extend_from_slice(unsafe { slice::from_raw_parts(data, len) });
             } else {
                 thread::sleep(Duration::from_millis(1));

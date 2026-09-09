@@ -37,7 +37,9 @@ impl DirectMonitor {
             Self::Dsd(value) => value.consumed_position(),
             #[cfg(test)]
             Self::Fake(value) => {
-                value.position_micros.load(std::sync::atomic::Ordering::Acquire) as f64
+                value
+                    .position_micros
+                    .load(std::sync::atomic::Ordering::Acquire) as f64
                     / 1_000_000.0
             }
         }

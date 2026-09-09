@@ -9,10 +9,10 @@ use tracing::{debug, info};
 
 use crate::audio_output::{AudioOutput, OutputFailureCallback};
 use crate::decoder;
-#[cfg(any(feature = "diretta", test))]
-use crate::direct_runtime::{DirectMonitor, DirectPlayback};
 #[cfg(feature = "diretta")]
 use crate::direct_runtime::DirectStageHandle;
+#[cfg(any(feature = "diretta", test))]
+use crate::direct_runtime::{DirectMonitor, DirectPlayback};
 use crate::equalizer::{Equalizer, EQ_BAND_COUNT};
 #[cfg(feature = "fft")]
 use crate::fft::FftAnalyzer;
@@ -283,7 +283,9 @@ impl InnerPlayer {
 
     #[cfg(feature = "diretta")]
     pub fn direct_stage_handle(&self) -> Option<DirectStageHandle> {
-        self.direct_playback.as_ref().map(DirectPlayback::stage_handle)
+        self.direct_playback
+            .as_ref()
+            .map(DirectPlayback::stage_handle)
     }
 
     #[cfg(feature = "diretta")]
@@ -849,7 +851,9 @@ mod tests {
             player.set_fade_duration(200).unwrap_err(),
             player.set_normalization_enabled(true).unwrap_err(),
             player.set_equalizer_enabled(true).unwrap_err(),
-            player.set_equalizer_bands(&[1.0; EQ_BAND_COUNT]).unwrap_err(),
+            player
+                .set_equalizer_bands(&[1.0; EQ_BAND_COUNT])
+                .unwrap_err(),
             player.set_preamp_gain(1.0).unwrap_err(),
             player.set_speed(1.1).unwrap_err(),
             player.set_pitch(1).unwrap_err(),
@@ -902,7 +906,11 @@ mod tests {
             .unwrap()
             .expect("Direct seek 应取得 Direct runtime");
         assert!(player.direct_playback.is_none());
-        assert!(player.set_volume(0.5).unwrap_err().to_string().contains("[Direct]"));
+        assert!(player
+            .set_volume(0.5)
+            .unwrap_err()
+            .to_string()
+            .contains("[Direct]"));
 
         let mut playback = take.playback;
         assert_eq!(playback.seek_while_paused(42.0).unwrap(), 42.0);
@@ -934,9 +942,14 @@ mod tests {
     fn direct_napi_load_and_seek_never_invoke_the_normal_audio_pipeline() {
         let bindings = include_str!("../../../audio-engine/src/bindings/player.rs");
         let direct_load = bindings
-            .split("#[cfg(feature = \"diretta\")]\n        if let Some(selector) = direct_selector {")
+            .split(
+                "#[cfg(feature = \"diretta\")]\n        if let Some(selector) = direct_selector {",
+            )
             .nth(1)
-            .and_then(|tail| tail.split("        let source_for_decoder = source.clone();").next())
+            .and_then(|tail| {
+                tail.split("        let source_for_decoder = source.clone();")
+                    .next()
+            })
             .expect("Direct load branch should exist");
         for forbidden in [
             "Shared::new",

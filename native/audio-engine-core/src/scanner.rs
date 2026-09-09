@@ -17,8 +17,8 @@ use walkdir::WalkDir;
 use crate::metadata;
 
 const AUDIO_EXTENSIONS: &[&str] = &[
-    "mp3", "flac", "wav", "ogg", "aac", "m4a", "wma", "opus", "ape", "dsf", "dff", "dsdiff",
-    "iso", "cue",
+    "mp3", "flac", "wav", "ogg", "aac", "m4a", "wma", "opus", "ape", "dsf", "dff", "dsdiff", "iso",
+    "cue",
 ];
 
 /// 每批回调的文件数
@@ -211,7 +211,8 @@ fn probe_fast_with_directory_cover(
                     ctime: 0,
                 });
             }
-        } else if path.to_lowercase().ends_with(".dff") || path.to_lowercase().ends_with(".dsdiff") {
+        } else if path.to_lowercase().ends_with(".dff") || path.to_lowercase().ends_with(".dsdiff")
+        {
             if let Ok(dff) = crate::dsd::DffReader::open(path) {
                 return Some(ScannedTrack {
                     path: path.to_string(),

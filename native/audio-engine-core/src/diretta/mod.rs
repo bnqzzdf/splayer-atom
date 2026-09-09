@@ -249,7 +249,8 @@ mod imp {
             let target = selector_target(selector)
                 .ok_or_else(|| anyhow!("invalid Diretta output selector"))?;
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
-            let (mut source, actual_position) = DirectDsdSource::open_local_at(path, position_secs)?;
+            let (mut source, actual_position) =
+                DirectDsdSource::open_local_at(path, position_secs)?;
             let format = source.format();
             let source_lsb_first = format.bit_order == DirectDsdBitOrder::LsbFirst;
             let mut wire_lsb_first = source_lsb_first;
@@ -277,7 +278,9 @@ mod imp {
                     source.set_wire_bit_order_while_paused(wire_bit_order, actual_position)
                 {
                     unsafe { atom_diretta_close(raw.as_ptr()) };
-                    return Err(anyhow!("failed to adapt Native DSD wire bit order: {error}"));
+                    return Err(anyhow!(
+                        "failed to adapt Native DSD wire bit order: {error}"
+                    ));
                 }
             }
             Ok((Self { raw, source }, actual_position))

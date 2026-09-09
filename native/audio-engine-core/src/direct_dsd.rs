@@ -219,7 +219,10 @@ impl DirectDsdReader {
                     return Ok(None);
                 }
                 let channels = usize::from(self.format.channels);
-                ensure!(*skip_per_channel < *block_size, "DSF seek block offset 无效");
+                ensure!(
+                    *skip_per_channel < *block_size,
+                    "DSF seek block offset 无效"
+                );
                 let valid_per_channel =
                     (*remaining_per_channel).min(*block_size - *skip_per_channel);
                 ensure!(
@@ -924,7 +927,8 @@ fn replace_dsd_ring(
         .round()
         .clamp(0.0, u64::MAX as f64) as u64;
     ring.reset_for_transition();
-    ring.duration_micros.store(duration_micros, Ordering::Release);
+    ring.duration_micros
+        .store(duration_micros, Ordering::Release);
     ring.ensure_capacity(reader.max_output_len());
     fill_slot(&mut reader, &ring.slots[0], wire_bit_order)?
         .context("Native DSD handoff 后没有可播放 payload")?;
@@ -939,9 +943,7 @@ pub struct DirectDsdMonitor {
 
 impl DirectDsdMonitor {
     pub fn consumed_position(&self) -> f64 {
-        self.ring
-            .consumed_bits_per_channel
-            .load(Ordering::Acquire) as f64
+        self.ring.consumed_bits_per_channel.load(Ordering::Acquire) as f64
             / f64::from(self.bit_rate)
     }
 
@@ -1014,7 +1016,8 @@ impl DirectDsdSource {
         };
         let format = reader.format();
         let ring = Arc::new(DirectDsdRing::new(reader.max_output_len()));
-        ring.duration_micros.store(duration_micros, Ordering::Release);
+        ring.duration_micros
+            .store(duration_micros, Ordering::Release);
         fill_slot(&mut reader, &ring.slots[0], format.bit_order)?
             .context("Native DSD 音源没有可播放 payload")?;
 
@@ -1641,9 +1644,7 @@ mod tests {
         assert_eq!(actual, 0.0);
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_dsd_next_block(source.callback_context(), &mut data, &mut len)
-        });
+        assert!(unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) });
         assert_eq!(source.consumed_position(), 0.0);
         unsafe { direct_dsd_release_block(source.callback_context()) };
         let expected_position = 64.0 / 2_822_400.0;
@@ -1664,10 +1665,11 @@ mod tests {
         assert_eq!(source.callback_context(), context_before);
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_dsd_next_block(source.callback_context(), &mut data, &mut len)
-        });
-        assert_eq!(unsafe { std::slice::from_raw_parts(data, len) }, expected_tail);
+        assert!(unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) });
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(data, len) },
+            expected_tail
+        );
         unsafe { direct_dsd_release_block(source.callback_context()) };
     }
 
@@ -1676,14 +1678,14 @@ mod tests {
         let (first_bytes, _) = dsf_fixture(64);
         let (mut second_bytes, _) = dsf_fixture(64);
         let second_raw = [
-            0xaa, 0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99,
-            0xab, 0xcd, 0xef,
+            0xaa, 0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xab,
+            0xcd, 0xef,
         ];
         let raw_start = second_bytes.len() - second_raw.len();
         second_bytes[raw_start..].copy_from_slice(&second_raw);
         let expected = [
-            0xaa, 0xbb, 0xcc, 0xdd, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x99,
-            0xab, 0xcd, 0xef,
+            0xaa, 0xbb, 0xcc, 0xdd, 0x55, 0x66, 0x77, 0x88, 0x11, 0x22, 0x33, 0x44, 0x99, 0xab,
+            0xcd, 0xef,
         ];
         let first = TempDsdFile::new("dsf", &first_bytes);
         let second = TempDsdFile::new("dsf", &second_bytes);
@@ -1698,9 +1700,7 @@ mod tests {
 
         let mut data = ptr::null();
         let mut len = 0_usize;
-        assert!(unsafe {
-            direct_dsd_next_block(source.callback_context(), &mut data, &mut len)
-        });
+        assert!(unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) });
         assert_eq!(unsafe { std::slice::from_raw_parts(data, len) }, expected);
         unsafe { direct_dsd_release_block(source.callback_context()) };
     }
@@ -1770,9 +1770,7 @@ mod tests {
         while collected.len() < target_len && std::time::Instant::now() < deadline {
             let mut data = ptr::null();
             let mut len = 0_usize;
-            if unsafe {
-                direct_dsd_next_block(source.callback_context(), &mut data, &mut len)
-            } {
+            if unsafe { direct_dsd_next_block(source.callback_context(), &mut data, &mut len) } {
                 collected.extend_from_slice(unsafe { std::slice::from_raw_parts(data, len) });
             } else {
                 thread::sleep(Duration::from_millis(1));

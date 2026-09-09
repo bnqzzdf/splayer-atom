@@ -296,7 +296,6 @@ fn dst_channel_and_packet_count_mismatch_fail_before_decode() {
     }
 }
 
-
 #[test]
 fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
     let first = pattern(0x31);
@@ -317,13 +316,18 @@ fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
     assert_eq!(&bytes[..4], b"DSD ");
     assert_eq!(&bytes[28..32], b"fmt ");
     assert_eq!(&bytes[80..84], b"data");
-    assert_eq!(u64::from_le_bytes(bytes[64..72].try_into().unwrap()), (expected_per_channel as u64) * 8);
+    assert_eq!(
+        u64::from_le_bytes(bytes[64..72].try_into().unwrap()),
+        (expected_per_channel as u64) * 8
+    );
     assert_eq!(u32::from_le_bytes(bytes[72..76].try_into().unwrap()), 4096);
 
     let mut actual = Vec::with_capacity(expected.len());
     let mut remaining = expected_per_channel;
     for group in bytes[92..].chunks_exact(8192) {
-        if remaining == 0 { break; }
+        if remaining == 0 {
+            break;
+        }
         let take = remaining.min(4096);
         for index in 0..take {
             actual.push(audio_engine_core::dsd::reverse_byte(group[index]));

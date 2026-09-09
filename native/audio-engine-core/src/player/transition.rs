@@ -278,7 +278,10 @@ impl InnerPlayer {
         #[cfg(feature = "fft")]
         let reader = DecoderSource::new(Arc::clone(&shared), Arc::clone(&self.fft));
         #[cfg(not(feature = "fft"))]
-        let reader = DecoderSource::new(Arc::clone(&shared), Arc::new(crate::fft::FftAnalyzer::new()));
+        let reader = DecoderSource::new(
+            Arc::clone(&shared),
+            Arc::new(crate::fft::FftAnalyzer::new()),
+        );
         let was_paused = self.state == PlayerState::Paused;
         let volume = self.target_volume;
         let playback = {
@@ -347,7 +350,10 @@ impl InnerPlayer {
         #[cfg(feature = "fft")]
         let reader = DecoderSource::new(Arc::clone(&shared), Arc::clone(&self.fft));
         #[cfg(not(feature = "fft"))]
-        let reader = DecoderSource::new(Arc::clone(&shared), Arc::new(crate::fft::FftAnalyzer::new()));
+        let reader = DecoderSource::new(
+            Arc::clone(&shared),
+            Arc::new(crate::fft::FftAnalyzer::new()),
+        );
         let volume = self.target_volume;
         let playback = {
             let output = self.ensure_output(None)?;
