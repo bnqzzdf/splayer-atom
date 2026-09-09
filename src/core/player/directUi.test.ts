@@ -363,7 +363,10 @@ test("Headless Web keeps one bottom output entry available before a track is loa
 
 test("bottom output entry shows the selected output kind and a truncated device name", () => {
   assert.match(toolbarSource, /IconLucideSpeaker/);
-  assert.match(toolbarSource, /IconLucideCable/);
+  assert.match(
+    toolbarSource,
+    /<svg\s+v-if="selectedOutputKind === 'diretta'"[^>]*aria-label="Diretta"/,
+  );
   assert.match(toolbarSource, /IconLucideCast/);
   assert.match(toolbarSource, /selectedOutputIcon/);
   assert.match(toolbarSource, /selectedOutputLabel/);
