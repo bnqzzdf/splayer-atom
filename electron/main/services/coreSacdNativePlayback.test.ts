@@ -12,6 +12,14 @@ const directDsd = read("native/audio-engine-core/src/direct_dsd.rs");
 const directRuntime = read("native/audio-engine-core/src/direct_runtime.rs");
 const virtualDsf = read("native/audio-engine-core/src/sacd/virtual_dsf.rs");
 
+test("SACD playback presentation keeps logical DSD clock instead of FFmpeg packed-byte metadata", () => {
+  assert.match(session, /quality\.bitsPerSample !== 1/);
+  assert.match(session, /quality\.sampleRate < 2_822_400/);
+  assert.match(session, /projectLogicalDsdPlaybackMetadata\(item\.track, detail, mediaInfo\)/);
+  assert.match(session, /detail: projected\.detail/);
+  assert.match(session, /mediaInfo: projected\.mediaInfo/);
+});
+
 test("ALSA streams SACD virtual tracks through a lazy seekable DSF view", () => {
   assert.match(sacdInput, /toNativeSacdPlaybackSource/);
   assert.doesNotMatch(sacdInput, /extractSacdDsf|mkdtemp|\.dsf\.part/);

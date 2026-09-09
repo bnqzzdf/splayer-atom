@@ -1,5 +1,6 @@
 import type {
   AudioDevice,
+  AudioQuality,
   MediaInfo,
   PlaybackQueueItem,
   PlaybackSessionMode,
@@ -218,6 +219,29 @@ const scheduleAutoCloseDeadline = (): void => {
   autoCloseTimer = setTimeout(onAutoCloseDeadline, delay);
 };
 
+const logicalDsdQuality = (quality: AudioQuality | undefined): AudioQuality | undefined => {
+  if (!quality || quality.bitsPerSample !== 1 || quality.sampleRate < 2_822_400) return undefined;
+  return /(?:sacd|dsd|dsf|dff|dst)/i.test(quality.codec) ? quality : undefined;
+};
+
+/**
+ * FFmpeg exposes DSD as packed 8-bit samples at DSD clock / 8 (DSD64 => 352.8 kHz / 8 bit).
+ * Playback presentation must keep the scanner's logical 1-bit DSD clock instead of leaking that
+ * decoder storage representation into Control.
+ */
+const projectLogicalDsdPlaybackMetadata = (
+  track: Track,
+  detail?: TrackDetail,
+  mediaInfo?: MediaInfo,
+): { detail?: TrackDetail; mediaInfo?: MediaInfo } => {
+  const quality = logicalDsdQuality(track.quality);
+  if (!quality) return { detail, mediaInfo };
+  return {
+    detail: detail ? { ...detail, quality } : detail,
+    mediaInfo: mediaInfo ? { ...mediaInfo, quality } : mediaInfo,
+  };
+};
+
 const publishTrackLoaded = (
   item: PlaybackQueueItem,
   source: string,
@@ -225,6 +249,7 @@ const publishTrackLoaded = (
   detail?: TrackDetail,
   mediaInfo?: MediaInfo,
 ): void => {
+  const projected = projectLogicalDsdPlaybackMetadata(item.track, detail, mediaInfo);
   const event = {
     type: "trackLoaded" as const,
     data: {
@@ -232,8 +257,8 @@ const publishTrackLoaded = (
       context: item.context,
       source,
       autoPlay,
-      detail,
-      mediaInfo,
+      detail: projected.detail,
+      mediaInfo: projected.mediaInfo,
     },
   };
   publishCoreControlEvent(event);
