@@ -1,4 +1,5 @@
 use std::cell::UnsafeCell;
+use std::collections::VecDeque;
 use std::ffi::{c_void, CStr, CString};
 use std::path::{Path, PathBuf};
 use std::ptr::{self, NonNull};
@@ -337,6 +338,87 @@ impl Drop for DirectPcmFrame {
 // AVFrame 由单一拥有者移动，底层 AVBufferRef 只通过 FFmpeg 引用计数共享。
 unsafe impl Send for DirectPcmFrame {}
 
+#[derive(Debug, Clone, Copy)]
+struct DirectPcmPacketTimeline {
+    timestamp: i64,
+    duration: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DirectPcmActivePacketTimeline {
+    timestamp: i64,
+    duration: i64,
+    consumed_samples: u64,
+}
+
+/// APE 等解码器可能不给 AVFrame 填 timestamp，且一个 packet 会拆成多个 frame。
+/// Source Direct seek 不能因此放弃样本级定位：按 demux packet 的时间轴和持续时长
+/// 推导每个 frame 的起点，只用于 seek 裁切，不修改 PCM 数据。
+fn seek_packet_frame_timestamp(
+    timeline: &mut VecDeque<DirectPcmPacketTimeline>,
+    active: &mut Option<DirectPcmActivePacketTimeline>,
+    time_base: sys::AVRational,
+    sample_rate: i32,
+    frame_samples: i32,
+) -> Option<i64> {
+    let sample_rate = u32::try_from(sample_rate).ok()?;
+    let frame_samples = u64::try_from(frame_samples).ok()?;
+    if sample_rate == 0 || frame_samples == 0 {
+        return None;
+    }
+
+    if active.is_none() {
+        let mut current = timeline.pop_front()?;
+        // 部分 APE 的 seek 首包没有 PTS/DTS；下一包的时间戳减去本包 duration
+        // 可以恢复首包起点，且不依赖 codec 私有 frame timestamp。
+        if current.timestamp == sys::AV_NOPTS_VALUE && current.duration > 0 {
+            if let Some(next) = timeline.front() {
+                if next.timestamp != sys::AV_NOPTS_VALUE {
+                    current.timestamp = next.timestamp.saturating_sub(current.duration);
+                }
+            }
+        }
+        *active = Some(DirectPcmActivePacketTimeline {
+            timestamp: current.timestamp,
+            duration: current.duration,
+            consumed_samples: 0,
+        });
+    }
+
+    let current = (*active)?;
+    if current.timestamp == sys::AV_NOPTS_VALUE || current.duration <= 0 {
+        return None;
+    }
+    let sample_time_base = sys::AVRational {
+        num: 1,
+        den: i32::try_from(sample_rate).ok()?,
+    };
+    let packet_samples =
+        unsafe { sys::av_rescale_q(current.duration, time_base, sample_time_base) };
+    let packet_samples = u64::try_from(packet_samples).ok()?;
+    let next_consumed = current.consumed_samples.checked_add(frame_samples)?;
+    if packet_samples == 0 || next_consumed > packet_samples {
+        return None;
+    }
+    let offset_pts = unsafe {
+        sys::av_rescale_q(
+            i64::try_from(current.consumed_samples).ok()?,
+            sample_time_base,
+            time_base,
+        )
+    };
+    let frame_timestamp = current.timestamp.saturating_add(offset_pts);
+    if next_consumed == packet_samples {
+        *active = None;
+    } else {
+        *active = Some(DirectPcmActivePacketTimeline {
+            consumed_samples: next_consumed,
+            ..current
+        });
+    }
+    Some(frame_timestamp)
+}
+
 pub struct DirectPcmDecoder {
     format_context: NonNull<sys::AVFormatContext>,
     codec_context: NonNull<sys::AVCodecContext>,
@@ -345,6 +427,9 @@ pub struct DirectPcmDecoder {
     time_base: sys::AVRational,
     timeline_origin_pts: i64,
     valid_bits_hint: u8,
+    seek_packet_timeline: Option<VecDeque<DirectPcmPacketTimeline>>,
+    active_seek_packet_timeline: Option<DirectPcmActivePacketTimeline>,
+    last_frame_packet_timestamp: Option<i64>,
     flushing: bool,
     drained: bool,
 }
@@ -474,6 +559,9 @@ impl DirectPcmDecoder {
             time_base,
             timeline_origin_pts,
             valid_bits_hint,
+            seek_packet_timeline: None,
+            active_seek_packet_timeline: None,
+            last_frame_packet_timestamp: None,
             flushing: false,
             drained: false,
         })
@@ -489,9 +577,8 @@ impl DirectPcmDecoder {
             "Source Direct seek 位置无效"
         );
         let target_us = (position_secs * 1_000_000.0).floor().min(i64::MAX as f64) as i64;
-        let mut target_pts = unsafe {
-            sys::av_rescale_q(target_us, sys::MICROSECONDS_Q, self.time_base)
-        };
+        let mut target_pts =
+            unsafe { sys::av_rescale_q(target_us, sys::MICROSECONDS_Q, self.time_base) };
         target_pts = target_pts.saturating_add(self.timeline_origin_pts);
         let seek_result = unsafe {
             sys::avformat_seek_file(
@@ -510,33 +597,44 @@ impl DirectPcmDecoder {
         }
         self.flushing = false;
         self.drained = false;
+        self.seek_packet_timeline = Some(VecDeque::new());
+        self.active_seek_packet_timeline = None;
+        self.last_frame_packet_timestamp = None;
 
         loop {
             if !self.read_frame(frame)? {
+                self.seek_packet_timeline = None;
+                self.active_seek_packet_timeline = None;
+                self.last_frame_packet_timestamp = None;
                 return Ok(position_secs);
             }
             let raw = unsafe { frame.raw.as_ref() };
-            let timestamp = if raw.best_effort_timestamp != sys::AV_NOPTS_VALUE {
-                raw.best_effort_timestamp
+            let frame_timestamp = if raw.best_effort_timestamp != sys::AV_NOPTS_VALUE {
+                Some(raw.best_effort_timestamp)
+            } else if raw.pts != sys::AV_NOPTS_VALUE {
+                Some(raw.pts)
+            } else if raw.pkt_dts != sys::AV_NOPTS_VALUE {
+                Some(raw.pkt_dts)
             } else {
-                raw.pts
+                None
             };
+            let timestamp = frame_timestamp
+                .or(self.last_frame_packet_timestamp)
+                .unwrap_or(sys::AV_NOPTS_VALUE);
             ensure!(
                 timestamp != sys::AV_NOPTS_VALUE,
-                "Source Direct accurate seek 需要有效 frame timestamp"
+                "Source Direct accurate seek 需要有效 frame/packet timestamp"
             );
             let relative_pts = timestamp.saturating_sub(self.timeline_origin_pts);
-            let frame_start_us = unsafe {
-                sys::av_rescale_q(relative_pts, self.time_base, sys::MICROSECONDS_Q)
-            };
+            let frame_start_us =
+                unsafe { sys::av_rescale_q(relative_pts, self.time_base, sys::MICROSECONDS_Q) };
             let total_samples = usize::try_from(raw.nb_samples)
                 .context("Source Direct seek frame sample count 越界")?;
             let sample_rate = u64::try_from(raw.sample_rate)
                 .context("Source Direct seek frame sample rate 越界")?;
             ensure!(sample_rate > 0, "Source Direct seek frame sample rate 无效");
-            let frame_duration_us = u64::try_from(total_samples)?
-                .saturating_mul(1_000_000)
-                / sample_rate;
+            let frame_duration_us =
+                u64::try_from(total_samples)?.saturating_mul(1_000_000) / sample_rate;
             let frame_end_us = frame_start_us.saturating_add(frame_duration_us as i64);
             if frame_end_us < target_us {
                 continue;
@@ -552,13 +650,12 @@ impl DirectPcmDecoder {
                 frame.trim_start_samples(offset_samples)?;
             }
             let actual_us = frame_start_us.saturating_add(
-                i64::try_from(
-                    u64::try_from(offset_samples)?
-                        .saturating_mul(1_000_000)
-                        / sample_rate,
-                )
+                i64::try_from(u64::try_from(offset_samples)?.saturating_mul(1_000_000) / sample_rate)
                 .unwrap_or(i64::MAX),
             );
+            self.seek_packet_timeline = None;
+            self.active_seek_packet_timeline = None;
+            self.last_frame_packet_timestamp = None;
             return Ok(actual_us.max(0) as f64 / 1_000_000.0);
         }
     }
@@ -574,6 +671,17 @@ impl DirectPcmDecoder {
                 sys::avcodec_receive_frame(self.codec_context.as_ptr(), frame.raw.as_ptr())
             };
             if receive_result == 0 {
+                let raw = unsafe { frame.raw.as_ref() };
+                self.last_frame_packet_timestamp =
+                    self.seek_packet_timeline.as_mut().and_then(|timeline| {
+                        seek_packet_frame_timestamp(
+                            timeline,
+                            &mut self.active_seek_packet_timeline,
+                            self.time_base,
+                            raw.sample_rate,
+                            raw.nb_samples,
+                        )
+                    });
                 frame.accept_decoded_frame(self.valid_bits_hint)?;
                 return Ok(true);
             }
@@ -617,11 +725,29 @@ impl DirectPcmDecoder {
                 continue;
             }
 
+            let packet_timeline = unsafe {
+                let timestamp = if self.packet.as_ref().pts != sys::AV_NOPTS_VALUE {
+                    self.packet.as_ref().pts
+                } else {
+                    self.packet.as_ref().dts
+                };
+                DirectPcmPacketTimeline {
+                    timestamp,
+                    duration: self.packet.as_ref().duration,
+                }
+            };
+
             let send_result = unsafe {
                 sys::avcodec_send_packet(self.codec_context.as_ptr(), self.packet.as_ptr())
             };
             unsafe { sys::av_packet_unref(self.packet.as_ptr()) };
-            if send_result == 0 || send_result == sys::AVERROR_EAGAIN {
+            if send_result == 0 {
+                if let Some(timeline) = &mut self.seek_packet_timeline {
+                    timeline.push_back(packet_timeline);
+                }
+                return Ok(true);
+            }
+            if send_result == sys::AVERROR_EAGAIN {
                 return Ok(true);
             }
             return Err(ffmpeg_error(send_result, "提交 Source Direct packet"));
@@ -1783,6 +1909,35 @@ mod tests {
             }
         );
         assert!(frame.payload_bytes().unwrap().iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn timestamp_less_packet_keeps_timeline_across_multiple_decoded_frames() {
+        let time_base = sys::AVRational {
+            num: 1,
+            den: 44_100,
+        };
+        let packet_samples = 73_728_i64;
+        let mut timeline = VecDeque::from([
+            DirectPcmPacketTimeline {
+                timestamp: sys::AV_NOPTS_VALUE,
+                duration: packet_samples,
+            },
+            DirectPcmPacketTimeline {
+                timestamp: packet_samples,
+                duration: packet_samples,
+            },
+        ]);
+        let mut active = None;
+
+        for (index, expected_timestamp) in [0_i64, 18_432, 36_864, 55_296].into_iter().enumerate() {
+            let timestamp =
+                seek_packet_frame_timestamp(&mut timeline, &mut active, time_base, 44_100, 18_432);
+            assert_eq!(timestamp, Some(expected_timestamp), "frame {index}");
+        }
+
+        assert!(active.is_none());
+        assert_eq!(timeline.len(), 1);
     }
 
     #[test]
