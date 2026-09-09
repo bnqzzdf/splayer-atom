@@ -14,7 +14,6 @@ import IconLucideClock from "~icons/lucide/clock";
 import IconLucideRepeat2 from "~icons/lucide/repeat-2";
 import IconLucideRadio from "~icons/lucide/radio";
 import IconLucideSpeaker from "~icons/lucide/speaker";
-import IconLucideCable from "~icons/lucide/cable";
 import IconLucideCast from "~icons/lucide/cast";
 
 const props = withDefaults(
@@ -56,7 +55,6 @@ const selectedOutputLabel = computed(() => {
 });
 const selectedOutputKind = computed(() => getOutputKind(status.selectedOutputDevice));
 const selectedOutputIcon = computed(() => {
-  if (selectedOutputKind.value === "diretta") return IconLucideCable;
   if (selectedOutputKind.value === "upnp") return IconLucideCast;
   return IconLucideSpeaker;
 });
@@ -150,7 +148,24 @@ const onMoreMenuSelect = (key: string): void => {
           :class="outputSelectionRequired ? undefined : mutedClass"
           :title="`${t('settings.outputDevice.label')}: ${selectedOutputLabel}`"
         >
-          <template #icon><component :is="selectedOutputIcon" /></template>
+          <template #icon>
+            <svg
+              v-if="selectedOutputKind === 'diretta'"
+              viewBox="0 0 24 24"
+              role="img"
+              aria-label="Diretta"
+            >
+              <path
+                fill="currentColor"
+                d="M4 2h7c4.5 0 7.8 2.1 9.2 5.5C17.8 5.8 15 5 11.8 5H9a2 2 0 0 0-2 2v10l-3-2V2Z"
+              />
+              <path
+                fill="#9560D9"
+                d="M17 7c2.5 1.7 4 4.1 4 7 0 5-3.8 8-9.5 8H4v-5c2 1.5 4.4 2 7.2 2 4.2 0 6.8-2.2 6.8-5.8 0-2.3-.3-4.3-1-6.2Z"
+              />
+            </svg>
+            <component :is="selectedOutputIcon" v-else />
+          </template>
           <span class="max-w-28 truncate text-sm">{{ selectedOutputLabel }}</span>
         </SButton>
       </template>
