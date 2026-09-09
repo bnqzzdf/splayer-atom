@@ -7,6 +7,10 @@ const trackMenuSource = readFileSync(
   new URL("../composables/useTrackMenu.ts", import.meta.url),
   "utf8",
 );
+const multiSelectSource = readFileSync(
+  new URL("../composables/useMultiSelect.ts", import.meta.url),
+  "utf8",
+);
 const playerSource = readFileSync(new URL("../core/player/index.ts", import.meta.url), "utf8");
 const songListSource = readFileSync(
   new URL("../components/list/SongList.vue", import.meta.url),
@@ -70,6 +74,17 @@ test("Track add-to-queue appends once by Track id for every SongList source", ()
   );
   assert.match(playerSource, /if \(seen\.has\(item\.id\)\) continue;/);
   assert.match(playerSource, /seen\.add\(item\.id\);/);
+});
+
+test("Batch add-to-queue appends selected tracks instead of inserting them next", () => {
+  assert.match(
+    multiSelectSource,
+    /player\.insertManyToQueue\(tracks, "end", options\.playbackContext\?\.value\)/,
+  );
+  assert.doesNotMatch(
+    multiSelectSource,
+    /player\.insertManyToQueue\(tracks, "next", options\.playbackContext\?\.value\)/,
+  );
 });
 
 test("Track right-click and row more button project the same Action Model", () => {

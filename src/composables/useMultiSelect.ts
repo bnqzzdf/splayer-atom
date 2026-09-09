@@ -175,7 +175,7 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
   const addToQueue = (): void => {
     const tracks = selectedItems.value;
     if (tracks.length === 0) return;
-    player.insertManyToQueue(tracks, "next", options.playbackContext?.value);
+    player.insertManyToQueue(tracks, "end", options.playbackContext?.value);
     exit();
   };
 
