@@ -5,6 +5,7 @@ import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
 import { useDirectModeState } from "@/core/player/directMode";
+import { getOutputDisplayName, getOutputKind } from "@/core/outputDevices";
 import { hasHostCapability, isWebRemote } from "@/runtime";
 import IconLucideSliders from "~icons/lucide/sliders-horizontal";
 import IconLucideGauge from "~icons/lucide/gauge";
@@ -13,6 +14,8 @@ import IconLucideClock from "~icons/lucide/clock";
 import IconLucideRepeat2 from "~icons/lucide/repeat-2";
 import IconLucideRadio from "~icons/lucide/radio";
 import IconLucideSpeaker from "~icons/lucide/speaker";
+import IconLucideCable from "~icons/lucide/cable";
+import IconLucideCast from "~icons/lucide/cast";
 
 const props = withDefaults(
   defineProps<{
@@ -43,10 +46,19 @@ const lyricButtonType = computed(() =>
 );
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
+const selectedOutputDevice = computed(() =>
+  status.outputDevices.find((device) => device.id === status.selectedOutputDevice),
+);
 const selectedOutputLabel = computed(() => {
   const selected = status.selectedOutputDevice;
   if (!selected) return t("settings.outputDevice.required");
-  return status.outputDevices.find((device) => device.id === selected)?.name ?? selected;
+  return selectedOutputDevice.value ? getOutputDisplayName(selectedOutputDevice.value) : selected;
+});
+const selectedOutputKind = computed(() => getOutputKind(status.selectedOutputDevice));
+const selectedOutputIcon = computed(() => {
+  if (selectedOutputKind.value === "diretta") return IconLucideCable;
+  if (selectedOutputKind.value === "upnp") return IconLucideCast;
+  return IconLucideSpeaker;
 });
 const processingUnavailableTitle = computed(() =>
   remoteSelected.value
@@ -133,12 +145,13 @@ const onMoreMenuSelect = (key: string): void => {
         <SButton
           :type="outputSelectionRequired ? 'primary' : buttonType"
           :variant="outputSelectionRequired ? 'tertiary' : 'ghost'"
-          circle
           size="large"
+          class="min-w-10 max-w-42 px-2.5"
           :class="outputSelectionRequired ? undefined : mutedClass"
           :title="`${t('settings.outputDevice.label')}: ${selectedOutputLabel}`"
         >
-          <template #icon><IconLucideSpeaker /></template>
+          <template #icon><component :is="selectedOutputIcon" /></template>
+          <span class="max-w-28 truncate text-sm">{{ selectedOutputLabel }}</span>
         </SButton>
       </template>
       <div class="flex flex-col gap-2">

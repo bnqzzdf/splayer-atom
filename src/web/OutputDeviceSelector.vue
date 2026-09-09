@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AudioDevice } from "@shared/types/player";
 import { refreshDevices, switchDevice } from "@/core/player";
+import { getOutputDisplayName, getOutputKind, type OutputKind } from "@/core/outputDevices";
 import { useStatusStore } from "@/stores/status";
 import IconLucideCheck from "~icons/lucide/check";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
@@ -12,8 +13,6 @@ const emit = defineEmits<{ selected: [] }>();
 const refreshing = ref(false);
 const selectingId = ref<string | null>(null);
 
-type OutputKind = "alsa" | "diretta" | "upnp";
-
 interface OutputGroup {
   kind: OutputKind;
   label: string;
@@ -21,19 +20,13 @@ interface OutputGroup {
   refreshable: boolean;
 }
 
-const outputKind = (device: AudioDevice): OutputKind => {
-  if (device.id.startsWith("diretta:")) return "diretta";
-  if (device.id.startsWith("upnp:")) return "upnp";
-  return "alsa";
-};
-
-const displayName = (device: AudioDevice, kind: OutputKind): string =>
-  kind === "diretta" ? device.name.replace(/\s*·\s*Diretta$/, "") : device.name;
-
 /** 快捷输出菜单直接展示分类后的 Core snapshot，不再在 Popover 内嵌第二层 Select。 */
 const groups = computed<OutputGroup[]>(() => {
   const byKind: Record<OutputKind, AudioDevice[]> = { alsa: [], diretta: [], upnp: [] };
-  for (const device of status.outputDevices) byKind[outputKind(device)].push(device);
+  for (const device of status.outputDevices) {
+    const kind = getOutputKind(device.id);
+    if (kind) byKind[kind].push(device);
+  }
   return [
     {
       kind: "alsa",
@@ -112,10 +105,10 @@ onMounted(() => {
           class="relative flex min-h-9 w-full items-center rounded-lg px-2.5 pr-9 text-left text-sm transition-colors hover:bg-on-surface/8 disabled:cursor-wait disabled:opacity-60"
           :class="device.id === status.selectedOutputDevice ? 'text-primary' : 'text-on-surface'"
           :disabled="selectingId !== null"
-          :title="displayName(device, group.kind)"
+          :title="getOutputDisplayName(device)"
           @click="onSelect(device.id)"
         >
-          <span class="truncate">{{ displayName(device, group.kind) }}</span>
+          <span class="truncate">{{ getOutputDisplayName(device) }}</span>
           <IconLucideCheck
             v-if="device.id === status.selectedOutputDevice"
             class="absolute right-2.5 size-4 shrink-0 text-primary"

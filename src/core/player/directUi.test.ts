@@ -361,6 +361,17 @@ test("Headless Web keeps one bottom output entry available before a track is loa
   assert.doesNotMatch(mainLayoutSource, /NavHeader.*OutputDeviceSelector/s);
 });
 
+test("bottom output entry shows the selected output kind and a truncated device name", () => {
+  assert.match(toolbarSource, /IconLucideSpeaker/);
+  assert.match(toolbarSource, /IconLucideCable/);
+  assert.match(toolbarSource, /IconLucideCast/);
+  assert.match(toolbarSource, /selectedOutputIcon/);
+  assert.match(toolbarSource, /selectedOutputLabel/);
+  assert.match(toolbarSource, /max-w-28 truncate/);
+  assert.match(outputDevicesSource, /export type OutputKind = "alsa" \| "diretta" \| "upnp"/);
+  assert.match(outputDevicesSource, /getOutputDisplayName/);
+});
+
 test("shared Control output switch reports online Source Direct preparation", () => {
   const switchFlow = between(
     playerSource,
