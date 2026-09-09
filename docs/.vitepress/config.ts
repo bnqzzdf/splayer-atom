@@ -12,6 +12,7 @@ const zhTheme: DefaultTheme.Config = {
     {
       text: "开发",
       items: [
+        { text: "构建与打包", link: "/build-and-packaging" },
         { text: "原生模块", link: "/native" },
         { text: "插件开发", link: "/plugins/" },
         { text: "外部 API", link: "/api" },
@@ -52,6 +53,7 @@ const zhTheme: DefaultTheme.Config = {
     {
       text: "开发",
       items: [
+        { text: "构建与打包", link: "/build-and-packaging" },
         { text: "原生模块", link: "/native" },
         {
           text: "插件开发",
@@ -102,6 +104,7 @@ const enTheme: DefaultTheme.Config = {
     {
       text: "Development",
       items: [
+        { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
         { text: "Plugin Development", link: "/en/plugins/" },
         { text: "External API", link: "/en/api" },
@@ -142,6 +145,7 @@ const enTheme: DefaultTheme.Config = {
     {
       text: "Development",
       items: [
+        { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
         {
           text: "Plugin Development",

@@ -368,6 +368,7 @@ AGENTS.md                          耐久架构、实现、来源与 Git 规则
 docs/atom-roadmap.md               当前范围、未完成工作、优先级与验收门槛
 docs/upstream-sync.md              官方 SPlayer 同步、baseline 与 contribution 操作
 docs/atom-development.md           开发环境与常用门禁
+docs/build-and-packaging.md        Desktop/Core 构建、平台打包、Linux ABI/glibc 与产物验收
 docs/build-flavors.md              Desktop/Core flavor 与 Diretta SDK release 规则
 docs/core-deployment.md            安装、数据、升级、回滚与 systemd
 docs/upnp-output-plan.md            UPnP 源保真输出设计、阶段与专项验收

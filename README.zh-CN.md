@@ -25,15 +25,16 @@
 
 SPlayer Atom 从 SPlayer-Next 继承成熟的 Desktop、媒体、歌词、曲库与 UI 基础，并在此之上形成自己的 Core-first 产品架构、Headless/Web Control、在线服务和 strict Source Direct 音频路径。Atom 是一个持续跟进上游的下游产品，而不是把 README、品牌或发布身份继续视为 SPlayer-Next。
 
-| 领域     | SPlayer-Next 基础                        | SPlayer Atom 增量                                                                                         |
-| -------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 产品模型 | 完整 Desktop 播放器                      | 增加普通 **Node Core**，统一持有音乐业务状态并可 Headless 运行                                            |
-| Control  | Desktop renderer                         | 同一套 Vue 界面既可作为 **Desktop Control**，也可作为 **Web Control** 连接同一个 Core 协议                |
-| 播放权威 | Desktop-oriented playback lifecycle      | Core 持有 canonical queue、播放策略、source resolution、cache、preload/recovery、统计与 output assignment |
-| 在线音乐 | SPlayer 现有服务与 Netease compatibility | 增加 **Qobuz**、**TIDAL**，协议唯一实现为 Rust `streaming-api`                                            |
-| Scrobble | SPlayer 已有 Last.fm 等集成              | 增加 **ListenBrainz Core Scrobble / Now Playing**；I/O 与音频链隔离，关闭时零 runtime                     |
-| 音频输出 | SPlayer 通用音频引擎与效果链             | 在普通 ALSA 之外增加 **Diretta strict Source Direct**，Direct 不进入普通 float DSP 路径                   |
-| 部署     | Desktop 应用                             | 增加 Linux x86-64 Core artifact、Web Control、systemd、迁移/备份/回滚与明确 runtime capability metadata   |
+| 领域     | SPlayer-Next 基础                        | SPlayer Atom 增量                                                                                                 |
+| -------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 产品模型 | 完整 Desktop 播放器                      | 增加普通 **Node Core**，统一持有音乐业务状态并可 Headless 运行                                                    |
+| Control  | Desktop renderer                         | 同一套 Vue 界面既可作为 **Desktop Control**，也可作为 **Web Control** 连接同一个 Core 协议                        |
+| 播放权威 | Desktop-oriented playback lifecycle      | Core 持有 canonical queue、播放策略、source resolution、cache、preload/recovery、统计与 output assignment         |
+| 在线音乐 | SPlayer 现有服务与 Netease compatibility | 增加 **Qobuz**、**TIDAL**，协议唯一实现为 Rust `streaming-api`                                                    |
+| Scrobble | SPlayer 已有 Last.fm 等集成              | 增加 **ListenBrainz Core Scrobble / Now Playing**；I/O 与音频链隔离，关闭时零 runtime                             |
+| 音频输出 | SPlayer 通用音频引擎与效果链             | 增加 **Diretta strict Source Direct** 与 Core-owned **UPnP MediaRenderer** 输出；Direct 不进入普通 float DSP 路径 |
+| 分轨媒体 | 常规本地文件 / CUE 基础能力              | Core 统一处理 CUE 虚拟分轨、SACD stereo 虚拟分轨、分轨结束边界与 UPnP 离线物化                                    |
+| 部署     | Desktop 应用                             | 增加 Linux x86-64 Core artifact、Web Control、systemd、迁移/备份/回滚与明确 runtime capability metadata           |
 
 Atom 刻意不建立第二套媒体模型、队列、provider framework 或音频引擎。QQ Music / Kugou 只保留官方 SPlayer 冻结兼容面，不作为 Atom 主动扩展的产品路线。
 
@@ -76,9 +77,10 @@ Web Control ───────► Node Core
                     └─ output assignment / Diretta materialization
                               │
                               ▼
-                         Core Local Output
+                         Core Output
                          ├─ ALSA
-                         └─ Diretta Source Direct
+                         ├─ Diretta Source Direct
+                         └─ UPnP MediaRenderer
 ```
 
 Web 与 Desktop 都只是 Control，不成为第二个 domain authority。Desktop 独有的窗口、托盘、热键、updater、本机文件、protocol 与歌词窗口继续作为 Host Capability；音乐业务命令与 snapshot 则统一使用 Core contract。
@@ -88,6 +90,7 @@ Web 与 Desktop 都只是 Control，不成为第二个 domain authority。Deskto
 作为 SPlayer-Next 的下游发行版，Atom 直接继承并持续整合上游的大量成熟能力，包括：
 
 - 🎵 **广泛格式支持** —— MP3、FLAC、WAV、AAC、OGG、APE 等，基于 FFmpeg + Rust
+- 💿 **虚拟分轨** —— CUE 与 SACD stereo area 可展开为稳定虚拟曲目；CUE 的开始/结束边界由 Core 播放生命周期统一处理
 - 📝 **丰富歌词** —— LRC / QRC / YRC / TTML、逐字高亮、翻译与原生歌词窗口
 - 🌐 **媒体服务器** —— Subsonic / Navidrome / Jellyfin / Emby
 - 🖥️ **Desktop 支持** —— Windows / macOS / Linux
@@ -144,13 +147,16 @@ pnpm dev
 
 ```bash
 pnpm build         # 完整构建：清理 → 原生模块 → 类型检查 → electron-vite
+pnpm build:unpack  # 生成未安装/未压缩的 Electron 目录，适合本机验收和 ELF 依赖扫描
 
 pnpm build:win     # 打包 Windows
 pnpm build:mac     # 打包 macOS
-pnpm build:linux   # 打包 Linux（AppImage / deb / rpm / tar.gz / pacman）
+pnpm build:linux   # 打包 Linux Desktop；当前只生成 tar.gz
 ```
 
 > 默认仅构建当前架构，暂不支持交叉编译。
+
+> **Linux ABI 注意：** Desktop/Core 都包含 Rust/N-API 原生产物，Linux 本地构建会继承构建环境可用的 glibc ABI。比如在滚动发行版或 glibc 2.43 主机直接构建，产物可能实际引用 `GLIBC_2.43`，从而无法在较旧系统运行。正式 Linux 发布应使用固定的较老 builder/sysroot，并在发布前扫描最终 ELF 的最高 `GLIBC_x.y` 符号版本。详见 [`docs/build-and-packaging.md`](./docs/build-and-packaging.md)。
 
 ### 构建 Node Core
 
@@ -168,6 +174,8 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 ```
 
 SDK 不进入本仓库，也不会被打进 release artifact。具体 flavor/release 规则见 [`docs/build-flavors.md`](./docs/build-flavors.md)，systemd、data、migration、upgrade 与 rollback 见 [`docs/core-deployment.md`](./docs/core-deployment.md)。
+
+Desktop/Core 的完整构建链、平台打包目标、Diretta 构建方式、Linux glibc 兼容性与产物验收命令统一记录在 [`docs/build-and-packaging.md`](./docs/build-and-packaging.md)。
 
 ### 其他脚本
 

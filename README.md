@@ -32,7 +32,8 @@ SPlayer Atom inherits the mature Desktop, media, lyrics, library, and UI foundat
 | Playback authority | Desktop-oriented playback lifecycle                 | Core owns the canonical queue, playback policy, source resolution, cache, preload/recovery, statistics, and output assignment           |
 | Online music       | Existing SPlayer services and Netease compatibility | Adds **Qobuz** and **TIDAL** through the single Rust `streaming-api` protocol engine                                                    |
 | Scrobbling         | Existing SPlayer integrations such as Last.fm       | Adds **ListenBrainz Core Scrobble / Now Playing**, isolated from the audio path and runtime-zero when disabled                          |
-| Audio output       | General SPlayer audio engine and effects            | Adds **Diretta strict Source Direct** beside normal ALSA playback, without routing Direct audio through the normal float DSP path       |
+| Audio output       | General SPlayer audio engine and effects            | Adds **Diretta strict Source Direct** and Core-owned **UPnP MediaRenderer** output; Direct audio never enters the normal float DSP path |
+| Virtual media      | Regular local files / baseline CUE support          | Core-owned CUE virtual tracks, SACD stereo virtual tracks, track-end boundaries, and UPnP extraction/materialization                    |
 | Deployment         | Desktop application                                 | Adds a Linux x86-64 Core artifact, Web Control, systemd deployment, migration/backup/rollback, and explicit runtime capability metadata |
 
 Atom intentionally does **not** create a second media model, queue, provider framework, or audio engine. QQ Music and Kugou remain inherited compatibility surfaces rather than Atom-owned product paths.
@@ -76,9 +77,10 @@ Web Control ───────► Node Core
                     └─ output assignment / Diretta materialization
                               │
                               ▼
-                         Core Local Output
+                         Core Output
                          ├─ ALSA
-                         └─ Diretta Source Direct
+                         ├─ Diretta Source Direct
+                         └─ UPnP MediaRenderer
 ```
 
 Web and Desktop are Controls, not secondary domain authorities. Desktop-only window, tray, hotkey, updater, native-file, protocol, and lyric-window behavior stays a Host Capability; music-domain commands and snapshots use the same Core contract.
@@ -88,6 +90,7 @@ Web and Desktop are Controls, not secondary domain authorities. Desktop-only win
 As a downstream distribution of SPlayer-Next, Atom directly inherits and continuously integrates a broad set of mature upstream capabilities, including:
 
 - 🎵 **Broad format support** — MP3, FLAC, WAV, AAC, OGG, APE and more through FFmpeg/Rust
+- 💿 **Virtual tracks** — CUE and SACD stereo areas can be expanded into stable virtual tracks, with CUE start/end boundaries owned by the Core playback lifecycle
 - 📝 **Rich lyrics** — LRC / QRC / YRC / TTML, word-by-word highlighting, translations, and native lyric surfaces
 - 🌐 **Media servers** — Subsonic / Navidrome / Jellyfin / Emby
 - 🖥️ **Desktop support** — Windows / macOS / Linux
@@ -144,13 +147,16 @@ pnpm dev
 
 ```bash
 pnpm build         # Full build: clean → native → typecheck → electron-vite
+pnpm build:unpack  # Build an unpacked Electron directory for local acceptance / ELF dependency inspection
 
 pnpm build:win     # Package for Windows
 pnpm build:mac     # Package for macOS
-pnpm build:linux   # Package for Linux (AppImage / deb / rpm / tar.gz / pacman)
+pnpm build:linux   # Package Linux Desktop; currently tar.gz only
 ```
 
 > By default a build targets the current architecture only. Cross-compilation is not supported.
+
+> **Linux ABI note:** both Desktop and Core contain Rust/N-API native binaries. A local Linux build can inherit the glibc ABI available on the build host. Building on a rolling distribution or a glibc 2.43 host may therefore produce files that actually require `GLIBC_2.43` and fail on older systems. Public Linux artifacts should be built in a pinned older builder/sysroot and the final ELF files should be scanned for their highest `GLIBC_x.y` symbol version. See [`docs/en/build-and-packaging.md`](./docs/en/build-and-packaging.md).
 
 ### Building Node Core
 
@@ -168,6 +174,8 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 ```
 
 The SDK is not stored in this repository or bundled into release artifacts. See [`docs/build-flavors.md`](./docs/build-flavors.md) for the exact flavor/release rules and [`docs/core-deployment.md`](./docs/core-deployment.md) for systemd, data, migration, upgrade, and rollback behavior.
+
+The complete Desktop/Core build chain, packaging targets, Diretta build rules, Linux glibc compatibility guidance, and artifact checks are documented in [`docs/en/build-and-packaging.md`](./docs/en/build-and-packaging.md).
 
 ### Other Scripts
 

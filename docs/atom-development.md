@@ -4,11 +4,11 @@
 
 - Atom repository: `https://github.com/bnqzzdf/splayer-atom.git` (`origin`)
 - Official upstream transport: `splayer/dev`
-- Accepted Atom upstream baseline: `0f5a2fcbf81904ea4303929f4cb285a57c1d6eee`
+- Accepted Atom upstream baseline: `ac0bcfa1f70c54cadc046aba6472c8d13294c719`
 - Pure upstream mirror: `vendor/splayer`
 - Current automated Atom baseline: Node/Web tests, typecheck, ESLint, touch audit, Linux native gates and the Core system artifact pipeline are green; exact evolving test counts are recorded in `progress.md` rather than frozen here
 - Upstream synchronization, accepted-baseline updates and integration gates are documented in [`upstream-sync.md`](./upstream-sync.md)
-- Desktop/Core build flavor boundaries are documented in [`build-flavors.md`](./build-flavors.md); Core installation, upgrade and rollback are documented in [`core-deployment.md`](./core-deployment.md)
+- Desktop/Core build flavor boundaries are documented in [`build-flavors.md`](./build-flavors.md); exact build/package commands and Linux ABI rules are in [`build-and-packaging.md`](./build-and-packaging.md); Core installation, upgrade and rollback are documented in [`core-deployment.md`](./core-deployment.md)
 
 The accepted baseline is intentionally fixed. A normal `git fetch splayer` may move `splayer/dev` and `vendor/splayer` may be fast-forwarded to a newer official commit, but the touch audit continues to compare against the last fully integrated and accepted baseline until that candidate has been merged and validated.
 
@@ -63,6 +63,10 @@ cargo --version
 ```
 
 The upstream audio engine vendors/static-builds its FFmpeg dependency, so no system FFmpeg package is required for the normal native build.
+
+### Linux release ABI note
+
+The development dependency list above is not a promise of minimum runtime compatibility. Rust/N-API addons are dynamically linked Linux ELF files, and a local build can inherit the glibc symbol level available on the build host. Do not publish Linux artifacts built directly on an arbitrary rolling distribution. Pin a release builder/sysroot and scan the final Desktop/Core artifact for its highest `GLIBC_x.y` requirement; the procedure is documented in [`build-and-packaging.md`](./build-and-packaging.md).
 
 ## Validate the native upstream baseline
 

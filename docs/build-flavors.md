@@ -16,6 +16,8 @@ pnpm build:win
 pnpm build:linux
 ```
 
+For exact platform targets, output names, native-module behavior and Linux glibc compatibility, see [`build-and-packaging.md`](./build-and-packaging.md).
+
 Desktop characteristics:
 
 - Electron main/preload/renderer processes remain available.
@@ -24,6 +26,7 @@ Desktop characteristics:
 - Desktop Control sends playback/domain commands to the same Core-owned session logic used by Node Core; it must not regain a second raw playable-source authority path.
 - The existing upstream Desktop release workflows are not yet an Atom formal release channel. Do not publish Atom by reusing upstream SPlayer updater/product identity.
 - Linux Desktop packaging is intentionally limited to the generic `tar.gz` target; Windows and macOS keep their configured installer targets.
+- Linux Desktop/Core native ABI compatibility is inherited from the selected build environment. A random rolling-distribution host is not a release compatibility baseline; final ELF files must be checked for their highest `GLIBC_x.y` requirement.
 
 ## Core system-runtime and bundled-runtime flavors
 
@@ -32,7 +35,8 @@ The Core flavor is an ordinary Node process plus Web Control. It is built from t
 Formal local gates:
 
 ```bash
-# Host provides a supported Node >=24.18.0 <25
+# Build process itself must run on the exact reference Node 24.18.0.
+# The resulting system-runtime artifact accepts a host Node >=24.18.0 <25.
 pnpm exec tsx scripts/atom/build-core-system.ts
 
 # Self-contained runtime; stages the exact reference Node 24.18.0
@@ -77,9 +81,9 @@ pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-node
 
 That mode fails if `DIRETTA_SDK_ROOT` is absent. Core Diretta release builds are pinned to **Diretta Host SDK 150** by reading the SDK's public `Host/Release.hpp`; any other release is rejected before native compilation. `build.json` and final `runtime.json` record `direttaSdkRelease: 150` when Diretta is compiled, while no-Diretta artifacts record `null`. The first formal Core release target remains Linux x86-64; AArch64 is not promoted to a supported release platform until its separate hardware gate is complete.
 
-The proprietary SDK remains external to the repository. SDK-enabled release validation uses the separate manual `Core Diretta Release Gate` on a controlled self-hosted Ubuntu 24.04 x86-64 runner labeled `diretta-sdk-150`. The runner administrator provisions SDK 150 read-only at `/opt/diretta/HostSDK_150`, outside `GITHUB_WORKSPACE`; the workflow never stores the SDK in GitHub Secrets, the repository, Actions artifacts or release uploads. The existing `Release.hpp` check and `--require-diretta` build gate remain authoritative.
+The proprietary SDK remains external to the repository. Any future automated SDK-enabled release job must provision the SDK outside `GITHUB_WORKSPACE`, must not place SDK contents in GitHub Secrets/Actions artifacts/release uploads, and must preserve the existing `Release.hpp` provenance check plus `--require-diretta` fail-closed build gate.
 
-The Diretta release runner is intentionally not used for pull requests or ordinary `dev` pushes. It is a privileged release resource: only an explicit `workflow_dispatch` on `dev`, behind the `diretta-release` GitHub Environment, may consume it. The environment exists and has a custom deployment branch policy allowing only `dev`. The runner image must provide Ubuntu 24.04 x86-64, ALSA development headers, `pkg-config` and `clang`; Node 24.18.0, Rust 1.98.0 and pnpm are still pinned by the workflow itself. Until a trusted runner with the `diretta-sdk-150` label is registered, the SDK-enabled remote gate is defined and protected but not executable.
+The current checked-in workflow does not contain that privileged Diretta release job. Until a controlled self-hosted/fixed release environment is committed and configured, SDK-enabled formal validation remains an operator-controlled release step rather than something ordinary `dev` CI can prove.
 
 ### Core deployment
 
@@ -96,16 +100,11 @@ See [`core-deployment.md`](./core-deployment.md) for the operator procedure.
 
 ## CI responsibilities
 
-Existing upstream-oriented workflows continue to validate Desktop behavior. Atom's `Core System Gate` separately validates the Core flavor in a clean Ubuntu 24.04 runner with:
+The currently checked-in `.github/workflows/dev.yml` validates the Desktop packaging matrix on Windows, macOS and Linux. It uses Node 22.x and Rust stable; the Linux job currently runs on `ubuntu-latest` and builds the generic Linux `tar.gz`.
 
-- Node `24.18.0`;
-- Rust `1.98.0`;
-- pnpm from the repository `packageManager` field and frozen lockfile;
-- Core ALSA native dependencies only;
-- Node/Web tests, typecheck, lint and upstream-touch audit;
-- the same `build-core-system.ts` artifact pipeline used locally.
+`ubuntu-latest` is deliberately **not** documented as a stable glibc release contract because the runner image changes over time. Formal Linux artifacts need a pinned builder/sysroot and a final ELF GLIBC-symbol audit; see [`build-and-packaging.md`](./build-and-packaging.md).
 
-The Core workflow is a validation gate, not a release publisher. The first GitHub-hosted `Core System Gate` for commit `fd5671f` completed successfully on 2026-08-29 as Actions run `33245921866`; the follow-up CI/provisioning commit `6aac815` also passed as run `33246384095`, proving the ordinary no-SDK Core path remains green after the Diretta release-gate addition. SPlayer Atom artifact naming, updater/feed identity and stable/beta release channels are now code-defined; the next hosted run must validate the renamed Core artifacts and bundled smoke before the first formal release.
+The repository already contains the local Core artifact pipeline (`build-core-system.ts`), native-flavor audit, plugin-host smoke, staging and final artifact smoke. These scripts are the current technical Core gate. The checked-in CI should not be described as a complete Core/Diretta release publisher until a fixed Linux ABI builder and the controlled SDK-enabled release environment are represented by executable release automation.
 
 ## Shared architecture contract
 
