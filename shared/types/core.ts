@@ -20,7 +20,6 @@ export interface CoreInfo {
   version: string;
   commit: string;
   sourceDirty: boolean;
-  splayerBaseline: string;
   platform: string;
   arch: string;
   node: string;

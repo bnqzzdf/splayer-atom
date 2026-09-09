@@ -9,6 +9,7 @@ import type { Track } from "@shared/types/player";
 import { useMediaStore } from "@/stores/media";
 import { usePluginsStore } from "@/stores/plugins";
 import { extractColorFromUrl } from "@/utils/color";
+import { pluginClient } from "@/core/pluginClient";
 
 /** 竞态 token */
 let currentToken = 0;
@@ -26,7 +27,7 @@ export const loadCoverForTrack = async (track: Track): Promise<void> => {
     if (!info.enabled || info.status.state !== "ready") continue;
     for (const [source, cap] of Object.entries(info.status.sources)) {
       if (!cap.actions.includes("musicPic")) continue;
-      const resp = await window.api.plugins.matchCover({
+      const resp = await pluginClient.matchCover({
         pluginId: info.manifest.id,
         source,
         track,

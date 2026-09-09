@@ -3,7 +3,6 @@ import { toast } from "@/composables/useToast";
 import { dialog } from "@/composables/useDialog";
 import { formatFileSize } from "@/utils/format";
 import type { Component } from "vue";
-import IconLucideFolderOpen from "~icons/lucide/folder-open";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
@@ -13,17 +12,16 @@ import IconLucideImagePlus from "~icons/lucide/image-plus";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDatabase from "~icons/lucide/database";
 import { useCacheStats } from "@/composables/useCacheStats";
-import { hasHostCapability } from "@/runtime";
 import { cacheClient } from "@/core/cacheClient";
 import type { CacheCategory } from "@shared/types/cache";
+import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
 
 defineOptions({ inheritAttrs: false });
 
 const { t } = useI18n();
-const canPickCorePathFromHost = hasHostCapability("nativeFileDialogs");
-const canOpenCorePathOnHost = hasHostCapability("hostFileExplorer");
 const { stats, cacheDir, loading, clearingId, clearingKind, load, refresh, setCacheDir } =
   useCacheStats();
+const corePickerOpen = ref(false);
 
 const iconMap: Record<string, Component> = {
   covers: IconLucideImage,
@@ -45,9 +43,11 @@ const handlePickDir = async (): Promise<void> => {
     confirmText: t("settings.cacheDir.switchConfirmOk"),
   });
   if (!confirmed) return;
-  const result = await window.api.cache.pickDir();
-  if (!result.ok) return;
-  const switched = await cacheClient.setDir(result.dir);
+  corePickerOpen.value = true;
+};
+
+const setCoreDir = async (dir: string): Promise<void> => {
+  const switched = await cacheClient.setDir(dir);
   if (!switched.ok) {
     if (switched.reason === "notEmpty") toast.error(t("settings.cacheDir.notEmpty"));
     return;
@@ -66,10 +66,6 @@ const handleResetDir = async (): Promise<void> => {
   if (!confirmed) return;
   setCacheDir(await cacheClient.resetDir());
   await refresh();
-};
-
-const handleOpenDir = (): void => {
-  if (cacheDir.value) void window.api.system.showInExplorer(cacheDir.value);
 };
 
 const requestClear = async (id: CacheCategory): Promise<void> => {
@@ -121,15 +117,6 @@ const requestClearAll = async (): Promise<void> => {
       </div>
       <div class="shrink-0 flex items-center gap-2">
         <SButton
-          v-if="canOpenCorePathOnHost"
-          variant="ghost"
-          circle
-          :title="t('settings.cacheDir.open')"
-          @click="handleOpenDir"
-        >
-          <template #icon><IconLucideFolderOpen /></template>
-        </SButton>
-        <SButton
           variant="ghost"
           circle
           :title="t('settings.cacheDir.reset')"
@@ -137,11 +124,17 @@ const requestClearAll = async (): Promise<void> => {
         >
           <template #icon><IconLucideRotateCcw /></template>
         </SButton>
-        <SButton v-if="canPickCorePathFromHost" variant="secondary" @click="handlePickDir">
+        <SButton variant="secondary" @click="handlePickDir">
           {{ t("settings.cacheDir.change") }}
         </SButton>
       </div>
     </div>
+    <CoreDirectoryPicker
+      v-model:open="corePickerOpen"
+      :title="t('settings.cacheDir.change')"
+      :initial-path="cacheDir"
+      @select="setCoreDir"
+    />
 
     <!-- 占用情况 -->
     <div

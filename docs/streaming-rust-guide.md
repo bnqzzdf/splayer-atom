@@ -5,7 +5,7 @@
 正式调用关系：
 
 ```text
-Web / Desktop Control
+Web Control
         -> Node Core providerApi
         -> qobuz/index.ts | tidal/index.ts
         -> streaming-api.node
@@ -50,7 +50,7 @@ Qobuz Web Player bundle 会随版本变化，不能依赖固定 bundle URL。正
 
 ### 1.3 用户登录态归 Node Core
 
-Rust `QobuzClient` 可以在一次调用中持有 `user_auth_token` / `user_id`，但它们来自 Node Core 注入。长期持久化和 token-free session projection 由 `electron/main/apis/qobuz/auth.ts` 管理。
+Rust `QobuzClient` 可以在一次调用中持有 `user_auth_token` / `user_id`，但它们来自 Node Core 注入。长期持久化和 token-free session projection 由 `core/apis/qobuz/auth.ts` 管理。
 
 ```text
 Node Core SecretStore/session
@@ -123,7 +123,7 @@ Node adapter 的职责仅限：
 - 将 Rust 私有响应形状规范化为现有 Core provider contract；
 - 登录/token refresh 成功后更新 Node Core 的 auth state。
 
-Web/Desktop 不应知道 `streaming-api.node` 的存在，它们继续只使用统一 Core Control Protocol。
+Web Control 不应知道 `streaming-api.node` 的存在，只使用统一 Core Control Protocol。
 
 ---
 

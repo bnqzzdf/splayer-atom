@@ -183,16 +183,12 @@ export const useLibraryStore = defineStore("library", () => {
         existing.startsWith(dir + "/"),
     );
 
-  /** 添加扫描目录；Desktop Host 只负责选路径，Library mutation 统一走 Core Protocol。 */
+  /** 添加一个已经由 Core 目录浏览器选定的扫描目录。 */
   const addScanDir = async (
-    requestedDir?: string,
+    requestedDir: string,
   ): Promise<{ success: boolean; error?: string }> => {
-    let dir = requestedDir?.trim();
-    if (!dir) {
-      const picked = await window.api.library.pickScanDir();
-      if (!picked.success || !picked.data) return { success: false, error: picked.error };
-      dir = picked.data;
-    }
+    const dir = requestedDir.trim();
+    if (!dir) return { success: false, error: "empty" };
     if (conflictsWithScanDir(dir)) {
       return { success: false, error: "nested" };
     }

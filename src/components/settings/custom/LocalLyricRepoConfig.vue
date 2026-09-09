@@ -2,6 +2,7 @@
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideFolderPlus from "~icons/lucide/folder-plus";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
+import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
 
 defineOptions({ inheritAttrs: false });
 
@@ -11,16 +12,18 @@ const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const { t } = useI18n();
 
 const open = ref(false);
+const corePickerOpen = ref(false);
 
 const folderName = (dir: string): string => {
   const parts = dir.replace(/\\/g, "/").split("/").filter(Boolean);
   return parts[parts.length - 1] || dir;
 };
 
-const choose = async () => {
-  const dir = await window.api.lyrics.pickLyricRepoDir();
-  if (dir) emit("update:modelValue", dir);
+const choose = (): void => {
+  corePickerOpen.value = true;
 };
+
+const selectCoreDir = (dir: string): void => emit("update:modelValue", dir);
 
 const clear = () => emit("update:modelValue", "");
 </script>
@@ -62,4 +65,10 @@ const clear = () => emit("update:modelValue", "");
       </SButton>
     </div>
   </SDialog>
+  <CoreDirectoryPicker
+    v-model:open="corePickerOpen"
+    :title="t('settings.localLyricRepoDir.choose')"
+    :initial-path="modelValue"
+    @select="selectCoreDir"
+  />
 </template>

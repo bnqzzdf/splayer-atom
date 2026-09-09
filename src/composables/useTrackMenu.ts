@@ -14,11 +14,11 @@ import { toast } from "@/composables/useToast";
 import { buildDownloadQualityItems } from "@/composables/useDownload";
 import { getTrackShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
+import { pluginClient } from "@/core/pluginClient";
 import IconPlay from "~icons/lucide/play";
 import IconListEnd from "~icons/lucide/list-end";
 import IconListMusic from "~icons/lucide/list-music";
 import IconListPlus from "~icons/lucide/list-plus";
-import IconFolderOpen from "~icons/lucide/folder-open";
 import IconSquarePen from "~icons/lucide/square-pen";
 import IconDownload from "~icons/lucide/download";
 import IconCopy from "~icons/lucide/copy";
@@ -117,18 +117,11 @@ export const useTrackMenu = (
         coreCommand: "playlist.addTracks",
       }),
       action({
-        id: "showInExplorer",
-        label: t("songList.context.showInExplorer"),
-        icon: markRaw(IconFolderOpen),
-        separator: true,
-        visible: isLocal,
-        requiredCapability: "hostFileExplorer",
-      }),
-      action({
         id: "copyPath",
         label: t("songList.context.copyPath"),
         icon: markRaw(IconCopy),
         visible: isLocal,
+        separator: true,
       }),
       action({
         id: "editTags",
@@ -246,7 +239,7 @@ export const useTrackMenu = (
       const rest = key.slice("plugin:".length);
       const sep = rest.indexOf(":");
       if (sep <= 0) return;
-      const res = await window.api.plugins.invokeMenu({
+      const res = await pluginClient.invokeMenu({
         pluginId: rest.slice(0, sep),
         menuId: rest.slice(sep + 1),
         track: toRaw(current),
@@ -277,11 +270,6 @@ export const useTrackMenu = (
       }
       case "addToPlaylist":
         options.onAddToPlaylist?.(current);
-        break;
-      case "showInExplorer":
-        if (current.cueAudioPath ?? current.path) {
-          window.api.system.showInExplorer((current.cueAudioPath ?? current.path)!);
-        }
         break;
       case "copyPath":
         if (current.cueAudioPath ?? current.path)

@@ -6,7 +6,6 @@
 
 import type { PlaybackAutoCloseSnapshot } from "@shared/types/player";
 import { useStatusStore } from "@/stores/status";
-import { coreCommand } from "@/core/controlClient";
 import { sessionClient } from "@/core/sessionClient";
 
 let tickHandle: ReturnType<typeof setInterval> | null = null;
@@ -71,15 +70,4 @@ export const cancel = (): void => {
   void sessionClient.cancelSessionAutoClose().then((result) => {
     if (result.success && result.data) applySnapshot(result.data.autoClose);
   });
-};
-
-/**
- * Desktop 事件 ownership 迁移期间的 fallback：只有 Core 已标记 pending 时才阻止 renderer auto-next。
- * Core 全面消费 ended 后该分支不会被调用。
- */
-export const onTrackEnded = (): boolean => {
-  if (!useStatusStore().autoClose.pendingStopOnEnd) return false;
-  void coreCommand("/pause");
-  cancel();
-  return true;
 };

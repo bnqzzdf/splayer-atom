@@ -1,12 +1,15 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::TidalClient;
+use crate::error::StreamingError;
 
 impl TidalClient {
     /// 获取 TIDAL 专辑详情
-    pub async fn album_get(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError> {
+    pub async fn album_get(
+        &self,
+        params: &HashMap<String, Value>,
+    ) -> Result<Value, StreamingError> {
         let album_id = params
             .get("album_id")
             .or_else(|| params.get("id"))
@@ -46,13 +49,19 @@ impl TidalClient {
 
         let limit = params
             .get("limit")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(50)
             .min(50);
 
         let offset = params
             .get("offset")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0);
 
         let mut req_params = HashMap::new();

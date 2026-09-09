@@ -10,7 +10,6 @@ import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
 import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import * as player from "@/core/player";
-import { hasHostCapability } from "@/runtime";
 import IconLucideLoaderCircle from "~icons/lucide/loader-circle";
 import IconLucideDownload from "~icons/lucide/download";
 import IconLucidePlay from "~icons/lucide/play";
@@ -20,7 +19,6 @@ import IconLucideX from "~icons/lucide/x";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideTriangleAlert from "~icons/lucide/triangle-alert";
-import IconLucideFolderOpen from "~icons/lucide/folder-open";
 
 const props = defineProps<{
   /** 当前 tab 已过滤好的下载任务 */
@@ -32,7 +30,6 @@ const media = useMediaStore();
 const status = useStatusStore();
 const downloadStore = useDownloadStore();
 const { retry } = useDownload();
-const canOpenDownloadLocation = hasHostCapability("hostFileExplorer");
 
 const STATUS_KEY: Record<DownloadStatus, string> = {
   queued: "download.status.queued",
@@ -96,11 +93,6 @@ const rowClass = (task: DownloadTask): string => {
     return `${base} cursor-pointer hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12`;
   }
   return base;
-};
-
-/** 在文件管理器中定位下载的文件 */
-const openFolder = (task: DownloadTask): void => {
-  if (task.filePath) window.api.system.showInExplorer(task.filePath);
 };
 
 /** 二次确认后删除已下载的本地文件并移除记录 */
@@ -282,16 +274,6 @@ defineExpose({ playAll });
               </SButton>
             </template>
             <template v-else-if="isDone(item)">
-              <SButton
-                v-if="canOpenDownloadLocation"
-                variant="ghost"
-                circle
-                size="small"
-                :title="t('download.openFolder')"
-                @click="openFolder(item)"
-              >
-                <template #icon><IconLucideFolderOpen /></template>
-              </SButton>
               <SButton
                 variant="ghost"
                 circle

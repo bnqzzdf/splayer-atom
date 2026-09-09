@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use base64::Engine;
 use serde_json::{json, Value};
 
-use crate::error::StreamingError;
 use super::dash::materialize_dash;
 use super::TidalClient;
+use crate::error::StreamingError;
 
 fn tidal_quality_for_level(level: &str) -> &'static [&'static str] {
     match level.to_lowercase().as_str() {
@@ -24,7 +24,9 @@ fn decode_manifest_text(value: &str) -> Option<String> {
     if value.contains("<MPD") {
         return Some(value.to_string());
     }
-    let decoded = base64::engine::general_purpose::STANDARD.decode(value).ok()?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(value)
+        .ok()?;
     String::from_utf8(decoded).ok()
 }
 

@@ -29,7 +29,7 @@ const streamingStoreSource = readFileSync(
   "utf8",
 );
 
-test("Atom formal search surface freezes QQ Music and Kugou without deleting compatibility", () => {
+test("Atom formal renderer exposes only managed online search providers", () => {
   assert.match(
     searchPageSource,
     /atomSearchPlatforms = new Set<Platform>\(\["netease", "qobuz", "tidal"\]\)/,
@@ -48,13 +48,12 @@ test("Atom formal search surface freezes QQ Music and Kugou without deleting com
   );
   assert.match(statusStoreSource, /searchPlatform = ref<Platform>\("netease"\)/);
 
-  assert.match(searchApiSource, /import \* as qqmusic from "\.\/qqmusic"/);
-  assert.match(searchApiSource, /import \* as kugou from "\.\/kugou"/);
+  assert.doesNotMatch(searchApiSource, /\.\/qqmusic|\.\/kugou/);
   assert.match(pluginPlaybackSource, /qqmusic: "tx"/);
   assert.match(pluginPlaybackSource, /kugou: "kg"/);
 });
 
-test("Desktop and Web reuse the library API for local song album and artist search", () => {
+test("Web reuses the library API for local song album and artist search", () => {
   assert.match(searchPageSource, /\{ key: "local", label: t\("search\.source\.local"\) \}/);
   assert.match(searchPageSource, /searchSource\.value === "local".*items\.slice\(0, 3\)/);
   assert.match(searchPageSource, /libraryClient\.searchTracks\(requestKeyword\)/);
@@ -77,13 +76,12 @@ test("Media source search reuses the Core streaming search projection", () => {
   assert.doesNotMatch(searchPageSource, /atomSearchPlatforms = new Set<Platform>\([^\n]*streaming/);
 });
 
-test("Headless Web Netease account pages reuse the shared Core provider surface", () => {
+test("Web Netease account pages reuse the shared Core provider surface", () => {
   assert.match(favoritesPageSource, /useUserStore\(\)/);
   assert.match(dailyPageSource, /useUserStore\(\)/);
   assert.match(dailyPageSource, /data\.ensureDailyRecommend\(true\)/);
   assert.match(cloudPageSource, /useUserStore\(\)/);
-  assert.match(cloudPageSource, /hasHostCapability\("cloudUpload"\)/);
-  assert.match(cloudPageSource, /v-if="cloudUploadAvailable"/);
+  assert.doesNotMatch(cloudPageSource, /hasHostCapability|cloudUploadAvailable|CloudUploadDialog/);
   assert.match(userStoreSource, /useProviderSessionsStore\(\)/);
   assert.match(userStoreSource, /providerSessions\.isAuthenticated\("netease"\)/);
   assert.match(neteaseApiSource, /providerClient\.call\("netease", name, params\)/);

@@ -1,4 +1,4 @@
-# Dev 分支推送构建
+# Dev 分支 Linux Core + Web Control 验证与产物构建
 name: Build Dev
 
 on:
@@ -6,58 +6,31 @@ on:
     branches:
       - dev
     paths:
+      - "core/**"
       - "src/**"
-      - "electron/**"
       - "native/**"
       - "shared/**"
       - "public/**"
-      - "resources/**"
       - "scripts/**"
+      - "docs/**"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "electron-builder.config.ts"
-      - "electron.vite.config.ts"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vite.config.ts"
       - "tsconfig*.json"
       - ".github/workflows/dev.yml"
   workflow_dispatch:
 
 env:
-  NODE_VERSION: 22.x
+  NODE_VERSION: 24.18.0
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            name: windows
-            arch: x64
-            artifact_name_suffix: windows-x64
-            package_extension: zip
-            build_cmd: pnpm build:win --x64
-          - os: macos-latest
-            name: macOS
-            arch: arm64
-            artifact_name_suffix: macos-arm64
-            package_extension: tar.gz
-            build_cmd: pnpm build:mac --arm64
-          - os: macos-latest
-            name: macOS
-            arch: x64
-            artifact_name_suffix: macos-x64
-            package_extension: tar.gz
-            build_cmd: pnpm build:mac --x64
-          - os: ubuntu-latest
-            name: linux
-            arch: x64
-            artifact_name_suffix: linux-x64
-            package_extension: tar.gz
-            build_cmd: pnpm build:linux --x64
+  linux-core:
+    name: Linux x86-64 Core + Web Control
+    runs-on: ubuntu-latest
     steps:
-      - name: Check out git repository
+      - name: Check out repository
         uses: actions/checkout@v5
 
       - name: Setup pnpm
@@ -71,74 +44,35 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust Cache
+      - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "native/audio-engine -> target\nnative/audio-capture -> target\nnative/media-ctrl -> target"
 
-      # Linux: 安装系统构建/打包依赖
-      - name: 安装系统依赖 (Linux)
-        if: runner.os == 'Linux'
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            libasound2-dev libdbus-1-dev libpipewire-0.3-dev libpulse-dev pkg-config clang \
-            libarchive-tools
+            libasound2-dev pkg-config clang libarchive-tools
 
-      # 清理旧构建产物
-      - name: Clean workspace on Windows
-        if: runner.os == 'Windows'
-        run: |
-          if (Test-Path dist) { Remove-Item -Recurse -Force dist }
-          if (Test-Path out) { Remove-Item -Recurse -Force out }
-
-      - name: Clean workspace on macOS & Linux
-        if: runner.os != 'Windows'
-        run: rm -rf dist out
-
-      # CI 不需要国内镜像
-      - name: 移除 .npmrc
-        shell: bash
+      - name: Remove local npm mirror config
         run: rm -f .npmrc
 
-      # 安装项目依赖
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      # 构建
-      - name: Build ${{ matrix.name }} ${{ matrix.arch }}
-        run: ${{ matrix.build_cmd }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Typecheck
+        run: pnpm typecheck
 
-      # 上传构建产物 (Windows)
-      - name: Upload Windows Setup
-        if: runner.os == 'Windows'
+      - name: Test
+        run: pnpm test
+
+      - name: Build Core and Web Control
+        run: pnpm build
+
+      - name: Build system-runtime artifact
+        run: pnpm package:core
+
+      - name: Upload Linux Core artifact
         uses: actions/upload-artifact@v7
         with:
-          name: SPlayer-Atom-Windows-setup-${{ matrix.arch }}
-          path: dist/*-setup.exe
-
-      # 上传构建产物 (macOS)
-      - name: Upload macOS DMG
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-macOS-dmg-${{ matrix.arch }}
-          path: dist/*.dmg
-
-      - name: Upload macOS Zip
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-macOS-zip-${{ matrix.arch }}
-          path: dist/*.zip
-
-      # 上传构建产物 (Linux)
-      - name: Upload Linux Tar
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: SPlayer-Atom-Linux-tar-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          name: splayer-atom-core-system-linux-x64
+          path: out/splayer-atom-core-system-linux-x64.tar.gz

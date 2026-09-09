@@ -1,98 +1,64 @@
 #!/usr/bin/env node
 
-/**
- * 跨平台开发启动脚本
- * 自动检测操作系统并设置相应的字符编码
- */
+import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-import { spawn } from "child_process";
-import os from "os";
+if (process.platform !== "linux" || process.arch !== "x64") {
+  throw new Error("SPlayer Atom 开发运行时当前只支持 Linux x86-64");
+}
 
-// 检测操作系统平台
-const platform = os.platform();
-const isWindows = platform === "win32";
-const isMacOS = platform === "darwin";
-
-console.log(`检测到操作系统: ${platform}`);
-
-// 设置环境变量
-const env: NodeJS.ProcessEnv = { ...process.env };
-
-const startElectronVite = (): void => {
-  console.log("正在启动 Electron Vite 开发服务器...");
-
-  // 设置 Node.js 选项
-  env.NODE_OPTIONS = "--max-old-space-size=4096";
-
-  // 传递给 electron-vite 的参数
-  const runArgs = ["dev"];
-  // 前两个参数分别是 node 和此脚本的路径，丢弃它们
-  const args = process.argv.slice(2);
-  // 添加参数
-  if (args.length > 0) {
-    runArgs.push(...args);
-  }
-
-  const electronVite = spawn("electron-vite", runArgs, {
-    stdio: "inherit",
-    shell: true,
-    env,
-  });
-
-  electronVite.on("close", (code) => {
-    console.log(`\n开发服务器已停止 (退出码: ${code})`);
-    process.exit(code ?? 0);
-  });
-
-  electronVite.on("error", (err) => {
-    console.error("启动失败:", err.message);
-    process.exit(1);
-  });
-
-  // 优雅退出处理
-  process.on("SIGINT", () => {
-    console.log("\n正在停止开发服务器...");
-    electronVite.kill("SIGINT");
-  });
-
-  process.on("SIGTERM", () => {
-    console.log("\n正在停止开发服务器...");
-    electronVite.kill("SIGTERM");
-  });
+const root = fileURLToPath(new URL("..", import.meta.url));
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  NODE_ENV: "development",
+  ATOM_APP_NAME: "SPlayer Atom Core",
+  ATOM_APP_PACKAGED: "0",
+  ATOM_LOG_STDIO_ONLY: "1",
+  ATOM_NATIVE_DIR: path.join(root, "out", "native"),
+  ATOM_WEB_DEV_URL: process.env.ATOM_WEB_DEV_URL ?? "http://127.0.0.1:5173",
 };
 
-if (isWindows) {
-  console.log("Windows 环境 - 正在设置代码页为 UTF-8");
-  // Windows 环境下先执行 chcp 65001
-  const chcp = spawn("chcp", ["65001"], {
-    stdio: "inherit",
-    shell: true,
-    env,
-  });
+const children: ChildProcess[] = [];
+let stopping = false;
 
-  chcp.on("close", (code) => {
-    if (code === 0) {
-      console.log("代码页设置成功");
-      startElectronVite();
-    } else {
-      console.warn("代码页设置失败，继续启动...");
-      startElectronVite();
-    }
+const start = (command: string, args: string[]): ChildProcess => {
+  const child = spawn(command, args, {
+    cwd: root,
+    env,
+    stdio: "inherit",
+    shell: process.platform === "win32",
   });
-} else {
-  // macOS 和 Linux 环境
-  console.log(`${isMacOS ? "macOS" : "Linux"} 环境 - 正在设置 UTF-8 编码`);
-  const langVar = env.LC_ALL || env.LANG || "";
-  if (langVar.endsWith("UTF-8")) {
-    console.log("当前环境已设置 UTF-8 编码");
-  } else {
-    if (langVar.startsWith("zh_CN")) {
-      env.LC_ALL = "zh_CN.UTF-8";
-      env.LANG = "zh_CN.UTF-8";
-    } else {
-      env.LC_ALL = "en_US.UTF-8";
-      env.LANG = "en_US.UTF-8";
-    }
+  children.push(child);
+  child.once("error", (error) => {
+    console.error(`[dev] ${command} 启动失败`, error);
+    stop(1);
+  });
+  child.once("exit", (code, signal) => {
+    if (stopping) return;
+    console.error(`[dev] ${command} 已退出: ${signal ?? code ?? "unknown"}`);
+    stop(code ?? 1);
+  });
+  return child;
+};
+
+const stop = (exitCode = 0): void => {
+  if (stopping) return;
+  stopping = true;
+  for (const child of children) {
+    if (!child.killed) child.kill("SIGTERM");
   }
-  setTimeout(() => startElectronVite(), 0);
-}
+  process.exitCode = exitCode;
+};
+
+start(path.join(root, "node_modules", ".bin", "tsx"), [
+  "watch",
+  "--tsconfig",
+  "tsconfig.node.json",
+  "core/core-node/index.ts",
+]);
+start(path.join(root, "node_modules", ".bin", "vite"), ["--config", "vite.config.ts"]);
+
+process.once("SIGINT", () => stop(0));
+process.once("SIGTERM", () => stop(0));

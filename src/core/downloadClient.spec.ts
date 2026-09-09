@@ -8,7 +8,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -53,8 +52,7 @@ const task: DownloadTask = {
 };
 
 describe("Download Core Protocol client", () => {
-  it("uses the Desktop Core scheme for queue and directory mutation", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for queue and directory mutation", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -66,8 +64,8 @@ describe("Download Core Protocol client", () => {
     await expect(downloadClient.start(request)).resolves.toEqual({ ok: true });
     await expect(downloadClient.setDir("/music")).resolves.toBe("/music");
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/download/start");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/download/dir");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/download/start");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/download/dir");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ dir: "/music" }),
@@ -75,7 +73,6 @@ describe("Download Core Protocol client", () => {
   });
 
   it("canonicalizes Web request artwork and projects Core task artwork", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))

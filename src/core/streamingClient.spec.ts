@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CoreControlEvent } from "@shared/types/coreEvents";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -8,9 +7,8 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
-  Object.defineProperty(window, "api", { configurable: true, value: undefined });
   vi.unstubAllGlobals();
+  vi.doUnmock("./controlEventClient");
   vi.resetModules();
 };
 
@@ -18,7 +16,6 @@ afterEach(resetRuntime);
 
 describe("Streaming Core Protocol client", () => {
   it("uses the shared Core routes for server management and sync", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -47,13 +44,12 @@ describe("Streaming Core Protocol client", () => {
     });
     await expect(streamingClient.sync("server-1", true)).resolves.toBe(true);
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/streaming/config");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/streaming/server");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("atom-core://control/api/streaming/sync");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/streaming/config");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/streaming/server");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/streaming/sync");
   });
 
   it("projects streaming-cover URLs for Web without losing the Core canonical form", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -115,23 +111,20 @@ describe("Streaming Core Protocol client", () => {
   });
 
   it("subscribes to Streaming library updates through the shared Core event envelope", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
-    let emit!: (event: CoreControlEvent) => void;
-    const onEvent = vi.fn((callback: (event: CoreControlEvent) => void) => {
+    let emit!: (data: { serverId: string }) => void;
+    const subscribeCoreControlEvent = vi.fn((type: string, callback: typeof emit) => {
+      expect(type).toBe("streamingLibraryUpdated");
       emit = callback;
       return () => {};
     });
-    Object.defineProperty(window, "api", {
-      configurable: true,
-      value: { coreEvents: { onEvent } },
-    });
+    vi.doMock("./controlEventClient", () => ({ subscribeCoreControlEvent }));
 
     const { streamingClient } = await import("./streamingClient");
     const callback = vi.fn();
     streamingClient.onLibraryUpdated(callback);
-    emit({ type: "streamingLibraryUpdated", data: { serverId: "server-1" } });
+    emit({ serverId: "server-1" });
 
-    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(subscribeCoreControlEvent).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith("server-1");
     expect("getStreamUrl" in streamingClient).toBe(false);
   });

@@ -63,8 +63,6 @@ export interface LibraryApi {
   isScanning: () => Promise<IpcResponse<boolean>>;
   /** 添加 Core 扫描目录。 */
   addScanDir: (dir: string) => Promise<IpcResponse<string>>;
-  /** Desktop Host 目录选择器；仅返回选中的本机/Core 同机路径，不修改 Library 状态。 */
-  pickScanDir: () => Promise<IpcResponse<string>>;
   /** 移除扫描目录及其下曲目 */
   removeScanDir: (dir: string) => Promise<IpcResponse>;
   /** 获取已配置的扫描目录 */
@@ -75,8 +73,6 @@ export interface LibraryApi {
   readTags: (path: string) => Promise<IpcResponse<TrackTags>>;
   /** 批量写入文件标签 */
   writeTags: (edits: TagEditRequest[]) => Promise<IpcResponse<TagWriteOutcome[]>>;
-  /** 弹出文件选择器，选择封面图片（返回路径与预览 dataUrl） */
-  pickCoverImage: () => Promise<IpcResponse<{ path: string; dataUrl: string }>>;
   /** 获取本地歌手头像 */
   fetchArtistAvatar: (artistName: string) => Promise<IpcResponse<string | null>>;
   /** 批量预取歌手头像 */

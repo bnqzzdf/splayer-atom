@@ -11,23 +11,9 @@ const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
 const { t } = useI18n();
 const pluginsStore = usePluginsStore();
 
-const importing = ref(false);
 const urlDialogOpen = ref(false);
 const urlInput = ref("");
 const urlSubmitting = ref(false);
-
-/** 通过原生文件选择框导入本地脚本 */
-const handleImportLocal = async (): Promise<void> => {
-  importing.value = true;
-  try {
-    const res = await pluginsStore.pickAndInstall();
-    if (res.cancelled) return;
-    if (res.ok) toast.success(t("settings.plugins.importSuccess"));
-    else toast.error(res.error ?? t("settings.plugins.importFailed"));
-  } finally {
-    importing.value = false;
-  }
-};
 
 const openUrlDialog = (): void => {
   urlInput.value = "";
@@ -80,12 +66,6 @@ const handleImportFromUrl = async (): Promise<void> => {
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <SButton variant="secondary" size="small" :loading="importing" @click="handleImportLocal">
-          <template #icon>
-            <IconLucideFolderOpen class="size-4" />
-          </template>
-          {{ t("settings.plugins.importLocal") }}
-        </SButton>
         <SButton variant="secondary" size="small" type="primary" @click="openUrlDialog">
           <template #icon>
             <IconLucideLink class="size-4" />

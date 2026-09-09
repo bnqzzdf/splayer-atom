@@ -18,7 +18,7 @@
     "footer": "You can adjust anything skipped here anytime in Settings",
     "welcome": {
       "title": "Welcome to SPlayer Atom",
-      "subtitle": "A modern desktop music player — a few quick steps and you're ready",
+      "subtitle": "A Linux music Core with Web Control — a few quick steps and you're ready",
       "start": "Get Started",
       "features": {
         "local": {
@@ -35,16 +35,9 @@
         },
         "lyrics": {
           "title": "Rich Lyrics",
-          "desc": "AMLL word-by-word lyrics, plus desktop, Dynamic Island and taskbar lyrics"
+          "desc": "AMLL word-by-word lyrics, translation, romanization, and timing offsets"
         }
       }
-    },
-    "agreement": {
-      "title": "User Agreement & Disclaimer",
-      "subtitle": "Please read and accept the agreement before continuing",
-      "scrollHint": "Scroll to the end before you can accept",
-      "agree": "I have read and agree to the User Agreement & Disclaimer",
-      "accept": "Agree & Continue"
     },
     "library": {
       "title": "Local Music Library",
@@ -67,31 +60,7 @@
       "languageLabel": "Interface Language",
       "modeLabel": "Theme Mode",
       "colorLabel": "Accent Color"
-    },
-    "hotkeys": {
-      "title": "Keyboard Shortcuts",
-      "subtitle": "SPlayer Atom ships with complete playback shortcuts you can use whenever you need them.",
-      "tips": {
-        "global": {
-          "title": "Global shortcuts",
-          "desc": "Control playback even when the window isn't focused — including media keys"
-        },
-        "local": {
-          "title": "In-app shortcuts",
-          "desc": "Space to play/pause, arrow keys to skip, Ctrl+F to search, and more"
-        },
-        "customize": {
-          "title": "Fully customizable",
-          "desc": "See and rebind every shortcut in Settings → Shortcuts"
-        }
-      }
     }
-  },
-  "agreementUpdate": {
-    "title": "User Agreement & Disclaimer Updated",
-    "subtitle": "The agreement has changed. Please re-read and accept to continue",
-    "accept": "I've read and agree, continue",
-    "reject": "Decline & Exit"
   },
   "common": {
     "back": "Back",
@@ -746,11 +715,8 @@
       "general": "General",
       "player": "Player",
       "lyric": "Lyrics",
-      "externalLyric": "External Lyrics",
       "appearance": "Appearance",
-      "hotkeys": "Hotkey Settings",
       "services": "Services",
-      "aiIntegration": "AI Integration",
       "mediaSource": "Media Sources",
       "download": "Downloads",
       "localCache": "Local & Cache",
@@ -779,9 +745,6 @@
       "lyricAMLLOptimize": "Lyric Optimization",
       "lyricSpring": "Spring Animation",
       "lyricLayout": "Layout & Opacity",
-      "desktopLyric": "Desktop Lyric",
-      "dynamicIsland": "Dynamic Island Lyric",
-      "taskbarLyric": "Taskbar Lyric",
       "theme": "Theme",
       "appearanceStyle": "Appearance Style",
       "layout": "Layout",
@@ -790,15 +753,9 @@
       "nowPlaying": "Now Playing",
       "media": "Media Controls",
       "device": "Output Device",
-      "hotkeys": "Hotkeys",
       "musicSpectrum": "Music Spectrum",
-      "discord": "Discord RPC",
       "providerAccounts": "Provider Accounts",
       "listenbrainz": "ListenBrainz",
-      "lastfm": "Last.fm",
-      "externalApi": "External API",
-      "mcp": "MCP",
-      "aiModel": "AI Models",
       "systemConfig": "System",
       "pluginManage": "Import Plugins",
       "pluginsList": "Plugin Management",
@@ -826,7 +783,6 @@
       "commit": "Atom Commit",
       "date": "Commit Time",
       "coreVersion": "Atom Version",
-      "splayerBaseline": "SPlayer Baseline",
       "coreProtocol": "Core Protocol",
       "sourceTree": "Source Tree",
       "clean": "Clean",
@@ -1044,51 +1000,6 @@
       "duplicate": "Rule already exists",
       "invalidRegex": "Invalid regex pattern"
     },
-    "hotkeys": {
-      "label": "Hotkeys",
-      "description": "Manage in-app and global keyboard shortcuts",
-      "globalEnabled": "Enable global shortcuts",
-      "globalEnabledHint": "Fire even when the app is not focused. May conflict with the OS or other apps.",
-      "colAction": "Action",
-      "colInApp": "In-App",
-      "colGlobal": "Global",
-      "unbound": "Unbound",
-      "recording": "Press a shortcut",
-      "resetRow": "Reset to default",
-      "resetAll": "Reset all",
-      "resetAllHint": "Restore every action's shortcut to its default",
-      "confirmResetTitle": "Reset to defaults?",
-      "confirmResetDesc": "All shortcuts will be reset and any customizations will be overwritten!",
-      "duplicateWith": "Conflicts with \"{action}\"",
-      "crossScopeWith": "Same as the in-app binding of \"{action}\"; will fire twice",
-      "osOccupied": "Already taken by the OS or another app",
-      "osDuplicate": "Already used by another global shortcut",
-      "invalid": "Invalid key combination",
-      "groups": {
-        "player": "Playback",
-        "window": "Windows",
-        "view": "Views"
-      },
-      "actions": {
-        "togglePlay": "Play / Pause",
-        "next": "Next track",
-        "prev": "Previous track",
-        "seekForward": "Seek forward 5s",
-        "seekBack": "Seek back 5s",
-        "volumeUp": "Volume up",
-        "volumeDown": "Volume down",
-        "cycleRepeat": "Cycle repeat mode",
-        "toggleShuffle": "Toggle shuffle",
-        "toggleDesktopLyric": "Toggle desktop lyric",
-        "toggleDynamicIsland": "Toggle Dynamic Island",
-        "toggleTaskbarLyric": "Toggle taskbar lyric",
-        "openPlayer": "Open player view",
-        "closePlayer": "Close player view",
-        "togglePlaylist": "Show / hide playlist",
-        "openSearch": "Open search",
-        "searchInPage": "Search in page"
-      }
-    },
     "engine": {
       "label": "Lyric Engine",
       "description": "Choose the engine type used for lyric rendering and scrolling"
@@ -1269,215 +1180,6 @@
       "label": "Inactive Opacity",
       "description": "Base opacity for non-active lines"
     },
-    "desktopLyricEnabled": {
-      "label": "Enable Desktop Lyric",
-      "description": "Show a floating lyric window on desktop"
-    },
-    "desktopLyricFontSize": {
-      "label": "Font Size",
-      "description": "Desktop lyric text size (px)"
-    },
-    "desktopLyricFontWeight": {
-      "label": "Font Weight",
-      "description": "Desktop lyric text weight"
-    },
-    "desktopLyricShowTranslation": {
-      "label": "Show Translation",
-      "description": "Display translated lyrics on desktop lyric"
-    },
-    "desktopLyricDoubleLine": {
-      "label": "Double Line",
-      "description": "Show current and next line together"
-    },
-    "desktopLyricAlign": {
-      "label": "Alignment",
-      "description": "Horizontal alignment of lyric text",
-      "left": "Left",
-      "center": "Center",
-      "right": "Right",
-      "justify": "Justify"
-    },
-    "desktopLyricWordByWord": {
-      "label": "Word by Word",
-      "description": "Render highlight progress per word"
-    },
-    "desktopLyricAutoGenerateWordByWord": {
-      "label": "Auto-generate Word Effect",
-      "description": "When off, only real per-word lyrics apply"
-    },
-    "desktopLyricPlayedColor": {
-      "label": "Played Color",
-      "description": "Color of played lyric text"
-    },
-    "desktopLyricUnplayedColor": {
-      "label": "Unplayed Color",
-      "description": "Color of unplayed lyric text"
-    },
-    "desktopLyricStrokeColor": {
-      "label": "Stroke Color",
-      "description": "Outline color of lyric text; transparent means stroke is off"
-    },
-    "desktopLyricBackgroundMask": {
-      "label": "Text Background Mask",
-      "description": "Add a translucent background block behind each lyric line for readability"
-    },
-    "desktopLyricBackgroundMaskColor": {
-      "label": "Mask Color",
-      "description": "Color and opacity of the text background mask"
-    },
-    "desktopLyricAlwaysShowSongInfo": {
-      "label": "Always Show Song Info",
-      "description": "Always show track title and artist; otherwise show only on hover"
-    },
-    "desktopLyricAnimation": {
-      "label": "Line Transition",
-      "description": "Enable slide-in / slide-out animation when lyric line switches"
-    },
-    "desktopLyricLimitBounds": {
-      "label": "Confine to Screen",
-      "description": "Clamp window position within the current display's work area while dragging"
-    },
-    "desktopLyricAlwaysOnTop": {
-      "label": "Always On Top",
-      "description": "Keep desktop lyric window above others"
-    },
-    "desktopLyricLocked": {
-      "label": "Lock Window",
-      "description": "Make window click-through and non-draggable"
-    },
-    "desktopLyricUseCSSDrag": {
-      "label": "Enable CSS Drag",
-      "description": "Enable CSS-based drag, recommended for Wayland environments"
-    },
-    "dynamicIslandEnabled": {
-      "label": "Enable Dynamic Island",
-      "description": "Show a compact floating lyric window at the top of the screen; drag it anywhere"
-    },
-    "dynamicIslandScale": {
-      "label": "Scale",
-      "description": "Scale window height and font size together; 100% is the default size"
-    },
-    "dynamicIslandFontWeight": {
-      "label": "Font Weight",
-      "description": "Lyric text weight in the Dynamic Island"
-    },
-    "dynamicIslandWordByWord": {
-      "label": "Word Highlight",
-      "description": "Render progressive word-by-word highlight"
-    },
-    "dynamicIslandTransition": {
-      "label": "Transition",
-      "description": "Choose how the island width and lyric lines transition",
-      "bounce": "Dynamic Bounce",
-      "smooth": "Smooth Transition"
-    },
-    "dynamicIslandDoubleLine": {
-      "label": "Always Two Lines",
-      "description": "Keep two-line layout even when no translation is available"
-    },
-    "dynamicIslandShowTranslation": {
-      "label": "Show Translation",
-      "description": "Show translation as the secondary line when available"
-    },
-    "dynamicIslandPlayedColor": {
-      "label": "Played Color",
-      "description": "Color of already-sung lyric text"
-    },
-    "dynamicIslandUnplayedColor": {
-      "label": "Unplayed Color",
-      "description": "Color of upcoming lyric text and artist name"
-    },
-    "dynamicIslandBackgroundColor": {
-      "label": "Background Color",
-      "description": "Background color and opacity of the island"
-    },
-    "dynamicIslandAlwaysOnTop": {
-      "label": "Always On Top",
-      "description": "Keep the Dynamic Island window above others"
-    },
-    "dynamicIslandNotchFusion": {
-      "label": "Notch Fusion",
-      "description": "Expand the island from the physical MacBook notch"
-    },
-    "dynamicIslandSnapCentered": {
-      "label": "Center When Snapped",
-      "description": "When off, snapping to the top keeps the dragged horizontal position"
-    },
-    "dynamicIslandNonOcclusive": {
-      "label": "Non-Occlusive Mode",
-      "description": "Click-through window; hide on hover"
-    },
-    "dynamicIslandUseCSSDrag": {
-      "label": "Enable CSS Drag",
-      "description": "Enable CSS-based drag, recommended for Wayland environments"
-    },
-    "taskbarLyricEnabled": {
-      "label": "Enable Taskbar Lyric",
-      "description": "Embed lyrics into the Windows taskbar"
-    },
-    "taskbarLyricPosition": {
-      "label": "Position",
-      "description": "Lyric position in the taskbar. Auto mode picks based on taskbar alignment",
-      "auto": "Auto",
-      "left": "Left",
-      "right": "Right"
-    },
-    "taskbarLyricAutoMaxWidth": {
-      "label": "Auto Width",
-      "description": "Use the available taskbar area as the maximum width; disable to set it manually"
-    },
-    "taskbarLyricAutoAdjustOccupiedSpace": {
-      "label": "Shrink Window to Content",
-      "description": "Within the automatic width, shrink the actual window to the primary lyric and hover controls"
-    },
-    "taskbarLyricMaxWidth": {
-      "label": "Max Width",
-      "description": "Capped by available space to avoid squeezing"
-    },
-    "taskbarLyricLeftMargin": {
-      "label": "Left Margin",
-      "description": "Gap between the lyric and the left edge of available space, to avoid other taskbar widgets"
-    },
-    "taskbarLyricRightMargin": {
-      "label": "Right Margin",
-      "description": "Gap between the lyric and the right edge of available space, to avoid other taskbar widgets"
-    },
-    "taskbarLyricColorMode": {
-      "label": "Color Mode",
-      "description": "Text and background color scheme of the taskbar lyric",
-      "taskbar": "Follow Taskbar",
-      "taskbarInverse": "Follow Taskbar (Inverted)",
-      "light": "Light",
-      "dark": "Dark"
-    },
-    "taskbarLyricShowBackground": {
-      "label": "Show Background",
-      "description": "Show a translucent background while focused"
-    },
-    "taskbarLyricFontSize": {
-      "label": "Font Size",
-      "description": "Taskbar lyric text size (px)"
-    },
-    "taskbarLyricFontWeight": {
-      "label": "Font Weight",
-      "description": "Taskbar lyric text weight"
-    },
-    "taskbarLyricShowCover": {
-      "label": "Show Cover",
-      "description": "Show the current track's cover thumbnail beside the lyric"
-    },
-    "taskbarLyricDoubleLine": {
-      "label": "Double Line",
-      "description": "Show current lyric together with translation or next line"
-    },
-    "taskbarLyricShowTranslation": {
-      "label": "Show Translation",
-      "description": "In double-line mode, prefer translation; fall back to the next line when unavailable"
-    },
-    "taskbarLyricWordByWord": {
-      "label": "Word by Word",
-      "description": "Render highlight progress per word"
-    },
     "playerBgType": {
       "label": "Player Background",
       "description": "Background type of the full-screen player",
@@ -1613,7 +1315,7 @@
     },
     "fontConfig": {
       "label": "Font Settings",
-      "description": "Configure fonts for the app, lyrics, and external lyric windows",
+      "description": "Configure fonts for Web Control and lyrics",
       "title": "Font Settings",
       "loading": "Loading system fonts",
       "placeholder": "Enter a font name",
@@ -1628,8 +1330,7 @@
       "fieldLabel": "{name} font",
       "groups": {
         "general": "General",
-        "appLyric": "Lyric Font",
-        "externalLyric": "External Lyric Windows"
+        "appLyric": "Lyric Font"
       },
       "fields": {
         "global": "global",
@@ -1637,30 +1338,8 @@
         "lyricChinese": "Chinese lyrics",
         "lyricJapanese": "Japanese lyrics",
         "lyricKorean": "Korean lyrics",
-        "lyricLatin": "English / Latin-script lyrics",
-        "desktopLyric": "desktop lyric",
-        "dynamicIsland": "dynamic island lyric",
-        "taskbarLyric": "taskbar lyric"
+        "lyricLatin": "English / Latin-script lyrics"
       }
-    },
-    "systemMediaControls": {
-      "label": "System Media Controls",
-      "description": "Show playback info in system media controls"
-    },
-    "discordEnabled": {
-      "label": "Discord Status",
-      "description": "Show playback status on Discord"
-    },
-    "discordShowWhenPaused": {
-      "label": "Show When Paused",
-      "description": "Keep Discord status visible when paused"
-    },
-    "discordDisplayMode": {
-      "label": "Brief Status Display",
-      "description": "Text shown below username when detailed panel is not open",
-      "name": "App Name",
-      "details": "Song Name",
-      "state": "Artist Name"
     },
     "listenbrainzEnabled": {
       "label": "ListenBrainz",
@@ -1669,22 +1348,6 @@
     "listenbrainzNowPlaying": {
       "label": "Send Now Playing",
       "description": "Send the current track to ListenBrainz without placing it in the durable outbox"
-    },
-    "lastfmEnabled": {
-      "label": "Last.fm",
-      "description": "Connect your Last.fm account to scrobble and sync loves"
-    },
-    "lastfmScrobble": {
-      "label": "Scrobbling",
-      "description": "Record a play to Last.fm after listening for a while"
-    },
-    "lastfmNowPlaying": {
-      "label": "Now Playing",
-      "description": "Send the currently playing track to Last.fm"
-    },
-    "lastfmLoveSync": {
-      "label": "Sync Loves",
-      "description": "Mirror your likes as Last.fm Love / Unlove"
     },
     "providerAccounts": {
       "connectedAs": "Signed in as {name}",
@@ -1730,22 +1393,6 @@
         "cleared": "ListenBrainz pending listens cleared"
       }
     },
-    "lastfm": {
-      "connect": "Connect account",
-      "connecting": "Finish authorization in your browser…",
-      "cancel": "Cancel",
-      "disconnect": "Disconnect",
-      "connectedAs": "Connected: {name}",
-      "notConnected": "No Last.fm account connected",
-      "connectHint": "Clicking connect opens the authorization page in your browser",
-      "toast": {
-        "connected": "Connected to Last.fm: {name}",
-        "timeout": "Authorization timed out, please retry",
-        "canceled": "Authorization canceled",
-        "failed": "Connection failed, please retry",
-        "disconnected": "Disconnected from Last.fm"
-      }
-    },
     "platformLogin": {
       "title": "Connect {name} Account",
       "desc": "Connect once and let Core securely retain the account session",
@@ -1772,39 +1419,9 @@
         "cookieInvalid": "Invalid Cookie, please check and retry"
       }
     },
-    "rememberWindowState": {
-      "label": "Remember Window State",
-      "description": "Restore window size, position and maximized state on next launch"
-    },
-    "borderlessWindow": {
-      "label": "Enable Borderless Window",
-      "description": "Disable to use the system native window frame and title bar"
-    },
-    "autoCheckUpdate": {
-      "label": "Auto Check for Updates",
-      "description": "Check for new versions in the background on launch and periodically"
-    },
-    "updateChannel": {
-      "label": "Update Channel",
-      "description": "Choose Stable or Beta preview updates",
-      "stable": "Stable",
-      "beta": "Beta Preview"
-    },
-    "checkUpdate": {
-      "label": "Check for Updates",
-      "description": "Check for a new version now"
-    },
     "showPerformanceMonitor": {
       "label": "Performance Monitor",
       "description": "Floating widget showing FPS / frame time / memory. Click to switch"
-    },
-    "taskbarProgress": {
-      "label": "Taskbar Progress",
-      "description": "Show playback progress on the taskbar icon"
-    },
-    "taskbarThumbnailCover": {
-      "label": "Taskbar Cover Preview",
-      "description": "Use the album cover as the window preview when hovering the taskbar; disable to show the system's live window"
     },
     "networkProxyProtocol": {
       "label": "Network Proxy",
@@ -1849,145 +1466,9 @@
       "legacy": "Legacy log API",
       "ncbl": "NCBL encrypted API"
     },
-    "orpheusProtocol": {
-      "label": "Wake this app via the Orpheus protocol",
-      "description": "This protocol is normally used by the web player to launch the official client; enabling it may prevent the official client from being launched"
-    },
     "streamingEnabled": {
       "label": "Enable streaming",
       "description": "When disabled, the media sources entry is hidden from the sidebar"
-    },
-    "externalApiEnabled": {
-      "label": "Allow external control",
-      "description": "Let external apps control the player via the API"
-    },
-    "externalApiWs": {
-      "label": "Enable WebSocket",
-      "description": "External apps can subscribe to events and send commands"
-    },
-    "externalApiAllowLan": {
-      "label": "Allow LAN access",
-      "description": "Other devices on your network can reach the API via this device's IP; when off, only this device can connect"
-    },
-    "externalApiPort": {
-      "label": "Listen port",
-      "description": "TCP port for the external API (1024–65535)"
-    },
-    "externalApi": {
-      "restart": "Restart server",
-      "restarted": "Server restarted",
-      "portInUse": "Port {port} is already in use, pick another",
-      "running": "Server is running",
-      "stopped": "Server not running"
-    },
-    "mcpEnabled": {
-      "label": "Enable MCP server",
-      "description": "Enable the local MCP server so AI Agents can join the app ecosystem and extend capabilities on demand"
-    },
-    "aiModelConfig": {
-      "label": "AI Models",
-      "description": "Configure AI models used by the app"
-    },
-    "aiModel": {
-      "hint": "AI Model Configuration",
-      "hintDetail": "Provides model support for selected AI features in the app",
-      "add": "Add model",
-      "editModel": "Edit model",
-      "empty": "No AI models configured",
-      "emptyHint": "Add an AI model configuration for the app to use",
-      "protocol": "Protocol",
-      "name": "Configuration name",
-      "namePlaceholder": "For example: OpenAI",
-      "baseUrl": "API URL",
-      "apiKey": "API Key",
-      "apiKeyPlaceholder": "Enter API Key",
-      "apiKeySavedPlaceholder": "Saved; leave blank to keep unchanged",
-      "model": "Model ID",
-      "added": "Model added",
-      "updated": "Model updated",
-      "removed": "Model deleted",
-      "activated": "Active model changed",
-      "deleteConfirmTitle": "Delete AI model?",
-      "deleteConfirm": "Delete “{name}”? Its saved API key will also be removed.",
-      "errors": {
-        "nameEmpty": "Enter a configuration name",
-        "urlInvalid": "Enter an API URL starting with http:// or https://",
-        "modelEmpty": "Enter a model ID",
-        "apiKeyEmpty": "Enter an API Key"
-      }
-    },
-    "mcpPort": {
-      "label": "Listen port",
-      "description": "After changing the port, click Restart server to apply it (1024–65535)"
-    },
-    "mcpConfigDetails": {
-      "label": "MCP configuration",
-      "description": "View and copy the MCP configuration required to connect an AI Agent"
-    },
-    "mcp": {
-      "restart": "Restart server",
-      "restarted": "MCP server restarted",
-      "portInUse": "Port {port} is already in use, pick another",
-      "running": "MCP server is running",
-      "stopped": "MCP server is not running",
-      "detectHint": "Detected the following AI Agents. Supported apps can be configured automatically.",
-      "inject": "Configure",
-      "notSupported": "Not supported yet",
-      "injected": "Configured",
-      "injectSuccess": "Configured successfully"
-    },
-    "closeAction": {
-      "label": "Close Button Action",
-      "description": "What to do when the title bar close button is clicked",
-      "quit": "Quit application",
-      "hide": "Minimize to tray"
-    },
-    "rememberCloseChoice": {
-      "label": "Remember Close Choice",
-      "description": "When off, asks every time the close button is clicked"
-    },
-    "closeDialog": {
-      "title": "Close Window",
-      "description": "Choose what to do this time",
-      "remember": "Remember my choice, don't ask again",
-      "quit": "Quit application",
-      "hide": "Minimize to tray"
-    },
-    "storageManager": {
-      "label": "Data Management",
-      "description": "Backup, restore, reset settings, or clear all data"
-    },
-    "backup": {
-      "label": "Backup Settings",
-      "description": "Export current settings to a backup file",
-      "button": "Backup",
-      "exported": "Backup saved",
-      "failed": "Backup failed"
-    },
-    "restore": {
-      "label": "Restore Settings",
-      "description": "Import settings from a backup file. Current settings will be overwritten.",
-      "button": "Restore",
-      "confirmTitle": "Restore settings and relaunch?",
-      "confirmDesc": "Your current settings will be overwritten by the backup file, and the app will relaunch immediately to apply them. Local library, playlists and playback history are not affected.",
-      "invalid": "Invalid backup file",
-      "failed": "Restore failed"
-    },
-    "resetSettings": {
-      "label": "Reset Settings",
-      "description": "Restore all settings to defaults. Playlists and local library are not affected.",
-      "button": "Reset",
-      "confirmTitle": "Reset settings?",
-      "confirmDesc": "All settings will be restored to their defaults. This cannot be undone.",
-      "done": "Settings have been reset"
-    },
-    "resetAll": {
-      "label": "Clear All Data",
-      "description": "Wipe all playlists, sign-in state and caches, then reset settings",
-      "button": "Clear",
-      "confirmTitle": "Clear all data?",
-      "confirmDesc": "All playlists, sign-in state and caches will be wiped and settings reset. This cannot be undone.",
-      "done": "All data has been cleared"
     },
     "plugins": {
       "securityWarningTitle": "Mind the security risks before installing",

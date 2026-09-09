@@ -1,6 +1,6 @@
 # Plugin Overview and Architecture
 
-SPlayer-Next runs third-party JavaScript plugins in isolated sandboxes. A plugin interacts with the application only through the injected global `splayer` object.
+SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A plugin interacts with Core only through the injected global `splayer` object.
 
 - [Source plugins](/en/plugins/source) resolve playable URLs and can provide fallback lyrics, covers, and comments.
 - [Control plugins](/en/plugins/control) receive playback events, control the player, expose settings, and add track menu items.
@@ -30,7 +30,7 @@ Use the Update Plugin template for a new version. Keep `@id` unchanged so users 
 All enabled plugins share a dedicated plugin-host process. Each plugin runs in its own `node:vm` context. The process boundary prevents scripts from reading application memory or another plugin's data.
 
 ```text
-┌──────────── SPlayer-Next main process / UI ────────────┐
+┌──────────────── SPlayer Atom Core ────────────────┐
 │        Player · plugin manager · network · storage     │
 └─────────────────────────┬──────────────────────────────┘
                           │ messages routed by pluginId
@@ -129,7 +129,7 @@ The current host level is **3**. A plugin requiring a newer level is rejected wi
 
 ## Sandbox environment
 
-- No Node built-ins, `require`, `import`, DOM, or Electron API.
+- No Node built-ins, `require`, `import`, DOM, or browser-host API.
 - Available globals include `splayer`, `Buffer`, URL APIs, text encoders, Base64 APIs, promises, microtasks, timers, and a forwarded `console`.
 - Network access is available only through `splayer.request` and only for HTTP(S).
 - Top-level synchronous execution has a five-second limit. Put expensive work in asynchronous handlers.

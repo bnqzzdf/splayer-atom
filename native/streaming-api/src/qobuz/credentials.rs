@@ -70,9 +70,9 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
         .iter()
         .filter_map(|(timezone, _)| {
             let mut chars = timezone.chars();
-            chars.next().map(|first| {
-                format!("{}{}", first.to_uppercase(), chars.collect::<String>())
-            })
+            chars
+                .next()
+                .map(|first| format!("{}{}", first.to_uppercase(), chars.collect::<String>()))
         })
         .collect();
 
@@ -82,17 +82,17 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
             r#"name:"\w+/({})",info:"([\w=]+)",extras:"([\w=]+)""#,
             timezones.join("|")
         );
-        let info_re = Regex::new(&pattern)
-            .map_err(|error| StreamingError::Parse(error.to_string()))?;
+        let info_re =
+            Regex::new(&pattern).map_err(|error| StreamingError::Parse(error.to_string()))?;
         for capture in info_re.captures_iter(&js) {
             if let (Some(timezone), Some(info), Some(extras)) =
                 (capture.get(1), capture.get(2), capture.get(3))
             {
                 let timezone = timezone.as_str().to_lowercase();
                 if let Some((_, seed)) = seeds.iter().find(|(value, _)| value == &timezone) {
-                    combined.entry(timezone).or_insert_with(|| {
-                        format!("{seed}{}{}", info.as_str(), extras.as_str())
-                    });
+                    combined
+                        .entry(timezone)
+                        .or_insert_with(|| format!("{seed}{}{}", info.as_str(), extras.as_str()));
                 }
             }
         }
@@ -106,7 +106,9 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
         if encoded.len() <= 44 {
             continue;
         }
-        let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&encoded[..encoded.len() - 44]) else {
+        let Ok(decoded) =
+            base64::engine::general_purpose::STANDARD.decode(&encoded[..encoded.len() - 44])
+        else {
             continue;
         };
         let Ok(secret) = String::from_utf8(decoded) else {
@@ -186,12 +188,15 @@ pub async fn get_credentials(
         }
     }
 
-    let credentials = fetch_dynamic_credentials(client).await.unwrap_or_else(|_| QobuzCredentials {
-        app_id: PROD_APP_ID.to_owned(),
-        secret: PROD_INIT.to_owned(),
-        secrets: vec![PROD_INIT.to_owned()],
-        saved_at: now_secs(),
-    });
+    let credentials =
+        fetch_dynamic_credentials(client)
+            .await
+            .unwrap_or_else(|_| QobuzCredentials {
+                app_id: PROD_APP_ID.to_owned(),
+                secret: PROD_INIT.to_owned(),
+                secrets: vec![PROD_INIT.to_owned()],
+                saved_at: now_secs(),
+            });
     *MEM_CREDS.write().await = Some(credentials.clone());
     Ok(credentials)
 }
@@ -238,6 +243,9 @@ mod tests {
         );
         let credentials = credentials_from_bundle(&bundle).unwrap();
         assert_eq!(credentials.app_id, "123456789");
-        assert!(credentials.secrets.iter().any(|value| value == derived_secret));
+        assert!(credentials
+            .secrets
+            .iter()
+            .any(|value| value == derived_secret));
     }
 }

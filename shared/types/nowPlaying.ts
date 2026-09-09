@@ -42,21 +42,3 @@ export interface NowPlayingLyricOffsetSync {
   /** 当前偏移（ms） */
   offsetMs: number;
 }
-
-/** NowPlaying API */
-export interface NowPlayingApi {
-  /** 同步当前播放状态到主进程 */
-  update: (payload: NowPlayingUpdatePayload) => void;
-  /** 拉取当前完整快照 */
-  requestSnapshot: () => Promise<NowPlayingSnapshot>;
-  /** 写入指定曲目的歌词偏移（ms）；0 视为清除 */
-  setLyricOffset: (trackId: string, offsetMs: number) => void;
-  /** 订阅歌曲切换 */
-  onTrackChange: (callback: (data: { track: Track | null }) => void) => () => void;
-  /** 订阅歌词内容变化 */
-  onLyricChange: (callback: (snapshot: NowPlayingSnapshot) => void) => () => void;
-  /** 订阅播放位置锚点 */
-  onPositionSync: (callback: (data: NowPlayingPositionSync) => void) => () => void;
-  /** 订阅当前曲目歌词偏移变化 */
-  onLyricOffsetChange: (callback: (data: NowPlayingLyricOffsetSync) => void) => () => void;
-}

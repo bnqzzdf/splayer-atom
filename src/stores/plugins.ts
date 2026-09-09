@@ -1,4 +1,5 @@
 import type { PluginInfo, MarketPlugin } from "@shared/types/plugin";
+import { pluginClient } from "@/core/pluginClient";
 
 /** 插件管理 Pinia store */
 export const usePluginsStore = defineStore("plugins", () => {
@@ -34,10 +35,10 @@ export const usePluginsStore = defineStore("plugins", () => {
 
   /** 拉取列表并建立状态订阅 */
   const load = async (): Promise<void> => {
-    list.value = await window.api.plugins.list();
+    list.value = await pluginClient.list();
     loaded.value = true;
     if (!unsubscribe) {
-      unsubscribe = window.api.plugins.onStatus((info) => {
+      unsubscribe = pluginClient.onStatus((info) => {
         const next = list.value.slice();
         const idx = next.findIndex((item) => item.manifest.id === info.manifest.id);
         if (idx >= 0) next[idx] = info;
@@ -47,23 +48,11 @@ export const usePluginsStore = defineStore("plugins", () => {
     }
   };
 
-  /** 通过原生文件选择框导入插件 */
-  const pickAndInstall = async (): Promise<{
-    ok: boolean;
-    id?: string;
-    error?: string;
-    cancelled?: boolean;
-  }> => {
-    const res = await window.api.plugins.pickAndInstall();
-    if (res.ok) await load();
-    return res;
-  };
-
   /** 从远端 URL 下载并导入 */
   const installFromUrl = async (
     url: string,
   ): Promise<{ ok: boolean; id?: string; error?: string }> => {
-    const res = await window.api.plugins.installFromUrl(url);
+    const res = await pluginClient.installFromUrl(url);
     if (res.ok) await load();
     return res;
   };
@@ -71,7 +60,7 @@ export const usePluginsStore = defineStore("plugins", () => {
   /** 拉取插件市场列表 */
   const fetchMarket = async (force = false): Promise<{ ok: boolean; error?: string }> => {
     if (marketLoaded.value && !force) return { ok: true };
-    const res = await window.api.plugins.market();
+    const res = await pluginClient.market();
     if (res.ok) {
       marketPlugins.value = res.plugins;
       marketLoaded.value = true;
@@ -85,7 +74,7 @@ export const usePluginsStore = defineStore("plugins", () => {
   ): Promise<{ ok: boolean; id?: string; error?: string }> => installFromUrl(plugin.updateUrl);
 
   const uninstall = async (id: string): Promise<{ ok: boolean; error?: string }> => {
-    const res = await window.api.plugins.uninstall(id);
+    const res = await pluginClient.uninstall(id);
     if (res.ok) list.value = list.value.filter((info) => info.manifest.id !== id);
     return res;
   };
@@ -100,7 +89,7 @@ export const usePluginsStore = defineStore("plugins", () => {
     if (!info) return;
     // 本地先改，开关即时反映
     list.value = list.value.map((item) => (item.manifest.id === id ? { ...item, enabled } : item));
-    await window.api.plugins.setEnabled(id, enabled);
+    await pluginClient.setEnabled(id, enabled);
   };
 
   /**
@@ -115,7 +104,7 @@ export const usePluginsStore = defineStore("plugins", () => {
         ? { ...info, settingsValues: { ...(info.settingsValues ?? {}), [key]: value } }
         : info,
     );
-    await window.api.plugins.setSetting(id, key, value);
+    await pluginClient.setSetting(id, key, value);
   };
 
   /**
@@ -126,7 +115,7 @@ export const usePluginsStore = defineStore("plugins", () => {
   const checkUpdate = async (
     id: string,
   ): Promise<{ ok: boolean; hasUpdate: boolean; plugin?: PluginInfo; error?: string }> => {
-    const res = await window.api.plugins.checkUpdate(id);
+    const res = await pluginClient.checkUpdate(id);
     if (res.plugin) {
       const next = list.value.slice();
       const idx = next.findIndex((item) => item.manifest.id === id);
@@ -144,7 +133,7 @@ export const usePluginsStore = defineStore("plugins", () => {
   const applyUpdate = async (
     id: string,
   ): Promise<{ ok: boolean; plugin?: PluginInfo; error?: string; fallbackUrl?: string }> => {
-    const res = await window.api.plugins.applyUpdate(id);
+    const res = await pluginClient.applyUpdate(id);
     if (res.ok && res.plugin) {
       const next = list.value.slice();
       const idx = next.findIndex((item) => item.manifest.id === id);
@@ -169,7 +158,6 @@ export const usePluginsStore = defineStore("plugins", () => {
     fetchMarket,
     installFromMarket,
     load,
-    pickAndInstall,
     installFromUrl,
     uninstall,
     setEnabled,

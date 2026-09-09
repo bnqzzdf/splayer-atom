@@ -3,12 +3,6 @@ import { useSettingsDialog } from "@/settings/useSettingsDialog";
 
 const dialog = useSettingsDialog();
 const { open } = dialog;
-
-const unsubscribe = window.api.system.onOpenSettings(({ category, highlight }) => {
-  dialog.show(category, highlight);
-});
-
-onBeforeUnmount(() => unsubscribe());
 </script>
 
 <template>

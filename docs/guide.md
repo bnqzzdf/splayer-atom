@@ -1,65 +1,45 @@
 # 使用指南
 
-本页介绍 SPlayer-Next 的基本使用。安装包请见 [下载](/download)。
+SPlayer Atom 由一个 Linux x86-64 Node Core 和浏览器中的 Web Control 组成。部署 Core 后，在浏览器访问 Core 提供的 Web 页面即可使用。
 
-## 播放音乐
+## 曲库
 
-- **搜索播放**：在顶部搜索框输入歌曲 / 歌手 / 专辑，点击即可播放或加入播放列表。
-- **播放队列**：支持顺序、随机、单曲循环等播放模式，可在队列中拖拽排序。
-- **音质与音效**：在设置中可选择音质档位，并开启渐入渐出、音量均衡、均衡器、变速变调等音效。
+在 **曲库** 中添加 Core 主机上的音乐目录并启动扫描。目录选择发生在 Core 文件系统上，不是浏览器本机文件选择。
 
-## 本地音乐
+支持本地曲目搜索、专辑/歌手聚合、标签编辑，以及 CUE / SACD stereo 虚拟分轨。
 
-1. 打开 **设置 → 本地音乐**（或音乐库页面），添加要扫描的本地文件夹；
-2. 等待扫描完成后，即可在「音乐库」中按歌曲、专辑、歌手浏览；
-3. 支持编辑本地曲目的**标签与封面**（元信息编辑）。
+## 播放与队列
 
-## 流媒体
+播放队列、当前曲目、循环/随机模式、自动下一首、错误恢复和播放进度都由 Core 持有。关闭或刷新浏览器不会把播放权威迁到 Web Control。
 
-接入 Subsonic / Navidrome / Jellyfin / Emby 等自建服务器，详见 [流媒体服务](/streaming)。
+## 输出
+
+可用输出统一显示在播放栏：
+
+- ALSA
+- Diretta Source Direct（构建包含 Diretta capability 时）
+- UPnP Renderer
+
+切换到 Diretta 或 UPnP 时，Web Control 会锁定不允许的 sample-processing 控件；最终约束仍由 Core/native 强制执行。
+
+## 在线服务
+
+Atom 正式维护 Netease、Qobuz 与 TIDAL provider。账号状态与凭据属于 Core，Web Control 只显示 token-free session projection。
+
+自建媒体服务见 [流媒体服务](/streaming)。
 
 ## 歌词
 
-SPlayer-Next 支持 LRC / QRC / YRC / TTML 多种歌词格式，提供逐字高亮、翻译与音译。在线歌词会按 **设置 → 歌词** 中的「歌词来源偏好」「音源排序」「格式偏好」依次匹配。
+支持 LRC、QRC、YRC、TTML 等格式，并提供翻译、音译、逐字高亮与时间偏移。歌词解析可以在 Web Control 中完成展示，但当前 Track 与播放生命周期仍由 Core 持有。
 
-在此之外，还提供两种高质量 TTML 歌词来源。
+## 下载与缓存
 
-### 在线 TTML 歌词（AMLL TTML DB）
-
-[AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db) 是一个社区维护的 TTML 歌词数据库，提供制作精良的**逐字歌词**，并带**翻译**与**音译**，观感接近 Apple Music。
-
-- 在 **设置 → 歌词 → 启用在线 TTML 歌词**（Beta）开启；
-- 开启后可配置 **AMLL TTML DB 地址**。地址是一个模板，需包含两个占位符：`%p`（平台）与 `%s`（歌曲 ID），应用据此拼接请求；地址错误会导致获取失败；
-- 播放时会尝试从该数据库匹配 TTML，命中则使用其逐字 / 翻译 / 音译内容。
-
-### 本地 TTML 歌词库
-
-如果你自己收藏或校对了 TTML 歌词文件，可以指定一个本地目录作为歌词库：
-
-- 在 **设置 → 歌词 → 启用本地 TTML 歌词库**（Beta）开启；
-- 选择一个存放 `.ttml` 文件的目录，应用会按歌曲**元信息**（曲名 / 艺术家等）在其中查找；
-- **命中本地歌词时优先于在线歌词**，方便用你自己的版本覆盖在线结果。
-
-### 歌词窗口
-
-除主播放页外，歌词还可在多种独立窗口中展示：
-
-- **桌面歌词**：悬浮于桌面，可调整位置、字号、颜色、对齐、逐字与翻译等，支持锁定与鼠标穿透；
-- **灵动岛**：顶部居中的紧凑歌词条；
-- **任务栏歌词**（Windows）：在任务栏内显示当前歌词。
-
-可在播放页或托盘菜单快速开关这些窗口，并在设置中分别调整它们的样式。
-
-## 系统集成
-
-- **系统媒体控制**：对接 Windows SMTC / Linux MPRIS / macOS Now Playing，可用锁屏、通知栏、键盘媒体键控制播放；
-- **Discord 状态**：可在设置中开启，将当前播放展示到 Discord；
-- **全局快捷键**：在设置中为播放控制绑定全局快捷键。
+下载目录与歌曲缓存目录都位于 Core 主机。Web Control 通过 Core Directory Picker 选择目录，不会把媒体文件下载到浏览器所在设备。
 
 ## 插件
 
-SPlayer-Next 内置插件系统，可通过脚本扩展音源与控制等能力，详见 [插件使用](/plugins-usage) 与 [插件开发](/plugins/)。
+插件运行在 Core 的隔离子进程中，可扩展音源解析与播放控制。见 [插件使用](/plugins-usage) 和 [插件开发](/plugins/)。
 
-## 外部控制
+## 多个 Web Control
 
-应用提供可选的外部 API（HTTP + WebSocket）以及独立的本机 MCP 服务，可供其他程序或 AI 查询状态与控制播放，详见 [外部 API](/api)、[WebSocket API](/socket) 与 [MCP 接口](/mcp)。
+多个浏览器可以同时连接同一个 Core；它们看到的是同一份 queue/session/output 状态。不要把某个浏览器的 localStorage 当作 Core 状态备份。

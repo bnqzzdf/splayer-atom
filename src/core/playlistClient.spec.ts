@@ -8,7 +8,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -16,8 +15,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Playlist Core Protocol client", () => {
-  it("uses the Desktop Core scheme for CRUD and track mutation", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for CRUD and track mutation", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -40,14 +38,13 @@ describe("Playlist Core Protocol client", () => {
     ).resolves.toMatchObject({ id: "playlist-1" });
     await expect(playlistClient.addTracks("playlist-1", ["track-1"])).resolves.toBe(1);
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/playlists");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/playlists");
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      "atom-core://control/api/playlists/playlist-1/tracks",
+      "http://localhost:14559/api/playlists/playlist-1/tracks",
     );
   });
 
   it("projects Web artwork and canonicalizes update and legacy cache URLs", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const detail: PlaylistDetail = {
       id: "playlist-1",
       type: "local",

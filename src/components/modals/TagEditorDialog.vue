@@ -8,7 +8,6 @@ import { rankTagCandidates, type RankedTagCandidate } from "@/utils/tagMatch";
 import * as player from "@/core/player";
 import { toast } from "@/composables/useToast";
 import { handleError } from "@/utils/errors";
-import { hasHostCapability } from "@/runtime";
 import { formatFileSize } from "@/utils/format";
 import { formatTime } from "@/utils/time";
 import { libraryClient } from "@/core/libraryClient";
@@ -19,7 +18,6 @@ const props = defineProps<{ open: boolean; track: Track | null }>();
 const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 const { t } = useI18n();
-const localCoverPickerAvailable = hasHostCapability("nativeFileDialogs");
 
 /** 文件名 */
 const fileName = computed(
@@ -55,7 +53,6 @@ const form = reactive({
 });
 
 /** 新封面 */
-const newCoverPath = ref<string | null>(null);
 const newCoverPreview = ref<string | null>(null);
 
 /**
@@ -72,7 +69,6 @@ const resetForm = (tags: TrackTags | null): void => {
   form.trackNumber = tags?.trackNumber ?? null;
   form.discNumber = tags?.discNumber ?? null;
   form.lyrics = tags?.lyrics ?? "";
-  newCoverPath.value = null;
   newCoverUrl.value = null;
   newCoverPreview.value = null;
   candidates.value = [];
@@ -98,15 +94,6 @@ watch(
     resetForm(result.data);
   },
 );
-
-/** 选择新封面 */
-const pickCover = async (): Promise<void> => {
-  const result = await window.api.library.pickCoverImage();
-  if (!result.success || !result.data) return;
-  newCoverPath.value = result.data.path;
-  newCoverUrl.value = null;
-  newCoverPreview.value = result.data.dataUrl;
-};
 
 /** 在线封面 URL */
 const newCoverUrl = ref<string | null>(null);
@@ -166,7 +153,6 @@ const applyCandidate = (candidate: RankedTagCandidate): void => {
   const coverUrl = online.coverOriginal ?? online.cover;
   if (coverUrl && /^https?:\/\//i.test(coverUrl)) {
     newCoverUrl.value = coverUrl;
-    newCoverPath.value = null;
     newCoverPreview.value = coverUrl;
   }
   candidatesVisible.value = false;
@@ -201,7 +187,6 @@ const handleSave = async (): Promise<void> => {
     trackNumber: diffNumber(tags.trackNumber, form.trackNumber),
     discNumber: diffNumber(tags.discNumber, form.discNumber),
     lyrics: diffText(tags.lyrics, form.lyrics),
-    coverPath: newCoverPath.value ?? undefined,
     coverUrl: newCoverUrl.value ?? undefined,
   };
   // 如果没有任何变更，直接关闭对话框
@@ -248,15 +233,6 @@ const handleSave = async (): Promise<void> => {
             </span>
             <span v-if="fileMeta" class="text-xs text-on-surface-variant/70">{{ fileMeta }}</span>
           </div>
-          <SButton
-            v-if="localCoverPickerAvailable"
-            variant="secondary"
-            size="small"
-            class="w-fit"
-            @click="pickCover"
-          >
-            {{ t("tagEditor.replaceCover") }}
-          </SButton>
         </div>
       </div>
       <!-- 在线匹配 -->

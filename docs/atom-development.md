@@ -1,192 +1,90 @@
 # SPlayer Atom Development Setup
 
-## Current baseline
+## Product baseline
 
-- Atom repository: `https://github.com/bnqzzdf/splayer-atom.git` (`origin`)
-- Official upstream transport: `splayer/dev`
-- Accepted Atom upstream baseline: `ac0bcfa1f70c54cadc046aba6472c8d13294c719`
-- Pure upstream mirror: `vendor/splayer`
-- Current automated Atom baseline: Node/Web tests, typecheck, ESLint, touch audit, Linux native gates and the Core system artifact pipeline are green; exact evolving test counts are recorded in `progress.md` rather than frozen here
-- Upstream synchronization, accepted-baseline updates and integration gates are documented in [`upstream-sync.md`](./upstream-sync.md)
-- Desktop/Core build flavor boundaries are documented in [`build-flavors.md`](./build-flavors.md); exact build/package commands and Linux ABI rules are in [`build-and-packaging.md`](./build-and-packaging.md); Core installation, upgrade and rollback are documented in [`core-deployment.md`](./core-deployment.md)
+SPlayer Atom has one runtime shape:
 
-The accepted baseline is intentionally fixed. A normal `git fetch splayer` may move `splayer/dev` and `vendor/splayer` may be fast-forwarded to a newer official commit, but the touch audit continues to compare against the last fully integrated and accepted baseline until that candidate has been merged and validated.
+- Linux x86-64 Node Core;
+- Web Control as the only UI;
+- Core HTTP/WebSocket as the only Control transport.
 
-## Upstream synchronization
+Do not add Electron, preload/IPC, Desktop windows, Windows/macOS packaging, or a second playback/data authority.
 
-Before architecture work after an upstream update, verify the repository topology and candidate state:
+## Requirements
 
-```bash
-node scripts/atom/upstream-sync.mjs status
-node scripts/atom/upstream-sync.mjs report
-node scripts/atom/check-upstream-touch.mjs
-```
+- Node `>=24.18.0 <25`
+- pnpm `>=10`
+- Rust stable
+- Linux x86-64
+- `libasound2-dev`, `pkg-config`, `clang`, `libarchive-tools`
 
-`origin` is `bnqzzdf/splayer-atom`; `splayer` is fetch-only and must never be a release/push target. `vendor/splayer` only points to official SPlayer commits and only moves by fast-forward. See `docs/upstream-sync.md` for the complete integration/worktree/CI flow.
-
-The upstream touch audit reports two independently bounded categories: the established Atom business-code delta and the explicit Node Core runtime-neutral seams. Runtime seams are limited to Electron-path/fetch/lifecycle/event integration points and have their own budget; adding a file to that category requires an architecture justification rather than silently increasing the business budget.
-
-## Node Core development bootstrap
-
-The first independent Node Core entry is `electron/main/core-node/index.ts`; it builds through `scripts/atom/vite.core.config.ts` into `out/core`. The current bootstrap reuses the existing settings store, database, song cache, playback session and Hono HTTP/WebSocket services. The built JS graph must contain no `electron` import.
-
-Development smoke:
+## Start development
 
 ```bash
-node node_modules/vite/bin/vite.js build --config scripts/atom/vite.core.config.ts
-grep -RIl 'from "electron"' out/core --include='*.js'
-ATOM_USER_DATA_DIR=/tmp/splayer-atom-core-smoke \
-  ELECTRON_RENDERER_URL=http://127.0.0.1:9 \
-  node out/core/index.js
+pnpm install
+pnpm dev
 ```
 
-With `ELECTRON_RENDERER_URL` set, the development Core listens on port `14559`; `/api/info`, `/api/session` and `/api/library/count` are the minimal development process smoke endpoints. Formal local Core artifact validation uses `pnpm exec tsx scripts/atom/build-core-system.ts` on reference Node `24.18.0`; see `docs/build-flavors.md` for the complete flavor/release boundary.
+`pnpm dev` builds the native addons in debug mode, starts Node Core, and starts the standalone Web Vite dev server.
 
-## Linux native toolchain
+## Repository layout
 
-On Debian/Ubuntu:
-
-```bash
-sudo apt update
-sudo apt install -y build-essential clang pkg-config \
-  libasound2-dev libdbus-1-dev libpipewire-0.3-dev libpulse-dev curl
+```text
+core/                    Node Core runtime and services
+src/                     Web Control
+shared/                  Core/Web protocol and shared domain types
+native/audio-engine/     N-API audio binding
+native/audio-engine-core shared Rust audio engine
+native/streaming-api/    Qobuz/TIDAL native protocol engine
+native/diretta-sys/      Diretta Host SDK FFI
+scripts/atom/            Core build, staging and release checks
+docs/                    Atom documentation
 ```
 
-Install Rust with rustup:
+`@main/*` remains the TypeScript alias for the `core/` tree; it is a source alias, not an Electron main-process concept.
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-rustup default stable
-rustc --version
-cargo --version
-```
-
-The upstream audio engine vendors/static-builds its FFmpeg dependency, so no system FFmpeg package is required for the normal native build.
-
-### Linux release ABI note
-
-The development dependency list above is not a promise of minimum runtime compatibility. Rust/N-API addons are dynamically linked Linux ELF files, and a local build can inherit the glibc symbol level available on the build host. Do not publish Linux artifacts built directly on an arbitrary rolling distribution. Pin a release builder/sysroot and scan the final Desktop/Core artifact for its highest `GLIBC_x.y` requirement; the procedure is documented in [`build-and-packaging.md`](./build-and-packaging.md).
-
-## Validate the native upstream baseline
-
-From the repository root:
-
-```bash
-cd /home/bnqzzdf/code/splayer-atom
-PATH="$HOME/.cargo/bin:$PATH" pnpm build:native --dev
-PATH="$HOME/.cargo/bin:$PATH" cargo test -p audio-engine
-```
-
-On Linux, use `cargo test -p audio-engine` as the native acceptance command. The full `pnpm test:native` workspace test also compiles Windows-only taskbar crates and is the upstream Windows CI criterion rather than the Linux one.
-
-If Electron's native Node dependency needs rebuilding after the earlier install with lifecycle scripts disabled:
-
-```bash
-pnpm exec electron-rebuild -f -w better-sqlite3
-```
-
-Then the normal application checks are:
+## Common gates
 
 ```bash
 pnpm typecheck
 pnpm test
+pnpm lint
 pnpm build
+pnpm docs:build
+cargo check --workspace
+cargo test --workspace
+git diff --check
 ```
 
-## Qobuz development credentials
+Use proportional checks while iterating. Architecture or release changes should run the full set.
 
-Atom has no runtime dependency on `qobuz-dl`. By default it uses the same proven Web Player Bundle route to auto-discover the current Qobuz app id and signing-secret candidates, caches them only in memory, and tries candidates until a signed request succeeds.
+## Core/Web ownership
 
-Manual application credentials remain optional overrides:
+Core owns database, settings, library, provider sessions, queue, playback policy, playable-source resolution, cache/preload, downloads, statistics, plugins, ListenBrainz and output assignment.
+
+Web Control may cache projections for rendering, but must not own a second queue, provider session, playback lifecycle, Direct staging path or output state.
+
+## Native development
 
 ```bash
-export QOBUZ_APP_ID="..."
-export QOBUZ_APP_SECRET="..."
+pnpm build:native --dev
+cargo check --workspace
+cargo test --workspace
 ```
 
-A user's own Qobuz authentication token is still required for authenticated API/search/playback acceptance:
+The formal Core native flavor contains only `audio-engine.node` and `streaming-api.node`.
+
+## Diretta
+
+Normal development builds do not require the proprietary SDK. A Diretta-enabled build uses `DIRETTA_SDK_ROOT`; a formal Diretta artifact must also pass `--require-diretta` during Core packaging.
+
+Source Direct invariants are defined in `AGENTS.md` and must not be weakened for convenience.
+
+## Release development
 
 ```bash
-export QOBUZ_USER_AUTH_TOKEN="..."
-pnpm dev
+pnpm package:core
+pnpm package:core:bundled
 ```
 
-Do not commit or paste the user's token into project files. `QOBUZ_USER_ID` is no longer required. Atom validates a supplied token through the current token-based API flow and persists validated tokens using Electron `safeStorage`.
-
-## Current Qobuz implementation
-
-The first Qobuz vertical slice is implemented as:
-
-```text
-Web Player app-credential discovery
-        ↓
-user_auth_token
-        ↓
-existing apis:call dispatch
-        ↓
-existing Platform/Search UI
-        ↓
-existing SPlayer Track/Queue
-        ↓
-signed track/getFileUrl
-        ↓
-existing audioSource/song cache/player
-```
-
-The remaining Phase 13 acceptance item is a real search → queue → playback run with a locally supplied user auth token. Web Player app-credential discovery has already been validated live without exposing any secret values.
-
-Rules for the Qobuz slice:
-
-- do not add an Atom provider framework;
-- do not create Atom Track/Album/Playlist models;
-- do not read `~/.config/qobuz-dl` or require qobuz-dl to be installed;
-- keep Web Player app-credential discovery narrow, in-memory, and based on the qobuz-dl-proven Bundle route;
-- do not persist automatically discovered Qobuz app secrets to disk;
-- do not add a second Qobuz URL/download cache when SPlayer's song cache is sufficient;
-- implement only search/auth/stream behavior required by the real playback path;
-- defer album/artist/favorite expansion until a real UI flow needs it.
-
-## TIDAL development credentials
-
-The current Atom TIDAL slice does **not** embed the retained tinyLMS shared client ID/secret. For development with an existing user OAuth session, preload the access token locally:
-
-```bash
-export TIDAL_ACCESS_TOKEN="..."
-# optional when refresh is available:
-export TIDAL_REFRESH_TOKEN="..."
-export TIDAL_CLIENT_ID="..."
-export TIDAL_EXPIRES_AT="..."      # epoch milliseconds
-export TIDAL_COUNTRY_CODE="US"
-pnpm dev
-```
-
-`TIDAL_CLIENT_SECRET` is an optional environment-only override for OAuth clients that require Basic authentication during refresh; Atom never persists it. Do not commit or paste OAuth tokens/client secrets into project files or chat.
-
-First-party Authorization Code/PKCE login UX is deferred until SPlayer Atom has its own TIDAL Developer application and redirect configuration. Do not restore the old tinyLMS embedded/shared client credentials as a product dependency.
-
-## Current TIDAL implementation
-
-```text
-user OAuth access/refresh token
-        ↓
-existing apis:call dispatch
-        ↓
-existing Platform/Search UI
-        ↓
-canonical SPlayer Track/Queue
-        ↓
-playbackinfopostpaywall
-        ├── JSON/BTS URL ─────────→ existing audioSource/player
-        └── DASH MPD
-              ↓
-          init + media segments
-              ↓
-          temporary fragmented MP4
-              ↓
-          existing SPlayer MOV/FLAC decoder
-```
-
-The DASH temp file is process-lifetime materialization, not a second persistent song cache. It is cleaned up on exit and is deliberately marked non-cacheable by the normal single-URL cache path. A local decoder proof confirmed the current built SPlayer audio engine can load fragmented MP4 containing FLAC directly, so **runtime system ffmpeg is not required** for TIDAL DASH playback.
-
-Real account/full-track entitlement acceptance remains deferred until a user OAuth token and suitable TIDAL application authorization are available.
+The release unit is the final Linux x86-64 tar.gz artifact. See [Build and Packaging](./build-and-packaging.md), [Core Deployment](./core-deployment.md), and [Hardware Release Checklist](./hardware-release-checklist.md).

@@ -8,7 +8,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -16,8 +15,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("NowPlaying Core Protocol client", () => {
-  it("uses the Desktop Core scheme for lyric offset query and command", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for lyric offset query and command", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -30,8 +28,10 @@ describe("NowPlaying Core Protocol client", () => {
     nowPlayingClient.setLyricOffset("track-1", -500);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/now-playing");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/now-playing/lyric-offset");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/now-playing");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "http://localhost:14559/api/now-playing/lyric-offset",
+    );
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
       trackId: "track-1",
       offsetMs: -500,
@@ -39,7 +39,6 @@ describe("NowPlaying Core Protocol client", () => {
   });
 
   it("rebuilds the Web full snapshot and projects artwork", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const light = {
       track: {
         id: "track-1",
@@ -73,7 +72,6 @@ describe("NowPlaying Core Protocol client", () => {
   });
 
   it("queries the loaded current Track for projection reconciliation", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))

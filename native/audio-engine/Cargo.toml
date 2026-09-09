@@ -7,12 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [features]
-default = ["desktop-audio"]
-desktop-audio = [
-  "audio-engine-core/fft",
-  "audio-engine-core/midi",
-  "audio-engine-core/desktop-audio",
-]
+default = ["core-audio"]
 core-audio = ["audio-engine-core/fft", "audio-engine-core/midi"]
 diretta = ["audio-engine-core/diretta"]
 

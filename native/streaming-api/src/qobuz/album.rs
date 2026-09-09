@@ -1,12 +1,15 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::QobuzClient;
+use crate::error::StreamingError;
 
 impl QobuzClient {
     /// 获取 Qobuz 专辑详情与曲目
-    pub async fn album_get(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError> {
+    pub async fn album_get(
+        &self,
+        params: &HashMap<String, Value>,
+    ) -> Result<Value, StreamingError> {
         let album_id = params
             .get("album_id")
             .or_else(|| params.get("id"))
@@ -30,6 +33,7 @@ impl QobuzClient {
             .unwrap_or("focus");
         req_params.insert("extra".to_string(), extra.to_string());
 
-        self.request("album/get", req_params, false, false, None).await
+        self.request("album/get", req_params, false, false, None)
+            .await
     }
 }

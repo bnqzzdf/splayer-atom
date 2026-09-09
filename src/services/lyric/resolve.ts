@@ -8,6 +8,7 @@ import { usePluginsStore } from "@/stores/plugins";
 import { DEFAULT_LYRIC_FORMAT_ORDER, DEFAULT_LYRIC_SOURCE_ORDER } from "@/types/settings";
 import { requestPlatformLyric, requestStreamingLyric, requestTTMLOverlay } from "./request";
 import { lyricsClient } from "@/core/lyricsClient";
+import { pluginClient } from "@/core/pluginClient";
 
 /** 支持 AMLL TTML DB 的平台列表 */
 const TTML_PLATFORMS = ["netease", "qqmusic"] as const;
@@ -294,7 +295,7 @@ export const resolvePluginLyric = async (track: Track): Promise<ResolvedLyric | 
     if (!info.enabled || info.status.state !== "ready") continue;
     for (const [source, cap] of Object.entries(info.status.sources)) {
       if (!cap.actions.includes("musicLyric")) continue;
-      const resp = await window.api.plugins.matchLyric({
+      const resp = await pluginClient.matchLyric({
         pluginId: info.manifest.id,
         source,
         track,

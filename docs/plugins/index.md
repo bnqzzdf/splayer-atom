@@ -1,6 +1,6 @@
 # 插件总览与架构
 
-SPlayer-Next 内置一套插件系统，允许用第三方 JavaScript 扩展应用能力。每个插件都是一段运行在**独立隔离沙箱**中的脚本，通过宿主注入的全局对象 `splayer` 与应用交互。
+SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音源与控制能力。每个插件都运行在**独立隔离沙箱**中，通过 Core 注入的全局对象 `splayer` 与播放域交互。
 
 本文介绍插件系统的整体架构、运行模型与两类插件共用的通用 API。具体的编写方式见：
 
@@ -40,7 +40,7 @@ SPlayer-Next 内置一套插件系统，允许用第三方 JavaScript 扩展应�
 **所有启用的插件共享一个独立的「插件 host」进程**，每个插件在其中跑在自己的 `node:vm` 沙箱上下文里。host 与应用主进程/界面之间隔着进程边界，脚本只能访问宿主注入的 `splayer`，既看不到应用内存，也看不到其他插件的数据。
 
 ```
-┌──────────── SPlayer-Next 主进程 / 界面 ────────────┐
+┌────────────── SPlayer Atom Core ──────────────┐
 │            播放器 · 插件管理 · 网络 / 存储           │
 └─────────────────────────┬──────────────────────────┘
                           │  消息往返（按 pluginId 路由）
@@ -159,7 +159,7 @@ SPlayer-Next 内置一套插件系统，允许用第三方 JavaScript 扩展应�
 
 插件脚本运行在受限沙箱中，与应用其余部分相互隔离：
 
-- **没有** Node 内置模块（`fs` / `net` / `path` 等）、**没有** `require` / `import`、**没有** DOM 与 Electron API；
+- **没有** Node 内置模块（`fs` / `net` / `path` 等）、**没有** `require` / `import`、**没有** DOM 或浏览器宿主 API；
 - **可用全局**：`splayer`、`Buffer`、`URL` / `URLSearchParams`、`TextEncoder` / `TextDecoder`、`btoa` / `atob`、`Promise`、`queueMicrotask`、定时器（`setTimeout` / `setInterval` / `setImmediate` 及其 clear 版本），以及 `console`（自动转发到 `splayer.log`）；
 - **网络**只能经 `splayer.request` 发起，且仅允许 `http://` / `https://`；
 - 脚本**顶层同步执行**有 5 秒时限，超时视为加载失败。请把耗时逻辑放进异步处理器，不要在顶层做同步重计算。

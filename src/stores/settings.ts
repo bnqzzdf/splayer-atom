@@ -19,8 +19,42 @@ import {
 import { isCoreSettingPath, type SystemConfig, type LocaleCode } from "@shared/types/settings";
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
-import { hasHostCapability } from "@/runtime";
 import { settingsClient } from "@/core/settingsClient";
+
+const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
+const WEB_CONTROL_SETTING_PATHS = new Set(["system.onboardingCompleted", "system.uiZoom"]);
+
+/** 读取当前浏览器 Control 自己持有的轻量配置。 */
+const loadWebControlEntries = (): Record<string, unknown> => {
+  try {
+    const raw = localStorage.getItem(WEB_CONTROL_CONFIG_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+/** 应用只影响当前浏览器 Control 的展示配置。 */
+const applyWebControlEntry = (keyPath: string, value: unknown): void => {
+  if (keyPath !== "system.uiZoom" || typeof value !== "number" || !Number.isFinite(value)) return;
+  const percent = Math.max(50, Math.min(200, value));
+  document.documentElement.style.setProperty("zoom", `${percent}%`);
+};
+
+/** 持久化当前浏览器 Control 自己持有的配置。 */
+const saveWebControlEntry = (keyPath: string, value: unknown): void => {
+  if (!WEB_CONTROL_SETTING_PATHS.has(keyPath)) {
+    throw new Error(`Setting is not owned by Web Control: ${keyPath}`);
+  }
+  const entries = loadWebControlEntries();
+  entries[keyPath] = value;
+  localStorage.setItem(WEB_CONTROL_CONFIG_KEY, JSON.stringify(entries));
+  applyWebControlEntry(keyPath, value);
+};
 
 /**
  * 对账有序集合：保留存档中仍有效的项（顺序不变），
@@ -167,7 +201,6 @@ export const useSettingsStore = defineStore(
       smartPreferOnline: false,
       preferPluginLyric: false,
       detectBackgroundLyrics: true,
-      cjkTransform: "none",
       adaptiveFontSize: true,
       fontSize: 48,
       fontWeight: 700,
@@ -217,15 +250,6 @@ export const useSettingsStore = defineStore(
     /** 系统配置 - 传递主进程 */
     const system = reactive<SystemConfig>(structuredClone(defaultSystemConfig));
 
-    /** 桌面歌词窗口是否打开；由主进程广播 */
-    const isDesktopLyricOpen = ref(false);
-
-    /** 灵动岛窗口是否打开；由主进程广播 */
-    const isDynamicIslandOpen = ref(false);
-
-    /** 任务栏歌词窗口是否打开；由主进程广播 */
-    const isTaskbarLyricOpen = ref(false);
-
     /**
      * 深合并：嵌套对象原地 mutate，叶子值不变就不写
      * 避免浅 Object.assign 替换嵌套引用，导致依赖路径的 watcher 误触
@@ -249,75 +273,21 @@ export const useSettingsStore = defineStore(
       }
     };
 
-    /** 同步 This Control 配置与 Core Settings；Core snapshot 最后覆盖同名 domain 路径。 */
+    /** 同步 This Control 配置与 Core Settings；Core snapshot 最后覆盖 Core-owned domain。 */
     const syncSystem = async (): Promise<void> => {
       try {
-        const [controlConfig, coreSettings] = await Promise.all([
-          window.api.config.getAll(),
-          settingsClient.getSnapshot(),
-        ]);
-        deepAssign(
-          system as unknown as Record<string, unknown>,
-          controlConfig as unknown as Record<string, unknown>,
-        );
+        for (const [keyPath, value] of Object.entries(loadWebControlEntries())) {
+          if (!WEB_CONTROL_SETTING_PATHS.has(keyPath)) continue;
+          setByPath(system, keyPath, value);
+          applyWebControlEntry(keyPath, value);
+        }
+        const coreSettings = await settingsClient.getSnapshot();
         deepAssign(
           system as unknown as Record<string, unknown>,
           coreSettings as unknown as Record<string, unknown>,
         );
       } catch {}
     };
-
-    /** IPC 订阅取消回调集合。Desktop lyric/window 只在对应 Host capability 下注册。 */
-    const unsubscribers: Array<() => void> = [];
-    if (hasHostCapability("desktopLyric")) {
-      unsubscribers.push(
-        // 订阅桌面歌词配置变化：歌词窗口点锁定按钮等场景需要回流到主窗口设置页
-        window.api.desktopLyric.onConfigChange((next) => {
-          Object.assign(system.desktopLyric, next as object);
-        }),
-        // 订阅桌面歌词窗口开关状态
-        window.api.window.onDesktopLyricVisibilityChange((open) => {
-          isDesktopLyricOpen.value = open;
-        }),
-        // 订阅灵动岛配置变化
-        window.api.dynamicIsland.onConfigChange((next) => {
-          Object.assign(system.dynamicIsland, next as object);
-        }),
-        // 订阅灵动岛窗口开关状态
-        window.api.window.onDynamicIslandVisibilityChange((open) => {
-          isDynamicIslandOpen.value = open;
-        }),
-        // 订阅任务栏歌词窗口开关状态
-        window.api.window.onTaskbarLyricVisibilityChange((open) => {
-          isTaskbarLyricOpen.value = open;
-        }),
-      );
-
-      // 拉取窗口初始开关状态。
-      window.api.window
-        .isDesktopLyricOpen()
-        .then((open) => {
-          isDesktopLyricOpen.value = open;
-        })
-        .catch(() => {});
-      window.api.window
-        .isDynamicIslandOpen()
-        .then((open) => {
-          isDynamicIslandOpen.value = open;
-        })
-        .catch(() => {});
-      window.api.window
-        .isTaskbarLyricOpen()
-        .then((open) => {
-          isTaskbarLyricOpen.value = open;
-        })
-        .catch(() => {});
-    }
-
-    onScopeDispose(() => {
-      for (const off of unsubscribers) off();
-      unsubscribers.length = 0;
-    });
 
     /**
      * 写入后端配置并同步本地
@@ -329,7 +299,7 @@ export const useSettingsStore = defineStore(
         if (isCoreSettingPath(keyPath)) {
           await settingsClient.set(keyPath, value);
         } else {
-          await window.api.config.set(keyPath, value);
+          saveWebControlEntry(keyPath, value);
         }
       } catch (err) {
         console.error("[settings] setting write failed", keyPath, err);
@@ -353,9 +323,6 @@ export const useSettingsStore = defineStore(
       preset,
       lyric,
       system,
-      isDesktopLyricOpen,
-      isDynamicIslandOpen,
-      isTaskbarLyricOpen,
       syncSystem,
       setSystem,
       afterLocalChange,
@@ -373,10 +340,7 @@ export const useSettingsStore = defineStore(
         if (typeof lyric.detectBackgroundLyrics !== "boolean") {
           lyric.detectBackgroundLyrics = true;
         }
-        lyric.lyricSourceOrder = reconcileOrder(
-          lyric.lyricSourceOrder,
-          SUPPORTED_LYRIC_PLATFORMS,
-        );
+        lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, SUPPORTED_LYRIC_PLATFORMS);
         if (lyric.lyricSourcePreference === "qobuz" || lyric.lyricSourcePreference === "tidal") {
           lyric.lyricSourcePreference = "auto";
         }

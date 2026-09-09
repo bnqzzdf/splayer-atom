@@ -1,12 +1,15 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::QobuzClient;
+use crate::error::StreamingError;
 
 impl QobuzClient {
     /// 获取 Qobuz 歌手详情
-    pub async fn artist_get(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError> {
+    pub async fn artist_get(
+        &self,
+        params: &HashMap<String, Value>,
+    ) -> Result<Value, StreamingError> {
         let artist_id = params
             .get("artist_id")
             .or_else(|| params.get("id"))
@@ -25,7 +28,8 @@ impl QobuzClient {
         req_params.insert("artist_id".to_string(), artist_id);
         req_params.insert("extra".to_string(), "albums".to_string());
 
-        self.request("artist/get", req_params, false, false, None).await
+        self.request("artist/get", req_params, false, false, None)
+            .await
     }
 
     /// 获取 Qobuz 歌手全部发行列表
@@ -45,12 +49,18 @@ impl QobuzClient {
 
         let limit = params
             .get("limit")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(50);
 
         let offset = params
             .get("offset")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0);
 
         let mut req_params = HashMap::new();
@@ -59,6 +69,7 @@ impl QobuzClient {
         req_params.insert("offset".to_string(), offset.to_string());
         req_params.insert("extra".to_string(), "albums".to_string());
 
-        self.request("artist/getReleasesList", req_params, false, false, None).await
+        self.request("artist/getReleasesList", req_params, false, false, None)
+            .await
     }
 }

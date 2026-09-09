@@ -14,7 +14,6 @@ import { useStatusStore } from "@/stores/status";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
-import { isWebRemote } from "@/runtime";
 import { libraryClient } from "@/core/libraryClient";
 
 const { t } = useI18n();
@@ -23,7 +22,6 @@ const router = useRouter();
 const status = useStatusStore();
 const providerSessions = useProviderSessionsStore();
 const streaming = useStreamingStore();
-const webRemote = isWebRemote();
 const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
 if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 void streaming.init();
@@ -40,8 +38,8 @@ const activeTab = ref<TabKey>("songs");
 
 /** 当前生效的关键词 */
 const keyword = ref("");
-/** Web 远程默认优先搜索本地曲库；桌面保持原有在线平台偏好。 */
-const searchSource = ref<SearchSource>(webRemote ? "local" : status.searchPlatform);
+/** Web Control 默认优先搜索 Core 本地曲库。 */
+const searchSource = ref<SearchSource>("local");
 
 const tabs = computed(() => {
   const items = [
@@ -405,12 +403,7 @@ const onLoginDialogClose = (open: boolean): void => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div
-          class="shrink-0"
-          :class="
-            streaming.activeServer ? 'w-104 max-w-full' : webRemote ? 'w-64' : 'w-80 max-w-full'
-          "
-        >
+        <div class="shrink-0" :class="streaming.activeServer ? 'w-104 max-w-full' : 'w-64'">
           <STabs
             :model-value="searchSource"
             :tabs="platformTabs"

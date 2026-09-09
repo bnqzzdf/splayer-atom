@@ -3,8 +3,6 @@ import type { CoreInfo } from "@shared/types/core";
 import { getContributors, type Contributor } from "@/apis/github";
 import { getCoreInfo } from "@/core/controlClient";
 import { useCopyText } from "@/composables/useCopyText";
-import { useUpdateStore } from "@/stores/update";
-import { hasHostCapability, isDesktopRenderer } from "@/runtime";
 import ProductBrand from "@/components/brand/ProductBrand.vue";
 import { openExternal } from "@/utils/url";
 import {
@@ -13,11 +11,9 @@ import {
   REPO_NAME,
   HOMEPAGE_URL,
   COPYRIGHT_HOLDER,
-  IS_APPX,
   COMMIT_HASH,
   COMMIT_DATE,
 } from "@/utils/config";
-import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideGithub from "~icons/lucide/github";
 import IconLucideRss from "~icons/lucide/rss";
 import IconLucideArrowUpRight from "~icons/lucide/arrow-up-right";
@@ -25,34 +21,8 @@ import IconLucideChevronDown from "~icons/lucide/chevron-down";
 
 const { t } = useI18n();
 const { copy } = useCopyText();
-const updaterAvailable = hasHostCapability("desktopUpdater");
-const logDirectoryAvailable = hasHostCapability("hostLogDirectory");
-const update = updaterAvailable ? useUpdateStore() : null;
-
-/** Desktop runtime 版本；Web 不伪造 Electron 环境。 */
-const versions = isDesktopRenderer() ? window.electron.process.versions : null;
-/** 操作系统信息 */
-const osInfo = window.api.system.osInfo;
 /** 当前连接 Core 的 release / protocol 信息。 */
 const coreInfo = shallowRef<CoreInfo | null>(null);
-
-/** 检查更新中 */
-const checking = computed(() => update?.phase === "checking");
-
-/** 触发更新检查 */
-const handleCheckUpdate = (): void => {
-  if (!update) return;
-  if (update.hasUpdate) {
-    update.openDialog();
-    return;
-  }
-  update.checkManually();
-};
-
-/** 打开日志目录 */
-const handleOpenLogs = (): void => {
-  if (logDirectoryAvailable) void window.api.system.openLogsDir();
-};
 
 interface EnvItem {
   label: string;
@@ -81,7 +51,7 @@ const envItems = computed<EnvItem[]>(() => {
             : []),
         ]
       : []),
-    { label: "OS", value: `${osInfo.type} ${osInfo.arch}`.trim() },
+    ...(info ? [{ label: "OS", value: `${info.platform} ${info.arch}`.trim() }] : []),
   ];
 });
 
@@ -95,7 +65,6 @@ const diagnosticItems = computed<EnvItem[]>(() => {
     { label: t("settings.about.date"), value: COMMIT_DATE },
     ...(info
       ? [
-          { label: t("settings.about.splayerBaseline"), value: info.splayerBaseline },
           { label: t("settings.about.coreProtocol"), value: `v${info.protocol.version}` },
           {
             label: t("settings.about.sourceTree"),
@@ -112,15 +81,7 @@ const diagnosticItems = computed<EnvItem[]>(() => {
             : []),
         ]
       : []),
-    ...(versions
-      ? [
-          { label: "Electron", value: versions.electron },
-          { label: "Chromium", value: versions.chrome },
-          { label: "Node.js", value: versions.node },
-          { label: "V8", value: versions.v8 },
-        ]
-      : []),
-    { label: "OS", value: `${osInfo.type} ${osInfo.arch} ${osInfo.release}`.trim() },
+    ...(info ? [{ label: "OS", value: `${info.platform} ${info.arch}`.trim() }] : []),
   ];
 });
 
@@ -195,29 +156,6 @@ onMounted(async () => {
         <div class="flex items-center gap-2 mr-auto text-on-surface">
           <ProductBrand size="about" />
           <STag type="primary" size="small" round>v{{ APP_VERSION }}</STag>
-          <STag v-if="IS_APPX" type="primary" size="small" round>
-            {{ t("settings.storeVersion") }}
-          </STag>
-        </div>
-        <div class="flex items-center gap-2">
-          <SButton
-            v-if="updaterAvailable"
-            variant="secondary"
-            :loading="checking"
-            @click="handleCheckUpdate"
-          >
-            <template #icon><IconLucideRefreshCw /></template>
-            {{
-              update?.hasUpdate
-                ? t("settings.about.newVersion")
-                : checking
-                  ? t("settings.about.checking")
-                  : t("settings.about.checkUpdate")
-            }}
-          </SButton>
-          <SButton v-if="logDirectoryAvailable" variant="secondary" @click="handleOpenLogs">
-            {{ t("settings.about.openLogs") }}
-          </SButton>
         </div>
       </SCard>
     </section>

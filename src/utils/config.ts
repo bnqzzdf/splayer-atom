@@ -1,25 +1,14 @@
 /** 是否为开发环境 */
 export const isDev = import.meta.env.MODE === "development" || import.meta.env.DEV;
 
-/** 操作系统平台
- * Electron 由 preload 注入 window.api；Web Control 在 bootstrap 判定运行形态后安装正式 Web API。
- * 本模块可能先于 Web API chunk 求值，因此必须保留可选链回退，避免模块顶层抛错。
- */
-const platform = window.api?.system?.platform ?? "linux";
-/** 是否为 Windows 系统 */
-export const isWin = platform === "win32";
-/** 是否为 macOS 系统 */
-export const isMac = platform === "darwin";
-/** 是否为 Linux 系统 */
-export const isLinux = platform === "linux";
+/** Core release host 固定为 Linux。 */
+export const isWin = false;
+export const isMac = false;
+export const isLinux = true;
 
 /** 应用版本号 */
 export const APP_VERSION = __APP_VERSION__;
 
-/** 安装类型；Web Control bootstrap 完成前回退为 portable。 */
-export const INSTALL_TYPE = window.api?.system?.installType ?? "portable";
-/** 是否为 AppX 安装 */
-export const IS_APPX = INSTALL_TYPE === "appx";
 /** 仓库地址 */
 export const REPO_URL = __APP_REPO_URL__;
 /** 项目名称 */

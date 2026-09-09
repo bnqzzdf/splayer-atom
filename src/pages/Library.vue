@@ -11,7 +11,6 @@ import IconRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideListChecks from "~icons/lucide/list-checks";
 import IconLucideX from "~icons/lucide/x";
 import * as player from "@/core/player";
-import { isWebRemote } from "@/runtime";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
@@ -44,11 +43,7 @@ const handleFolderAdded = (): void => {
 };
 
 const handleQuickAddFolder = async (): Promise<void> => {
-  if (isWebRemote()) {
-    folderDialogOpen.value = true;
-    return;
-  }
-  await libraryStore.addScanDir();
+  folderDialogOpen.value = true;
 };
 
 // 播放全部

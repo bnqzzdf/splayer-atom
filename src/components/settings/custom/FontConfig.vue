@@ -1,144 +1,34 @@
 <script setup lang="ts">
-import type { StyleValue } from "vue";
 import { useSettingsStore } from "@/stores/settings";
-import { useSystemFonts } from "@/composables/useSystemFonts";
-import { hasHostCapability } from "@/runtime";
 import IconLucideRotateCcw from "~icons/lucide/rotate-ccw";
 
 defineOptions({ inheritAttrs: false });
 
 const { t } = useI18n();
 const settings = useSettingsStore();
-const { families: fonts, loading: loadingFonts, ensureLoaded } = useSystemFonts();
-const systemFontEnumerationAvailable = hasHostCapability("systemFonts");
-const externalLyricFontsAvailable = hasHostCapability("desktopLyric");
+const open = ref(false);
 
 type FontDraftKey =
-  | "global"
-  | "lyric"
-  | "lyricChinese"
-  | "lyricJapanese"
-  | "lyricKorean"
-  | "lyricLatin"
-  | "desktopLyric"
-  | "dynamicIsland"
-  | "taskbarLyric";
-type FontGroup = "general" | "appLyric" | "externalLyric";
-type FontMode = "select" | "custom";
+  "global" | "lyric" | "lyricChinese" | "lyricJapanese" | "lyricKorean" | "lyricLatin";
 
-interface FontDraft {
-  global: string;
-  lyric: string;
-  lyricChinese: string;
-  lyricJapanese: string;
-  lyricKorean: string;
-  lyricLatin: string;
-  desktopLyric: string;
-  dynamicIsland: string;
-  taskbarLyric: string;
-}
-
-interface FontTarget {
-  key: FontDraftKey;
-  label: string;
-  defaultLabel: string;
-}
-
-interface FontOption {
-  value: string;
-  label: string;
-  style?: StyleValue;
-}
-
-const open = ref(false);
-const mode = ref<FontMode>(systemFontEnumerationAvailable ? "select" : "custom");
-
-const draft = reactive<FontDraft>({
+const draft = reactive<Record<FontDraftKey, string>>({
   global: "",
   lyric: "",
   lyricChinese: "",
   lyricJapanese: "",
   lyricKorean: "",
   lyricLatin: "",
-  desktopLyric: "",
-  dynamicIsland: "",
-  taskbarLyric: "",
 });
 
-/** 字段定义 */
-const TARGET_DEFS: Array<{ key: FontDraftKey; group: FontGroup }> = [
-  { key: "global", group: "general" },
-  { key: "lyric", group: "appLyric" },
-  { key: "lyricChinese", group: "appLyric" },
-  { key: "lyricJapanese", group: "appLyric" },
-  { key: "lyricKorean", group: "appLyric" },
-  { key: "lyricLatin", group: "appLyric" },
-  { key: "desktopLyric", group: "externalLyric" },
-  { key: "dynamicIsland", group: "externalLyric" },
-  { key: "taskbarLyric", group: "externalLyric" },
+const targets: FontDraftKey[] = [
+  "global",
+  "lyric",
+  "lyricChinese",
+  "lyricJapanese",
+  "lyricKorean",
+  "lyricLatin",
 ];
 
-const GROUP_ORDER: FontGroup[] = ["general", "appLyric", "externalLyric"];
-
-/** 分组目标 */
-const groupedTargets = computed<Array<{ group: FontGroup; items: FontTarget[] }>>(() => {
-  const buildTarget = (key: FontDraftKey): FontTarget => {
-    const name = t(`settings.fontConfig.fields.${key}`);
-    const followLyricKeys: FontDraftKey[] = [
-      "lyricChinese",
-      "lyricJapanese",
-      "lyricKorean",
-      "lyricLatin",
-    ];
-    return {
-      key,
-      label: t("settings.fontConfig.fieldLabel", { name }),
-      defaultLabel:
-        key === "lyric"
-          ? t("settings.fontConfig.useGlobal")
-          : followLyricKeys.includes(key)
-            ? t("settings.fontConfig.useLyric")
-            : t("settings.fontConfig.useSystem"),
-    };
-  };
-  return GROUP_ORDER.filter((group) => group !== "externalLyric" || externalLyricFontsAvailable)
-    .map((group) => ({
-      group,
-      items: TARGET_DEFS.filter((d) => d.group === group).map((d) => buildTarget(d.key)),
-    }))
-    .filter((g) => g.items.length > 0);
-});
-
-/** 设置方式选项 */
-const modeOptions = computed<FontOption[]>(() =>
-  systemFontEnumerationAvailable
-    ? [
-        { value: "select", label: t("settings.fontConfig.modeSelect") },
-        { value: "custom", label: t("settings.fontConfig.modeCustom") },
-      ]
-    : [{ value: "custom", label: t("settings.fontConfig.modeCustom") }],
-);
-
-/** 系统字体下拉项 */
-const fontOptions = computed<FontOption[]>(() =>
-  fonts.value.map((font) => ({ value: font, label: font, style: { fontFamily: `"${font}"` } })),
-);
-
-/** 字符串 → 数组 */
-const parseFontChain = (value: string): string[] => {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((f) => f.trim().replace(/^["']|["']$/g, ""))
-    .filter(Boolean);
-};
-
-/** 数组 → 字符串 */
-const stringifyFontChain = (chain: string[]): string => {
-  return chain.map((f) => (/[\s,]/.test(f) ? `"${f}"` : f)).join(", ");
-};
-
-/** 同步字体配置 */
 const syncDraft = (): void => {
   draft.global = settings.appearance.fontFamily;
   draft.lyric = settings.lyric.fontFamily;
@@ -146,58 +36,19 @@ const syncDraft = (): void => {
   draft.lyricJapanese = settings.lyric.fontFamilyJapanese;
   draft.lyricKorean = settings.lyric.fontFamilyKorean;
   draft.lyricLatin = settings.lyric.fontFamilyLatin;
-  draft.desktopLyric = settings.system.desktopLyric.fontFamily;
-  draft.dynamicIsland = settings.system.dynamicIsland.fontFamily;
-  draft.taskbarLyric = settings.system.taskbarLyric.fontFamily;
 };
 
-/** 打开字体配置 */
 watch(open, (value) => {
-  if (!value) return;
-  syncDraft();
-  if (systemFontEnumerationAvailable) void ensureLoaded();
-  else mode.value = "custom";
+  if (value) syncDraft();
 });
 
-/** 选择字体 */
-const handleChainChange = (
-  key: FontDraftKey,
-  value: string | number | (string | number)[],
-): void => {
-  const chain = Array.isArray(value) ? value : [value];
-  draft[key] = stringifyFontChain(chain.map(String));
-};
-
-/** 手动输入字体 */
-const handleManualInput = (key: FontDraftKey, value: string): void => {
-  draft[key] = value.trim();
-};
-
-/** 重置字段 */
-const handleResetField = (key: FontDraftKey): void => {
-  draft[key] = "";
-};
-
-/** 更新设置方式 */
-const updateMode = (value: string | number | boolean): void => {
-  mode.value = value === "custom" ? "custom" : "select";
-};
-
-/** 保存字体配置 */
-const handleSave = async (): Promise<void> => {
-  settings.appearance.fontFamily = draft.global;
-  settings.lyric.fontFamily = draft.lyric;
-  settings.lyric.fontFamilyChinese = draft.lyricChinese;
-  settings.lyric.fontFamilyJapanese = draft.lyricJapanese;
-  settings.lyric.fontFamilyKorean = draft.lyricKorean;
-  settings.lyric.fontFamilyLatin = draft.lyricLatin;
-  if (externalLyricFontsAvailable) {
-    await Promise.all([
-      settings.setSystem("desktopLyric.fontFamily", draft.desktopLyric),
-      settings.setSystem("dynamicIsland.fontFamily", draft.dynamicIsland),
-      settings.setSystem("taskbarLyric.fontFamily", draft.taskbarLyric),
-    ]);
-  }
+const handleSave = (): void => {
+  settings.appearance.fontFamily = draft.global.trim();
+  settings.lyric.fontFamily = draft.lyric.trim();
+  settings.lyric.fontFamilyChinese = draft.lyricChinese.trim();
+  settings.lyric.fontFamilyJapanese = draft.lyricJapanese.trim();
+  settings.lyric.fontFamilyKorean = draft.lyricKorean.trim();
+  settings.lyric.fontFamilyLatin = draft.lyricLatin.trim();
   open.value = false;
 };
 </script>
@@ -212,73 +63,28 @@ const handleSave = async (): Promise<void> => {
     :description="t('settings.fontConfig.description')"
     width="620px"
   >
-    <div class="flex flex-col gap-3">
-      <!-- 设置方式 -->
-      <SCard variant="settings" class="flex items-center gap-3">
+    <div class="flex flex-col gap-2">
+      <SCard v-for="key in targets" :key="key" variant="settings" class="flex items-center gap-3">
         <div class="min-w-0 flex-1">
-          <div class="text-base">{{ t("settings.fontConfig.modeLabel") }}</div>
-          <div class="text-sm text-on-surface-variant/70 mt-0.5">
-            {{ t("settings.fontConfig.modeHint") }}
+          <div class="text-sm font-medium">
+            {{ t(`settings.fontConfig.fields.${key}`) }}
           </div>
-        </div>
-        <div class="shrink-0 w-60">
-          <SSelect :model-value="mode" :options="modeOptions" @update:model-value="updateMode" />
-        </div>
-      </SCard>
-
-      <!-- 各分组 -->
-      <div v-for="g in groupedTargets" :key="g.group" class="flex flex-col gap-2.5">
-        <h4 class="flex items-center gap-2 text-base text-on-surface px-1">
-          <span class="w-1 h-4 rounded-full bg-primary" />
-          {{ t(`settings.fontConfig.groups.${g.group}`) }}
-        </h4>
-        <SCard
-          v-for="target in g.items"
-          :key="target.key"
-          variant="settings"
-          class="flex flex-col gap-2.5"
-        >
-          <div class="flex items-center gap-3">
-            <div class="min-w-0 flex-1 text-base">{{ target.label }}</div>
-            <SButton
-              variant="ghost"
-              circle
-              size="small"
-              :disabled="!draft[target.key]"
-              :title="t('settings.fontConfig.resetRow')"
-              @click="handleResetField(target.key)"
-            >
-              <template #icon><IconLucideRotateCcw /></template>
-            </SButton>
-          </div>
-          <SCombobox
-            v-if="mode === 'select'"
-            class="w-full"
-            :model-value="parseFontChain(draft[target.key])"
-            :options="fontOptions"
-            :disabled="loadingFonts"
-            :placeholder="loadingFonts ? t('settings.fontConfig.loading') : target.defaultLabel"
-            multiple
-            clearable
-            virtual
-            fallback-option
-            @update:model-value="handleChainChange(target.key, $event)"
-          />
           <SInput
-            v-else
-            class="w-full"
-            :model-value="draft[target.key]"
-            :placeholder="t('settings.fontConfig.placeholder')"
-            clearable
-            @update:model-value="handleManualInput(target.key, $event)"
+            v-model="draft[key]"
+            class="mt-2"
+            :placeholder="t('settings.fontConfig.modeCustom')"
           />
-        </SCard>
-      </div>
+        </div>
+        <SButton variant="ghost" circle @click="draft[key] = ''">
+          <template #icon><IconLucideRotateCcw /></template>
+        </SButton>
+      </SCard>
     </div>
-
     <template #footer="{ close }">
-      <SButton variant="secondary" @click="close">{{ t("common.cancel") }}</SButton>
-      <SButton type="primary" @click="handleSave">{{ t("common.save") }}</SButton>
+      <div class="flex justify-end gap-2">
+        <SButton variant="ghost" @click="close">{{ t("common.cancel") }}</SButton>
+        <SButton type="primary" @click="handleSave">{{ t("common.save") }}</SButton>
+      </div>
     </template>
   </SDialog>
 </template>

@@ -5,7 +5,6 @@ import type {
   PlayerApi,
   PlayerStatus,
 } from "@shared/types/player";
-import { isWebRemote } from "@/runtime";
 import { coreCommand, coreResult } from "./controlClient";
 import { projectOutputDevices } from "./outputDevices";
 
@@ -46,7 +45,7 @@ const mapOutputSnapshot = async (
     success: true,
     data: {
       selected: resolved.data.selected,
-      data: projectOutputDevices(resolved.data.data, isWebRemote(), resolved.data.selected),
+      data: projectOutputDevices(resolved.data.data, resolved.data.selected),
     },
   };
 };

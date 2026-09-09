@@ -1,9 +1,13 @@
 //! FFmpeg 音频解码 + CPAL 播放。
 //!
-//! 作为 Atom 唯一音频实现，由薄 NAPI wrapper 暴露给 Node Core / Desktop。
+//! 作为 Atom 唯一音频实现，由薄 NAPI wrapper 暴露给 Node Core。
+
 //! FFT 频谱分析（fft feature）和 MIDI 合成器（midi feature）为可选。
 
 #![allow(dead_code)]
+
+#[cfg(not(target_os = "linux"))]
+compile_error!("SPlayer Atom audio-engine-core 只支持 Linux");
 
 pub mod audio_output;
 pub mod cue;

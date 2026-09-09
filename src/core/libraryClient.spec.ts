@@ -7,7 +7,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -15,8 +14,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Library Core Protocol client", () => {
-  it("uses the Desktop Core scheme and preserves cache URLs for Desktop", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes and preserves Web cache URLs", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -40,13 +38,12 @@ describe("Library Core Protocol client", () => {
     const result = await libraryClient.getTracks();
 
     expect(result.success).toBe(true);
-    expect(result.data?.[0]?.cover).toBe("cache://covers/a.jpg");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("atom-core://control/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/library/tracks");
+    expect(result.data?.[0]?.cover).toBe("http://localhost:14559/cache/covers/a.jpg");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/library/tracks");
   });
 
   it("projects Core cache URLs to the Web Control origin", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -66,7 +63,6 @@ describe("Library Core Protocol client", () => {
   });
 
   it("uses the shared Core routes for scan roots, tags and file mutation", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -84,13 +80,13 @@ describe("Library Core Protocol client", () => {
       success: true,
     });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/library/scan-dirs/add");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/library/scan-dirs/add");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ dir: "/music" }),
     });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/library/tags/read");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("atom-core://control/api/library/tags/write");
-    expect(fetchMock.mock.calls[4]?.[0]).toBe("atom-core://control/api/library/files");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/library/tags/read");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/library/tags/write");
+    expect(fetchMock.mock.calls[4]?.[0]).toBe("http://localhost:14559/api/library/files");
   });
 });

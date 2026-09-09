@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::TidalClient;
+use crate::error::StreamingError;
 
 impl TidalClient {
     /// 搜索 TIDAL 资源（tracks / albums / artists / playlists）
@@ -22,13 +22,19 @@ impl TidalClient {
 
         let limit = params
             .get("limit")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(20)
             .min(50);
 
         let offset = params
             .get("offset")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0);
 
         let mut req_params = HashMap::new();

@@ -23,8 +23,3 @@ export type CoreControlEvent =
   | { type: "lyricOffset"; data: NowPlayingLyricOffsetSync }
   | { type: "pluginStatus"; data: PluginInfo }
   | CorePlayerProjectionEvent;
-
-/** Desktop preload 只负责承载统一 Core event envelope。 */
-export interface CoreEventsApi {
-  onEvent: (callback: (event: CoreControlEvent) => void) => () => void;
-}

@@ -11,13 +11,25 @@ const theme = useThemeStore();
 
 const picking = ref(false);
 
-/** 选图 */
+/** 从浏览器选择本地背景图并以 data URL 保存在 Control 本地状态。 */
 const handlePick = async (): Promise<void> => {
   if (picking.value) return;
   picking.value = true;
   try {
-    const url = await window.api.theme.pickBackgroundImage();
-    if (url) theme.imageBackground.src = url;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    const file = await new Promise<File | null>((resolve) => {
+      input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+      input.click();
+    });
+    if (!file) return;
+    theme.imageBackground.src = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   } finally {
     picking.value = false;
   }
@@ -26,7 +38,6 @@ const handlePick = async (): Promise<void> => {
 /** 清除 */
 const handleClear = (): void => {
   theme.imageBackground.src = "";
-  void window.api.theme.clearBackgroundImages();
 };
 </script>
 

@@ -1,7 +1,7 @@
 /**
  * TIDAL 搜索（tracks / albums / artists / playlists）
  *
- * 调用 window.api.apis.call("tidal", "search", ...) 并转换响应。
+ * 调用 Core Provider Protocol 的 TIDAL search 并转换响应。
  *
  * 响应结构（search 后端统一定义）：
  * {

@@ -33,7 +33,7 @@ const toServerRequest = (value: DownloadRequest): DownloadRequest => ({
   coverUrl: serverAssetUrl(value.coverUrl),
 });
 
-/** Desktop 与 Web 共用的 Core Download request client。 */
+/** Web Control 的 Core Download request client。 */
 export const downloadClient: CoreDownloadClient = {
   start: (value) =>
     request<EnqueueResult>("/download/start", {

@@ -43,7 +43,7 @@ const mapSearch = (result: StreamingSearchResult): StreamingSearchResult => ({
   playlists: result.playlists.map(mapPlaylist),
 });
 
-/** Desktop 与 Web 共用的 Streaming Core Protocol client；不暴露最终 playable URL。 */
+/** Web Control 的 Streaming Core Protocol client；不暴露最终 playable URL。 */
 export const streamingClient = {
   loadServers: (): Promise<{ servers: StreamingServerConfig[]; activeServerId: string | null }> =>
     request("/streaming/config"),

@@ -4,8 +4,8 @@ use regex::Regex;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::error::StreamingError;
 use super::config::TIDAL_USER_AGENT;
+use crate::error::StreamingError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TidalDashDescriptor {
@@ -41,9 +41,8 @@ fn replace_representation_id(
     if !template.contains("$RepresentationID$") {
         return Ok(template.to_string());
     }
-    let representation_id = representation_id.ok_or_else(|| {
-        StreamingError::Parse("TIDAL DASH 缺少 Representation ID".into())
-    })?;
+    let representation_id = representation_id
+        .ok_or_else(|| StreamingError::Parse("TIDAL DASH 缺少 Representation ID".into()))?;
     Ok(template.replace("$RepresentationID$", representation_id))
 }
 
@@ -85,8 +84,14 @@ pub fn parse_dash_manifest(xml: &str) -> Result<TidalDashDescriptor, StreamingEr
         .map_err(|error| StreamingError::Parse(error.to_string()))?;
 
     for representation in representation_re.captures_iter(xml) {
-        let representation_attrs = representation.get(1).map(|value| value.as_str()).unwrap_or("");
-        let representation_body = representation.get(2).map(|value| value.as_str()).unwrap_or("");
+        let representation_attrs = representation
+            .get(1)
+            .map(|value| value.as_str())
+            .unwrap_or("");
+        let representation_body = representation
+            .get(2)
+            .map(|value| value.as_str())
+            .unwrap_or("");
         let Some(template) = template_re.captures(representation_body) else {
             continue;
         };
@@ -104,8 +109,7 @@ pub fn parse_dash_manifest(xml: &str) -> Result<TidalDashDescriptor, StreamingEr
             replace_representation_id(&raw_initialization, representation_id.as_deref())?,
             "initialization",
         )?;
-        let media_template =
-            replace_representation_id(&raw_media, representation_id.as_deref())?;
+        let media_template = replace_representation_id(&raw_media, representation_id.as_deref())?;
         let start_number = parse_attr(template_attrs, "startNumber")
             .as_deref()
             .unwrap_or("1")
@@ -216,7 +220,9 @@ pub async fn materialize_dash(
         .map_err(|error| StreamingError::Other(format!("创建 TIDAL DASH 临时文件失败: {error}")))?;
 
     let download = async {
-        for url in std::iter::once(&descriptor.initialization_url).chain(descriptor.media_urls.iter()) {
+        for url in
+            std::iter::once(&descriptor.initialization_url).chain(descriptor.media_urls.iter())
+        {
             let response = client
                 .get(url)
                 .header("Accept", "*/*")
@@ -235,15 +241,13 @@ pub async fn materialize_dash(
             if bytes.is_empty() {
                 return Err(StreamingError::Parse("TIDAL DASH 分段为空".into()));
             }
-            output
-                .write_all(&bytes)
-                .await
-                .map_err(|error| StreamingError::Other(format!("写入 TIDAL DASH 分段失败: {error}")))?;
+            output.write_all(&bytes).await.map_err(|error| {
+                StreamingError::Other(format!("写入 TIDAL DASH 分段失败: {error}"))
+            })?;
         }
-        output
-            .flush()
-            .await
-            .map_err(|error| StreamingError::Other(format!("刷新 TIDAL DASH 临时文件失败: {error}")))?;
+        output.flush().await.map_err(|error| {
+            StreamingError::Other(format!("刷新 TIDAL DASH 临时文件失败: {error}"))
+        })?;
         Ok::<(), StreamingError>(())
     }
     .await;
@@ -318,11 +322,9 @@ mod tests {
 
     #[test]
     fn supports_zero_padded_number_templates() {
-        let parsed = parse_dash_manifest(&mpd(
-            "https://audio.invalid/segment-$Number%05d$.mp4",
-            "0",
-        ))
-        .unwrap();
+        let parsed =
+            parse_dash_manifest(&mpd("https://audio.invalid/segment-$Number%05d$.mp4", "0"))
+                .unwrap();
         assert_eq!(
             parsed.media_urls,
             vec![
@@ -334,13 +336,17 @@ mod tests {
 
     #[test]
     fn rejects_time_and_unbounded_templates() {
-        assert!(parse_dash_manifest(&mpd("https://audio.invalid/$Time$.mp4", "0"))
-            .unwrap_err()
-            .to_string()
-            .contains("$Time$"));
-        assert!(parse_dash_manifest(&mpd("https://audio.invalid/$Number$.mp4", "-1"))
-            .unwrap_err()
-            .to_string()
-            .contains("数值无效"));
+        assert!(
+            parse_dash_manifest(&mpd("https://audio.invalid/$Time$.mp4", "0"))
+                .unwrap_err()
+                .to_string()
+                .contains("$Time$")
+        );
+        assert!(
+            parse_dash_manifest(&mpd("https://audio.invalid/$Number$.mp4", "-1"))
+                .unwrap_err()
+                .to_string()
+                .contains("数值无效")
+        );
     }
 }

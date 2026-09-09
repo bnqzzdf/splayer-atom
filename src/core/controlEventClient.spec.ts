@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CoreControlEvent } from "@shared/types/coreEvents";
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
-  Object.defineProperty(window, "api", { configurable: true, value: undefined });
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -11,18 +8,30 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Core Control event client", () => {
-  it("shares one Desktop core:event subscription across typed consumers", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
-    let emit!: (event: CoreControlEvent) => void;
-    const unsubscribe = vi.fn();
-    const onEvent = vi.fn((callback: (event: CoreControlEvent) => void) => {
-      emit = callback;
-      return unsubscribe;
-    });
-    Object.defineProperty(window, "api", {
-      configurable: true,
-      value: { coreEvents: { onEvent } },
-    });
+  it("shares one WebSocket transport across typed consumers", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ protocol: { version: 1 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    class MockWebSocket {
+      static OPEN = 1;
+      static instances: MockWebSocket[] = [];
+      readyState = MockWebSocket.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((message: { data: string }) => void) | null = null;
+      onclose: (() => void) | null = null;
+      readonly send = vi.fn();
+      readonly close = vi.fn();
+
+      constructor(readonly url: string) {
+        MockWebSocket.instances.push(this);
+      }
+    }
+    vi.stubGlobal("WebSocket", MockWebSocket);
 
     const { subscribeCoreControlEvent, subscribeCorePlayerProjection } =
       await import("./controlEventClient");
@@ -33,29 +42,29 @@ describe("Core Control event client", () => {
     const offProgress = subscribeCoreControlEvent("downloadProgress", progress);
     const offPlayer = subscribeCorePlayerProjection(playerProjection);
 
-    expect(onEvent).toHaveBeenCalledTimes(1);
-    emit({
-      type: "providerSessions",
-      data: {
-        netease: { authenticated: true },
-        qobuz: { authenticated: false },
-        tidal: { authenticated: false },
-      },
+    await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
+    const ws = MockWebSocket.instances[0];
+    expect(ws?.url).toBe("ws://localhost:14559/ws");
+    const emit = (type: string, data: unknown): void => {
+      ws?.onmessage?.({ data: JSON.stringify({ kind: "event", type, data }) });
+    };
+
+    emit("providerSessions", {
+      netease: { authenticated: true },
+      qobuz: { authenticated: false },
+      tidal: { authenticated: false },
     });
-    emit({ type: "downloadProgress", data: { taskId: "task-1", received: 10, total: 100 } });
-    emit({
-      type: "status",
-      data: {
-        state: "paused",
-        position: 1000,
-        duration: 2000,
-        volume: 1,
-        speed: 1,
-        isFinished: false,
-      },
+    emit("downloadProgress", { taskId: "task-1", received: 10, total: 100 });
+    emit("status", {
+      state: "paused",
+      position: 1000,
+      duration: 2000,
+      volume: 1,
+      speed: 1,
+      isFinished: false,
     });
-    emit({ type: "position", data: { position: 1200, duration: 2000 } });
-    emit({ type: "fftData", data: { ldata: [0.1], rdata: [0.2] } });
+    emit("position", { position: 1200, duration: 2000 });
+    emit("fftData", { ldata: [0.1], rdata: [0.2] });
 
     expect(provider).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledWith({ taskId: "task-1", received: 10, total: 100 });
@@ -65,8 +74,8 @@ describe("Core Control event client", () => {
 
     offProvider();
     offProgress();
-    expect(unsubscribe).not.toHaveBeenCalled();
+    expect(ws?.close).not.toHaveBeenCalled();
     offPlayer();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(ws?.close).toHaveBeenCalledTimes(1);
   });
 });

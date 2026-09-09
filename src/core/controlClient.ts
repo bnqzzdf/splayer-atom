@@ -2,23 +2,19 @@ import { assertCoreProtocolCompatible } from "@shared/constants/coreProtocol";
 import type { CoreInfo } from "@shared/types/core";
 import type { IpcResponse } from "@shared/types/player";
 
-const desktopControl =
-  typeof document !== "undefined" && document.documentElement.dataset.atomRuntime === "desktop";
 const location = typeof window !== "undefined" ? window.location : null;
 const host = location?.hostname || "127.0.0.1";
 const dev = import.meta.env?.DEV === true;
 
 /**
  * 当前 Control 使用的 Core Protocol origin。
- * Desktop 通过 Electron session 内部 scheme 访问；Web 继续使用同源/开发 HTTP。
+ * 生产环境与 Core 同源；开发环境固定连接本机 Core 端口。
  */
-export const coreApiOrigin = desktopControl
-  ? "atom-core://control"
-  : location
-    ? dev
-      ? `${location.protocol}//${host}:14559`
-      : location.origin
-    : "";
+export const coreApiOrigin = location
+  ? dev
+    ? `${location.protocol}//${host}:14559`
+    : location.origin
+  : "";
 
 const rawRequest = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${coreApiOrigin}/api${path}`, {

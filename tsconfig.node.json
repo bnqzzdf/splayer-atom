@@ -1,25 +1,24 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": [
-    "electron.vite.config.*",
-    "vitest.config.*",
-    "electron/main/**/*",
-    "electron/preload/**/*",
-    "scripts/**/*",
-    "shared/**/*"
-  ],
+  "include": ["vite.config.ts", "vitest.config.*", "core/**/*", "scripts/**/*", "shared/**/*"],
   "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
     "tsBuildInfoFile": "node_modules/.cache/tsconfig.node.tsbuildinfo",
-    "types": ["electron-vite/node"],
     "paths": {
-      "@main/*": ["./electron/main/*"],
+      "@main/*": ["./core/*"],
       "@shared/*": ["./shared/*"],
-      "@splayer/audio-engine": ["./native/audio-engine"],
-      "@splayer/audio-capture": ["./native/audio-capture"],
-      "@splayer/media-ctrl": ["./native/media-ctrl"],
-      "@splayer/taskbar-lyric": ["./native/taskbar-lyric"],
-      "@splayer/taskbar-thumbnail": ["./native/taskbar-thumbnail"],
-      "@splayer/opencc": ["./native/opencc"]
+      "@splayer/audio-engine": ["./native/audio-engine"]
     }
   }
 }

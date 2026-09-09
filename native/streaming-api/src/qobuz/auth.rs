@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::QobuzClient;
+use crate::error::StreamingError;
 
 impl QobuzClient {
     /// 验证/登录 Qobuz (支持 user_id + user_auth_token 或 email + password)
@@ -146,7 +146,9 @@ impl QobuzClient {
     }
 
     pub async fn auth_logout(&self) -> Result<Value, StreamingError> {
-        let _ = self.request("user/logout", HashMap::new(), false, false, None).await;
+        let _ = self
+            .request("user/logout", HashMap::new(), false, false, None)
+            .await;
         Ok(json!({ "status": "success", "loggedIn": false }))
     }
 }

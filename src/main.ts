@@ -5,14 +5,7 @@ import "@/web/runtime.css";
 import piniaPersistedstate from "pinia-plugin-persistedstate";
 import { vRipple } from "./directives/ripple";
 
-const hasElectronApi = (): boolean =>
-  typeof window !== "undefined" &&
-  "electron" in window &&
-  typeof window.electron === "object" &&
-  window.electron !== null &&
-  "ipcRenderer" in window.electron;
-
-/** 挂载保留的 Headless 工程诊断页。 */
+/** 挂载工程诊断页。 */
 const mountDebugWeb = async (): Promise<void> => {
   const { default: HeadlessApp } = await import("./web/HeadlessApp.vue");
   const app = createApp(HeadlessApp);
@@ -20,16 +13,8 @@ const mountDebugWeb = async (): Promise<void> => {
   app.mount("#app");
 };
 
-/** 挂载同一套 SPlayer Atom UI；仅 transport/runtime 随 Desktop/Web 变化。 */
-const mountSPlayer = async (webRemote: boolean): Promise<void> => {
-  if (webRemote) {
-    document.documentElement.dataset.atomRuntime = "web";
-    const { installWebApi } = await import("./web/api");
-    await installWebApi();
-  } else {
-    document.documentElement.dataset.atomRuntime = "desktop";
-  }
-
+/** 挂载唯一 Web Control。 */
+const mountWebControl = async (): Promise<void> => {
   const [
     { default: App },
     { default: router },
@@ -55,47 +40,29 @@ const mountSPlayer = async (webRemote: boolean): Promise<void> => {
   app.use(router);
   app.use(i18n);
 
+  await useSettingsStore().syncSystem();
   useThemeStore().init();
 
   watch(
     () => useSettingsStore().locale,
     (locale) => {
       i18n.global.locale.value = locale;
-      window.api.system.setLocale(locale);
     },
     { immediate: true },
   );
 
-  if (webRemote && router.currentRoute.value.path === "/") {
-    await router.replace("/library");
-  }
+  if (router.currentRoute.value.path === "/") await router.replace("/library");
   await router.isReady();
   app.mount("#app");
-
   initPlayer().catch(console.error);
-
-  if (!webRemote) {
-    const [{ useHotkeyStore }, { installHotkeyManager }] = await Promise.all([
-      import("./stores/hotkey"),
-      import("./core/hotkey/manager"),
-    ]);
-    useHotkeyStore()
-      .init()
-      .then(installHotkeyManager)
-      .catch((err) => console.error("[hotkey] init failed", err));
-  }
 };
 
 const bootstrap = async (): Promise<void> => {
-  if (hasElectronApi()) {
-    await mountSPlayer(false);
-    return;
-  }
   if (window.location.pathname === "/debug") {
     await mountDebugWeb();
     return;
   }
-  await mountSPlayer(true);
+  await mountWebControl();
 };
 
 void bootstrap().catch((error) => {

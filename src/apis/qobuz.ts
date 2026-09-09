@@ -2,7 +2,7 @@
  * Qobuz API 渲染端封装
  *
  * 用 Proxy 把所有接口代理到主进程：`qobuz.catalog_search({query})` 实际等于
- * `window.api.apis.call("qobuz", "catalog_search", {query})`
+ * 通过 `providerClient` 调用 Core Provider Protocol。
  *
  * 调用约定：成功 → 返回 body；失败 → 抛 Error
  *
@@ -14,7 +14,7 @@ import { providerClient } from "@/core/providerClient";
 
 /**
  * 调用 Qobuz API，返回原始响应
- * @param name 接口名（对应 electron/main/apis/qobuz/modules/index.ts 中的 key）
+ * @param name 接口名（对应 core/apis/qobuz/modules/index.ts 中的 key）
  * @param params 接口参数
  * @returns 原始响应（含 status + body）
  */
@@ -72,14 +72,10 @@ export const catalogSearch = <T = any>(
   type: "tracks" | "albums" | "artists" | "playlists",
   limit = 20,
   offset = 0,
-) =>
-  qobuzRaw("catalog_search", { query, type, limit, offset }).then(
-    (r) => r.body as T,
-  );
+) => qobuzRaw("catalog_search", { query, type, limit, offset }).then((r) => r.body as T);
 
 /** 专辑详情（含曲目） */
-export const albumGet = (albumId: string) =>
-  qobuzCall("album_get", { album_id: albumId });
+export const albumGet = (albumId: string) => qobuzCall("album_get", { album_id: albumId });
 
 /** 歌单详情（含曲目） */
 export const playlistGet = (playlistId: string) =>

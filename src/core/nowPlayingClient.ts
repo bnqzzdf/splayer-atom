@@ -1,4 +1,4 @@
-import type { NowPlayingSnapshot } from "@shared/types/nowPlaying";
+import type { NowPlayingSnapshot, NowPlayingUpdatePayload } from "@shared/types/nowPlaying";
 import type { Track } from "@shared/types/player";
 import { controlAssetUrl } from "./controlAssets";
 import { request } from "./controlClient";
@@ -13,7 +13,7 @@ const mapTrack = (track: Track): Track => ({
   coverOriginal: controlAssetUrl(track.coverOriginal),
 });
 
-/** Desktop 与 Web 共用的 Core NowPlaying query/command client。 */
+/** Web Control 的 Core NowPlaying query/command client。 */
 export const nowPlayingClient = {
   getLyricOffset: async (): Promise<number> =>
     (await request<LightNowPlayingSnapshot>("/now-playing")).lyricOffsetMs,
@@ -40,6 +40,13 @@ export const nowPlayingClient = {
     void request("/now-playing/lyric-offset", {
       method: "POST",
       body: JSON.stringify({ trackId, offsetMs }),
+    });
+  },
+  /** 同步当前 Control 解析后的歌词 presentation，不改变 Core 当前 Track。 */
+  updateLyrics: (payload: NowPlayingUpdatePayload): void => {
+    void request("/now-playing", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };

@@ -157,6 +157,6 @@ node --version
 cat /opt/splayer-atom-core/runtime.json
 ```
 
-`runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, `splayerBaseline`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
+`runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
 
 Core production logs go to stdout/stderr so systemd/journald remains the deployment log owner. The installation directory should not accumulate production log files.

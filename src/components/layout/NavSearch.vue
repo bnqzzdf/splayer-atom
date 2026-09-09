@@ -9,18 +9,15 @@ import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/n
 import { parseMusicLink, type LinkType } from "@/utils/link";
 import type { TrackSource } from "@shared/types/player";
 import * as player from "@/core/player";
-import { hasHostCapability } from "@/runtime";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideUser from "~icons/lucide/user";
 import IconLucideDisc from "~icons/lucide/disc";
 import IconLucideListMusic from "~icons/lucide/list-music";
-import IconLucideAudioWaveform from "~icons/lucide/audio-waveform";
 
 const { t, locale } = useI18n();
 const router = useRouter();
 const data = useDataStore();
 const status = useStatusStore();
-const recognitionAvailable = hasHostCapability("musicRecognition");
 
 /** 弹窗开关挂在 status store，便于快捷键打开 */
 const dialogOpen = computed({
@@ -28,7 +25,6 @@ const dialogOpen = computed({
   set: (value: boolean) => (status.searchOpen = value),
 });
 const searchQuery = ref("");
-const recognitionOpen = ref(false);
 
 const trimmedQuery = computed(() => searchQuery.value.trim());
 
@@ -277,12 +273,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- 搜索框触发器与听歌识曲 -->
+  <!-- 搜索框触发器 -->
   <div class="flex items-center gap-2 shrink-0">
     <div
       role="button"
       :aria-label="t('nav.searchPlaceholder')"
-      class="app-no-drag w-60 h-10 px-4 cursor-pointer flex items-center gap-2 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
+      class="w-60 h-10 px-4 cursor-pointer flex items-center gap-2 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
       @click="dialogOpen = true"
       @contextmenu.prevent="dialogOpen = true"
       @mousedown.prevent
@@ -292,20 +288,7 @@ onMounted(() => {
         {{ t("nav.searchPlaceholder") }}
       </span>
     </div>
-    <SButton
-      v-if="recognitionAvailable"
-      class="app-no-drag shrink-0"
-      variant="tertiary"
-      circle
-      :size="40"
-      :icon-size="20"
-      @click="recognitionOpen = true"
-    >
-      <template #icon><IconLucideAudioWaveform /></template>
-    </SButton>
   </div>
-  <!-- 听歌识曲 -->
-  <RecognitionDialog v-if="recognitionAvailable" v-model:open="recognitionOpen" />
   <!-- 搜索 -->
   <SDialog
     v-model:open="dialogOpen"

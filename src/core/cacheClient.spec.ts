@@ -7,7 +7,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -15,8 +14,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Cache Core Protocol client", () => {
-  it("uses the Desktop Core scheme for cache management", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for cache management", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -31,13 +29,12 @@ describe("Cache Core Protocol client", () => {
       dir: "/next-cache",
     });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/cache/dir");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/cache/dir");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/cache/dir");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/cache/dir");
     expect(fetchMock.mock.calls[2]?.[1]?.method).toBe("POST");
   });
 
   it("preserves Core not-empty refusal and clear commands", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))

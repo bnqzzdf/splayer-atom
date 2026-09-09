@@ -1,95 +1,18 @@
-import { dialog } from "@/composables/useDialog";
-import { useSettingsStore } from "@/stores/settings";
-import SRadio from "@/components/ui/SRadio.vue";
-import SCheckbox from "@/components/ui/SCheckbox.vue";
-import { hasHostCapability } from "@/runtime";
-
-/** 主窗口控制 */
+/** 浏览器全屏控制。 */
 export const useWindowControls = () => {
-  const { t } = useI18n();
-  const settings = useSettingsStore();
+  const isFullscreen = ref(document.fullscreenElement !== null);
 
-  const windowControlsAvailable = hasHostCapability("windowControls");
-  const isMaximized = ref(false);
-  const isFullscreen = ref(false);
-  const isBorderless = computed(
-    () => windowControlsAvailable && settings.system.system.borderlessWindow,
-  );
-
-  const minimize = (): void => window.api.window.minimize();
-  const toggleMaximize = (): void => window.api.window.toggleMaximize();
-  const toggleFullscreen = (): void => window.api.window.toggleFullscreen();
-  const hide = (): void => window.api.window.hide();
-  const quit = (): void => window.api.window.quit();
-
-  /** 点击关闭：已记忆走设置，未记忆弹窗询问 */
-  const close = async (): Promise<void> => {
-    const { appearance } = settings;
-    if (appearance.rememberCloseChoice) {
-      appearance.closeAction === "hide" ? hide() : quit();
-      return;
-    }
-    const choice = ref<"quit" | "hide">(appearance.closeAction);
-    const remember = ref(false);
-    const confirmed = await dialog.confirm({
-      title: t("settings.closeDialog.title"),
-      description: t("settings.closeDialog.description"),
-      body: () =>
-        h("div", { class: "flex flex-col gap-4" }, [
-          h("div", { class: "flex flex-col gap-3" }, [
-            h(SRadio, {
-              checked: choice.value === "quit",
-              label: t("settings.closeDialog.quit"),
-              onChange: () => (choice.value = "quit"),
-            }),
-            h(SRadio, {
-              checked: choice.value === "hide",
-              label: t("settings.closeDialog.hide"),
-              onChange: () => (choice.value = "hide"),
-            }),
-          ]),
-          h(SCheckbox, {
-            checked: remember.value,
-            label: t("settings.closeDialog.remember"),
-            "onUpdate:checked": (v: boolean) => (remember.value = v),
-          }),
-        ]),
-    });
-    if (!confirmed) return;
-    if (remember.value) {
-      appearance.closeAction = choice.value;
-      appearance.rememberCloseChoice = true;
-    }
-    choice.value === "hide" ? hide() : quit();
+  const syncFullscreen = (): void => {
+    isFullscreen.value = document.fullscreenElement !== null;
   };
 
-  let offMax: (() => void) | null = null;
-  let offFs: (() => void) | null = null;
-
-  onMounted(() => {
-    if (!windowControlsAvailable) return;
-    window.api.window.isMaximized().then((m) => (isMaximized.value = m));
-    window.api.window.isFullscreen().then((f) => (isFullscreen.value = f));
-    offMax = window.api.window.onMaximizeChange((m) => (isMaximized.value = m));
-    offFs = window.api.window.onFullscreenChange((f) => (isFullscreen.value = f));
-  });
-
-  onBeforeUnmount(() => {
-    offMax?.();
-    offFs?.();
-    offMax = null;
-    offFs = null;
-  });
-
-  return {
-    isMaximized,
-    isFullscreen,
-    isBorderless,
-    minimize,
-    toggleMaximize,
-    toggleFullscreen,
-    hide,
-    quit,
-    close,
+  const toggleFullscreen = async (): Promise<void> => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
   };
+
+  onMounted(() => document.addEventListener("fullscreenchange", syncFullscreen));
+  onBeforeUnmount(() => document.removeEventListener("fullscreenchange", syncFullscreen));
+
+  return { isFullscreen, toggleFullscreen };
 };

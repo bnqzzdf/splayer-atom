@@ -11,7 +11,7 @@ const toServerTrack = (track: Track): Track => ({
   coverOriginal: serverAssetUrl(track.coverOriginal),
 });
 
-/** Desktop 与 Web 共用的 Core Lyrics request client。 */
+/** Web Control 的 Core Lyrics request client。 */
 export const lyricsClient: CoreLyricsClient = {
   matchById: (platform, id) =>
     request<LyricMatchResponse>("/lyrics/match-by-id", {

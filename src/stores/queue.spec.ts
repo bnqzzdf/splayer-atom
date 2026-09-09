@@ -6,22 +6,12 @@ import type {
 } from "@shared/types/player";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const storage = vi.hoisted(() => ({
-  getItem: vi.fn(),
-  removeItem: vi.fn(() => Promise.resolve()),
-}));
 const sessionApi = vi.hoisted(() => ({
   getSession: vi.fn(),
-  migrateLegacySessionQueue: vi.fn(),
   clearSessionQueue: vi.fn(),
   removeSessionServerTracks: vi.fn(),
 }));
 
-vi.mock("localforage", () => ({
-  default: {
-    createInstance: () => storage,
-  },
-}));
 vi.mock("@/core/sessionClient", () => ({ sessionClient: sessionApi }));
 
 import {
@@ -74,10 +64,7 @@ describe("queue projection", () => {
   beforeEach(() => {
     queueEntries.value = [];
     originalQueue.value = null;
-    storage.getItem.mockReset();
-    storage.removeItem.mockClear();
     sessionApi.getSession.mockReset();
-    sessionApi.migrateLegacySessionQueue.mockReset();
     sessionApi.clearSessionQueue.mockReset();
     sessionApi.removeSessionServerTracks.mockReset();
   });
@@ -101,57 +88,22 @@ describe("queue projection", () => {
     expect(originalQueue.value?.map((item) => item.track.id)).toEqual(["b", "a"]);
   });
 
-  it("main 已有权威队列时直接恢复并清理旧 IndexedDB", async () => {
+  it("直接恢复 Core 权威队列，不读取 renderer 持久化", async () => {
     const data = session([entry("a"), entry("b")], { index: 1, current: track("b") });
     sessionApi.getSession.mockResolvedValue({ success: true, data });
 
-    const restored = await restoreQueue({ index: 0, repeat: "one", shuffle: "on" });
+    const restored = await restoreQueue();
 
     expect(restored).toEqual(data);
     expect(queue.value.map(({ id }) => id)).toEqual(["a", "b"]);
-    expect(storage.getItem).not.toHaveBeenCalled();
-    expect(storage.removeItem).toHaveBeenCalledTimes(2);
-    expect(sessionApi.migrateLegacySessionQueue).not.toHaveBeenCalled();
   });
 
-  it("main 为空时一次性迁移旧 Track/QueueItem、原顺序和播放模式", async () => {
-    const empty = session([]);
-    const migrated = session([entry("b", context), entry("a")], {
-      originalQueue: [entry("a"), entry("b", context)],
-      index: 0,
-      current: track("b"),
-      repeat: "one",
-      shuffle: "on",
-    });
-    sessionApi.getSession.mockResolvedValue({ success: true, data: empty });
-    storage.getItem
-      .mockResolvedValueOnce([{ ...track("b"), source: "netease" }, entry("a")])
-      .mockResolvedValueOnce([entry("a"), entry("b", context)]);
-    sessionApi.migrateLegacySessionQueue.mockResolvedValue({ success: true, data: migrated });
+  it("Core 会话读取失败时不制造第二份本地队列", async () => {
+    sessionApi.getSession.mockResolvedValue({ success: false, error: "NETWORK_ERROR" });
 
-    const restored = await restoreQueue({ index: 0, repeat: "one", shuffle: "on" });
-
-    expect(sessionApi.migrateLegacySessionQueue).toHaveBeenCalledWith(
-      [{ track: { ...track("b"), source: "netease" } }, entry("a")],
-      [entry("a"), entry("b", context)],
-      0,
-      "one",
-      "on",
-    );
-    expect(restored).toEqual(migrated);
-    expect(queueEntries.value[0].context).toEqual(context);
-    expect(storage.removeItem).toHaveBeenCalledTimes(2);
-  });
-
-  it("迁移失败时保留旧 IndexedDB，避免不可恢复的数据丢失", async () => {
-    sessionApi.getSession.mockResolvedValue({ success: true, data: session([]) });
-    storage.getItem.mockResolvedValueOnce([track("a")]).mockResolvedValueOnce(null);
-    sessionApi.migrateLegacySessionQueue.mockResolvedValue({ success: false, error: "UNKNOWN" });
-
-    const restored = await restoreQueue({ index: 0, repeat: "list", shuffle: "off" });
+    const restored = await restoreQueue();
 
     expect(restored).toBeNull();
-    expect(storage.removeItem).not.toHaveBeenCalled();
     expect(queueEntries.value).toEqual([]);
   });
 });

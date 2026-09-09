@@ -44,7 +44,11 @@ impl QobuzClient {
         }
 
         let http = builder.build().unwrap_or_default();
-        Self { http, user_auth_token, user_id }
+        Self {
+            http,
+            user_auth_token,
+            user_id,
+        }
     }
 
     /// 生成 request_sig（公式不变，变的是喂进来的参数）。
@@ -138,11 +142,15 @@ impl QobuzClient {
         let resp = req.query(&query).send().await?;
 
         let status = resp.status();
-        let body: Value = resp.json().await
+        let body: Value = resp
+            .json()
+            .await
             .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if !status.is_success() {
-            let msg = body.get("message").and_then(Value::as_str)
+            let msg = body
+                .get("message")
+                .and_then(Value::as_str)
                 .unwrap_or("Unknown Qobuz API error");
             return Err(StreamingError::Api {
                 status: status.as_u16(),

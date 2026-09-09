@@ -1,5 +1,4 @@
 import type { Component } from "vue";
-import { hasHostCapability, type ControlHostCapability } from "@/runtime";
 
 /**
  * Control 业务动作的共享描述。
@@ -19,8 +18,6 @@ export interface ControlAction {
   visible: boolean;
   /** 是否为破坏性动作。 */
   danger: boolean;
-  /** 需要 Control 本机能力时显式声明。 */
-  requiredCapability?: ControlHostCapability;
   /** 动作最终委托的 Core command；纯 Control/Host 动作可省略。 */
   coreCommand?: string;
   /** presentation 可在此动作前显示分组分隔。 */
@@ -36,5 +33,4 @@ export const createControlAction = (
 ): ControlAction => ({ enabled: true, visible: true, danger: false, ...action });
 
 /** 统一判断动作是否应出现在当前 Control。 */
-export const isControlActionVisible = (action: ControlAction): boolean =>
-  action.visible && (!action.requiredCapability || hasHostCapability(action.requiredCapability));
+export const isControlActionVisible = (action: ControlAction): boolean => action.visible;

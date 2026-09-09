@@ -2,37 +2,33 @@
 layout: home
 
 hero:
-  name: "SPlayer-Next"
-  text: "Music, the way it should be"
-  tagline: A clean and refined cross-platform desktop music player with broad format support, expressive lyrics, deep performance optimization, and carefully crafted details.
+  name: "SPlayer Atom"
+  text: "Node Core + Web Control"
+  tagline: A Linux x86-64 music Core that owns library, queue, playback policy, online services, and outputs.
   actions:
     - theme: brand
-      text: Download
-      link: /en/download
-    - theme: alt
       text: User Guide
       link: /en/guide
     - theme: alt
+      text: Core Deployment
+      link: /core-deployment
+    - theme: alt
       text: GitHub
-      link: https://github.com/SPlayer-Dev/SPlayer-Next
+      link: https://github.com/bnqzzdf/splayer-atom
 
 features:
-  - icon: 🎵
-    title: Broad format support
-    details: A high-performance FFmpeg + Rust audio engine supporting MP3, FLAC, WAV, AAC, OGG, APE, and more, with fades, loudness normalization, and an equalizer.
-  - icon: 📝
-    title: Expressive lyrics
-    details: LRC, QRC, YRC, and TTML lyrics with word-by-word highlighting, translations, desktop lyrics, Dynamic Island, and Windows taskbar lyrics.
-  - icon: 🌐
-    title: Streaming services
-    details: Connect Subsonic, Navidrome, Jellyfin, Emby, and other self-hosted servers, manage multiple servers, and access your library anywhere.
-  - icon: 🎧
-    title: System integration
-    details: Windows SMTC, Linux MPRIS, macOS Now Playing, Discord status, lock-screen controls, notifications, and media keys.
-  - icon: 🎨
-    title: Adaptive themes
-    details: Cover-driven colors, Light, Dark, and Auto modes, spectrum visualization, and carefully polished details.
-  - icon: 🧩
-    title: Extensible by design
-    details: Built-in plugins and external HTTP and WebSocket APIs let you add music sources or control playback remotely.
+  - title: One Core authority
+    details: Database, settings, library, queue, playback policy, cache, downloads, plugins, and providers live in Node Core.
+  - title: Web Control
+    details: Browsers control the same Core over HTTP/WebSocket without owning a second player or data model.
+  - title: HiFi outputs
+    details: ALSA, strict Diretta Source Direct, and a Core-owned UPnP Renderer share one playback authority.
+  - title: Linux x86-64
+    details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
+
+## Product boundary
+
+SPlayer Atom provides only **Node Core + Web Control**. There is no Desktop/Electron edition and no Windows or macOS application package.
+
+Continue with the [User Guide](/en/guide), [Build and Packaging](/en/build-and-packaging), or [Core Deployment](/core-deployment).

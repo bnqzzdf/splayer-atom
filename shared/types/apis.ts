@@ -30,31 +30,3 @@ export type ProviderSessionsSnapshot = Record<ManagedProviderPlatform, ProviderS
 export type ApiCallResponse =
   | { ok: true; status?: number; body?: unknown; data?: unknown }
   | { ok: false; error: string; status?: number; body?: unknown };
-
-/** 渲染端统一入口 */
-export interface ApisApi {
-  /**
-   * 调用任意音源接口
-   * @param platform 音源平台
-   * @param name 接口名
-   * @param params 接口参数
-   */
-  call: (
-    platform: ApiPlatform,
-    name: string,
-    params?: Record<string, unknown>,
-  ) => Promise<ApiCallResponse>;
-  /** QQ/酷狗 legacy provider session 清理；Managed Provider 已走 Core Protocol。 */
-  clearSession: (platform: "qqmusic" | "kugou") => Promise<void>;
-  /** QQ/酷狗 legacy cookie/session 写入；Managed Provider 已走 Core Protocol。 */
-  setCookie: (
-    platform: "qqmusic" | "kugou",
-    cookie: string,
-  ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  /**
-   * 打开官方网页登录
-   * @param platform 音源平台
-   * @returns 登录成功 `{ ok: true }`；用户取消 / 失败 `{ ok: false, error }`
-   */
-  openLoginWeb: (platform: ApiPlatform) => Promise<{ ok: true } | { ok: false; error: string }>;
-}

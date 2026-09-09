@@ -1,6 +1,6 @@
 # Streaming Services
 
-In addition to local music and online sources, SPlayer-Next can connect to self-hosted streaming servers and browse your private library.
+In addition to local music and online providers, SPlayer Atom Core can connect to self-hosted streaming servers and browse your private library.
 
 ## Supported services
 
@@ -17,7 +17,7 @@ In addition to local music and online sources, SPlayer-Next can connect to self-
 1. Open **Settings → Streaming** and enable streaming.
 2. Add a server and select Subsonic, Jellyfin, or Emby.
 3. Enter its URL, username, and password.
-4. Save. SPlayer-Next connects automatically and exposes tracks, albums, artists, and playlists in the sidebar.
+4. Save. Core connects and exposes tracks, albums, artists, and playlists to Web Control.
 
 You can configure and switch between multiple servers. Browsing data is cached locally for faster subsequent access.
 

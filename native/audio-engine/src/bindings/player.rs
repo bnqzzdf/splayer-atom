@@ -620,9 +620,7 @@ impl AudioPlayer {
                 if source_for_direct.starts_with("http://")
                     || source_for_direct.starts_with("https://")
                 {
-                    anyhow::bail!(
-                        "[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源"
-                    );
+                    anyhow::bail!("[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源");
                 }
                 let mut metadata =
                     decoder::probe_metadata(&source_for_direct, cover_dir.as_deref(), handle)?;
@@ -863,16 +861,15 @@ impl AudioPlayer {
                 }
                 if let Err(error) = seek_result {
                     player.enter_paused_for_recovery();
-                    let _ = player
-                        .commit_direct_seeked(token, playback)
-                        .into_napi()?;
+                    let _ = player.commit_direct_seeked(token, playback).into_napi()?;
                     return Err(error).into_napi();
                 }
-                let committed = player
-                    .commit_direct_seeked(token, playback)
-                    .into_napi()?;
+                let committed = player.commit_direct_seeked(token, playback).into_napi()?;
                 if !committed {
-                    info!(position, "Direct seek 已被更新的 load/seek/stop 取代，丢弃结果");
+                    info!(
+                        position,
+                        "Direct seek 已被更新的 load/seek/stop 取代，丢弃结果"
+                    );
                 }
                 return Ok(());
             }
@@ -1261,13 +1258,11 @@ impl AudioPlayer {
             let source = player.current_source().map(String::from);
             if new_is_direct {
                 player.validate_direct_entry().into_napi()?;
-                if source
-                    .as_deref()
-                    .is_some_and(|value| value.starts_with("http://") || value.starts_with("https://"))
-                {
+                if source.as_deref().is_some_and(|value| {
+                    value.starts_with("http://") || value.starts_with("https://")
+                }) {
                     return Err(Error::from_reason(
-                        "[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源"
-                            .to_string(),
+                        "[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源".to_string(),
                     ));
                 }
             }

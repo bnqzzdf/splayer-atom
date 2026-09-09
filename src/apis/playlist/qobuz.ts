@@ -7,9 +7,13 @@
 
 import type { Playlist, Track } from "@shared/types/player";
 import { qobuzCall } from "@/apis/qobuz";
-import { songsToTracks, toPlaylist, type QobuzPlaylist, type QobuzTrack, type QobuzImage } from "@/utils/format/qobuz";
-
-interface QobuzPlaylistResponse extends QobuzPlaylist {}
+import {
+  songsToTracks,
+  toPlaylist,
+  type QobuzImage,
+  type QobuzPlaylist,
+  type QobuzTrack,
+} from "@/utils/format/qobuz";
 
 /**
  * 拉取歌单：元数据 + 全部曲目
@@ -18,7 +22,7 @@ interface QobuzPlaylistResponse extends QobuzPlaylist {}
 export const fetchPlaylist = async (
   playlistId: string,
 ): Promise<{ playlist: Playlist; tracks: Track[] } | null> => {
-  const data = await qobuzCall<QobuzPlaylistResponse>("playlist_get", {
+  const data = await qobuzCall<QobuzPlaylist>("playlist_get", {
     playlist_id: playlistId,
   });
   if (!data?.id) return null;

@@ -127,7 +127,6 @@ Operator:
 Artifact file:
 Artifact SHA256:
 Atom version / commit / sourceDirty:
-SPlayer accepted baseline:
 Core protocol / Node variant / Node version:
 Diretta capability / Host SDK release:
 

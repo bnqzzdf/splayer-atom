@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { builtinModules } from "node:module";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";

@@ -4,9 +4,9 @@
 
 ## 1. 通用前置条件
 
-- 使用已记录 SHA256、Atom commit、`sourceDirty=false`、SPlayer accepted baseline 与 Core capability 的候选 artifact。
+- 使用已记录 SHA256、Atom commit、`sourceDirty=false`、Core protocol 与 capability 的候选 artifact。
 - 使用验收者授权的真实账号、真实权益和真实网络；不把账号、cookie、token 或 Authorization 写入命令、fixture、截图、日志、文档或 Git。
-- Web/Desktop 仅发送 Core Control 命令并消费 snapshot/event；最终 playable URL、刷新、重试、skip、cache 与 Diretta materialization 仍由 Core 持有。
+- Web Control 仅发送 Core Control 命令并消费 snapshot/event；最终 playable URL、刷新、重试、skip、cache 与 Diretta materialization 仍由 Core 持有。
 - 普通输出使用真实 ALSA hardware；Diretta 使用 root Host 与真实 Target。软件 fake output 不算 live acceptance。
 - 每项记录 `PASS`、`FAIL` 或 `BLOCKED`。权益不足、区域限制、账号未提供、硬件不可用和服务端限制都应记录为 `BLOCKED`，不得伪装为通过。
 
@@ -62,13 +62,13 @@ Date/timezone / operator:
 
 Artifact SHA256:
 Atom version / commit / sourceDirty:
-SPlayer accepted baseline / Core protocol:
+Core protocol / capability:
 Provider capability:
 Account tier (非账号标识):
 Region (仅在与 entitlement 相关时):
 
 Scenario:
-Control surface: Headless Web | Desktop
+Control surface: Web Control
 Source metadata: codec / rate / bits / channels / duration
 Output: ALSA device | Diretta Target
 Queue length / observed auto-next:

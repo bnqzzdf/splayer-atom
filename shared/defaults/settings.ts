@@ -1,14 +1,5 @@
 import type { SystemConfig } from "../types/settings";
 import { defaultPluginsConfig } from "./plugin-api";
-import { defaultHotkeyConfig } from "./hotkeys";
-
-/**
- * 灵动岛基准高度（缩放比例 = 1 时的物理像素，等于"主行高度")
- * 主行高度 = DYNAMIC_ISLAND_BASE_HEIGHT * scale
- * 双行模式下窗口最终高度 = 主行高度 + 副行高度
- * 主进程按渲染端上报的最终高度 setBounds
- */
-export const DYNAMIC_ISLAND_BASE_HEIGHT = 40;
 
 /** 默认配置 */
 export const defaultSystemConfig: SystemConfig = {
@@ -33,71 +24,8 @@ export const defaultSystemConfig: SystemConfig = {
     },
     lyricOffsets: {},
   },
-  media: {
-    systemMediaControls: true,
-    discord: {
-      enabled: false,
-      showWhenPaused: false,
-      displayMode: "name",
-    },
-  },
   library: {
     scanDirs: [],
-  },
-  desktopLyric: {
-    fontSize: 24,
-    fontWeight: 600,
-    fontFamily: "",
-    showTranslation: true,
-    doubleLine: true,
-    align: "center",
-    wordByWord: true,
-    autoGenerateWordByWord: true,
-    playedColor: "rgb(254, 121, 113)",
-    unplayedColor: "rgb(255, 255, 255)",
-    strokeColor: "rgba(0, 0, 0, 0.5)",
-    backgroundMask: false,
-    backgroundMaskColor: "rgba(0, 0, 0, 0.3)",
-    alwaysShowSongInfo: false,
-    limitBounds: false,
-    animation: true,
-    alwaysOnTop: true,
-    locked: false,
-    useCSSDrag: false,
-  },
-  dynamicIsland: {
-    scale: 1,
-    fontWeight: 500,
-    fontFamily: "",
-    wordByWord: true,
-    transition: "bounce",
-    playedColor: "rgba(255, 255, 255, 1)",
-    unplayedColor: "rgba(255, 255, 255, 0.5)",
-    backgroundColor: "rgba(0, 0, 0, 1)",
-    alwaysOnTop: true,
-    snapCentered: true,
-    notchFusion: false,
-    nonOcclusive: false,
-    doubleLine: false,
-    showTranslation: false,
-    useCSSDrag: false,
-  },
-  taskbarLyric: {
-    position: "auto",
-    autoMaxWidth: true,
-    autoAdjustOccupiedSpace: false,
-    maxWidth: 400,
-    leftMargin: 0,
-    rightMargin: 0,
-    colorMode: "taskbar",
-    showBackground: false,
-    doubleLine: true,
-    showTranslation: true,
-    showCover: true,
-    wordByWord: true,
-    fontSize: 14,
-    fontWeight: 400,
-    fontFamily: "",
   },
   lyric: {
     enableOnlineTTMLLyric: false,
@@ -137,36 +65,9 @@ export const defaultSystemConfig: SystemConfig = {
     enabled: false,
     sendNowPlaying: true,
   },
-  lastfm: {
-    enabled: false,
-    scrobble: true,
-    nowPlaying: true,
-    loveSync: true,
-  },
-  externalApi: {
-    enabled: false,
-    wsEnabled: false,
-    allowLan: false,
-    port: 14558,
-    bypassToken: "",
-  },
-  mcp: {
-    enabled: false,
-    port: 14559,
-    accessKey: "",
-  },
-  update: {
-    autoCheck: true,
-    channel: "stable",
-  },
   system: {
-    rememberWindowState: true,
-    borderlessWindow: true,
-    taskbarProgress: true,
-    taskbarThumbnailCover: true,
     uiZoom: 100,
     onboardingCompleted: false,
-    agreedAgreementVersion: 1,
     neteaseRealIp: false,
     kugouLoginVersion: "standard",
     networkProxy: {
@@ -176,33 +77,6 @@ export const defaultSystemConfig: SystemConfig = {
     },
     neteaseScrobbleEnabled: false,
     neteaseScrobbleMode: "ncbl",
-    registerOrpheusProtocol: false,
-  },
-  windowStates: {
-    main: {
-      width: 1280,
-      height: 800,
-      x: null,
-      y: null,
-      maximized: false,
-    },
-    desktopLyric: {
-      width: 800,
-      height: 200,
-      x: null,
-      y: null,
-      visible: false,
-    },
-    dynamicIsland: {
-      mode: "snapped",
-      x: null,
-      y: null,
-      visible: false,
-    },
-    taskbarLyric: {
-      visible: false,
-    },
   },
   plugins: defaultPluginsConfig,
-  hotkeys: defaultHotkeyConfig,
 };

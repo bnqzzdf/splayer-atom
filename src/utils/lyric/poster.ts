@@ -66,13 +66,13 @@ const resolveCoverDataUrl = async (track: Track): Promise<string | null> => {
     const res = await playerClient.getCoverRaw();
     return res.success && res.data ? res.data : null;
   }
-  // 远程：主进程拉字节回渲染层
+  // 远程：浏览器直接拉取封面字节
   const url = track.coverOriginal || track.cover;
   if (!url || !/^https?:\/\//i.test(url)) return null;
   try {
-    const res = await window.api.system.fetchRemoteBytes(url);
-    if (!res.success || !res.data) return null;
-    return await blobToDataUrl(new Blob([new Uint8Array(res.data)]));
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await blobToDataUrl(new Blob([new Uint8Array(await response.arrayBuffer())]));
   } catch {
     return null;
   }
@@ -256,7 +256,7 @@ export const createLyricPoster = async (options: LyricPosterOptions): Promise<Bl
   ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
   ctx.font = MARK_FONT;
   ctx.textAlign = "center";
-  ctx.fillText("Made by SPlayer Next", WIDTH / 2, totalHeight - PAD_BOTTOM - WATERMARK_H);
+  ctx.fillText("Made by SPlayer Atom", WIDTH / 2, totalHeight - PAD_BOTTOM - WATERMARK_H);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

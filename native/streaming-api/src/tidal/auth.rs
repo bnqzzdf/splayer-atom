@@ -4,7 +4,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
-use crate::error::StreamingError;
 use super::config::{
     TIDAL_ANDROID_REDIRECT_URI, TIDAL_AUTH_BASE, TIDAL_DEFAULT_CLIENT_ID,
     TIDAL_DEFAULT_CLIENT_SECRET, TIDAL_LOGIN_BASE, TIDAL_OFFICIAL_CLIENT_ID, TIDAL_SCOPE,
@@ -12,6 +11,7 @@ use super::config::{
 };
 use super::pkce::{generate_code_challenge, generate_code_verifier, generate_state};
 use super::TidalClient;
+use crate::error::StreamingError;
 
 #[derive(Debug, Clone)]
 struct PendingPkce {
@@ -154,7 +154,10 @@ impl TidalClient {
             .await?;
 
         let status = resp.status();
-        let body: Value = resp.json().await.map_err(|e| StreamingError::Parse(e.to_string()))?;
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if !status.is_success() {
             let msg = body
@@ -169,14 +172,32 @@ impl TidalClient {
             });
         }
 
-        let access_token = body.get("access_token").and_then(Value::as_str).unwrap_or("");
-        let refresh_token = body.get("refresh_token").and_then(Value::as_str).unwrap_or("");
-        let expires_in = body.get("expires_in").and_then(Value::as_u64).unwrap_or(86400);
+        let access_token = body
+            .get("access_token")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let refresh_token = body
+            .get("refresh_token")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let expires_in = body
+            .get("expires_in")
+            .and_then(Value::as_u64)
+            .unwrap_or(86400);
 
         let user = body.get("user");
-        let user_id = user.and_then(|u| u.get("userId")).map(|v| v.to_string()).unwrap_or_default();
-        let username = user.and_then(|u| u.get("username").or_else(|| u.get("email"))).and_then(Value::as_str).unwrap_or("TIDAL User");
-        let country_code = user.and_then(|u| u.get("countryCode")).and_then(Value::as_str).unwrap_or("US");
+        let user_id = user
+            .and_then(|u| u.get("userId"))
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let username = user
+            .and_then(|u| u.get("username").or_else(|| u.get("email")))
+            .and_then(Value::as_str)
+            .unwrap_or("TIDAL User");
+        let country_code = user
+            .and_then(|u| u.get("countryCode"))
+            .and_then(Value::as_str)
+            .unwrap_or("US");
 
         Ok(json!({
             "status": "success",
@@ -215,10 +236,16 @@ impl TidalClient {
             .await?;
 
         let status = resp.status();
-        let mut body: Value = resp.json().await.map_err(|e| StreamingError::Parse(e.to_string()))?;
+        let mut body: Value = resp
+            .json()
+            .await
+            .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if !status.is_success() {
-            let msg = body.get("error_description").and_then(Value::as_str).unwrap_or("Failed to request device authorization");
+            let msg = body
+                .get("error_description")
+                .and_then(Value::as_str)
+                .unwrap_or("Failed to request device authorization");
             return Err(StreamingError::Api {
                 status: status.as_u16(),
                 message: msg.to_string(),
@@ -228,12 +255,18 @@ impl TidalClient {
         if let Some(obj) = body.as_object_mut() {
             if let Some(uri) = obj.get("verificationUri").and_then(Value::as_str) {
                 if !uri.starts_with("http://") && !uri.starts_with("https://") {
-                    obj.insert("verificationUri".to_string(), json!(format!("https://{uri}")));
+                    obj.insert(
+                        "verificationUri".to_string(),
+                        json!(format!("https://{uri}")),
+                    );
                 }
             }
             if let Some(uri) = obj.get("verificationUriComplete").and_then(Value::as_str) {
                 if !uri.starts_with("http://") && !uri.starts_with("https://") {
-                    obj.insert("verificationUriComplete".to_string(), json!(format!("https://{uri}")));
+                    obj.insert(
+                        "verificationUriComplete".to_string(),
+                        json!(format!("https://{uri}")),
+                    );
                 }
             }
         }
@@ -282,7 +315,10 @@ impl TidalClient {
             .await?;
 
         let status = resp.status();
-        let body: Value = resp.json().await.map_err(|e| StreamingError::Parse(e.to_string()))?;
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if status.as_u16() == 400 {
             if let Some(err) = body.get("error").and_then(Value::as_str) {
@@ -297,18 +333,42 @@ impl TidalClient {
         }
 
         if !status.is_success() {
-            let msg = body.get("error_description").and_then(Value::as_str).unwrap_or("Device token poll failed");
-            return Err(StreamingError::Api { status: status.as_u16(), message: msg.to_string() });
+            let msg = body
+                .get("error_description")
+                .and_then(Value::as_str)
+                .unwrap_or("Device token poll failed");
+            return Err(StreamingError::Api {
+                status: status.as_u16(),
+                message: msg.to_string(),
+            });
         }
 
-        let access_token = body.get("access_token").and_then(Value::as_str).unwrap_or("");
-        let refresh_token = body.get("refresh_token").and_then(Value::as_str).unwrap_or("");
-        let expires_in = body.get("expires_in").and_then(Value::as_u64).unwrap_or(86400);
+        let access_token = body
+            .get("access_token")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let refresh_token = body
+            .get("refresh_token")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let expires_in = body
+            .get("expires_in")
+            .and_then(Value::as_u64)
+            .unwrap_or(86400);
 
         let user = body.get("user");
-        let user_id = user.and_then(|u| u.get("userId")).map(|v| v.to_string()).unwrap_or_default();
-        let username = user.and_then(|u| u.get("username").or_else(|| u.get("email"))).and_then(Value::as_str).unwrap_or("TIDAL User");
-        let country_code = user.and_then(|u| u.get("countryCode")).and_then(Value::as_str).unwrap_or("US");
+        let user_id = user
+            .and_then(|u| u.get("userId"))
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let username = user
+            .and_then(|u| u.get("username").or_else(|| u.get("email")))
+            .and_then(Value::as_str)
+            .unwrap_or("TIDAL User");
+        let country_code = user
+            .and_then(|u| u.get("countryCode"))
+            .and_then(Value::as_str)
+            .unwrap_or("US");
 
         Ok(json!({
             "status": "success",
@@ -370,16 +430,34 @@ impl TidalClient {
             .await?;
 
         let status = resp.status();
-        let body: Value = resp.json().await.map_err(|e| StreamingError::Parse(e.to_string()))?;
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if !status.is_success() {
-            let msg = body.get("error_description").and_then(Value::as_str).unwrap_or("Token refresh failed");
-            return Err(StreamingError::Api { status: status.as_u16(), message: msg.to_string() });
+            let msg = body
+                .get("error_description")
+                .and_then(Value::as_str)
+                .unwrap_or("Token refresh failed");
+            return Err(StreamingError::Api {
+                status: status.as_u16(),
+                message: msg.to_string(),
+            });
         }
 
-        let new_access = body.get("access_token").and_then(Value::as_str).unwrap_or("");
-        let new_refresh = body.get("refresh_token").and_then(Value::as_str).unwrap_or(refresh_token);
-        let expires_in = body.get("expires_in").and_then(Value::as_u64).unwrap_or(86400);
+        let new_access = body
+            .get("access_token")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let new_refresh = body
+            .get("refresh_token")
+            .and_then(Value::as_str)
+            .unwrap_or(refresh_token);
+        let expires_in = body
+            .get("expires_in")
+            .and_then(Value::as_u64)
+            .unwrap_or(86400);
 
         Ok(json!({
             "status": "success",

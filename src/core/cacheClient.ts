@@ -1,7 +1,7 @@
 import type { CacheCategory, CacheKind, CacheStat, CacheSwitchResult } from "@shared/types/cache";
 import { request } from "./controlClient";
 
-/** Desktop 与 Web 共用的 Core cache 管理 client；song-cache 播放内部操作不属于 Control API。 */
+/** Web Control 的 Core cache 管理 client；song-cache 播放内部操作不属于 Control API。 */
 export const cacheClient = {
   getStats: (): Promise<CacheStat[]> => request<CacheStat[]>("/cache/stats"),
   clear: async (id: CacheCategory): Promise<void> => {

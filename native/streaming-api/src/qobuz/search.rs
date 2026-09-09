@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::QobuzClient;
+use crate::error::StreamingError;
 
 impl QobuzClient {
     /// 搜索 Qobuz 资源（tracks / albums / artists / playlists）
@@ -24,12 +24,18 @@ impl QobuzClient {
 
         let limit = params
             .get("limit")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(20);
 
         let offset = params
             .get("offset")
-            .and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0);
 
         let mut req_params = HashMap::new();
@@ -38,6 +44,7 @@ impl QobuzClient {
         req_params.insert("limit".to_string(), limit.to_string());
         req_params.insert("offset".to_string(), offset.to_string());
 
-        self.request("catalog/search", req_params, true, false, None).await
+        self.request("catalog/search", req_params, true, false, None)
+            .await
     }
 }

@@ -11,9 +11,9 @@ import {
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { CONFIG_SCHEMA_VERSION } from "../../electron/main/atom/runtime/configSchema";
-import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
-import { DATABASE_SCHEMA_VERSION } from "../../electron/main/database/migration";
+import { CONFIG_SCHEMA_VERSION } from "../../core/atom/runtime/configSchema";
+import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
+import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
@@ -62,13 +62,9 @@ const packageMetadata = JSON.parse(readFileSync(path.join(root, "package.json"),
   productName?: string;
   version?: string;
 };
-const upstreamMetadata = JSON.parse(
-  readFileSync(path.join(root, "scripts", "atom", "upstream.json"), "utf8"),
-) as { acceptedBaseline?: string };
 if (packageMetadata.productName !== "SPlayer Atom" || !packageMetadata.version) {
   fail("package.json 缺少正式 SPlayer Atom 产品身份或版本");
 }
-if (!upstreamMetadata.acceptedBaseline) fail("缺少 SPlayer accepted baseline");
 const gitHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
 if (gitHead.error) throw gitHead.error;
 if (gitHead.status !== 0 || gitHead.signal || !gitHead.stdout.trim()) {
@@ -181,7 +177,6 @@ writeFileSync(
       atomVersion: packageMetadata.version,
       atomCommit,
       sourceDirty,
-      splayerBaseline: upstreamMetadata.acceptedBaseline,
       platform: "linux",
       arch: "x64",
       nodeRange: CORE_NODE_RANGE,

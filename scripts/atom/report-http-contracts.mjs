@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -10,7 +9,9 @@ const contracts = Array.isArray(data.contracts) ? data.contracts : [];
 const classes = ["UPSTREAM", "COMPAT", "ATOM", "DROP"];
 
 const countBy = (key, values) =>
-  Object.fromEntries(values.map((value) => [value, contracts.filter((item) => item[key] === value).length]));
+  Object.fromEntries(
+    values.map((value) => [value, contracts.filter((item) => item[key] === value).length]),
+  );
 
 const classification = countBy("classification", classes);
 const unclassified = contracts.filter((item) => !classes.includes(item.classification));

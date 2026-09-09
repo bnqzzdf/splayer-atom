@@ -12,7 +12,6 @@ import type { RepeatMode, ShuffleMode } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
-import { useStreamingStore } from "@/stores/streaming";
 import { usePluginsStore } from "@/stores/plugins";
 import { useHistoryStore } from "@/stores/history";
 import { useLibraryStore } from "@/stores/library";
@@ -30,10 +29,8 @@ import {
   installNextTrackPreloadWatchers,
   scheduleNextTrackPreload,
 } from "@/services/nextTrackPreloader";
-import { useFavorite } from "@/composables/useFavorite";
 import { handleError } from "@/utils/errors";
 import { toast } from "@/composables/useToast";
-import { isWebRemote } from "@/runtime";
 import i18n from "@/i18n";
 import { coreCommand } from "@/core/controlClient";
 import {
@@ -291,9 +288,7 @@ export const refreshDevices = async (): Promise<void> => {
   status.outputDevicesReady = true;
   const settings = useSettingsStore();
   await settings.syncSystem();
-  settings.player.outputDevice = isWebRemote()
-    ? result.data.selected
-    : settings.system.player.outputDevice;
+  settings.player.outputDevice = result.data.selected;
 };
 
 /**
@@ -425,7 +420,6 @@ export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => 
   status.heartMode = true;
   // 心动 / FM 互斥
   status.fmMode = false;
-  syncPlayMode();
 };
 
 /** 退出心动模式，保留当前队列继续播放 */
@@ -505,12 +499,6 @@ const onQueueEnded = async (): Promise<void> => {
   status.position = status.duration;
 };
 
-/** 同步播放模式到主进程 */
-const syncPlayMode = (): void => {
-  const status = useStatusStore();
-  window.api.player.syncPlayMode(status.repeatMode, status.shuffleMode);
-};
-
 /**
  * 设置循环模式
  * @param mode - list（列表循环）、one（单曲循环）
@@ -520,7 +508,6 @@ export const setRepeatMode = (mode: RepeatMode): void => {
   if (status.repeatMode === mode) return;
   void sessionClient.setSessionRepeat(mode).then((result) => {
     if (!applySessionResult(result)) return;
-    syncPlayMode();
     toast.info(i18n.global.t(`player.repeatMode.${mode}`), { icon: false });
   });
 };
@@ -549,7 +536,6 @@ export const setShuffleMode = (mode: ShuffleMode): void => {
   if (status.heartMode || status.shuffleMode === mode) return;
   void sessionClient.setSessionShuffle(mode).then((result) => {
     if (!applySessionResult(result)) return;
-    syncPlayMode();
     toast.info(i18n.global.t(`player.shuffleMode.${mode}`), { icon: false });
   });
 };
@@ -718,7 +704,6 @@ export const moveInQueue = async (fromIndex: number, toIndex: number): Promise<v
   applySessionResult(await sessionClient.moveSessionQueue(fromIndex, toIndex));
 };
 
-let unsubscribe: (() => void) | null = null;
 let unsubscribeCoreProjection: (() => void) | null = null;
 let unsubscribeLyricOffset: (() => void) | null = null;
 let initialized = false;
@@ -728,52 +713,17 @@ export const initPlayer = async (): Promise<void> => {
   if (initialized) return;
   initialized = true;
   console.log("[player] init");
-  // 先从主进程同步后端配置，确保 system 设置可用
-  const settings = useSettingsStore();
-  const webRemote = isWebRemote();
-  await settings.syncSystem();
-  const legacyOutputPreference = webRemote ? null : settings.player.outputDevice;
-  if (!webRemote) {
-    // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
-    await useStreamingStore().init();
-  }
-  // 插件列表来自同一 Core registry；Desktop/Web 都要在 loadTrack 前建立 projection。
+  await useSettingsStore().syncSystem();
+  // 插件列表来自同一 Core registry，在建立播放投影前开始加载。
   void usePluginsStore().load();
   const status = useStatusStore();
-  let legacyIndex = status.playIndex;
-  let legacyRepeat: RepeatMode = status.repeatMode;
-  let legacyShuffle: ShuffleMode = status.shuffleMode;
-  let legacyStatus: Record<string, unknown> | null = null;
-  try {
-    const raw = localStorage.getItem("status");
-    if (raw) {
-      legacyStatus = JSON.parse(raw) as Record<string, unknown>;
-      if (Number.isInteger(legacyStatus.playIndex)) legacyIndex = Number(legacyStatus.playIndex);
-      if (legacyStatus.repeatMode === "one" || legacyStatus.repeatMode === "list") {
-        legacyRepeat = legacyStatus.repeatMode;
-      }
-      if (legacyStatus.shuffleMode === "on" || legacyStatus.shuffleMode === "off") {
-        legacyShuffle = legacyStatus.shuffleMode;
-      }
-    }
-  } catch {}
-  const session = await queue.restoreQueue({
-    index: legacyIndex,
-    repeat: legacyRepeat,
-    shuffle: legacyShuffle,
-  });
+  const session = await queue.restoreQueue();
   if (session) {
     status.playIndex = session.index;
     status.repeatMode = session.repeat;
     status.shuffleMode = session.shuffle;
     status.fmMode = session.mode === "personalFm";
     autoClose.applySnapshot(session.autoClose);
-    if (!webRemote && legacyStatus) {
-      delete legacyStatus.playIndex;
-      delete legacyStatus.repeatMode;
-      delete legacyStatus.shuffleMode;
-      localStorage.setItem("status", JSON.stringify(legacyStatus));
-    }
   }
 
   unsubscribeCoreProjection?.();
@@ -789,119 +739,36 @@ export const initPlayer = async (): Promise<void> => {
     console.error("[player] getLyricOffset failed", error);
   }
 
-  if (webRemote) {
-    await refreshDevices();
-    const media = useMediaStore();
-    const current = status.currentTrack;
-    if (current) {
-      media.setTrack(current);
-      media.setPlaybackContext(status.currentPlaybackContext);
-    }
-    const currentStatus = await playerClient.getStatus();
-    if (currentStatus.success && currentStatus.data) {
-      status.state =
-        current && currentStatus.data.state === "idle" ? "stopped" : currentStatus.data.state;
-      status.position = currentStatus.data.position;
-      status.duration = currentStatus.data.duration;
-      status.volume = currentStatus.data.volume;
-      status.speed = currentStatus.data.speed;
-      playback.setCurrentTime(currentStatus.data.position);
-      playback.setDuration(currentStatus.data.duration);
-      playback.setSpeed(currentStatus.data.speed);
-      playback.setPlaying(currentStatus.data.state === "playing");
-      if (
-        current &&
-        (currentStatus.data.state === "playing" || currentStatus.data.state === "paused")
-      ) {
-        // Web 可能在主进程已经播放后才连入；把当前已加载曲补入同一 upstream 历史记录。
-        void useHistoryStore().record(current);
-      }
-    }
-    installNextTrackPreloadWatchers();
-    scheduleNextTrackPreload();
-    return;
-  }
-
-  // 恢复上次的音量和播放模式到主进程
-  await playerClient.setVolume(status.volume);
-  syncPlayMode();
-  // 应用渐入渐出配置
-  const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
-  await playerClient.setFadeDuration(fadeEnabled ? fadeDuration : 0);
-  // 应用音量均衡配置
-  await playerClient.setNormalizationEnabled(loudnessNormalization ?? false);
-  // 应用均衡器配置
-  if (equalizer) {
-    await playerClient.setEqualizerBands([...equalizer.bands]);
-    await playerClient.setPreampGain(equalizer.preamp);
-    await playerClient.setEqualizerEnabled(equalizer.enabled);
-  }
-  // Core 启动时已恢复自己的 output preference；renderer 本地旧值只允许做一次兼容迁移。
   await refreshDevices();
-  if (settings.system.player.outputDevice == null && legacyOutputPreference) {
-    const legacy = useStatusStore().outputDevices.find(
-      (device) => device.name === legacyOutputPreference,
-    );
-    const migratedOutput = legacy?.id ?? legacyOutputPreference;
-    if (isDirettaOutput(migratedOutput) && getCurrentDirectEntryBlockers().length > 0) {
-      settings.player.outputDevice = null;
-      toast.error(i18n.global.t("directMode.entryBlocked"));
-    } else {
-      await switchDevice(migratedOutput);
-    }
-  }
-  // Desktop legacy event 只承载 Host directive 与 Core 未消费的 recovery fallback。
-  if (unsubscribe) unsubscribe();
-  unsubscribe = window.api.player.onEvent(handleEvent);
   const media = useMediaStore();
-  // 当前歌曲喜欢状态变化时同步到托盘菜单
-  const fav = useFavorite();
-  watch(
-    () => fav.isLiked(media.track),
-    (liked) => window.api.player.syncLikeState(liked),
-    { immediate: true },
-  );
-  // 检查服务端当前是否已经在播放或暂停状态（如 Headless 后台守护进程持续播放中）
-  let isServerActive = false;
-  try {
-    const serverStatus = await playerClient.getStatus();
-    if (serverStatus.success && serverStatus.data) {
-      if (serverStatus.data.state === "playing" || serverStatus.data.state === "paused") {
-        isServerActive = true;
-        status.state = serverStatus.data.state;
-        status.position = serverStatus.data.position;
-        status.duration = serverStatus.data.duration;
-        playback.setDuration(serverStatus.data.duration);
-        playback.setCurrentTime(serverStatus.data.position, { force: true });
-        playback.setPlaying(serverStatus.data.state === "playing");
-      }
-    }
-  } catch (error) {
-    console.error("[player] getStatus failed", error);
-  }
-
-  const lastTrack = status.currentTrack;
-  if (lastTrack) {
-    const lastPosition = status.position;
-    media.setTrack(lastTrack);
+  const current = status.currentTrack;
+  if (current) {
+    media.setTrack(current);
     media.setPlaybackContext(status.currentPlaybackContext);
     lyricLoader.beginLoad();
-    if (!isServerActive) {
-      const loaded = await sessionClient.reloadSessionCurrent(settings.system.player.autoPlay);
-      if (loaded.success && loaded.data === true) {
-        if (settings.system.player.rememberLastTrack && lastPosition > 0) {
-          await seek(lastPosition);
-        }
-      } else {
-        status.trackLoading = false;
-        status.state = "idle";
-      }
-    }
-  } else if (!isServerActive) {
-    status.state = "idle";
   }
 
-  // 下一首预载的监听器
+  const currentStatus = await playerClient.getStatus();
+  if (currentStatus.success && currentStatus.data) {
+    status.state =
+      current && currentStatus.data.state === "idle" ? "stopped" : currentStatus.data.state;
+    status.position = currentStatus.data.position;
+    status.duration = currentStatus.data.duration;
+    status.volume = currentStatus.data.volume;
+    status.speed = currentStatus.data.speed;
+    playback.setCurrentTime(currentStatus.data.position, { force: true });
+    playback.setDuration(currentStatus.data.duration);
+    playback.setSpeed(currentStatus.data.speed);
+    playback.setPlaying(currentStatus.data.state === "playing");
+    if (
+      current &&
+      (currentStatus.data.state === "playing" || currentStatus.data.state === "paused")
+    ) {
+      // Web Control 可能在 Core 已经播放后才连入，补齐 renderer 历史投影。
+      void useHistoryStore().record(current);
+    }
+  }
+
   installNextTrackPreloadWatchers();
   scheduleNextTrackPreload();
 };
@@ -909,10 +776,6 @@ export const initPlayer = async (): Promise<void> => {
 /** 清理事件订阅 */
 export const disposePlayer = (): void => {
   disposeNextTrackPreload();
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
   if (unsubscribeCoreProjection) {
     unsubscribeCoreProjection();
     unsubscribeCoreProjection = null;

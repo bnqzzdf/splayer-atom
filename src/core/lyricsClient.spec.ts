@@ -7,7 +7,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -15,8 +14,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Lyrics Core Protocol client", () => {
-  it("uses the Desktop Core scheme for matching and TTML requests", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for matching and TTML requests", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -45,15 +43,14 @@ describe("Lyrics Core Protocol client", () => {
     });
 
     expect(fetchMock.mock.calls.slice(1).map((call) => call[0])).toEqual([
-      "atom-core://control/api/lyrics/match-by-id",
-      "atom-core://control/api/lyrics/match-by-query",
-      "atom-core://control/api/lyrics/ttml-overlay",
-      "atom-core://control/api/lyrics/local",
+      "http://localhost:14559/api/lyrics/match-by-id",
+      "http://localhost:14559/api/lyrics/match-by-query",
+      "http://localhost:14559/api/lyrics/ttml-overlay",
+      "http://localhost:14559/api/lyrics/local",
     ]);
   });
 
   it("canonicalizes Web cache artwork before Track-based lyric requests", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))

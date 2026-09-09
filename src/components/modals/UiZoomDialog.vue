@@ -1,28 +1,30 @@
 <script setup lang="ts">
+import { useSettingsStore } from "@/stores/settings";
+
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ "update:open": [value: boolean] }>();
 
 const { t } = useI18n();
+const settings = useSettingsStore();
 
 /** 当前缩放百分比 */
 const percent = ref(100);
 
-/** 写入并应用缩放：config:set 触发主进程 applyMainWindowZoom */
+/** 写入当前浏览器 Control 的缩放配置。 */
 const apply = (value: number): void => {
   percent.value = value;
-  window.api.config.set("system.uiZoom", value).catch(() => {});
+  void settings.setSystem("system.uiZoom", value);
 };
 
 /** 恢复默认 100% */
 const reset = (): void => apply(100);
 
-// 打开时读取当前缩放值
+// 打开时读取当前 Control 已同步的缩放值
 watch(
   () => props.open,
-  async (isOpen) => {
+  (isOpen) => {
     if (!isOpen) return;
-    const saved = await window.api.config.get("system.uiZoom");
-    percent.value = typeof saved === "number" ? saved : 100;
+    percent.value = settings.system.system.uiZoom;
   },
 );
 </script>

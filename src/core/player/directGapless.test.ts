@@ -12,29 +12,20 @@ const sharedPlayerSource = readFileSync(
   new URL("../../../shared/types/player.ts", import.meta.url),
   "utf8",
 );
-const preloadSource = readFileSync(
-  new URL("../../../electron/preload/index.ts", import.meta.url),
-  "utf8",
-);
-const mainPlayerSource = readFileSync(
-  new URL("../../../electron/main/ipc/player.ts", import.meta.url),
-  "utf8",
-);
 const headlessRoutesSource = readFileSync(
-  new URL("../../../electron/main/atom/headless/routes.ts", import.meta.url),
+  new URL("../../../core/atom/headless/routes.ts", import.meta.url),
   "utf8",
 );
-const webApiSource = readFileSync(new URL("../../web/api.ts", import.meta.url), "utf8");
 const directGaplessServiceSource = readFileSync(
-  new URL("../../../electron/main/services/directGapless.ts", import.meta.url),
+  new URL("../../../core/services/directGapless.ts", import.meta.url),
   "utf8",
 );
 const corePreloaderSource = readFileSync(
-  new URL("../../../electron/main/services/playbackPreloader.ts", import.meta.url),
+  new URL("../../../core/services/playbackPreloader.ts", import.meta.url),
   "utf8",
 );
 const sessionSource = readFileSync(
-  new URL("../../../electron/main/services/playbackSession.ts", import.meta.url),
+  new URL("../../../core/services/playbackSession.ts", import.meta.url),
   "utf8",
 );
 
@@ -46,7 +37,7 @@ const between = (source: string, start: string, end: string): string => {
   return section;
 };
 
-test("Direct gapless boundary is committed by Core before Control projection", () => {
+test("Direct gapless boundary is committed exclusively by Core", () => {
   const coreBoundary = between(
     sessionSource,
     "export const onNativeDirectTrackBoundary = (",
@@ -57,17 +48,8 @@ test("Direct gapless boundary is committed by Core before Control projection", (
   assert.match(coreBoundary, /publishTrackLoaded\(/);
   assert.match(coreBoundary, /scheduleNextPlaybackPreload\(\)/);
 
-  const rendererBoundary = between(
-    eventsSource,
-    'case "directTrackBoundary": {',
-    'case "sourceError":',
-  );
-  assert.match(rendererBoundary, /只有未消费的异常边界才会到 Desktop renderer/);
-  assert.match(rendererBoundary, /await stop\(\)/);
-  assert.doesNotMatch(
-    rendererBoundary,
-    /consumeDirectGaplessBoundary|commitDirectGaplessTrack|commitDirectGaplessBoundary/,
-  );
+  assert.doesNotMatch(eventsSource, /directTrackBoundary|sourceError/);
+  assert.doesNotMatch(eventsSource, /commitDirectGaplessTrack|commitDirectGaplessBoundary/);
 });
 
 test("Direct staging respects Core playback semantics before handing audio to native", () => {
@@ -120,19 +102,7 @@ test("renderer-facing Direct staging and materialization protocol is removed end
   const forbidden =
     /stageDirectNext|cancelDirectNext|commitDirectGaplessBoundary|materializeDirectInput/;
   assert.doesNotMatch(sharedPlayerSource, forbidden);
-  assert.doesNotMatch(
-    preloadSource,
-    /player:(stageDirectNext|cancelDirectNext|commitDirectGaplessBoundary|materializeDirectInput)/,
-  );
-  assert.doesNotMatch(
-    mainPlayerSource,
-    /player:(stageDirectNext|cancelDirectNext|commitDirectGaplessBoundary|materializeDirectInput)/,
-  );
   assert.doesNotMatch(headlessRoutesSource, /\/player\/direct-input\/materialize/);
-  assert.doesNotMatch(
-    webApiSource,
-    /WEB_DIRECT_STAGING_DISABLED|\/player\/direct-input\/materialize/,
-  );
   assert.doesNotMatch(
     audioSource,
     /prepareDirectTrackSource|window\.api\.player\.materializeDirectInput/,

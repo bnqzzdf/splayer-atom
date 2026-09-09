@@ -48,37 +48,15 @@ tracing-subscriber = { workspace = true }
 tracing-appender = { workspace = true }
 time = { workspace = true }
 
-# 音频输出（cpal 统一后端：Linux PipeWire/PulseAudio、macOS CoreAudio、Windows WASAPI）
+# Linux Core 音频输出
 cpal = { version = "0.18.2", default-features = false }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-pipewire = { version = "0.10.0", features = ["v0_3_53"], optional = true }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-core-audio = { version = "0.3.2", default-features = false, features = [
-  "std",
-  "AudioHardware",
-] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-core = { workspace = true }
-[target.'cfg(target_os = "windows")'.dependencies.windows]
-workspace = true
-features = [
-  "Win32_Foundation",
-  "Win32_Media_Audio",
-  "Win32_System_Com",
-  "Win32_System_Threading",
-]
-
 [features]
-default = ["fft", "midi", "desktop-audio"]
+default = ["fft", "midi"]
 fft = ["dep:rustfft"]
 midi = ["dep:rustysynth"]
-desktop-audio = ["cpal/pipewire", "cpal/pulseaudio", "dep:pipewire"]
 napi = []
 diretta = ["dep:diretta-sys"]
-windows_device = []
 
 [dev-dependencies]
 base64 = "0.22.1"

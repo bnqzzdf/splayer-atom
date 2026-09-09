@@ -38,7 +38,7 @@ const toServerLegacy = (record: LegacyPlaylistRecord): LegacyPlaylistRecord => (
   cover: serverAssetUrl(record.cover),
 });
 
-/** Desktop 与 Web 共用的 Core Playlist request client。 */
+/** Web Control 的 Core Playlist request client。 */
 export const playlistClient: PlaylistApi = {
   list: async () => (await request<PlaylistSummary[]>("/playlists")).map(mapSummary),
   get: async (id) =>

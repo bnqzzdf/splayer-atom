@@ -1,29 +1,5 @@
-import localforage from "localforage";
-import { isWebRemote } from "@/runtime";
 import { sessionClient } from "@/core/sessionClient";
-import type {
-  PlaybackQueueItem,
-  PlaybackSessionSnapshot,
-  RepeatMode,
-  ShuffleMode,
-  Track,
-} from "@shared/types/player";
-
-const db = localforage.createInstance({ name: "splayer", storeName: "queue" });
-
-type PersistedQueueItem = Track | PlaybackQueueItem;
-
-export interface LegacyQueueState {
-  index: number;
-  repeat: RepeatMode;
-  shuffle: ShuffleMode;
-}
-
-/** 兼容旧版本直接持久化的 Track 队列。 */
-const restoreQueueItem = (value: PersistedQueueItem): PlaybackQueueItem => {
-  if (typeof value.track === "object" && value.track !== null) return value as PlaybackQueueItem;
-  return { track: value as Track };
-};
+import type { PlaybackQueueItem, PlaybackSessionSnapshot, Track } from "@shared/types/player";
 
 /** 当前播放队列项；仅是 main session 的 renderer 响应式投影。 */
 export const queueEntries = shallowRef<PlaybackQueueItem[]>([]);
@@ -45,46 +21,17 @@ export const applySession = (session: PlaybackSessionSnapshot): void => {
     : null;
 };
 
-const clearLegacyQueue = (): Promise<unknown[]> =>
-  Promise.all([db.removeItem("playList"), db.removeItem("originalPlayList")]);
-
 /**
- * 恢复 main session；若 main 尚无队列，则一次性迁移旧 renderer IndexedDB。
- * @param legacyState - 升级前由 Pinia 持久化的索引和播放模式
- * @returns 当前主进程权威会话
+ * 读取 Core 权威播放会话。
+ * Web Control 不持久化或迁移第二份 renderer 队列。
+ * @returns 当前 Core 权威会话
  */
-export const restoreQueue = async (
-  legacyState: LegacyQueueState,
-): Promise<PlaybackSessionSnapshot | null> => {
+export const restoreQueue = async (): Promise<PlaybackSessionSnapshot | null> => {
   try {
     const current = await sessionClient.getSession();
     if (!current.success || !current.data) return null;
-    if (current.data.queue.length > 0 || isWebRemote()) {
-      applySession(current.data);
-      if (!isWebRemote()) await clearLegacyQueue();
-      return current.data;
-    }
-
-    const [list, original] = await Promise.all([
-      db.getItem<PersistedQueueItem[]>("playList"),
-      db.getItem<PersistedQueueItem[] | null>("originalPlayList"),
-    ]);
-    if (!list?.length) {
-      applySession(current.data);
-      return current.data;
-    }
-
-    const result = await sessionClient.migrateLegacySessionQueue(
-      list.map(restoreQueueItem),
-      original?.map(restoreQueueItem) ?? null,
-      legacyState.index,
-      legacyState.repeat,
-      legacyState.shuffle,
-    );
-    if (!result.success || !result.data) return null;
-    applySession(result.data);
-    await clearLegacyQueue();
-    return result.data;
+    applySession(current.data);
+    return current.data;
   } catch (error) {
     console.error("[queue] 恢复权威队列失败:", error);
     return null;

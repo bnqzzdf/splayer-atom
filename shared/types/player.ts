@@ -419,10 +419,6 @@ export interface PlayerApi {
   setOutputDevice: (deviceId: string | null) => Promise<IpcResponse>;
   /** 获取当前选择的输出设备 ID（None = 跟随系统默认） */
   getSelectedDeviceName: () => Promise<IpcResponse<string | null>>;
-  /** 同步播放模式到托盘 */
-  syncPlayMode: (repeatMode: string, shuffleMode: string) => void;
-  /** 同步当前歌曲喜欢状态到托盘 */
-  syncLikeState: (liked: boolean) => void;
   /** 广播播放控制事件 */
   dispatch: (type: string) => void;
   /** 订阅播放事件 */

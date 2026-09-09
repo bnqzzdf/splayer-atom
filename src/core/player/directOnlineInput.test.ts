@@ -8,23 +8,23 @@ const preloaderSource = readFileSync(
   "utf8",
 );
 const mainPlayerLoadSource = readFileSync(
-  new URL("../../../electron/main/services/playerLoad.ts", import.meta.url),
+  new URL("../../../core/services/playerLoad.ts", import.meta.url),
   "utf8",
 );
 const corePreloaderSource = readFileSync(
-  new URL("../../../electron/main/services/playbackPreloader.ts", import.meta.url),
+  new URL("../../../core/services/playbackPreloader.ts", import.meta.url),
   "utf8",
 );
 const coreSessionSource = readFileSync(
-  new URL("../../../electron/main/services/playbackSession.ts", import.meta.url),
+  new URL("../../../core/services/playbackSession.ts", import.meta.url),
   "utf8",
 );
 const sourceResolverSource = readFileSync(
-  new URL("../../../electron/main/services/playbackSourceResolver.ts", import.meta.url),
+  new URL("../../../core/services/playbackSourceResolver.ts", import.meta.url),
   "utf8",
 );
 const songCacheSource = readFileSync(
-  new URL("../../../electron/main/services/songCache.ts", import.meta.url),
+  new URL("../../../core/services/songCache.ts", import.meta.url),
   "utf8",
 );
 
@@ -44,7 +44,10 @@ test("canonical source resolution is owned by Core before native load", () => {
     "const loadIndexWithPolicy = async (",
   );
   assert.match(loadFlow, /resolvePlaybackSource\(track\)/);
-  assert.match(loadFlow, /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/);
+  assert.match(
+    loadFlow,
+    /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/,
+  );
   assert.match(loadFlow, /loadPlayerSource\(\s*nativeSource/);
 });
 

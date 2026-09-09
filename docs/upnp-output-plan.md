@@ -24,7 +24,7 @@ SACD reader correctness 属于 `audio-engine-core` 自身维护，不属于 UPnP
 - 不重采样、不 remix、不归一化、不应用 ReplayGain、EQ、fade、tempo、pitch、软件音量或
   DSD-to-PCM；DSD 不使用 DoP。
 - Renderer 内部处理和 DAC bit-perfect 是独立硬件验收，不由“Core 发送了原文件”推导。
-- 不做多房间、同步 Zones、OpenHome Playlist、通用 MediaServer/ContentDirectory、Desktop
+- 不做多房间、同步 Zones、OpenHome Playlist、通用 MediaServer/ContentDirectory、额外
   Output Agent、第二音频引擎或新的 provider 协议实现。
 
 ## 2. 实现原则
@@ -32,7 +32,7 @@ SACD reader correctness 属于 `audio-engine-core` 自身维护，不属于 UPnP
 按 `AGENTS.md` 的最小下游规则执行：
 
 1. 复用当前 SPlayer/Atom 已有类型、Core Control、queue、resolver、cache 和播放策略。
-2. UPnP 特有协议与运行态尽量只存在于 `electron/main/atom/upnp/`。
+2. UPnP 特有协议与运行态只存在于 `core/atom/upnp/`。
 3. 现有 native/local/Diretta 路径采用 early branch 包围式接入，不重写成通用 Output
    framework。
 4. 只有第二个真实消费者出现时才抽取现有 helper；不为未来可能的实现预建 registry、adapter、
@@ -45,7 +45,7 @@ SACD reader correctness 属于 `audio-engine-core` 自身维护，不属于 UPnP
 新增：
 
 ```text
-electron/main/atom/upnp/
+core/atom/upnp/
   discovery.ts
   transport.ts
   output.ts
@@ -122,7 +122,7 @@ single byte Range
 provider URL。
 
 `media.ts` 自己维护一个极薄的 Atom-owned HTTP listener，只服务 UPnP media，不承载 Core
-Control、Web UI、WebSocket 或 Desktop External API。这样 Desktop 与 Headless 行为一致，且
+Control 与 WebSocket。这样所有 Web Control 行为一致，且
 不改变现有 `externalApi.enabled/allowLan` 的启动和暴露语义。listener 使用临时端口，按需要
 启动并在无资源/退出时释放。
 
@@ -149,7 +149,7 @@ GET  /status
 ```
 
 `GET /output/devices` 继续作为刷新动作，合并 local + Diretta + UPnP 扫描结果，不新增
-`/output/refresh`。Desktop/Web 现有 output selector 继续消费同一 `AudioDevice[]`；Web output
+`/output/refresh`。Web output selector 继续消费同一 `AudioDevice[]`；output
 projection 只需允许 `upnp:` 通过。
 
 `GET /status` 在 UPnP 被选中时读取 `output.ts` 的最近观察值，否则保持现有 native status
@@ -161,7 +161,7 @@ Protocol version。
 
 ## 5. PlaybackSession 最小接入
 
-`electron/main/services/playbackSession.ts` 已经是 Atom-owned Core playback authority，因此
+`core/services/playbackSession.ts` 是 Core playback authority，因此
 不新增 `IOutput`、Output registry 或 adapter hierarchy。
 
 ### load
@@ -181,7 +181,7 @@ resolvePlaybackSource(track)
               existing loadPlayerSource() path unchanged
 ```
 
-native/local/Diretta 分支尽量保持原代码原位，避免未来 upstream sync 冲突。
+native/local/Diretta 分支保持现有职责边界，避免无关扩张。
 
 UPnP 不伪造 `AudioPlayer` 或 native `LoadResult`。需要的 presentation、NowPlaying、Netease、
 ListenBrainz 和 Core play stats 优先复用现有公开 helper；只有实际出现稳定重复时才提取共同
@@ -191,7 +191,7 @@ ListenBrainz 和 Core play stats 优先复用现有公开 helper；只有实际�
 ### play / pause / stop / seek
 
 `playbackSession.play/pause/stop/seek` 在 `upnp:` 选中时委托 `output.ts`，否则保持现有 native
-调用。现有 Desktop 主 UI、Web Control、系统媒体的 Play/Pause/Stop/Seek 已经主要委托
+调用。现有 Web Control 的 Play/Pause/Stop/Seek 已经委托
 playbackSession，因此无需为 UPnP 新建 Control API。
 
 旧 IPC 中与 DSP/FFT/native device 明确绑定的能力继续属于 native player，不为 UPnP 进行全局
@@ -232,7 +232,7 @@ provider 协议，也不解析 manifest。
 若 resolver 已返回本地 path/cache path，直接服务。若仍为 HTTP(S)，首版先完整物化后提供给
 Renderer，不做边下边播 relay。
 
-`electron/main/atom/directInput.ts` 已有 exact HTTP bytes -> `.part` -> rename 的实现。实现时先
+`core/atom/directInput.ts` 已有 exact HTTP bytes -> `.part` -> rename 的实现。实现时先
 复用其可复用部分；如果 Diretta 专属 temp/lifecycle 使直接复用不成立，再提取最小的 Atom-owned
 exact-byte helper。Diretta 和 UPnP 仍分别拥有 temp root 与 cleanup lifecycle，不复制下载实现，
 也不让 UPnP 依赖 Diretta 目录语义。
@@ -324,7 +324,7 @@ Atom-specific 薄导出文件，例如：
 native/audio-engine/src/atom_media_extract.rs
 ```
 
-只把参数传给 `audio_engine_core::media_extract` 并返回文件级结果。现有 upstream-oriented
+只把参数传给 `audio_engine_core::media_extract` 并返回文件级结果。现有
 `bindings/player.rs` 保持不变；不新增第二 native addon。
 
 ## 9. 状态、结束与统计
@@ -381,7 +381,7 @@ UPnP 观察到实际 PLAYING 后才开始/恢复 playing wall-clock；Pause/Stop
 - mock Renderer 实际拉取媒体，验证 SetURI/Play/Pause/Stop/Seek 与状态轮询。
 - 手动 stop 不自动 next；自然结束只消费一次；旧 generation 不污染新资源。
 - UPnP 路径不调用 native `AudioPlayer.load/play`、DSP 或 Diretta stage。
-- `/output/devices` 与 Desktop/Web 现有 selector 无新协议 schema 即可工作。
+- `/output/devices` 与 Web Control 现有 selector 无新协议 schema 即可工作。
 
 ### CUE / SACD / DSD
 
@@ -430,7 +430,7 @@ artifact 上连续 30 次原始 DSF 强制 reload 验证残留目标 FD=0、总 
 - 是否优先发送原文件，只有明确必要时才进行样本/逻辑 DSD 序列保持的转换；
 - 是否引入了没有真实需求的 registry、状态机、缓存层或 fallback。
 
-如果任一项暴露出广泛 upstream/native touch，应先重新设计 seam，再继续实现。
+如果任一项暴露出广泛无关 native touch，应先重新设计 seam，再继续实现。
 
 ## 14. 参考
 

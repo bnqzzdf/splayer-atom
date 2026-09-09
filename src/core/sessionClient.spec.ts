@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -9,8 +8,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("shared playback session Core Protocol client", () => {
-  it("preserves remove-index loadCurrent semantics on Desktop", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("preserves remove-index loadCurrent semantics over Core HTTP", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -33,13 +31,12 @@ describe("shared playback session Core Protocol client", () => {
       data: { queue: [] },
     });
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "atom-core://control/api/session/queue/4?loadCurrent=0",
+      "http://localhost:14559/api/session/queue/4?loadCurrent=0",
     );
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE" });
   });
 
   it("sends the one-time legacy queue migration through Core Protocol", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -62,7 +59,7 @@ describe("shared playback session Core Protocol client", () => {
     ];
     await sessionClient.migrateLegacySessionQueue(items as never, null, 0, "list", "off");
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/session/migrate-legacy");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/session/migrate-legacy");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({

@@ -36,15 +36,14 @@ test("Control Action Model carries semantic state instead of Dropdown-only flags
     "enabled: boolean",
     "visible: boolean",
     "danger: boolean",
-    "requiredCapability?: ControlHostCapability",
     "coreCommand?: string",
   ]) {
     assert.match(modelSource, new RegExp(field.replace(/[?]/g, "\\?")));
   }
-  assert.match(modelSource, /hasHostCapability\(action\.requiredCapability\)/);
+  assert.doesNotMatch(modelSource, /ControlHostCapability|requiredCapability|hasHostCapability/);
 });
 
-test("Track actions declare Core commands and Host requirements once", () => {
+test("Track actions declare Core commands without host-only actions", () => {
   assert.match(trackMenuSource, /const actions = computed<ControlAction\[\]>/);
   assert.match(trackMenuSource, /id: "play"[\s\S]*coreCommand: "player\.playNow"/);
   assert.match(trackMenuSource, /id: "playNext"[\s\S]*coreCommand: "player\.insertQueueNext"/);
@@ -55,10 +54,7 @@ test("Track actions declare Core commands and Host requirements once", () => {
     /id: "deleteFile"[\s\S]*danger: true[\s\S]*coreCommand: "library\.deleteTracks"/,
   );
   assert.match(trackMenuSource, /id: "comments"[\s\S]*coreCommand: "comments\.get"/);
-  assert.match(
-    trackMenuSource,
-    /id: "showInExplorer"[\s\S]*requiredCapability: "hostFileExplorer"/,
-  );
+  assert.doesNotMatch(trackMenuSource, /showInExplorer|requiredCapability|hostFileExplorer/);
 });
 
 test("Track add-to-queue appends once by Track id for every SongList source", () => {

@@ -9,7 +9,7 @@ import { extractLyricAuthors } from "@/utils/lyric/author";
 import { applyLyricExclude } from "@/utils/lyric/lyricStripper";
 import { normalizeLyricLines } from "@/utils/lyric/normalize";
 import { applyProfanityUncensor } from "@/utils/preset/profanity";
-import { applyLyricCjkTransform } from "@/utils/lyric/cjkTransform";
+import { nowPlayingClient } from "@/core/nowPlayingClient";
 
 export const useMediaStore = defineStore("media", () => {
   watchLyricPreference();
@@ -51,7 +51,7 @@ export const useMediaStore = defineStore("media", () => {
         lyric: toRaw(parsedLyric.value),
         source: activeLyric.value ? toRaw(activeLyric.value) : null,
       };
-      window.api.nowPlaying.update(payload);
+      nowPlayingClient.updateLyrics(payload);
     } catch (error) {
       console.error("[media] syncToMain failed", error);
     }
@@ -131,12 +131,9 @@ export const useMediaStore = defineStore("media", () => {
     syncToMain();
   };
 
-  /** 简繁转换竞态 token */
-  let transformToken = 0;
-
-  // 监听简繁转换及强迫症设置变化并重新解析当前歌词
+  // 监听歌词文本处理设置变化并重新解析当前歌词
   watch(
-    () => [useSettingsStore().lyric.cjkTransform, useSettingsStore().preset.uncensorProfanity],
+    () => useSettingsStore().preset.uncensorProfanity,
     () => {
       if (activeLyric.value && lyricContent.value) {
         setLyric(activeLyric.value, lyricContent.value);
@@ -179,17 +176,6 @@ export const useMediaStore = defineStore("media", () => {
     lyricIndex.value = -1;
     lyricLoading.value = false;
     syncToMain();
-
-    // 应用 OpenCC 简繁转换
-    const cjkMode = settings.lyric.cjkTransform;
-    if (hasContent && cjkMode && cjkMode !== "none") {
-      const token = ++transformToken;
-      applyLyricCjkTransform(nextLines, cjkMode).then((transformed) => {
-        if (token !== transformToken) return;
-        parsedLyric.value = transformed;
-        syncToMain();
-      });
-    }
   };
 
   /**

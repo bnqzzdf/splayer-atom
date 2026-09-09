@@ -1,7 +1,7 @@
 /**
  * Qobuz 搜索（tracks / albums / artists / playlists）
  *
- * 调用 window.api.apis.call("qobuz", "catalog_search", ...) 并转换响应。
+ * 调用 Core Provider Protocol 的 Qobuz catalog_search 并转换响应。
  *
  * 响应结构（catalog/search）：
  * {

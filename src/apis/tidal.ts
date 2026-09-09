@@ -2,12 +2,12 @@
  * TIDAL API 渲染端封装
  *
  * 用 Proxy 把所有接口代理到主进程：`tidalRaw("search", {query})` 实际等于
- * `window.api.apis.call("tidal", "search", {query})`
+ * 通过 `providerClient` 调用 Core Provider Protocol。
  *
  * 调用约定：成功 → 返回 body；失败 → 抛 Error
  *
  * 参照 src/apis/qobuz.ts 的封装模式。TIDAL 后端模块注册表见
- * electron/main/apis/tidal/modules/index.ts。
+ * core/apis/tidal/modules/index.ts。
  */
 
 import type { ApiCallResponse } from "@shared/types/apis";
@@ -15,7 +15,7 @@ import { providerClient } from "@/core/providerClient";
 
 /**
  * 调用 TIDAL API，返回原始响应
- * @param name 接口名（对应 electron/main/apis/tidal/modules/index.ts 中的 key）
+ * @param name 接口名（对应 core/apis/tidal/modules/index.ts 中的 key）
  * @param params 接口参数
  * @returns 原始响应（含 status + body）
  */
@@ -105,7 +105,6 @@ export const authStatus = () =>
     expiresAt?: number;
   }>("auth_status");
 
-
 /** 授权码登录响应（auth_authorize） */
 export interface TidalAuthorizeResponse {
   status: string;
@@ -147,14 +146,12 @@ export const search = <T = any>(
   type: "TRACKS" | "ALBUMS" | "ARTISTS" | "PLAYLISTS",
   limit = 20,
   offset = 0,
-) =>
-  tidalCall<T>("search", { query, type, limit, offset });
+) => tidalCall<T>("search", { query, type, limit, offset });
 
 // ============ 专辑 ============
 
 /** 专辑详情 */
-export const albumGet = (albumId: string) =>
-  tidalCall("album_get", { album_id: albumId });
+export const albumGet = (albumId: string) => tidalCall("album_get", { album_id: albumId });
 
 /** 专辑曲目列表 */
 export const albumGetTracks = (albumId: string, limit = 50, offset = 0) =>
@@ -169,8 +166,7 @@ export const playlistGet = (playlistId: string) =>
 // ============ 艺术家 ============
 
 /** 艺术家详情 */
-export const artistGet = (artistId: string) =>
-  tidalCall("artist_get", { artist_id: artistId });
+export const artistGet = (artistId: string) => tidalCall("artist_get", { artist_id: artistId });
 
 /** 艺术家专辑列表 */
 export const artistGetAlbums = (artistId: string, limit = 50, offset = 0) =>
@@ -183,8 +179,7 @@ export const artistGetTopTracks = (artistId: string, limit = 50, offset = 0) =>
 // ============ 曲目 / 流 URL ============
 
 /** 曲目详情 */
-export const trackGet = (trackId: string) =>
-  tidalCall("track_get", { track_id: trackId });
+export const trackGet = (trackId: string) => tidalCall("track_get", { track_id: trackId });
 
 /** 获取曲目流 URL（含 DASH manifest） */
 export const trackGetStreamUrl = (trackId: string, quality?: string) =>

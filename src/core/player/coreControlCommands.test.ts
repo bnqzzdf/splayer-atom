@@ -72,7 +72,7 @@ test("renderer processing and status controls use Core Protocol instead of Playe
   assert.doesNotMatch(settingsSource, processingIpc);
 });
 
-test("distributed player helpers use Core Protocol while Host presentation and events stay separate", () => {
+test("distributed player helpers use Core Protocol without host event facades", () => {
   assert.match(playerClientSource, /coreCommand\("\/player\/fft", \{ enabled \}\)/);
   assert.match(playerClientSource, /coreResult<\{ data: string \| null \}>\("\/player\/cover"\)/);
   assert.match(playerClientSource, /coreResult<\{ data: string \}>\("\/player\/read-lyric"/);
@@ -92,9 +92,10 @@ test("distributed player helpers use Core Protocol while Host presentation and e
   ]) {
     assert.doesNotMatch(source, migratedIpc);
   }
-  assert.match(playerSource, /window\.api\.player\.syncPlayMode/);
-  assert.match(playerSource, /window\.api\.player\.syncLikeState/);
-  assert.match(playerSource, /window\.api\.player\.onEvent/);
+  assert.doesNotMatch(
+    playerSource,
+    /window\.api\.player\.(syncPlayMode|syncLikeState|onEvent)|ipcRenderer|electron/,
+  );
 });
 
 test("next always delegates playback advancement to the Core session", () => {

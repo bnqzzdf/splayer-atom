@@ -6,7 +6,6 @@ import { useSettingsStore } from "@/stores/settings";
 import * as player from "@/core/player";
 import { useDirectModeState } from "@/core/player/directMode";
 import { getOutputDisplayName, getOutputKind } from "@/core/outputDevices";
-import { hasHostCapability, isWebRemote } from "@/runtime";
 import IconLucideSliders from "~icons/lucide/sliders-horizontal";
 import IconLucideGauge from "~icons/lucide/gauge";
 import IconLucideMoreVertical from "~icons/lucide/more-vertical";
@@ -27,22 +26,15 @@ const props = withDefaults(
 const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
-const { isDesktopLyricOpen } = storeToRefs(settings);
 const { remoteSelected, sampleControlsUnavailable: processingLocked } = useDirectModeState();
-const webRemote = isWebRemote();
-const desktopLyricAvailable = hasHostCapability("desktopLyric");
 const outputPopoverOpen = ref(false);
 const outputSelectionRequired = computed(
-  () => webRemote && status.outputDevicesReady && status.selectedOutputDevice === null,
+  () => status.outputDevicesReady && status.selectedOutputDevice === null,
 );
 let initialOutputPromptHandled = false;
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
-
-const lyricButtonType = computed(() =>
-  isDesktopLyricOpen.value ? (props.cover ? "cover" : "primary") : buttonType.value,
-);
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
 const selectedOutputDevice = computed(() =>
@@ -67,7 +59,7 @@ const processingUnavailableTitle = computed(() =>
 watch(
   [() => status.outputDevicesReady, () => status.selectedOutputDevice],
   ([ready, selected]) => {
-    if (!webRemote || !ready || initialOutputPromptHandled) return;
+    if (!ready || initialOutputPromptHandled) return;
     initialOutputPromptHandled = true;
     if (!selected) outputPopoverOpen.value = true;
   },
@@ -77,7 +69,7 @@ watch(
 watch(
   () => status.outputSelectionRequest,
   () => {
-    if (webRemote) outputPopoverOpen.value = true;
+    outputPopoverOpen.value = true;
   },
 );
 
@@ -99,10 +91,6 @@ const toggleMute = (): void => {
   } else {
     player.setVolume(lastVolume.value || 0.7);
   }
-};
-
-const toggleDesktopLyric = (): void => {
-  window.api.window.toggleDesktopLyric().catch(() => {});
 };
 
 const equalizerOpen = ref(false);
@@ -132,7 +120,6 @@ const onMoreMenuSelect = (key: string): void => {
     <QualityControl v-if="settings.appearance.showQualitySwitch" :cover="cover" />
     <!-- Web 没有系统托盘/原生菜单，直接在播放器工具栏暴露主机输出选择。 -->
     <SPopover
-      v-if="webRemote"
       v-model:open="outputPopoverOpen"
       trigger="click"
       side="top"
@@ -221,17 +208,6 @@ const onMoreMenuSelect = (key: string): void => {
         <span class="text-xs tabular-nums mt-2">{{ volumePercent }}%</span>
       </div>
     </SPopover>
-    <SButton
-      v-if="desktopLyricAvailable"
-      :type="lyricButtonType"
-      :variant="isDesktopLyricOpen ? 'tertiary' : 'ghost'"
-      circle
-      size="large"
-      :class="isDesktopLyricOpen ? undefined : mutedClass"
-      @click="toggleDesktopLyric"
-    >
-      <template #icon><IconLucideCaptions /></template>
-    </SButton>
     <!-- 私人 FM 模式调整 -->
     <SButton
       v-if="status.fmMode"

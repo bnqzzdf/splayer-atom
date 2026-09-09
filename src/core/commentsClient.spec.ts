@@ -7,7 +7,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -15,8 +14,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Comments Core Protocol client", () => {
-  it("uses the Desktop Core scheme for source and page requests", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for source and page requests", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -38,12 +36,11 @@ describe("Comments Core Protocol client", () => {
       }),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/comments/sources");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("atom-core://control/api/comments/music");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/comments/sources");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/comments/music");
   });
 
   it("canonicalizes Web cache artwork before sending a Track to Core", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))

@@ -1,6 +1,6 @@
 //! High Quality DSD-to-PCM Decimation Engine
 //!
-//! 当音频输出为普通系统声卡 (ALSA/PulseAudio/CoreAudio/WASAPI) 时，
+//! 当音频输出为普通 ALSA 声卡时，
 //! 将 1-bit 高速 DSD 比特流抽取滤波降采样转换为高动态范围的 32-bit Float PCM。
 
 const FIR_DECIMATION: usize = 16; // 16:1 抽取比例 (DSD64 2.8224MHz -> 176.4kHz PCM)

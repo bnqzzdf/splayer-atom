@@ -6,9 +6,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import net, { type AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { CONFIG_SCHEMA_VERSION } from "../../electron/main/atom/runtime/configSchema";
-import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
-import { DATABASE_SCHEMA_VERSION } from "../../electron/main/database/migration";
+import { CONFIG_SCHEMA_VERSION } from "../../core/atom/runtime/configSchema";
+import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
+import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 import type { CoreInfo } from "../../shared/types/core";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
@@ -80,7 +80,6 @@ try {
     atomVersion?: string;
     atomCommit?: string;
     sourceDirty?: boolean;
-    splayerBaseline?: string;
     nodeRange?: string;
     nodeReference?: string;
     nodeBundled?: boolean;
@@ -93,8 +92,7 @@ try {
     runtime.productName !== "SPlayer Atom" ||
     !runtime.atomVersion ||
     !runtime.atomCommit ||
-    typeof runtime.sourceDirty !== "boolean" ||
-    !runtime.splayerBaseline
+    typeof runtime.sourceDirty !== "boolean"
   ) {
     fail("runtime.json 缺少 SPlayer Atom release identity metadata");
   }
@@ -167,7 +165,6 @@ try {
     info.version !== runtime.atomVersion ||
     info.commit !== runtime.atomCommit ||
     info.sourceDirty !== runtime.sourceDirty ||
-    info.splayerBaseline !== runtime.splayerBaseline ||
     info.direttaSdkRelease !== runtime.direttaSdkRelease ||
     info.node !== CORE_NODE_REFERENCE ||
     info.nodeRange !== CORE_NODE_RANGE ||

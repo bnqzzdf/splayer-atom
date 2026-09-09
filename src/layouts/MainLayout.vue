@@ -1,21 +1,13 @@
 <script setup lang="ts">
 import { useStatusStore } from "@/stores/status";
-import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
-import { useOrpheusProtocol } from "@/composables/useOrpheusProtocol";
-import { isWebRemote } from "@/runtime";
-import { useExternalFileHandler } from "@/composables/useExternalFileHandler";
 
 const route = useRoute();
 const status = useStatusStore();
 const settings = useSettingsStore();
 
-// 接入 orpheus 协议唤起与外部音频文件播放
-useOrpheusProtocol();
-if (!isWebRemote()) useExternalFileHandler();
-
-/** Headless Web 常驻播放栏以保留首次输出选择入口；Desktop 延续按曲目显示。 */
-const showPlayerBar = computed(() => isWebRemote() || !!useMediaStore().track);
+/** Web Control 常驻播放栏以保留首次输出选择入口。 */
+const showPlayerBar = computed(() => true);
 const { isPlayerExpanded } = storeToRefs(status);
 const { appearance } = settings;
 
@@ -170,8 +162,6 @@ const playerBarInnerClass = computed(() => {
   <FullPlayer />
   <!-- 全局设置 -->
   <SettingsDialog />
-  <!-- 更新弹窗 -->
-  <UpdateDialog />
   <!-- 评论弹窗 -->
   <MusicCommentsDialog />
 </template>

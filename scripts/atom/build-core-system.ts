@@ -1,7 +1,7 @@
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { CORE_NODE_REFERENCE } from "../../electron/main/atom/runtime/nodeRuntime";
+import { CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -38,7 +38,7 @@ run("构建 Core native release", bin("tsx"), [
 ]);
 run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.config.ts"]);
 run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);
-run("构建 Web Control", bin("vite"), ["build", "-c", "scripts/atom/vite.web.config.ts"]);
+run("构建 Web Control", bin("vite"), ["build", "-c", "vite.config.ts"]);
 run("审计 Core build", process.execPath, ["scripts/atom/check-core-build.mjs"]);
 run(bundleNode ? "生成 bundled-runtime tar.gz" : "生成 system-runtime tar.gz", bin("tsx"), [
   "scripts/atom/stage-core-system.ts",

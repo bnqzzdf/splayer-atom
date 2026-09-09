@@ -210,18 +210,16 @@ export const extractColorFromUrl = (url: string | null): void => {
   img.src = url;
 };
 
-/** 跨域封面：主进程拉字节 → blob URL → 同源 canvas 取色 */
+/** 远程封面：浏览器拉字节后转 blob URL 给 canvas 取色。 */
 const loadColorFromRemote = async (url: string, token: number): Promise<void> => {
   const settings = useSettingsStore();
   const themeStore = useThemeStore();
   try {
-    const result = await window.api.system.fetchRemoteBytes(url);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`cover fetch failed: ${response.status}`);
+    const data = await response.arrayBuffer();
     if (token !== coverColorToken || !settings.player.followCoverColor) return;
-    if (!result.success || !result.data) {
-      themeStore.coverColor = null;
-      return;
-    }
-    const blob = new Blob([new Uint8Array(result.data)]);
+    const blob = new Blob([new Uint8Array(data)]);
     const blobUrl = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {

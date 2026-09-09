@@ -36,13 +36,11 @@ export const filterWebSystemOutputs = (
   });
 };
 
-/** 按当前 Control Host presentation 投影同一份 Core output snapshot。 */
+/** 为 Web Control 投影同一份 Core output snapshot。 */
 export const projectOutputDevices = (
   devices: AudioDevice[],
-  webRemote: boolean,
   selectedOutputId: string | null = null,
 ): AudioDevice[] => {
-  if (!webRemote) return devices;
   const diretta = devices
     .filter((device) => device.id.startsWith("diretta:"))
     .map((device) => ({ ...device, name: `${device.name} · Diretta` }));

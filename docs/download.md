@@ -1,43 +1,21 @@
 ---
-title: 下载
+title: 下载与部署
 ---
 
-# 下载 SPlayer-Next
+# 下载与部署
 
-下方会自动从 GitHub 拉取对应更新通道的最新版本，并根据你的系统推荐合适的安装包。默认选择 Stable 正式版；若下载缓慢，可切换镜像线路。
+SPlayer Atom 只发布 Linux x86-64 Core，不提供 Desktop 安装包。
 
-<DownloadPage />
+正式 artifact 有两种部署变体：
 
-## 更新通道
-
-| 通道       | 适合人群           | 可收到的版本               | 版本格式示例    |
-| ---------- | ------------------ | -------------------------- | --------------- |
-| **Stable** | 日常使用           | Stable                     | `1.2.0`         |
-| **Beta**   | 愿意提前体验新功能 | Beta、后续 Stable          | `1.3.0-beta.1`  |
-| **Alpha**  | 开发测试与问题反馈 | Alpha、后续 Beta 和 Stable | `1.4.0-alpha.1` |
-
-应用内可在 **设置 → 通用 → 更新通道** 中切换。Alpha 版本可能非常不稳定，切换到更稳定的通道时，应用可能需要安装版本号更低的构建。
-
-## 其他获取方式
-
-- **历史版本**：前往 [GitHub Releases](https://github.com/SPlayer-Dev/SPlayer-Next/releases) 查看全部归档。
-- **开发版**：可在 [GitHub Actions](https://github.com/SPlayer-Dev/SPlayer-Next/actions) 工作流产物中获取最新构建（需登录 GitHub）。
-
-## 安装提示
-
-- **Windows**：提供安装版（含自动更新）与单文件便携版，按需选择。
-- **macOS**：首次打开若提示「应用已损坏」或无法验证，请参考 [Mac 应用显示已损坏](/troubleshooting/macos-damaged)。
-- **Linux**：提供通用 `tar.gz` 压缩包，启动异常可参考 [Ubuntu 沙箱启动失败](/troubleshooting/ubuntu-sandbox)。
-
-### Linux 安装包
-
-| 格式   | 说明                         |
-| ------ | ---------------------------- |
-| tar.gz | 通用压缩包，适合手动解压运行 |
-
-```bash
-# 压缩包
-tar -xzf ./splayer-next-*.tar.gz
-cd splayer-next-*/
-./SPlayer-Next
+```text
+splayer-atom-core-system-linux-x64.tar.gz
+splayer-atom-core-bundled-linux-x64.tar.gz
 ```
+
+- **system-runtime**：使用系统 Node `>=24.18.0 <25`；
+- **bundled-runtime**：包含构建时 reference Node。
+
+两者运行同一个 Node Core 和 Web Control。
+
+获取 artifact 后请按 [Core 部署](/core-deployment) 完成解包、数据目录、systemd、升级与回滚。公开发布的 Linux 兼容下限以最终 artifact 的 `GLIBC_x.y` 审计结果为准。

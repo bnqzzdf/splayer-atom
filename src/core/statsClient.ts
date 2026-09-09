@@ -32,7 +32,7 @@ const recordFavorite = (event: FavoriteEventInput): void => {
   });
 };
 
-/** Desktop 与 Web 共用的 Core Stats request client。播放计数由 Core native lifecycle 独立拥有。 */
+/** Web Control 的 Core Stats request client。播放计数由 Core native lifecycle 独立拥有。 */
 export const statsClient: StatsApi = {
   recordFavorite,
   getStatsSummary: () => request<PlayStatsSummary>("/stats/summary"),

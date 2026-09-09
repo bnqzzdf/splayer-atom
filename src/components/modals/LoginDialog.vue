@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
-import { dialog } from "@/composables/useDialog";
 import { REPO_NAME } from "@/utils/config";
-import { hasHostCapability } from "@/runtime";
 import { neteaseQrLoginAdapter } from "@/apis/login/netease";
 
 const props = defineProps<{ open: boolean }>();
@@ -12,7 +10,6 @@ const { t } = useI18n();
 const user = useUserStore();
 const adapter = neteaseQrLoginAdapter;
 const panelRef = useTemplateRef("panelRef");
-const providerLoginWindowAvailable = hasHostCapability("providerLoginWindow");
 const loading = ref(false);
 const cookieDialogOpen = ref(false);
 
@@ -30,30 +27,6 @@ const finishLogin = async (): Promise<boolean> => {
 const handleQrSuccess = async (): Promise<void> => {
   loading.value = true;
   try {
-    if (!(await finishLogin())) void panelRef.value?.refresh();
-  } finally {
-    loading.value = false;
-  }
-};
-
-const startAutoFetch = async (): Promise<void> => {
-  if (loading.value) return;
-  const ok = await dialog.confirm({
-    title: t("login.autoFetchTitle"),
-    content: t("login.autoFetchTip"),
-    confirmText: t("login.autoFetchConfirm"),
-    type: "warning",
-  });
-  if (!ok) return;
-  loading.value = true;
-  panelRef.value?.pause();
-  try {
-    const result = await window.api.apis.openLoginWeb("netease");
-    if (!result.ok) {
-      if (result.error !== "canceled") toast.error(t("login.failed"));
-      panelRef.value?.resume();
-      return;
-    }
     if (!(await finishLogin())) void panelRef.value?.refresh();
   } finally {
     loading.value = false;
@@ -86,17 +59,6 @@ const onCookieDialogOpen = (open: boolean): void => {
         @success="handleQrSuccess"
       />
       <div class="flex items-center gap-2 pt-1">
-        <SButton
-          v-if="providerLoginWindowAvailable"
-          variant="ghost"
-          size="small"
-          :disabled="loading"
-          @click="startAutoFetch"
-        >
-          <template #icon><IconLucideScanLine /></template>
-          {{ t("login.autoFetch") }}
-        </SButton>
-        <div class="h-3 w-px bg-outline-variant/40" />
         <SButton variant="ghost" size="small" :disabled="loading" @click="openManualCookie">
           <template #icon><IconLucideKeyRound /></template>
           {{ t("login.manualCookie") }}

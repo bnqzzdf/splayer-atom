@@ -1,6 +1,6 @@
 # Plugin Updates
 
-SPlayer-Next uses **host version checks with user-approved installation**. A plugin declares `@updateUrl` pointing to the latest raw JavaScript. The host downloads the script, compares `@version`, and shows an update on the plugin card. Applying it replaces the script in place while preserving enabled state, settings, storage, and priority.
+SPlayer Atom Core checks plugin versions and Web Control presents the user-approved update action. A plugin declares `@updateUrl`, Core downloads the script and compares `@version`, and applying an update preserves enabled state, settings, storage, and priority.
 
 ## Workflow
 

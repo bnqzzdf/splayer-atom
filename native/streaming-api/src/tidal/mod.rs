@@ -65,7 +65,9 @@ impl TidalClient {
             .country_code
             .as_deref()
             .unwrap_or(TIDAL_DEFAULT_COUNTRY);
-        query.entry("countryCode".to_string()).or_insert_with(|| country.to_string());
+        query
+            .entry("countryCode".to_string())
+            .or_insert_with(|| country.to_string());
 
         let url = format!("{}/{}", TIDAL_API_BASE, endpoint);
         let mut req = self
@@ -80,7 +82,10 @@ impl TidalClient {
 
         let resp = req.send().await?;
         let status = resp.status();
-        let body: Value = resp.json().await.map_err(|e| StreamingError::Parse(e.to_string()))?;
+        let body: Value = resp
+            .json()
+            .await
+            .map_err(|e| StreamingError::Parse(e.to_string()))?;
 
         if !status.is_success() {
             let msg = body

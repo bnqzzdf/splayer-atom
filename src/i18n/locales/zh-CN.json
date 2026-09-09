@@ -18,21 +18,14 @@
     "footer": "可随时在「设置」中调整本次未配置的内容",
     "welcome": {
       "title": "欢迎使用 SPlayer Atom",
-      "subtitle": "一个现代化的桌面音乐播放器，完成几步设置即可开始享用",
+      "subtitle": "Linux 音乐 Core 与 Web Control，完成几步设置即可开始使用",
       "start": "开始设置",
       "features": {
         "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
         "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
         "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词，桌面歌词、灵动岛、任务栏歌词" }
+        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词、翻译、音译与时间偏移" }
       }
-    },
-    "agreement": {
-      "title": "用户协议与免责声明",
-      "subtitle": "继续使用前，请阅读并同意以下协议",
-      "scrollHint": "请滚动阅读至结尾后再勾选",
-      "agree": "我已阅读并同意《用户协议与免责声明》",
-      "accept": "同意并继续"
     },
     "library": {
       "title": "本地音乐库",
@@ -55,31 +48,7 @@
       "languageLabel": "界面语言",
       "modeLabel": "主题模式",
       "colorLabel": "主色调"
-    },
-    "hotkeys": {
-      "title": "快捷键",
-      "subtitle": "SPlayer Atom 内置了完整的播放控制快捷键，需要时随时调用",
-      "tips": {
-        "global": {
-          "title": "全局快捷键",
-          "desc": "无需聚焦应用窗口，例如媒体键即可控制播放、暂停、切歌"
-        },
-        "local": {
-          "title": "应用内快捷键",
-          "desc": "空格键播放暂停、左右切歌、Ctrl+F 搜索等常用操作"
-        },
-        "customize": {
-          "title": "自由定制",
-          "desc": "「设置 → 快捷键」中可以查看完整列表并修改绑定"
-        }
-      }
     }
-  },
-  "agreementUpdate": {
-    "title": "用户协议与免责声明已更新",
-    "subtitle": "协议内容有变更，请重新阅读并同意后继续使用",
-    "accept": "我已阅读并同意，继续使用",
-    "reject": "不同意并退出"
   },
   "common": {
     "back": "返回",
@@ -734,11 +703,8 @@
       "general": "常规设置",
       "player": "播放设置",
       "lyric": "歌词设置",
-      "externalLyric": "外部歌词",
       "appearance": "外观设置",
-      "hotkeys": "快捷键配置",
       "services": "网络与服务",
-      "aiIntegration": "AI 集成",
       "mediaSource": "媒体源配置",
       "download": "下载配置",
       "localCache": "本地与缓存",
@@ -767,9 +733,6 @@
       "lyricAMLLOptimize": "歌词优化",
       "lyricSpring": "弹簧动画",
       "lyricLayout": "布局与透明度",
-      "desktopLyric": "桌面歌词",
-      "dynamicIsland": "灵动岛歌词",
-      "taskbarLyric": "任务栏歌词",
       "theme": "主题与颜色",
       "appearanceStyle": "外观风格",
       "layout": "布局",
@@ -778,15 +741,9 @@
       "nowPlaying": "播放页",
       "media": "媒体控制",
       "device": "输出设备",
-      "hotkeys": "快捷键",
       "musicSpectrum": "音乐频谱",
-      "discord": "Discord RPC",
       "providerAccounts": "在线平台账号",
       "listenbrainz": "ListenBrainz",
-      "lastfm": "Last.fm",
-      "externalApi": "外部 API",
-      "mcp": "MCP",
-      "aiModel": "AI 模型",
       "systemConfig": "系统配置",
       "pluginManage": "导入插件",
       "pluginsList": "插件管理",
@@ -814,7 +771,6 @@
       "commit": "Atom 提交",
       "date": "提交时间",
       "coreVersion": "Atom 版本",
-      "splayerBaseline": "SPlayer 基线",
       "coreProtocol": "Core Protocol",
       "sourceTree": "源码状态",
       "clean": "Clean",
@@ -1032,51 +988,6 @@
       "duplicate": "已存在该规则",
       "invalidRegex": "无效的正则表达式"
     },
-    "hotkeys": {
-      "label": "快捷键",
-      "description": "管理应用内与全局快捷键",
-      "globalEnabled": "开启全局快捷键",
-      "globalEnabledHint": "应用未聚焦时也可触发，可能与系统或其他应用冲突",
-      "colAction": "动作",
-      "colInApp": "应用内",
-      "colGlobal": "全局",
-      "unbound": "未绑定",
-      "recording": "请按下快捷键",
-      "resetRow": "恢复默认",
-      "resetAll": "全部恢复默认",
-      "resetAllHint": "将每个动作的快捷键还原为默认值",
-      "confirmResetTitle": "确认恢复默认？",
-      "confirmResetDesc": "所有快捷键将被重置，已自定义的绑定会被覆盖！",
-      "duplicateWith": "与「{action}」冲突",
-      "crossScopeWith": "与「{action}」的应用内绑定相同，会重复触发",
-      "osOccupied": "该组合键已被系统或其他应用占用",
-      "osDuplicate": "已被另一全局快捷键占用",
-      "invalid": "组合键无效",
-      "groups": {
-        "player": "播放控制",
-        "window": "窗口",
-        "view": "视图"
-      },
-      "actions": {
-        "togglePlay": "播放 / 暂停",
-        "next": "下一首",
-        "prev": "上一首",
-        "seekForward": "快进 5 秒",
-        "seekBack": "快退 5 秒",
-        "volumeUp": "音量增加",
-        "volumeDown": "音量减小",
-        "cycleRepeat": "切换循环模式",
-        "toggleShuffle": "切换随机播放",
-        "toggleDesktopLyric": "切换桌面歌词",
-        "toggleDynamicIsland": "切换灵动岛",
-        "toggleTaskbarLyric": "切换任务栏歌词",
-        "openPlayer": "打开播放界面",
-        "closePlayer": "关闭播放界面",
-        "togglePlaylist": "展开 / 收起播放列表",
-        "openSearch": "打开搜索",
-        "searchInPage": "页面内搜索"
-      }
-    },
     "engine": {
       "label": "歌词渲染引擎",
       "description": "选择用于歌词渲染与滚动的动效引擎"
@@ -1257,215 +1168,6 @@
       "label": "非激活行透明度",
       "description": "非当前行的基础透明度"
     },
-    "desktopLyricEnabled": {
-      "label": "开启桌面歌词",
-      "description": "在桌面显示一个独立的歌词悬浮窗口"
-    },
-    "desktopLyricFontSize": {
-      "label": "字号",
-      "description": "桌面歌词的文字大小（像素）"
-    },
-    "desktopLyricFontWeight": {
-      "label": "字重",
-      "description": "桌面歌词的文字粗细"
-    },
-    "desktopLyricShowTranslation": {
-      "label": "显示翻译",
-      "description": "在桌面歌词中显示翻译文本"
-    },
-    "desktopLyricDoubleLine": {
-      "label": "双行显示",
-      "description": "同时显示当前行与下一行"
-    },
-    "desktopLyricAlign": {
-      "label": "对齐方式",
-      "description": "歌词文本的水平对齐",
-      "left": "居左",
-      "center": "居中",
-      "right": "居右",
-      "justify": "两端对齐"
-    },
-    "desktopLyricWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
-    },
-    "desktopLyricAutoGenerateWordByWord": {
-      "label": "自动生成逐字效果",
-      "description": "关闭后仅真正的逐字歌词生效"
-    },
-    "desktopLyricPlayedColor": {
-      "label": "已播放颜色",
-      "description": "已播放的歌词文字颜色"
-    },
-    "desktopLyricUnplayedColor": {
-      "label": "未播放颜色",
-      "description": "未播放的歌词文字颜色"
-    },
-    "desktopLyricStrokeColor": {
-      "label": "描边颜色",
-      "description": "歌词文字的描边颜色，透明则视为关闭描边"
-    },
-    "desktopLyricBackgroundMask": {
-      "label": "文本背景遮罩",
-      "description": "为每行歌词文字加半透明背景色块，提升弱对比下的可读性"
-    },
-    "desktopLyricBackgroundMaskColor": {
-      "label": "遮罩颜色",
-      "description": "文本背景遮罩的颜色与透明度"
-    },
-    "desktopLyricAlwaysShowSongInfo": {
-      "label": "常驻显示歌曲信息",
-      "description": "始终显示歌曲名与艺术家，关闭后仅悬停时显示"
-    },
-    "desktopLyricAnimation": {
-      "label": "切换动画",
-      "description": "歌词行切换时的滑入 / 滑出过渡动画"
-    },
-    "desktopLyricLimitBounds": {
-      "label": "限制在屏幕内",
-      "description": "拖拽时把窗口边界限制在当前屏幕的工作区范围内"
-    },
-    "desktopLyricAlwaysOnTop": {
-      "label": "窗口置顶",
-      "description": "桌面歌词窗口始终保持在最前"
-    },
-    "desktopLyricLocked": {
-      "label": "锁定窗口",
-      "description": "锁定后鼠标点击将穿透到下层窗口，无法拖动"
-    },
-    "desktopLyricUseCSSDrag": {
-      "label": "使用 CSS 拖拽",
-      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 环境建议启用"
-    },
-    "dynamicIslandEnabled": {
-      "label": "开启灵动岛",
-      "description": "在屏幕顶部显示一个简洁的悬浮歌词窗口，可拖离至任意位置"
-    },
-    "dynamicIslandScale": {
-      "label": "缩放比例",
-      "description": "窗口高度与字号同步缩放，100% 为默认大小"
-    },
-    "dynamicIslandFontWeight": {
-      "label": "字重",
-      "description": "灵动岛歌词的文字粗细"
-    },
-    "dynamicIslandWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
-    },
-    "dynamicIslandTransition": {
-      "label": "切换动画",
-      "description": "选择灵动岛宽度与歌词行的切换方式",
-      "bounce": "灵动回弹",
-      "smooth": "平滑过渡"
-    },
-    "dynamicIslandDoubleLine": {
-      "label": "总是显示双行",
-      "description": "即使没有翻译可用也保持双行布局"
-    },
-    "dynamicIslandShowTranslation": {
-      "label": "显示翻译",
-      "description": "有翻译的句子在副行显示翻译"
-    },
-    "dynamicIslandPlayedColor": {
-      "label": "已播放颜色",
-      "description": "当前已唱到部分的文字颜色"
-    },
-    "dynamicIslandUnplayedColor": {
-      "label": "未播放颜色",
-      "description": "尚未唱到部分及艺术家名的文字颜色"
-    },
-    "dynamicIslandBackgroundColor": {
-      "label": "背景颜色",
-      "description": "窗口背板的颜色与透明度"
-    },
-    "dynamicIslandAlwaysOnTop": {
-      "label": "窗口置顶",
-      "description": "灵动岛窗口始终保持在最前"
-    },
-    "dynamicIslandNotchFusion": {
-      "label": "刘海融合",
-      "description": "在 MacBook 刘海屏上让灵动岛从物理刘海向下扩展"
-    },
-    "dynamicIslandSnapCentered": {
-      "label": "吸附时居中",
-      "description": "关闭后吸附到顶部时保留拖动到的水平位置"
-    },
-    "dynamicIslandNonOcclusive": {
-      "label": "非遮挡模式",
-      "description": "鼠标穿透窗口，悬停时隐藏内容"
-    },
-    "dynamicIslandUseCSSDrag": {
-      "label": "使用 CSS 拖拽",
-      "description": "使用 CSS -webkit-app-region 拖拽，在 Wayland 环境建议启用"
-    },
-    "taskbarLyricEnabled": {
-      "label": "开启任务栏歌词",
-      "description": "将歌词嵌入 Windows 任务栏中显示"
-    },
-    "taskbarLyricPosition": {
-      "label": "显示位置",
-      "description": "歌词在任务栏中的位置，自动模式下根据任务栏对齐方式选择",
-      "auto": "自动",
-      "left": "左侧",
-      "right": "右侧"
-    },
-    "taskbarLyricAutoMaxWidth": {
-      "label": "自动宽度",
-      "description": "自动使用任务栏可用区域作为最大宽度；关闭后手动设置最大宽度"
-    },
-    "taskbarLyricAutoAdjustOccupiedSpace": {
-      "label": "按内容收缩窗口",
-      "description": "在自动宽度范围内，根据当前主行和悬浮控件缩小实际占用空间"
-    },
-    "taskbarLyricMaxWidth": {
-      "label": "最大宽度",
-      "description": "超出可用空间时仍以可用空间为准，避免挤占"
-    },
-    "taskbarLyricLeftMargin": {
-      "label": "左边距",
-      "description": "歌词与可用空间左侧的间距，用于避开任务栏上的其他组件"
-    },
-    "taskbarLyricRightMargin": {
-      "label": "右边距",
-      "description": "歌词与可用空间右侧的间距，用于避开任务栏上的其他组件"
-    },
-    "taskbarLyricColorMode": {
-      "label": "配色模式",
-      "description": "任务栏歌词的文字与背景配色",
-      "taskbar": "跟随任务栏",
-      "taskbarInverse": "跟随任务栏（反向）",
-      "light": "浅色",
-      "dark": "深色"
-    },
-    "taskbarLyricShowBackground": {
-      "label": "显示背景",
-      "description": "获焦时显示半透明背景，增强歌词与任务栏的区分"
-    },
-    "taskbarLyricFontSize": {
-      "label": "字号",
-      "description": "任务栏歌词的文字大小（像素）"
-    },
-    "taskbarLyricFontWeight": {
-      "label": "字重",
-      "description": "任务栏歌词的文字粗细"
-    },
-    "taskbarLyricShowCover": {
-      "label": "显示封面",
-      "description": "在歌词旁显示当前曲目的封面缩略图"
-    },
-    "taskbarLyricDoubleLine": {
-      "label": "双行显示",
-      "description": "同时显示当前歌词与翻译或下一行"
-    },
-    "taskbarLyricShowTranslation": {
-      "label": "显示翻译",
-      "description": "双行模式下优先显示翻译，无翻译时回退到下一行"
-    },
-    "taskbarLyricWordByWord": {
-      "label": "逐字高亮",
-      "description": "按单词进度逐字渲染高亮"
-    },
     "playerBgType": {
       "label": "播放器背景",
       "description": "全屏播放器的背景类型",
@@ -1601,7 +1303,7 @@
     },
     "fontConfig": {
       "label": "字体配置",
-      "description": "统一配置应用、歌词和外部歌词窗口的字体",
+      "description": "统一配置 Web Control 与歌词字体",
       "title": "字体配置",
       "loading": "正在加载系统字体",
       "placeholder": "输入字体名称",
@@ -1616,8 +1318,7 @@
       "fieldLabel": "{name}字体",
       "groups": {
         "general": "通用字体",
-        "appLyric": "歌词字体",
-        "externalLyric": "外部歌词字体"
+        "appLyric": "歌词字体"
       },
       "fields": {
         "global": "全局",
@@ -1625,30 +1326,8 @@
         "lyricChinese": "中文歌词",
         "lyricJapanese": "日语歌词",
         "lyricKorean": "韩语歌词",
-        "lyricLatin": "英语 / 拉丁文字歌词",
-        "desktopLyric": "桌面歌词",
-        "dynamicIsland": "灵动岛歌词",
-        "taskbarLyric": "任务栏歌词"
+        "lyricLatin": "英语 / 拉丁文字歌词"
       }
-    },
-    "systemMediaControls": {
-      "label": "系统媒体控制",
-      "description": "在系统媒体控制中显示当前播放信息"
-    },
-    "discordEnabled": {
-      "label": "Discord 状态",
-      "description": "在 Discord 中显示当前播放状态"
-    },
-    "discordShowWhenPaused": {
-      "label": "暂停时显示",
-      "description": "暂停播放时仍然显示 Discord 状态"
-    },
-    "discordDisplayMode": {
-      "label": "简略状态显示",
-      "description": "不打开详细信息面板时，在用户名下方显示的小字",
-      "name": "应用名",
-      "details": "歌曲名",
-      "state": "歌手名"
     },
     "listenbrainzEnabled": {
       "label": "ListenBrainz",
@@ -1657,22 +1336,6 @@
     "listenbrainzNowPlaying": {
       "label": "发送正在播放",
       "description": "向 ListenBrainz 同步当前正在播放的歌曲；不进入持久待发送队列"
-    },
-    "lastfmEnabled": {
-      "label": "Last.fm",
-      "description": "连接 Last.fm 账号，记录播放并同步喜欢"
-    },
-    "lastfmScrobble": {
-      "label": "记录播放（Scrobble）",
-      "description": "播放一段时间后自动记录到 Last.fm"
-    },
-    "lastfmNowPlaying": {
-      "label": "正在播放",
-      "description": "向 Last.fm 同步当前正在播放的歌曲"
-    },
-    "lastfmLoveSync": {
-      "label": "同步喜欢",
-      "description": "点击喜欢时同步为 Last.fm 的 Love / Unlove"
     },
     "providerAccounts": {
       "connectedAs": "已登录：{name}",
@@ -1718,22 +1381,6 @@
         "cleared": "已清空 ListenBrainz 待发送记录"
       }
     },
-    "lastfm": {
-      "connect": "连接账号",
-      "connecting": "请在浏览器中完成授权…",
-      "cancel": "取消",
-      "disconnect": "断开连接",
-      "connectedAs": "已连接：{name}",
-      "notConnected": "尚未连接 Last.fm 账号",
-      "connectHint": "点击连接后将在浏览器中打开授权页面",
-      "toast": {
-        "connected": "已连接到 Last.fm：{name}",
-        "timeout": "授权超时，请重试",
-        "canceled": "已取消授权",
-        "failed": "连接失败，请重试",
-        "disconnected": "已断开 Last.fm 连接"
-      }
-    },
     "platformLogin": {
       "title": "连接 {name} 账号",
       "desc": "连接后由 Core 安全保持账号会话",
@@ -1760,39 +1407,9 @@
         "cookieInvalid": "Cookie 无效，请检查后重试"
       }
     },
-    "rememberWindowState": {
-      "label": "记忆窗口状态",
-      "description": "下次启动时恢复窗口的大小、位置和最大化状态"
-    },
-    "borderlessWindow": {
-      "label": "开启无边框窗口",
-      "description": "关闭后使用系统原生窗口边框和标题栏"
-    },
-    "autoCheckUpdate": {
-      "label": "自动检查更新",
-      "description": "启动后及定时在后台检查新版本"
-    },
-    "updateChannel": {
-      "label": "更新通道",
-      "description": "选择正式版或 Beta 预览版更新",
-      "stable": "正式版",
-      "beta": "Beta 预览版"
-    },
-    "checkUpdate": {
-      "label": "检查更新",
-      "description": "立即检查是否有新版本"
-    },
     "showPerformanceMonitor": {
       "label": "性能监视器",
       "description": "悬浮显示 FPS / 帧时间 / 内存占用，点击切换指标"
-    },
-    "taskbarProgress": {
-      "label": "任务栏播放进度",
-      "description": "在任务栏图标上显示当前播放进度"
-    },
-    "taskbarThumbnailCover": {
-      "label": "任务栏封面预览",
-      "description": "悬停任务栏时以专辑封面作为窗口预览，关闭则显示系统默认的实时窗口"
     },
     "networkProxyProtocol": {
       "label": "网络代理",
@@ -1837,145 +1454,9 @@
       "legacy": "原版日志接口",
       "ncbl": "NCBL 加密接口"
     },
-    "orpheusProtocol": {
-      "label": "通过 Orpheus 协议唤起本应用",
-      "description": "该协议通常用于官方网页端唤起官方客户端，启用后可能导致官方客户端无法被唤起"
-    },
     "streamingEnabled": {
       "label": "启用流媒体",
       "description": "关闭后将隐藏侧边栏的媒体源入口"
-    },
-    "externalApiEnabled": {
-      "label": "允许外部控制",
-      "description": "允许外部应用通过 API 控制播放器"
-    },
-    "externalApiWs": {
-      "label": "启用 WebSocket",
-      "description": "外部应用可订阅播放事件并发送控制指令"
-    },
-    "externalApiAllowLan": {
-      "label": "允许局域网访问",
-      "description": "开启后局域网内的其他设备可通过本机 IP 访问，关闭时仅本机可访问"
-    },
-    "externalApiPort": {
-      "label": "监听端口",
-      "description": "外部 API 服务监听的端口（1024–65535）"
-    },
-    "externalApi": {
-      "restart": "重启服务",
-      "restarted": "服务已重启",
-      "portInUse": "端口 {port} 已被占用，请换一个",
-      "running": "服务运行中",
-      "stopped": "服务未运行"
-    },
-    "mcpEnabled": {
-      "label": "启用 MCP 服务",
-      "description": "启用本地 MCP 服务，让 AI Agent 接入应用生态，按需扩展能力"
-    },
-    "aiModelConfig": {
-      "label": "AI 模型",
-      "description": "配置应用使用的 AI 模型"
-    },
-    "aiModel": {
-      "hint": "AI 模型配置",
-      "hintDetail": "可为项目中的部分 AI 功能提供支持",
-      "add": "添加模型",
-      "editModel": "编辑模型",
-      "empty": "暂未配置 AI 模型",
-      "emptyHint": "添加一个 AI 模型配置以供应用使用",
-      "protocol": "接口协议",
-      "name": "配置名称",
-      "namePlaceholder": "例如：OpenAI",
-      "baseUrl": "API 地址",
-      "apiKey": "API Key",
-      "apiKeyPlaceholder": "输入 API Key",
-      "apiKeySavedPlaceholder": "已保存，留空则保持不变",
-      "model": "模型 ID",
-      "added": "模型已添加",
-      "updated": "模型已更新",
-      "removed": "模型已删除",
-      "activated": "已切换启用模型",
-      "deleteConfirmTitle": "删除 AI 模型？",
-      "deleteConfirm": "确定删除“{name}”吗？保存的 API Key 也会一并移除。",
-      "errors": {
-        "nameEmpty": "请填写配置名称",
-        "urlInvalid": "请输入以 http:// 或 https:// 开头的 API 地址",
-        "modelEmpty": "请填写模型 ID",
-        "apiKeyEmpty": "请填写 API Key"
-      }
-    },
-    "mcpPort": {
-      "label": "监听端口",
-      "description": "修改端口后需要点击“重启服务”生效（1024–65535）"
-    },
-    "mcpConfigDetails": {
-      "label": "MCP 配置详情",
-      "description": "查看并复制 AI Agent 连接所需的 MCP 配置"
-    },
-    "mcp": {
-      "restart": "重启服务",
-      "restarted": "MCP 服务已重启",
-      "portInUse": "端口 {port} 已被占用，请换一个",
-      "running": "MCP 服务运行中",
-      "stopped": "MCP 服务未运行",
-      "detectHint": "检测到以下 AI Agent 应用，支持的平台可一键写入 MCP 配置",
-      "inject": "一键配置",
-      "notSupported": "暂不支持",
-      "injected": "已配置",
-      "injectSuccess": "配置成功"
-    },
-    "closeAction": {
-      "label": "关闭按钮行为",
-      "description": "点击标题栏关闭按钮时执行的操作",
-      "quit": "退出应用",
-      "hide": "最小化到托盘"
-    },
-    "rememberCloseChoice": {
-      "label": "记忆关闭选择",
-      "description": "关闭此项后，每次点击关闭都会弹窗询问"
-    },
-    "closeDialog": {
-      "title": "关闭窗口",
-      "description": "选择本次关闭要执行的操作",
-      "remember": "记住我的选择，不再询问",
-      "quit": "退出应用",
-      "hide": "最小化到托盘"
-    },
-    "storageManager": {
-      "label": "数据管理",
-      "description": "备份、恢复、重置设置或清除全部数据"
-    },
-    "backup": {
-      "label": "备份设置",
-      "description": "将当前的设置项导出为备份文件",
-      "button": "备份",
-      "exported": "备份已保存",
-      "failed": "备份失败"
-    },
-    "restore": {
-      "label": "恢复设置",
-      "description": "从备份文件导入设置项，将覆盖当前设置",
-      "button": "恢复",
-      "confirmTitle": "恢复设置并重启？",
-      "confirmDesc": "将用备份文件覆盖当前的设置项，应用会立即重启以让全部设置生效；本地音乐库、歌单与播放历史不受影响",
-      "invalid": "备份文件无效",
-      "failed": "恢复失败"
-    },
-    "resetSettings": {
-      "label": "重置设置",
-      "description": "将全部设置项还原为默认值，不影响歌单与本地音乐库",
-      "button": "重置",
-      "confirmTitle": "重置设置？",
-      "confirmDesc": "全部设置项将还原为默认值，操作不可恢复",
-      "done": "设置已重置"
-    },
-    "resetAll": {
-      "label": "清除全部数据",
-      "description": "清空全部歌单、登录状态、缓存并重置设置",
-      "button": "清除",
-      "confirmTitle": "清除全部数据？",
-      "confirmDesc": "将清空全部歌单、登录状态、缓存并重置设置，操作不可恢复",
-      "done": "全部数据已清除"
     },
     "plugins": {
       "securityWarningTitle": "安装前请注意安全风险",

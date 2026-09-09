@@ -1,8 +1,4 @@
-import type {
-  CoreControlEvent,
-  CoreEventsApi,
-  CorePlayerProjectionEvent,
-} from "@shared/types/coreEvents";
+import type { CoreControlEvent, CorePlayerProjectionEvent } from "@shared/types/coreEvents";
 import type { PlaybackSessionSnapshot, PlayerStatus, Track } from "@shared/types/player";
 import { controlAssetUrl } from "./controlAssets";
 import { ensureCoreProtocolCompatible, request } from "./controlClient";
@@ -79,11 +75,6 @@ const projectCoreEvent = (event: CoreControlEvent): CoreControlEvent => {
     };
   }
   return event;
-};
-
-const connectDesktop = (): (() => void) => {
-  const coreEvents = (window.api as typeof window.api & { coreEvents: CoreEventsApi }).coreEvents;
-  return coreEvents.onEvent((event) => emit(projectCoreEvent(event)));
 };
 
 const host = window.location.hostname || "127.0.0.1";
@@ -210,11 +201,10 @@ const connectWeb = (): (() => void) => {
 
 const ensureTransport = (): void => {
   if (disconnectTransport) return;
-  disconnectTransport =
-    document.documentElement.dataset.atomRuntime === "desktop" ? connectDesktop() : connectWeb();
+  disconnectTransport = connectWeb();
 };
 
-/** 订阅当前 Control transport 上的原始事件；Web player projection 也复用这一连接。 */
+/** 订阅 Web Control transport 上的原始事件。 */
 export const subscribeControlEvent = (listener: (event: ControlEvent) => void): (() => void) => {
   listeners.add(listener);
   ensureTransport();
@@ -238,7 +228,7 @@ export const subscribeCoreControlEvent = <T extends CoreEventType>(
     }
   });
 
-/** 订阅已从 Host directive/recovery event 中拆出的 Player projection。 */
+/** 订阅 Core 权威 Player projection。 */
 export const subscribeCorePlayerProjection = (
   callback: (event: CorePlayerProjectionEvent) => void,
 ): (() => void) =>

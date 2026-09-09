@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
-use crate::error::StreamingError;
 use super::credentials::{get_credentials, set_working_secret};
 use super::QobuzClient;
+use crate::error::StreamingError;
 
 fn format_id_for_level(level: &str) -> &'static [u32] {
     match level.to_lowercase().as_str() {
@@ -71,7 +71,13 @@ impl QobuzClient {
                 req_params.insert("intent".to_string(), "stream".to_string());
 
                 match self
-                    .request("track/getFileUrl", req_params, true, true, Some(secret.clone()))
+                    .request(
+                        "track/getFileUrl",
+                        req_params,
+                        true,
+                        true,
+                        Some(secret.clone()),
+                    )
                     .await
                 {
                     Ok(body) => {
@@ -83,7 +89,8 @@ impl QobuzClient {
                                     .and_then(Value::as_str)
                                     .unwrap_or("audio/flac");
                                 let duration = body.get("duration").and_then(Value::as_f64);
-                                let sampling_rate = body.get("sampling_rate").and_then(Value::as_f64);
+                                let sampling_rate =
+                                    body.get("sampling_rate").and_then(Value::as_f64);
                                 let bit_depth = body.get("bit_depth").and_then(Value::as_i64);
 
                                 return Ok(json!({

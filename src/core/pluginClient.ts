@@ -19,7 +19,7 @@ const post = <T>(path: string, body?: unknown): Promise<T> =>
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 
-/** Desktop / Web 共用的 Core Plugin Control client。 */
+/** Web Control 的 Core Plugin client。 */
 export const pluginClient = {
   list: (): Promise<PluginInfo[]> => request<PluginInfo[]>("/plugins"),
   market: (): Promise<{ ok: boolean; plugins: MarketPlugin[]; error?: string }> =>

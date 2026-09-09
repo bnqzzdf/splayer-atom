@@ -14,7 +14,7 @@ const toServerTrack = (track: Track): Track => ({
   coverOriginal: serverAssetUrl(track.coverOriginal),
 });
 
-/** Desktop 与 Web 共用的 Core Comments request client。 */
+/** Web Control 的 Core Comments request client。 */
 export const commentsClient: CommentsApi = {
   sources: () => request<CommentSource[]>("/comments/sources"),
   get: (args: MusicCommentQuery) =>

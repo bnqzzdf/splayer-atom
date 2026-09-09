@@ -1,6 +1,6 @@
 /// FFT 频谱分析器
 ///
-/// 当 `fft` feature 开启时（Electron / 桌面端），使用 rustfft 进行真实频谱分析。
+/// 当 `fft` feature 开启时，使用 rustfft 进行真实频谱分析。
 /// 当 `fft` feature 关闭时（headless 服务端），提供零成本 stub，所有调用均为空操作，
 /// 不链接 rustfft，避免额外 4–6 MB 代码段。
 

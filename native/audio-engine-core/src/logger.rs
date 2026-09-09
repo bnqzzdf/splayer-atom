@@ -14,8 +14,8 @@ static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 /// 初始化 tracing 日志系统
 ///
-/// audio-engine 和 media-ctrl 在同一进程中共享全局 tracing subscriber。
-/// 先被调用的模块完成初始化，后被调用的模块 `try_init` 会无害失败。
+/// Core 进程中的 native audio 模块共享全局 tracing subscriber。
+/// 首次调用负责初始化，后续 `try_init` 会无害失败。
 pub fn init_logger(log_dir: &str, is_dev: bool) {
     let log_path = PathBuf::from(log_dir);
 
@@ -55,7 +55,7 @@ pub fn init_logger(log_dir: &str, is_dev: bool) {
         .with_timer(local_timer.clone())
         .with_filter(file_filter);
 
-    // 控制台层：紧凑单行，不带文件路径，贴近 electron-log 风格
+    // 控制台层：紧凑单行，便于直接汇入 Core stdout 日志。
     let stdout_level = if is_dev {
         LevelFilter::DEBUG
     } else {

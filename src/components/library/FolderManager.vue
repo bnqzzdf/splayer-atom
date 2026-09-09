@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useLibraryStore } from "@/stores/library";
 import { toast } from "@/composables/useToast";
-import { isWebRemote } from "@/runtime";
 import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideFolderPlus from "~icons/lucide/folder-plus";
@@ -10,7 +9,6 @@ import IconLucideTrash2 from "~icons/lucide/trash-2";
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
 const { scanDirs } = storeToRefs(libraryStore);
-const webRemote = isWebRemote();
 
 const emit = defineEmits<{
   (e: "added"): void;
@@ -27,7 +25,7 @@ const corePickerOpen = ref(false);
 const removingDir = ref<string | null>(null);
 const removeConfirmOpen = ref(false);
 
-const addDirectory = async (dir?: string): Promise<void> => {
+const addDirectory = async (dir: string): Promise<void> => {
   if (adding.value) return;
   adding.value = true;
   try {
@@ -45,8 +43,7 @@ const addDirectory = async (dir?: string): Promise<void> => {
 };
 
 const handleAdd = (): void => {
-  if (webRemote) corePickerOpen.value = true;
-  else void addDirectory();
+  corePickerOpen.value = true;
 };
 
 const confirmRemove = (dir: string): void => {
@@ -95,7 +92,6 @@ onMounted(() => {
     </SButton>
 
     <CoreDirectoryPicker
-      v-if="webRemote"
       v-model:open="corePickerOpen"
       :title="t('library.addFolder')"
       @select="(dir) => addDirectory(dir)"

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -9,8 +8,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("shared Core Protocol client", () => {
-  it("uses the Electron-internal Core scheme for Desktop commands", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses the Core HTTP origin for commands", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -28,20 +26,18 @@ describe("shared Core Protocol client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { coreApiOrigin, coreCommand } = await import("./controlClient");
-    expect(coreApiOrigin).toBe("atom-core://control");
+    expect(coreApiOrigin).toBe("http://localhost:14559");
     await expect(coreCommand("/seek", { positionMs: 1234 })).resolves.toEqual({ success: true });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("atom-core://control/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/seek");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/seek");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ positionMs: 1234 }),
     });
   });
 
-  it("keeps Web Control on the existing HTTP origin", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
+  it("uses the browser host for the Web Control origin", async () => {
     const { coreApiOrigin } = await import("./controlClient");
-    expect(coreApiOrigin).not.toBe("atom-core://control");
     expect(coreApiOrigin).toContain(window.location.hostname || "127.0.0.1");
   });
 });

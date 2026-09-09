@@ -8,28 +8,14 @@ export default defineConfig({
   publicDir: false,
   resolve: {
     alias: {
-      "@main": resolve(root, "electron/main"),
+      "@main": resolve(root, "core"),
       "@shared": resolve(root, "shared"),
-      "electron-log": resolve(root, "node_modules/electron-log/node.js"),
       "@splayer/audio-engine": resolve(root, "native/audio-engine"),
-      "@splayer/audio-capture": resolve(root, "native/audio-capture"),
-      "@splayer/media-ctrl": resolve(root, "native/media-ctrl"),
-      "@splayer/taskbar-lyric": resolve(root, "native/taskbar-lyric"),
-      "@splayer/taskbar-thumbnail": resolve(root, "native/taskbar-thumbnail"),
-      "@splayer/opencc": resolve(root, "native/opencc"),
     },
   },
   ssr: {
     external: ["better-sqlite3"],
-    noExternal: [
-      "@hono/node-server",
-      "atomically",
-      "electron-log",
-      "fast-xml-parser",
-      "hono",
-      "undici",
-      "ws",
-    ],
+    noExternal: ["@hono/node-server", "atomically", "fast-xml-parser", "hono", "undici", "ws"],
   },
   build: {
     ssr: true,
@@ -39,9 +25,9 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
-        index: resolve(root, "electron/main/core-node/index.ts"),
-        "plugin-host": resolve(root, "electron/main/atom/pluginHostNode.ts"),
-        "listenbrainz-child": resolve(root, "electron/main/services/listenbrainzChild.ts"),
+        index: resolve(root, "core/core-node/index.ts"),
+        "plugin-host": resolve(root, "core/atom/pluginHostNode.ts"),
+        "listenbrainz-child": resolve(root, "core/services/listenbrainzChild.ts"),
       },
       output: {
         format: "es",

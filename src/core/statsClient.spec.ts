@@ -7,7 +7,6 @@ const jsonResponse = (body: unknown): Response =>
   });
 
 const resetRuntime = (): void => {
-  delete document.documentElement.dataset.atomRuntime;
   vi.unstubAllGlobals();
   vi.resetModules();
 };
@@ -15,8 +14,7 @@ const resetRuntime = (): void => {
 afterEach(resetRuntime);
 
 describe("Stats Core Protocol client", () => {
-  it("uses the Desktop Core scheme for stats queries", async () => {
-    document.documentElement.dataset.atomRuntime = "desktop";
+  it("uses Core HTTP routes for stats queries", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
@@ -37,11 +35,10 @@ describe("Stats Core Protocol client", () => {
     const { statsClient } = await import("./statsClient");
     await expect(statsClient.getStatsSummary()).resolves.toMatchObject({ totalPlayCount: 6 });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("atom-core://control/api/stats/summary");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/stats/summary");
   });
 
   it("projects Web artwork and canonicalizes favorite event tracks", async () => {
-    document.documentElement.dataset.atomRuntime = "web";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
