@@ -5,6 +5,10 @@ import test from "node:test";
 const playerSource = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 const playerEventsSource = readFileSync(new URL("./events.ts", import.meta.url), "utf8");
 const directModeSource = readFileSync(new URL("./directMode.ts", import.meta.url), "utf8");
+const sharedOutputDeviceSource = readFileSync(
+  new URL("../../../shared/utils/outputDevice.ts", import.meta.url),
+  "utf8",
+);
 const toolbarSource = readFileSync(
   new URL("../../components/player/Toolbar.vue", import.meta.url),
   "utf8",
@@ -97,7 +101,8 @@ const between = (source: string, start: string, end: string): string => {
 };
 
 test("Direct entry preflight mirrors native sample-processing requirements", () => {
-  assert.match(directModeSource, /startsWith\("diretta:"\)/);
+  assert.match(directModeSource, /isDirettaOutput/);
+  assert.match(sharedOutputDeviceSource, /startsWith\("diretta:"\)/);
   assert.match(directModeSource, /state\.volume - 1/);
   assert.match(directModeSource, /state\.normalizationEnabled/);
   assert.match(directModeSource, /state\.equalizerEnabled/);
@@ -139,9 +144,12 @@ test("Web status snapshots can settle a seek without high-frequency position eve
   assert.match(seekFlow, /playback\.setSeeking\(false\)/);
 });
 
-test("Existing sample-altering UI is visibly locked while Diretta is selected", () => {
-  assert.match(toolbarSource, /sampleControlsUnavailable: directLocked/);
-  assert.match(toolbarSource, /:disabled="directLocked"/);
+test("sample-altering UI is locked for Diretta and UPnP without conflating their semantics", () => {
+  assert.match(directModeSource, /isSampleProcessingUnavailableOutput/);
+  assert.match(directModeSource, /selected\.value \|\| remoteSelected\.value/);
+  assert.match(toolbarSource, /sampleControlsUnavailable: processingLocked/);
+  assert.match(toolbarSource, /:disabled="processingLocked"/);
+  assert.match(toolbarSource, /remoteOutput\.processingUnavailable/);
   assert.match(toolbarSource, /directMode\.processingUnavailable/);
 
   assert.match(equalizerSource, /<DirectModeNotice \/>/);
@@ -152,10 +160,13 @@ test("Existing sample-altering UI is visibly locked while Diretta is selected", 
   assert.match(speedSource, /:disabled="directLocked"/);
 
   assert.match(settingsSource, /component: DirectModeNotice/);
-  assert.match(settingsSource, /key: "fadeEnabled"[\s\S]*disabled: isDirectOutputSelected/);
   assert.match(
     settingsSource,
-    /key: "loudnessNormalization"[\s\S]*disabled: isDirectOutputSelected/,
+    /key: "fadeEnabled"[\s\S]*disabled: isSampleProcessingUnavailableSelected/,
+  );
+  assert.match(
+    settingsSource,
+    /key: "loudnessNormalization"[\s\S]*disabled: isSampleProcessingUnavailableSelected/,
   );
 });
 
@@ -380,7 +391,7 @@ test("Controls refresh output preference from Core config authority", () => {
   assert.doesNotMatch(refreshFlow, /getSelectedDeviceName/);
 });
 
-test("Core volume and tempo controls cannot bypass the Direct UI lock", () => {
+test("Control volume and tempo commands cannot bypass Diretta or UPnP processing locks", () => {
   for (const marker of [
     "export const setVolume = async",
     "export const setSpeed = async",
@@ -388,6 +399,10 @@ test("Core volume and tempo controls cannot bypass the Direct UI lock", () => {
     "export const setPitchSync = async",
   ]) {
     const section = playerSource.split(marker)[1]?.slice(0, 420) ?? "";
-    assert.match(section, /isDirectOutputSelected\(\)/, `${marker} must keep the Direct guard`);
+    assert.match(
+      section,
+      /isSampleProcessingUnavailableSelected\(\)/,
+      `${marker} must keep the output processing guard`,
+    );
   }
 });

@@ -117,6 +117,7 @@ import {
   insertFavoriteEvent,
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
+import { isSampleProcessingUnavailableOutput } from "@shared/utils/outputDevice";
 import { testNetworkProxy } from "@main/utils/proxy";
 import { getDownloadDir } from "@main/utils/config";
 import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFilesystem";
@@ -125,6 +126,10 @@ import { fetchProviderImage, parseProviderImageUrl } from "@main/services/provid
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
+const sampleProcessingUnavailable = (): boolean =>
+  isSampleProcessingUnavailableOutput(getSelectedOutputDevice());
+const sampleProcessingUnavailableResponse = (c: Context) =>
+  c.json({ error: "output_processing_unavailable" }, 409);
 const CACHE_CATEGORIES = new Set<CacheCategory>([
   "covers",
   "artists",
@@ -497,6 +502,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
   api.get("/volume", (c) => c.json({ volume: getPlayer().getVolume() }));
   api.post("/volume", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { volume?: number } | null;
     const volume = Number(body?.volume);
     if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
@@ -521,6 +527,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/speed", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { speed?: number } | null;
     const speed = Number(body?.speed);
     if (!Number.isFinite(speed)) return c.json({ error: "speed_required" }, 400);
@@ -534,6 +541,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/pitch", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { semitones?: number } | null;
     try {
       getPlayer().setPitch(Number(body?.semitones ?? 0));
@@ -544,6 +552,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/pitch-sync", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
     try {
       getPlayer().setPitchSync(body?.enabled === true);
@@ -554,6 +563,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/normalization", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
     try {
       getPlayer().setNormalizationEnabled(body?.enabled === true);
@@ -564,6 +574,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/equalizer", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as {
       enabled?: boolean;
       bands?: number[];
@@ -580,6 +591,7 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/player/fade", async (c) => {
+    if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { durationMs?: number } | null;
     try {
       getPlayer().setFadeDuration(Math.max(0, Number(body?.durationMs ?? 0)));

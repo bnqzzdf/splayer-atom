@@ -26,7 +26,7 @@ const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
 const { isDesktopLyricOpen } = storeToRefs(settings);
-const { sampleControlsUnavailable: directLocked } = useDirectModeState();
+const { remoteSelected, sampleControlsUnavailable: processingLocked } = useDirectModeState();
 const webRemote = isWebRemote();
 const desktopLyricAvailable = hasHostCapability("desktopLyric");
 const outputPopoverOpen = ref(false);
@@ -48,6 +48,11 @@ const selectedOutputLabel = computed(() => {
   if (!selected) return t("settings.outputDevice.required");
   return status.outputDevices.find((device) => device.id === selected)?.name ?? selected;
 });
+const processingUnavailableTitle = computed(() =>
+  remoteSelected.value
+    ? t("remoteOutput.processingUnavailable")
+    : t("directMode.processingUnavailable"),
+);
 
 watch(
   [() => status.outputDevicesReady, () => status.selectedOutputDevice],
@@ -70,14 +75,14 @@ watch(
 const lastVolume = ref(status.volume || 0.7);
 
 const onVolumeWheel = (e: WheelEvent): void => {
-  if (directLocked.value) return;
+  if (processingLocked.value) return;
   const delta = e.deltaY < 0 ? 0.05 : -0.05;
   const next = Math.max(0, Math.min(1, status.volume + delta));
   player.setVolume(next);
 };
 
 const toggleMute = (): void => {
-  if (directLocked.value) return;
+  if (processingLocked.value) return;
   if (status.volume > 0) {
     lastVolume.value = status.volume;
     player.setVolume(0);
@@ -158,8 +163,8 @@ const onMoreMenuSelect = (key: string): void => {
           circle
           size="large"
           :class="mutedClass"
-          :disabled="directLocked"
-          :title="directLocked ? t('directMode.processingUnavailable') : undefined"
+          :disabled="processingLocked"
+          :title="processingLocked ? processingUnavailableTitle : undefined"
           @click="toggleMute"
           @wheel.prevent="onVolumeWheel"
         >
@@ -180,7 +185,7 @@ const onMoreMenuSelect = (key: string): void => {
             :thumb-size="15"
             :track-height="5"
             :cover="cover"
-            :disabled="directLocked"
+            :disabled="processingLocked"
             vertical
             @change="player.setVolume($event)"
           />

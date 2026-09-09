@@ -156,6 +156,10 @@
     "processingUnavailable": "Diretta Source Direct 会保持原始音频数据。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调控制在 Direct 模式下不可用；普通输出的原设置会保留。",
     "preparingSource": "正在准备 Source Direct 在线音源…"
   },
+  "remoteOutput": {
+    "title": "远端输出",
+    "processingUnavailable": "UPnP Renderer 直接播放远端媒体，本地软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调不会作用到该输出，因此当前已禁用；切回本地输出后原设置仍会保留。"
+  },
   "autoClose": {
     "title": "定时关闭",
     "duration": "时长",

@@ -1,7 +1,7 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
 import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue";
-import { isDirectOutputSelected } from "@/core/player/directMode";
+import { isSampleProcessingUnavailableSelected } from "@/core/player/directMode";
 import IconLucidePlay from "~icons/lucide/play";
 
 const playerCategory: SettingCategory = {
@@ -17,7 +17,7 @@ const playerCategory: SettingCategory = {
           component: DirectModeNotice,
           fullWidth: true,
           searchable: false,
-          visible: isDirectOutputSelected,
+          visible: isSampleProcessingUnavailableSelected,
         },
         {
           key: "autoPlay",
@@ -36,7 +36,7 @@ const playerCategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "system.player.fadeEnabled" },
           defaultValue: true,
-          disabled: isDirectOutputSelected,
+          disabled: isSampleProcessingUnavailableSelected,
           children: [
             {
               key: "fadeDuration",
@@ -47,7 +47,7 @@ const playerCategory: SettingCategory = {
               step: 100,
               defaultValue: 200,
               marks: { 100: "100", 200: "200", 600: "600" },
-              disabled: isDirectOutputSelected,
+              disabled: isSampleProcessingUnavailableSelected,
             },
           ],
         },
@@ -56,7 +56,7 @@ const playerCategory: SettingCategory = {
           type: "switch",
           binding: { store: "settings", path: "system.player.loudnessNormalization" },
           defaultValue: false,
-          disabled: isDirectOutputSelected,
+          disabled: isSampleProcessingUnavailableSelected,
           tag: { text: "Beta" },
         },
       ],

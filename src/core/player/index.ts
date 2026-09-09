@@ -20,7 +20,7 @@ import * as queue from "@/stores/queue";
 import {
   getCurrentDirectEntryBlockers,
   isDirettaOutput,
-  isDirectOutputSelected,
+  isSampleProcessingUnavailableSelected,
 } from "./directMode";
 import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
@@ -239,7 +239,7 @@ export const markSeek = (posMs: number): void => {
  * @param vol - 音量值（0.0 ~ 1.0）
  */
 export const setVolume = async (vol: number): Promise<void> => {
-  if (isDirectOutputSelected()) return;
+  if (isSampleProcessingUnavailableSelected()) return;
   const result = await playerClient.setVolume(vol);
   if (result.success) {
     useStatusStore().volume = vol;
@@ -251,7 +251,7 @@ export const setVolume = async (vol: number): Promise<void> => {
  * @param v - 速度（0.5 ~ 2.0）
  */
 export const setSpeed = async (v: number): Promise<void> => {
-  if (isDirectOutputSelected()) return;
+  if (isSampleProcessingUnavailableSelected()) return;
   const safe = Number.isFinite(v) ? Math.max(0.5, Math.min(2.0, v)) : 1.0;
   const result = await playerClient.setSpeed(safe);
   if (result.success) {
@@ -265,7 +265,7 @@ export const setSpeed = async (v: number): Promise<void> => {
  * 设置音调偏移（半音 -12 ~ 12）
  */
 export const setPitch = async (n: number): Promise<void> => {
-  if (isDirectOutputSelected()) return;
+  if (isSampleProcessingUnavailableSelected()) return;
   const safe = Number.isFinite(n) ? Math.max(-12, Math.min(12, Math.round(n))) : 0;
   const result = await playerClient.setPitch(safe);
   if (result.success) useStatusStore().pitch = safe;
@@ -276,7 +276,7 @@ export const setPitch = async (n: number): Promise<void> => {
  * @param on - true = 变速保音调，false = 变速变调
  */
 export const setPitchSync = async (on: boolean): Promise<void> => {
-  if (isDirectOutputSelected()) return;
+  if (isSampleProcessingUnavailableSelected()) return;
   const result = await playerClient.setPitchSync(on);
   if (result.success) useStatusStore().pitchSync = on;
 };

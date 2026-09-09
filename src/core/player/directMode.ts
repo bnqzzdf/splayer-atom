@@ -1,5 +1,11 @@
 import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
+import {
+  isDirettaOutput,
+  isSampleProcessingUnavailableOutput,
+  isUpnpOutput,
+} from "@shared/utils/outputDevice";
+export { isDirettaOutput } from "@shared/utils/outputDevice";
 
 /** 进入 Source Direct 前必须恢复的样本处理状态。 */
 export type DirectEntryBlocker = "volume" | "normalization" | "equalizer" | "speed" | "pitch";
@@ -13,10 +19,6 @@ export interface DirectEntryState {
 }
 
 const F32_EPSILON = 1.1920928955078125e-7;
-
-/** Diretta 输出继续占用 SPlayer 现有 output-device ID 空间。 */
-export const isDirettaOutput = (deviceId: string | null | undefined): boolean =>
-  deviceId?.startsWith("diretta:") === true;
 
 /**
  * 返回阻止 Source Direct 进入的当前样本处理项。
@@ -52,14 +54,18 @@ export const getCurrentDirectEntryBlockers = (): DirectEntryBlocker[] =>
 export const isDirectOutputSelected = (): boolean =>
   isDirettaOutput(useSettingsStore().player.outputDevice);
 
+export const isSampleProcessingUnavailableSelected = (): boolean =>
+  isSampleProcessingUnavailableOutput(useSettingsStore().player.outputDevice);
+
 /**
- * Direct 被选中后，UI 层锁定会改变样本的控制；native 拒绝仍是最终权威。
- * 这里只派生现有设置，不保存新的 Direct 状态。
+ * 输出模式被选中后，UI 层锁定不会作用于当前媒体路径的样本处理控制。
+ * Diretta 的 entry blockers 仍只服务 Source Direct preflight；UPnP 不要求修改普通输出设置。
  */
 export const useDirectModeState = () => {
   const settings = useSettingsStore();
   const status = useStatusStore();
   const selected = computed(() => isDirettaOutput(settings.player.outputDevice));
+  const remoteSelected = computed(() => isUpnpOutput(settings.player.outputDevice));
   const blockers = computed(() =>
     getDirectEntryBlockers({
       volume: status.volume,
@@ -69,9 +75,11 @@ export const useDirectModeState = () => {
       pitch: status.pitch,
     }),
   );
+  const sampleControlsUnavailable = computed(() => selected.value || remoteSelected.value);
   return {
     selected,
+    remoteSelected,
     blockers,
-    sampleControlsUnavailable: selected,
+    sampleControlsUnavailable,
   };
 };

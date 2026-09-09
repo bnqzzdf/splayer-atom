@@ -23,6 +23,28 @@ test("UPnP remains an Atom-owned early branch without a generic output framework
   assert.doesNotMatch(session, /interface IOutput|class OutputRegistry|class OutputManager/);
 });
 
+test("UPnP rejects local sample-processing commands instead of exposing fake controls", () => {
+  assert.match(routes, /isSampleProcessingUnavailableOutput\(getSelectedOutputDevice\(\)\)/);
+  assert.match(routes, /output_processing_unavailable/);
+  for (const route of [
+    "/volume",
+    "/player/speed",
+    "/player/pitch",
+    "/player/pitch-sync",
+    "/player/normalization",
+    "/player/equalizer",
+    "/player/fade",
+  ]) {
+    const marker = `api.post("${route}", async (c) => {`;
+    const section = routes.split(marker)[1]?.slice(0, 280) ?? "";
+    assert.match(
+      section,
+      /sampleProcessingUnavailable\(\)/,
+      `${route} must reject unavailable processing`,
+    );
+  }
+});
+
 test("UPnP reuses the existing output and status Core Protocol schema", () => {
   assert.match(routes, /scanUpnpOutputDevices\(\)/);
   assert.match(routes, /getPlaybackStatus\(\)/);

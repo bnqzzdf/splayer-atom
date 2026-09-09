@@ -168,6 +168,10 @@
     "processingUnavailable": "Diretta Source Direct preserves the original audio data. Software volume, volume normalization, EQ/preamp, fade, speed, and pitch controls are unavailable in Direct mode; your normal-output settings are preserved.",
     "preparingSource": "Preparing the online source for Source Direct…"
   },
+  "remoteOutput": {
+    "title": "Remote Output",
+    "processingUnavailable": "The UPnP Renderer plays the remote media directly, so local software volume, normalization, EQ/preamp, fades, speed, and pitch do not affect this output and are disabled while it is selected. Your local-output settings are preserved."
+  },
   "autoClose": {
     "title": "Sleep Timer",
     "duration": "Duration",
