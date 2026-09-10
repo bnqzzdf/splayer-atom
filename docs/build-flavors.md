@@ -30,7 +30,7 @@ The SDK remains external and is not bundled.
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-system-linux-x64.tar.gz` and requires a compatible system Node `>=24.18.0 <25`.
+Produces `splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz` and requires a compatible system Node `>=24.18.0 <25`.
 
 ## bundled-runtime
 
@@ -38,10 +38,6 @@ Produces `splayer-atom-core-system-linux-x64.tar.gz` and requires a compatible s
 pnpm package:core:bundled
 ```
 
-Produces `splayer-atom-core-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
+Produces `splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
 
-Both variants contain the same Core JS, Web Control, native addons, protocol version and data schema. The runtime choice must never create a second product architecture.
-
-## Release ABI
-
-Both variants ship ELF binaries. Formal artifacts must be built in the pinned release environment and audited for their maximum required `GLIBC_x.y` symbol version.
+Both variants contain the same Core JS, Web Control, native addons, protocol version and data schema.

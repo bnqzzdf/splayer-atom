@@ -38,15 +38,21 @@ pnpm package:core:bundled
 Artifacts:
 
 ```text
-dist/splayer-atom-core-system-linux-x64.tar.gz
-dist/splayer-atom-core-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
+
+The version comes from `package.json` and the date is the packaging date in `YYYYMMDD` format.
+Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible date is required. `runtime.json` also records a
+human-readable `buildDate`.
 
 Both contain the same Core JS, Web Control, native addons, protocol, and data schema.
 
 ## Release identity
 
-`runtime.json` records Atom version/commit/dirty state, platform/arch, Node contract, protocol/schema versions, capabilities, and the Diretta SDK release when applicable. Formal releases should have `sourceDirty=false`.
+`runtime.json` records the Atom version, build date, commit/dirty state, platform/arch, Node
+contract, protocol/schema versions, capabilities, and the Diretta SDK release when applicable.
+Formal releases should have `sourceDirty=false`.
 
 ## Diretta
 
@@ -59,15 +65,11 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 
 The SDK itself is not bundled.
 
-## Linux glibc ABI
-
-Rust/N-API binaries and bundled Node are ELF files. The real minimum glibc requirement is determined by the highest versioned `GLIBC_x.y` symbol used anywhere in the final artifact.
-
-Formal releases must use a pinned older Linux builder/sysroot and audit every shipped ELF. A rolling distribution or glibc 2.43 development host should not be used directly as the public release builder.
-
 ## CI and gates
 
-`.github/workflows/dev.yml` builds only Linux x86-64 Core/Web on Node `24.18.0` and Rust stable.
+`.github/workflows/dev.yml` builds Core/Web in a pinned `ubuntu-24.04` Linux x86-64 environment
+with Node `24.18.0` and Rust stable. Formal release packages are produced from that fixed build
+environment.
 
 Recommended release gates:
 

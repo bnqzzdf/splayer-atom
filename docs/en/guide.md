@@ -1,6 +1,6 @@
 # User Guide
 
-SPlayer Atom consists of one Linux x86-64 Node Core and a browser-based Web Control. After deploying Core, open the Web page served by Core.
+SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 Node Core plus a browser-based Web Control. After deploying Core, open the Web page served by Core.
 
 ## Library
 
@@ -10,7 +10,7 @@ Local search, album/artist aggregation, tag editing, CUE virtual tracks, and SAC
 
 ## Playback and queue
 
-Core owns the queue, current track, repeat/shuffle modes, auto-next, error recovery, and playback position. Refreshing or closing a browser does not move playback authority into Web Control.
+Core manages the queue, current track, repeat/shuffle modes, auto-next, error recovery, and playback position. Refreshing or closing a browser does not interrupt playback running in Core.
 
 ## Outputs
 
@@ -18,13 +18,13 @@ The player bar exposes one Core-backed output selector for ALSA, optional Dirett
 
 ## Providers
 
-Atom formally maintains Netease, Qobuz, and TIDAL. Credentials and session state belong to Core; Web Control consumes only token-free session projections.
+Atom supports Netease, Qobuz, and TIDAL. Credentials stay in Core; Web Control only receives login status and never exposes account tokens to the page.
 
 See [Streaming Services](/en/streaming) for self-hosted media servers.
 
 ## Lyrics
 
-LRC, QRC, YRC, and TTML presentation is supported, including translation, romanization, word timing, and offsets. Web rendering never becomes playback authority.
+LRC, QRC, YRC, and TTML presentation is supported, including translation, romanization, word timing, and offsets. Lyrics rendering in the browser does not affect the playback process in Core.
 
 ## Downloads and cache
 
@@ -36,4 +36,4 @@ Plugins run in an isolated Core child process and can extend source resolution a
 
 ## Multiple controls
 
-Multiple browsers may connect to one Core and share the same queue/session/output projection.
+Multiple browsers may connect to one Core and stay synchronized with the same queue, login status, and output selection.

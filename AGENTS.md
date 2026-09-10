@@ -84,8 +84,6 @@ Diretta is a strict Source Direct path, not a processed output backend.
 - The supported release target is Linux x86-64.
 - The Core native flavor contains only `audio-engine.node` and `streaming-api.node`; it must not
   carry Electron, Chromium, GTK, PipeWire/PulseAudio, or desktop-only native modules.
-- Linux binary compatibility is part of the release contract. Build formal artifacts in the pinned
-  release environment and audit the highest required `GLIBC_x.y` symbol across every shipped ELF.
 - A Diretta-branded artifact must pass the required-SDK provenance gate before an artifact is
   produced.
 - The final `tar.gz` artifact, runtime metadata, native addon load, Web root, HTTP/WS endpoints,

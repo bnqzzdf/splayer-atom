@@ -1,6 +1,6 @@
 # 使用指南
 
-SPlayer Atom 由一个 Linux x86-64 Node Core 和浏览器中的 Web Control 组成。部署 Core 后，在浏览器访问 Core 提供的 Web 页面即可使用。
+SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览器中的 Web Control 组成。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
 
 ## 曲库
 
@@ -10,7 +10,7 @@ SPlayer Atom 由一个 Linux x86-64 Node Core 和浏览器中的 Web Control 组
 
 ## 播放与队列
 
-播放队列、当前曲目、循环/随机模式、自动下一首、错误恢复和播放进度都由 Core 持有。关闭或刷新浏览器不会把播放权威迁到 Web Control。
+播放队列、当前曲目、循环/随机模式、自动下一首、错误恢复和播放进度都由 Core 管理。关闭或刷新浏览器不会中断 Core 中正在进行的播放。
 
 ## 输出
 
@@ -24,7 +24,7 @@ SPlayer Atom 由一个 Linux x86-64 Node Core 和浏览器中的 Web Control 组
 
 ## 在线服务
 
-Atom 正式维护 Netease、Qobuz 与 TIDAL provider。账号状态与凭据属于 Core，Web Control 只显示 token-free session projection。
+Atom 支持 Netease、Qobuz 与 TIDAL。登录信息保存在 Core 中，Web Control 只显示登录状态，不会把账号 token 暴露给浏览器页面。
 
 自建媒体服务见 [流媒体服务](/streaming)。
 
@@ -42,4 +42,4 @@ Atom 正式维护 Netease、Qobuz 与 TIDAL provider。账号状态与凭据属�
 
 ## 多个 Web Control
 
-多个浏览器可以同时连接同一个 Core；它们看到的是同一份 queue/session/output 状态。不要把某个浏览器的 localStorage 当作 Core 状态备份。
+多个浏览器可以同时连接同一个 Core，并看到相同的播放队列、登录状态和输出设备。浏览器本地存储只用于界面设置，不是 Core 数据的备份。

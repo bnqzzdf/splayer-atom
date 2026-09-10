@@ -13,6 +13,7 @@ const packageJson = JSON.parse(read("package.json")) as {
   repository?: { url?: string };
   bugs?: { url?: string };
 };
+const artifactNameSource = read("scripts/atom/core-artifact-name.ts");
 const stageSource = read("scripts/atom/stage-core-system.ts");
 const artifactSource = read("scripts/atom/check-core-artifact.ts");
 const coreInfoSource = read("core/atom/runtime/coreInfo.ts");
@@ -29,8 +30,8 @@ const serverSource = read("core/server/index.ts");
 test("SPlayer Atom owns a Node Core and Web Control product identity", () => {
   assert.equal(packageJson.name, "splayer-atom");
   assert.equal(packageJson.productName, "SPlayer Atom");
-  assert.equal(packageJson.version, "0.1.0");
-  assert.match(packageJson.description ?? "", /Linux x86-64 music Core with Web Control/);
+  assert.equal(packageJson.version, "1.0.0-rc.1");
+  assert.match(packageJson.description ?? "", /Web \+ Core music player adapted from SPlayer-Next/);
   assert.equal(packageJson.repository?.url, "https://github.com/bnqzzdf/splayer-atom");
   assert.equal(packageJson.bugs?.url, "https://github.com/bnqzzdf/splayer-atom/issues");
 });
@@ -38,6 +39,7 @@ test("SPlayer Atom owns a Node Core and Web Control product identity", () => {
 test("Core artifact carries Atom version commit and dirty state", () => {
   assert.match(stageSource, /productName: packageMetadata\.productName/);
   assert.match(stageSource, /atomVersion: packageMetadata\.version/);
+  assert.match(stageSource, /buildDate: formatCoreBuildDate\(buildDate\)/);
   assert.match(stageSource, /atomCommit/);
   assert.match(stageSource, /sourceDirty/);
   assert.match(artifactSource, /runtime\.productName !== "SPlayer Atom"/);
@@ -49,6 +51,15 @@ test("Core artifact carries Atom version commit and dirty state", () => {
   assert.doesNotMatch(stageSource, /splayerBaseline|acceptedBaseline|upstreamMetadata/);
   assert.doesNotMatch(artifactSource, /splayerBaseline/);
   assert.doesNotMatch(coreInfoSource, /splayerBaseline|ATOM_SPLAYER_BASELINE/);
+});
+
+test("Core package filenames contain product version and build date", () => {
+  assert.match(artifactNameSource, /ATOM_BUILD_DATE/);
+  assert.match(artifactNameSource, /\^\\d\{8\}\$/);
+  assert.match(
+    artifactNameSource,
+    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{bundleNode \? "bundled" : "system"\}-linux-x64\.tar\.gz/,
+  );
 });
 
 test("runtime integrations identify the current product as SPlayer Atom", () => {

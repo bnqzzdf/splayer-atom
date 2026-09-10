@@ -18,13 +18,10 @@ pnpm dev
 
 ## Architecture rules
 
-Read the root `AGENTS.md` and the [Atom Roadmap](/atom-roadmap) before changing architecture.
-
-- Node Core is the sole music-domain authority.
-- Web Control is the only UI.
-- Do not add Electron/Desktop/Host capabilities.
-- Do not create a second queue, player, provider, settings, or persistence model.
-- Diretta must remain strict Source Direct without silent DSP or fallback.
+For architecture or playback changes, read the root `AGENTS.md` and the
+[Atom Roadmap](/atom-roadmap). As a general rule, library, provider, playback, and output behavior
+belongs in Core, while interface and interaction behavior belongs in Web Control. Detailed
+implementation constraints are kept in `AGENTS.md` instead of being repeated in user-facing docs.
 
 ## Common gates
 

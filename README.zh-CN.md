@@ -1,8 +1,8 @@
 # SPlayer Atom
 
-SPlayer Atom 是一个面向 Linux x86-64 的音乐播放 Core，配套唯一的 Web Control 界面。
+SPlayer Atom 是在 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 基础上修改的 Linux x86-64 音乐播放器，采用 **Web + Core** 模式：后台 Node Core 负责曲库、在线服务、播放队列和音频输出，日常操作通过浏览器中的 Web Control 完成。
 
-项目不提供 Desktop/Electron 版本，也不提供 Windows/macOS 安装包。Node Core 是数据库、设置、曲库、队列、播放策略、音源解析、缓存、下载、统计、插件、在线服务与输出设备的唯一权威；浏览器只通过 Core HTTP/WS 协议发送高层命令并消费状态投影。
+这种模式适合把播放器长期运行在 Linux 主机、音乐服务器或 HiFi 主机上，再从电脑、平板或手机浏览器进行控制。关闭某个浏览器页面不会停止 Core 中正在进行的播放。
 
 ## 产品形态
 
@@ -17,13 +17,11 @@ SPlayer Atom Node Core
   ├─ Library / DB / Settings / Queue
   ├─ Netease / Qobuz / TIDAL / Streaming
   ├─ Cache / Download / Plugins / ListenBrainz
-  └─ Playback authority
+  └─ Playback / Output
        ├─ ALSA
        ├─ Diretta Source Direct
        └─ UPnP Renderer
 ```
-
-当前正式发布目标只有 **Linux x86-64**。
 
 ## 主要能力
 
@@ -38,8 +36,8 @@ SPlayer Atom Node Core
   - PCM 保持源采样率、声道数、有效位深与样本值
   - Native DSD 保持逻辑 one-bit 序列
   - 不允许静默 resample、remix、DSP 或 PCM fallback
-- UPnP 单 Renderer 输出，共用同一 Core queue/source/cache 权威
-- Web Control 多客户端连接、HTTP/WS 状态投影
+- UPnP 单 Renderer 输出，与本地输出共用同一套 Core 播放队列和音源处理流程
+- 多个 Web Control 可以同时连接同一个 Core，并实时同步播放状态
 
 ## 环境要求
 
@@ -113,11 +111,11 @@ bundled-runtime（包内携带 reference Node）：
 pnpm package:core:bundled
 ```
 
-产物位于 `dist/`：
+产物位于 `out/`，文件名包含版本号和构建日期：
 
 ```text
-splayer-atom-core-system-linux-x64.tar.gz
-splayer-atom-core-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
 
 Diretta 正式构建必须显式提供支持的 Host SDK：
@@ -127,19 +125,9 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
   pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
 ```
 
-SDK 不进入仓库，也不会被打进 release artifact。
-
-## Linux glibc 兼容性
-
-Core artifact 包含 Rust/N-API ELF。最终最低 glibc 版本取决于构建环境与实际引用的版本化符号，而不是 package.json 中的配置。
-
-正式发布应在固定的较老 Linux builder/sysroot 中构建，并扫描最终 tar 内所有 ELF 的最高 `GLIBC_x.y`。不要直接使用滚动发行版或 glibc 2.43 开发机作为公开发布 builder。
-
-详见 [构建与打包](./docs/build-and-packaging.md)。
-
 ## 部署
 
-Core 支持 system-runtime 与 bundled-runtime 两种部署方式，共享同一个 Core/Web 协议和数据目录模型。systemd、数据目录、升级与回滚流程见 [Core 部署](./docs/core-deployment.md)。
+Core 支持 system-runtime 与 bundled-runtime 两种部署方式，两者运行相同的 Core/Web 功能并使用相同的数据目录结构。systemd、数据目录、升级与回滚流程见 [Core 部署](./docs/core-deployment.md)。
 
 ## 文档
 

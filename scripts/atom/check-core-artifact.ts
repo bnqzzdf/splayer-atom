@@ -11,18 +11,24 @@ import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/no
 import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 import type { CoreInfo } from "../../shared/types/core";
+import {
+  coreArtifactFileName,
+  formatCoreBuildDate,
+  readCoreReleaseMetadata,
+  resolveCoreBuildDate,
+} from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreArtifact] 未知参数: ${[...args].join(" ")}`);
+const release = readCoreReleaseMetadata();
+const buildDate = resolveCoreBuildDate();
 const archiveFile = path.join(
   root,
   "out",
-  bundleNode
-    ? "splayer-atom-core-bundled-linux-x64.tar.gz"
-    : "splayer-atom-core-system-linux-x64.tar.gz",
+  coreArtifactFileName(bundleNode, release.version, buildDate),
 );
 
 const fail = (message: string): never => {
@@ -78,6 +84,7 @@ try {
   const runtime = JSON.parse(readFileSync(path.join(installRoot, "runtime.json"), "utf8")) as {
     productName?: string;
     atomVersion?: string;
+    buildDate?: string;
     atomCommit?: string;
     sourceDirty?: boolean;
     nodeRange?: string;
@@ -91,6 +98,7 @@ try {
   if (
     runtime.productName !== "SPlayer Atom" ||
     !runtime.atomVersion ||
+    runtime.buildDate !== formatCoreBuildDate(buildDate) ||
     !runtime.atomCommit ||
     typeof runtime.sourceDirty !== "boolean"
   ) {

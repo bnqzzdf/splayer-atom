@@ -8,8 +8,6 @@ SPlayer Atom has one runtime shape:
 - Web Control as the only UI;
 - Core HTTP/WebSocket as the only Control transport.
 
-Do not add Electron, preload/IPC, Desktop windows, Windows/macOS packaging, or a second playback/data authority.
-
 ## Requirements
 
 - Node `>=24.18.0 <25`
@@ -58,11 +56,11 @@ git diff --check
 
 Use proportional checks while iterating. Architecture or release changes should run the full set.
 
-## Core/Web ownership
+## Core/Web responsibilities
 
-Core owns database, settings, library, provider sessions, queue, playback policy, playable-source resolution, cache/preload, downloads, statistics, plugins, ListenBrainz and output assignment.
+Core manages database, settings, library, provider sessions, queue, playback, playable-source resolution, cache/preload, downloads, statistics, plugins, ListenBrainz and output selection.
 
-Web Control may cache projections for rendering, but must not own a second queue, provider session, playback lifecycle, Direct staging path or output state.
+Web Control handles the interface and keeps its visible state synchronized through Core HTTP/WS.
 
 ## Native development
 
@@ -77,8 +75,6 @@ The formal Core native flavor contains only `audio-engine.node` and `streaming-a
 ## Diretta
 
 Normal development builds do not require the proprietary SDK. A Diretta-enabled build uses `DIRETTA_SDK_ROOT`; a formal Diretta artifact must also pass `--require-diretta` during Core packaging.
-
-Source Direct invariants are defined in `AGENTS.md` and must not be weakened for convenience.
 
 ## Release development
 

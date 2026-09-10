@@ -20,11 +20,11 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 
 ### Account / pages
 
-- 登录状态由 Core provider session snapshot/event 正确投影。
+- 登录状态能从 Core 正确同步到 Web Control。
 - Favorites 首次加载、分页/刷新和收藏变更在 Headless Web 可见。
 - Daily Recommendations 可加载、刷新并加入 canonical Core queue。
-- Cloud 可分页、播放；删除只在验收者明确授权的测试条目上执行，并验证结果由 Core 投影。
-- logout 后 Core session 与页面状态一致，不残留可用 credential 投影。
+- Cloud 可分页、播放；删除只在验收者明确授权的测试条目上执行，并验证 Web Control 能看到 Core 的最新结果。
+- logout 后 Core session 与页面状态一致，Web Control 不残留可用 credential。
 
 ### Playback
 
@@ -37,7 +37,7 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 
 ## 3. Qobuz
 
-- 真实账号 session/entitlement 由 Core 持有并正确投影。
+- 真实账号 session/entitlement 由 Core 保存，并能正确同步到 Web Control。
 - search → detail → queue → playback 全链路使用真实结果。
 - lossless/high-resolution entitlement 与实际 resolve 结果一致；无权益时明确失败。
 - 三首 queue 的 Core-owned auto-next 与连续播放通过。
@@ -46,7 +46,7 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 
 ## 4. TIDAL
 
-- 真实账号 session、subscription/quality entitlement 由 Core 持有并正确投影。
+- 真实账号 session、subscription/quality entitlement 由 Core 保存，并能正确同步到 Web Control。
 - search → detail → queue → playback 全链路使用真实结果。
 - JSON/BTS 与 DASH 两种真实播放路径分别验收；记录实际命中的路径和 quality。
 - 三首 queue 的 Core-owned auto-next 与连续播放通过。

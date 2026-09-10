@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "SPlayer Atom"
-  text: "Node Core + Web Control"
-  tagline: A Linux x86-64 music Core that owns library, queue, playback policy, online services, and outputs.
+  text: "Web + Core music player"
+  tagline: Adapted from SPlayer-Next for Linux x86-64 music hosts, with everyday control from a browser.
   actions:
     - theme: brand
       text: User Guide
@@ -17,18 +17,18 @@ hero:
       link: https://github.com/bnqzzdf/splayer-atom
 
 features:
-  - title: One Core authority
-    details: Database, settings, library, queue, playback policy, cache, downloads, plugins, and providers live in Node Core.
+  - title: Background Core
+    details: Node Core handles the library, queue, providers, downloads, plugins, and actual audio playback, so music keeps playing when a browser closes.
   - title: Web Control
-    details: Browsers control the same Core over HTTP/WebSocket without owning a second player or data model.
+    details: Computers, tablets, and phones can connect to the same Core over HTTP/WebSocket and stay synchronized in real time.
   - title: HiFi outputs
-    details: ALSA, strict Diretta Source Direct, and a Core-owned UPnP Renderer share one playback authority.
+    details: Supports ALSA, Diretta Source Direct, and UPnP Renderer output.
   - title: Linux x86-64
     details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
 
 ## Product boundary
 
-SPlayer Atom provides only **Node Core + Web Control**. There is no Desktop/Electron edition and no Windows or macOS application package.
+SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.
 
 Continue with the [User Guide](/en/guide), [Build and Packaging](/en/build-and-packaging), or [Core Deployment](/core-deployment).

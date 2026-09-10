@@ -88,8 +88,9 @@ sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
 3. Extract the new release into the original installation path.
 
 ```bash
+ARCHIVE=/path/to/splayer-atom-core-1.0.0-rc.1-20260910-system-linux-x64.tar.gz
 sudo mkdir -p /opt/splayer-atom-core
-sudo tar -xzf splayer-atom-core-system-linux-x64.tar.gz \
+sudo tar -xzf "$ARCHIVE" \
   -C /opt/splayer-atom-core --strip-components=1
 # bundled-runtime uses the corresponding bundled archive and the same target layout
 ```

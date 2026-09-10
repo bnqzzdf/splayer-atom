@@ -28,7 +28,7 @@ env:
 jobs:
   linux-core:
     name: Linux x86-64 Core + Web Control
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -75,4 +75,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: splayer-atom-core-system-linux-x64
-          path: out/splayer-atom-core-system-linux-x64.tar.gz
+          path: out/splayer-atom-core-*-system-linux-x64.tar.gz

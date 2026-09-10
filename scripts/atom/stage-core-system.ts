@@ -15,6 +15,12 @@ import { CONFIG_SCHEMA_VERSION } from "../../core/atom/runtime/configSchema";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
 import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
+import {
+  coreArtifactFileName,
+  formatCoreBuildDate,
+  readCoreReleaseMetadata,
+  resolveCoreBuildDate,
+} from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -29,6 +35,8 @@ const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
 const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
+const packageMetadata = readCoreReleaseMetadata();
+const buildDate = resolveCoreBuildDate();
 
 const fail = (message: string): never => {
   throw new Error(`[CoreStage] ${message}`);
@@ -58,13 +66,6 @@ requireFile(audioEngineFile, "Core audio-engine addon");
 requireFile(streamingApiFile, "Core streaming-api addon");
 requireFile(path.join(root, "LICENSE"), "AGPL license");
 
-const packageMetadata = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")) as {
-  productName?: string;
-  version?: string;
-};
-if (packageMetadata.productName !== "SPlayer Atom" || !packageMetadata.version) {
-  fail("package.json 缺少正式 SPlayer Atom 产品身份或版本");
-}
 const gitHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
 if (gitHead.error) throw gitHead.error;
 if (gitHead.status !== 0 || gitHead.signal || !gitHead.stdout.trim()) {
@@ -175,6 +176,7 @@ writeFileSync(
     {
       productName: packageMetadata.productName,
       atomVersion: packageMetadata.version,
+      buildDate: formatCoreBuildDate(buildDate),
       atomCommit,
       sourceDirty,
       platform: "linux",
@@ -239,9 +241,7 @@ if (archive) {
   const archiveFile = path.join(
     root,
     "out",
-    bundleNode
-      ? "splayer-atom-core-bundled-linux-x64.tar.gz"
-      : "splayer-atom-core-system-linux-x64.tar.gz",
+    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate),
   );
   rmSync(archiveFile, { force: true });
   const tar = spawnSync(

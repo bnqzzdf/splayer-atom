@@ -9,8 +9,8 @@ SPlayer Atom 只发布 Linux x86-64 Core，不提供 Desktop 安装包。
 正式 artifact 有两种部署变体：
 
 ```text
-splayer-atom-core-system-linux-x64.tar.gz
-splayer-atom-core-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
 
 - **system-runtime**：使用系统 Node `>=24.18.0 <25`；
@@ -18,4 +18,4 @@ splayer-atom-core-bundled-linux-x64.tar.gz
 
 两者运行同一个 Node Core 和 Web Control。
 
-获取 artifact 后请按 [Core 部署](/core-deployment) 完成解包、数据目录、systemd、升级与回滚。公开发布的 Linux 兼容下限以最终 artifact 的 `GLIBC_x.y` 审计结果为准。
+获取 artifact 后请按 [Core 部署](/core-deployment) 完成解包、数据目录、systemd、升级与回滚。

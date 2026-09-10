@@ -46,9 +46,12 @@ pnpm package:core:bundled
 输出：
 
 ```text
-dist/splayer-atom-core-system-linux-x64.tar.gz
-dist/splayer-atom-core-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
+
+版本号来自 `package.json`，日期为打包当天的 `YYYYMMDD`。需要可重复构建时可以通过
+`ATOM_BUILD_DATE=YYYYMMDD` 固定日期。`runtime.json` 同时记录可读的 `buildDate`。
 
 staging 内容包括 Core JS、Web Control、两个 native addons、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
 
@@ -58,6 +61,7 @@ staging 内容包括 Core JS、Web Control、两个 native addons、`runtime.jso
 
 - `productName`
 - `atomVersion`
+- `buildDate`
 - `atomCommit`
 - `sourceDirty`
 - platform / arch
@@ -80,29 +84,6 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 
 SDK release 必须匹配仓库固定版本；缺失或不匹配会在 staging 前失败。SDK 本体不进入 artifact。
 
-## Linux glibc ABI
-
-Rust/N-API 与 bundled Node 都是 ELF。构建机较新的 glibc 可能让最终 artifact 引用更高版本的 `GLIBC_x.y`，从而无法在旧系统运行。
-
-正式发布规则：
-
-1. 使用固定的 Linux x86-64 builder/sysroot；
-2. builder 的 glibc 不高于计划支持的最低版本；
-3. 对最终解包 artifact 中所有 ELF 扫描版本化 glibc 符号；
-4. 以整个 artifact 的最高要求作为真实最低 glibc 版本。
-
-示例扫描：
-
-```bash
-find core-system -type f -print0 |
-while IFS= read -r -d '' f; do
-  max=$(objdump -T "$f" 2>/dev/null | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
-  [ -n "$max" ] && printf '%-15s %s\n' "$max" "$f"
-done
-```
-
-不要把 glibc 2.43 的日常开发机直接作为公开 release builder。
-
 ## Artifact smoke
 
 `scripts/atom/build-core-system.ts` 在正式构建链中会执行 staging 与最终 artifact 检查。检查包含：
@@ -117,7 +98,8 @@ done
 
 ## CI
 
-`.github/workflows/dev.yml` 只在 `ubuntu-latest` 构建 Linux x86-64 Core/Web，使用 Node `24.18.0` 与 Rust stable，不再存在 Desktop matrix。
+`.github/workflows/dev.yml` 使用固定的 `ubuntu-24.04` Linux x86-64 环境构建 Core/Web，
+使用 Node `24.18.0` 与 Rust stable。正式发布包统一从固定构建环境生成。
 
 ## 发布前门禁
 

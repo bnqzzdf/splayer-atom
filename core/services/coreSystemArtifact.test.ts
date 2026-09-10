@@ -27,6 +27,10 @@ const artifactCheckSource = readFileSync(
   new URL("../../scripts/atom/check-core-artifact.ts", import.meta.url),
   "utf8",
 );
+const artifactNameSource = readFileSync(
+  new URL("../../scripts/atom/core-artifact-name.ts", import.meta.url),
+  "utf8",
+);
 const launcherSource = readFileSync(
   new URL("../../scripts/atom/core-system/splayer-atom-core", import.meta.url),
   "utf8",
@@ -69,8 +73,10 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /streaming-api\.node/);
   assert.match(stageSource, /callStreamingProvider/);
   assert.match(stageSource, /AGPL license/);
-  assert.match(stageSource, /splayer-atom-core-system-linux-x64\.tar\.gz/);
-  assert.match(stageSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(
+    stageSource,
+    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate\)/,
+  );
   assert.match(stageSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
   assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
   assert.match(stageSource, /requireFile\(nodeLicense, "bundled Node license"\)/);
@@ -78,6 +84,7 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /nodeBundled: bundleNode/);
   assert.match(stageSource, /productName: packageMetadata\.productName/);
   assert.match(stageSource, /atomVersion: packageMetadata\.version/);
+  assert.match(stageSource, /buildDate: formatCoreBuildDate\(buildDate\)/);
   assert.match(stageSource, /atomCommit/);
   assert.match(stageSource, /sourceDirty/);
   assert.doesNotMatch(stageSource, /splayerBaseline|acceptedBaseline|upstreamMetadata/);
@@ -88,6 +95,7 @@ test("system-runtime staging is reference-Node and release-native only", () => {
 
 test("formal Core system build always rebuilds before staging and checks the final tar", () => {
   assert.match(buildSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(buildSource, /ATOM_BUILD_DATE: buildDate/);
   assert.match(buildSource, /\.\.\.\(bundleNode \? \["--bundle-node"\] : \[\]\)/);
   const nativeBuild = buildSource.indexOf("build-core-native.ts");
   const coreBuild = buildSource.indexOf("vite.core.config.ts");
@@ -129,6 +137,7 @@ test("final tar artifact smoke starts the extracted Core on an isolated port", (
   assert.match(artifactCheckSource, /ATOM_SERVER_PORT: String\(port\)/);
   assert.match(artifactCheckSource, /cwd: tempDir/);
   assert.match(artifactCheckSource, /runtime\.productName !== "SPlayer Atom"/);
+  assert.match(artifactCheckSource, /runtime\.buildDate !== formatCoreBuildDate\(buildDate\)/);
   assert.match(artifactCheckSource, /info\.version !== runtime\.atomVersion/);
   assert.match(artifactCheckSource, /info\.commit !== runtime\.atomCommit/);
   assert.match(artifactCheckSource, /info\.sourceDirty !== runtime\.sourceDirty/);
@@ -145,9 +154,19 @@ test("final tar artifact smoke starts the extracted Core on an isolated port", (
 test("system and bundled runtime remain deployment variants of the same staged Core", () => {
   assert.match(launcherSource, /elif \[ -x "\$ROOT_DIR\/runtime\/bin\/node" \]/);
   assert.match(launcherSource, /NODE_BIN=\$ROOT_DIR\/runtime\/bin\/node/);
-  assert.match(stageSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
-  assert.match(buildSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
-  assert.match(artifactCheckSource, /splayer-atom-core-bundled-linux-x64\.tar\.gz/);
+  assert.match(
+    stageSource,
+    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate\)/,
+  );
+  assert.match(buildSource, /coreArtifactFileName\(bundleNode, release\.version, buildDate\)/);
+  assert.match(
+    artifactCheckSource,
+    /coreArtifactFileName\(bundleNode, release\.version, buildDate\)/,
+  );
+  assert.match(
+    artifactNameSource,
+    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{bundleNode \? "bundled" : "system"\}-linux-x64\.tar\.gz/,
+  );
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {

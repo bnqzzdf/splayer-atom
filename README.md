@@ -1,8 +1,8 @@
 # SPlayer Atom
 
-SPlayer Atom is a Linux x86-64 music Core with a single Web Control UI.
+SPlayer Atom is a Linux x86-64 music player adapted from [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next). It uses a **Web + Core** architecture: a background Node Core handles the library, online services, playback queue, and audio outputs, while everyday control happens in the browser-based Web Control.
 
-There is no Desktop/Electron edition and no Windows or macOS application package. Node Core is the sole authority for database state, settings, library, queue, playback policy, source resolution, cache, downloads, statistics, plugins, online services, and output assignment. Browsers only send high-level commands and consume Core HTTP/WebSocket projections.
+This setup is designed for Linux music servers and HiFi hosts that stay running in the background while you control playback from a computer, tablet, or phone. Closing one browser tab does not stop playback in the Core.
 
 ## Product shape
 
@@ -17,13 +17,11 @@ SPlayer Atom Node Core
   ├─ Library / DB / Settings / Queue
   ├─ Netease / Qobuz / TIDAL / Streaming
   ├─ Cache / Download / Plugins / ListenBrainz
-  └─ Playback authority
+  └─ Playback / Output
        ├─ ALSA
        ├─ Diretta Source Direct
        └─ UPnP Renderer
 ```
-
-The only supported release target is **Linux x86-64**.
 
 ## Highlights
 
@@ -38,8 +36,8 @@ The only supported release target is **Linux x86-64**.
   - preserves source PCM rate, channels, effective bit depth, and samples
   - preserves the logical Native DSD one-bit sequence
   - never silently resamples, remixes, applies DSP, or falls back to PCM
-- UPnP single-renderer output under the same Core queue/source/cache authority
-- Web Control over the Core HTTP/WebSocket protocol
+- UPnP single-renderer output using the same Core playback queue and source pipeline as local outputs
+- Multiple Web Control clients can connect to one Core and stay in sync in real time
 
 ## Requirements
 
@@ -113,11 +111,11 @@ Bundled-runtime artifact with the reference Node runtime:
 pnpm package:core:bundled
 ```
 
-Artifacts are written to `dist/`:
+Artifacts are written to `out/`, with the product version and build date in the filename:
 
 ```text
-splayer-atom-core-system-linux-x64.tar.gz
-splayer-atom-core-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
 
 A formal Diretta build must provide the supported external Host SDK:
@@ -127,19 +125,9 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
   pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
 ```
 
-The SDK is neither stored in this repository nor bundled into release artifacts.
-
-## Linux glibc compatibility
-
-Core artifacts contain Rust/N-API ELF binaries. Their actual minimum glibc requirement is determined by the build environment and the versioned symbols they reference.
-
-Formal releases should be built in a pinned older Linux builder/sysroot and every ELF in the final archive should be audited for its highest `GLIBC_x.y` requirement. Do not use a rolling distribution or a glibc 2.43 development host as the public release builder.
-
-See [Build and Packaging](./docs/en/build-and-packaging.md).
-
 ## Deployment
 
-System-runtime and bundled-runtime are deployment variants of the same Core/Web product. See [Core Deployment](./docs/core-deployment.md) for systemd, data directories, upgrades, and rollback.
+System-runtime and bundled-runtime run the same Core/Web application and use the same data layout. See [Core Deployment](./docs/core-deployment.md) for systemd, data directories, upgrades, and rollback.
 
 ## Documentation
 

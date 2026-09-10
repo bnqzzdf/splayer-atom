@@ -18,13 +18,9 @@ pnpm dev
 
 ## 架构规则
 
-提交前先阅读根目录 `AGENTS.md` 与 [Atom Roadmap](./atom-roadmap.md)。
-
-- Node Core 是唯一音乐域权威；
-- Web Control 是唯一 UI；
-- 不引入 Electron/Desktop/Host capability；
-- 不建立第二套 queue、player、provider、settings 或 persistence model；
-- Diretta 保持 strict Source Direct，不能静默 DSP/fallback。
+涉及架构或播放链路的改动，提交前请阅读根目录 `AGENTS.md` 与
+[Atom Roadmap](./atom-roadmap.md)。通常情况下，曲库、在线服务、播放与输出逻辑放在 Core，
+界面与交互放在 Web Control。更严格的实现约束统一维护在 `AGENTS.md`，不在用户文档中重复。
 
 ## 常用命令
 

@@ -1,49 +1,49 @@
 # SPlayer Atom Roadmap
 
-## 1. Product boundary
+## 1. Current status
 
-SPlayer Atom provides exactly two runtime surfaces:
+SPlayer Atom is a Linux x86-64 music player adapted from SPlayer-Next and rebuilt around a
+**Web + Core** model. The main architecture migration is complete. Current work is focused on final
+hardware checks, multi-client Web testing, provider acceptance, and release packaging.
 
-- **Node Core** — the only application/runtime authority;
-- **Web Control** — the only supported UI.
+Target release: **1.0.0-rc.1**.
 
-The only supported release platform is **Linux x86-64**. Atom does not provide a Desktop edition,
-Electron host, Windows/macOS application package, desktop lyric window, tray, global hotkey,
-desktop updater, desktop media integration, or desktop-only native addon.
+- **Node Core** runs the music library, settings, providers, queue, playback, cache, downloads,
+  plugins, statistics and audio outputs.
+- **Web Control** is the browser UI and communicates with Core over HTTP/WebSocket.
+- **Linux x86-64** is the supported release platform.
 
-## 2. Core authority baseline
+## 2. Core and Web foundation
 
-- [x] Core owns database, settings, library, canonical queue, provider sessions, playback policy,
-      source resolution, cache, preload/recovery, downloads, statistics, plugins and output choice.
-- [x] Web Control uses the Core HTTP/WS contract and does not own playable URL resolution,
-      retry/skip, auto-next, Direct staging, or output state.
+- [x] Database, settings, library, queue, providers, playback, cache, downloads, statistics,
+      plugins and output selection run in Node Core.
+- [x] Web Control sends playback/library/provider commands through the Core HTTP/WS API and keeps
+      its UI state synchronized with Core.
 - [x] Core native runtime is limited to `audio-engine.node` and `streaming-api.node`.
-- [x] ALSA, strict Diretta Source Direct and UPnP all execute below the same Core playback
-      authority.
-- [x] CUE/SACD virtual tracks and CUE track-end boundaries are Core-owned.
-- [x] ListenBrainz Scrobble/Now Playing is Core-owned; disabled mode creates no ListenBrainz child,
-      DB, HTTP client, retry timer or high-frequency listener.
+- [x] ALSA, Diretta Source Direct and UPnP use the same Core playback flow.
+- [x] CUE/SACD virtual tracks and track boundaries are handled by Core.
+- [x] ListenBrainz Now Playing/Scrobble runs in Core, with no background worker when disabled.
 
-## 3. Core/Web convergence gate
+## 3. Web + Core migration
 
 - [x] Electron runtime/build dependencies and Electron-specific configuration are removed.
-- [x] Retained Core sources live under `core/**`.
+- [x] Core sources live under `core/**`.
 - [x] Preload/IPC/window/tray/hotkey/updater/desktop-protocol code is removed.
 - [x] Desktop/taskbar/dynamic-island lyric windows and related Web branches are removed.
 - [x] Desktop-only native crates are removed.
 - [x] Windows/macOS packaging and CI jobs are removed.
-- [x] Standalone Web Vite is the only UI build.
-- [x] Linux x86-64 Core artifacts are the only application packaging path.
-- [x] Web Control no longer installs a `window.api`/Host compatibility facade.
+- [x] Standalone Web Vite is the UI build.
+- [x] Linux x86-64 Core artifacts are the application packaging path.
+- [x] Web Control no longer installs the old `window.api`/Host compatibility layer.
 
 ## 4. Audio and output acceptance
 
 - [x] Diretta exact PCM Source Direct has real-target bit-perfect evidence through PCM 768 kHz.
 - [x] Native DSD Source Direct has real-target logical one-bit verification through DSD512.
 - [x] Mixed PCM/Native-DSD Diretta queues have completed long-run transition testing.
-- [x] UPnP playback reuses the canonical Core queue/source/cache authority.
-- [x] UPnP CUE/SACD extraction/materialization remains isolated from normal and Direct playback.
-- [ ] Complete final release-candidate ALSA coverage for common rate/channel/bit-depth combinations.
+- [x] UPnP playback uses the same Core queue/source/cache flow.
+- [x] UPnP CUE/SACD extraction/materialization is isolated from normal and Direct playback.
+- [x] Complete final release-candidate ALSA coverage for common rate/channel/bit-depth combinations.
 - [ ] Complete restart/SIGTERM/output-switch/reconnect lifecycle acceptance on the final artifact.
 - [ ] Repeat the final hardware checklist from a clean release artifact.
 
@@ -52,85 +52,75 @@ desktop updater, desktop media integration, or desktop-only native addon.
 ### Netease
 
 - [x] Core provider/session/resolver and Web Control integration exist.
-- [ ] Complete real-account favorites/daily/cloud-library acceptance.
-- [ ] Complete continuous ALSA/Diretta/UPnP real-account playback acceptance.
+- [x] Complete real-account favorites/daily/cloud-library acceptance.
+- [x] Complete continuous ALSA/Diretta/UPnP real-account playback acceptance.
 
 ### Qobuz
 
-- [x] `native/streaming-api` is the only Qobuz protocol implementation.
-- [x] Core session/search/canonical-track/playback resolution is integrated.
+- [x] `native/streaming-api` is the Qobuz protocol implementation.
+- [x] Core session/search/track/playback resolution is integrated.
 - [ ] Complete real-account login/search/queue/playback/logout acceptance.
 
 ### TIDAL
 
-- [x] `native/streaming-api` is the only TIDAL auth/request/manifest/DASH implementation.
+- [x] `native/streaming-api` handles TIDAL auth/request/manifest/DASH.
 - [x] Core session/search/JSON-BTS/DASH materialization is integrated.
-- [ ] Complete real-account auth/refresh/entitlement/logout acceptance.
-- [ ] Validate both JSON/BTS and DASH playback on final outputs.
+- [x] Complete real-account auth/refresh/entitlement/logout acceptance.
+- [x] Validate both JSON/BTS and DASH playback on final outputs.
 
 ### ListenBrainz
 
-- [x] Core owns listen-session authority and durable outbox semantics.
-- [x] Disabled runtime is zero-resource.
+- [x] Core manages listen sessions and the durable outbox.
+- [x] Disabled mode creates no ListenBrainz background worker.
 - [x] SQLite/HTTP/retry work runs in the isolated child process when enabled.
-- [ ] Complete real-token Now Playing/permanent-listen/401/429/offline/restart acceptance.
+- [x] Complete real-token Now Playing/permanent-listen/401/429/offline/restart acceptance.
 
-## 6. Core artifact and Linux release
+## 6. Packaging and release
 
 - [x] Core runtime range is Node `>=24.18.0 <25`; release reference is `24.18.0`.
-- [x] system-runtime and bundled-runtime share one Core JS/native/Web contract.
-- [x] Artifact staging validates native addon load, plugin-host IPC, HTTP/WS/Web startup and
+- [x] system-runtime and bundled-runtime use the same Core JS/native/Web build.
+- [x] Artifact staging validates native addon loading, plugin-host startup, HTTP/WS/Web startup and
       termination.
 - [x] Durable `data/`, migration backup, upgrade and rollback procedures are defined.
-- [x] Diretta artifacts fail before packaging when required SDK provenance is missing/mismatched.
-- [ ] Pin the formal Linux x86-64 builder/sysroot used for releases.
-- [ ] Audit the maximum required `GLIBC_x.y` symbol across every ELF in the final artifact.
-  - Current development-host audit: both system-runtime and bundled-runtime artifacts require at
-    most `GLIBC_2.43`, coming from `native/audio-engine.node`; bundled Node itself requires at most
-    `GLIBC_2.28`, while `better-sqlite3` and `streaming-api.node` require at most `GLIBC_2.34`.
-  - This development-host result is not a release compatibility baseline; repeat the audit after
-    the formal builder/sysroot is pinned.
-- [ ] Complete clean artifact, deployment, upgrade, rollback and hardware gates on one release
+- [x] Diretta packages fail before packaging when the required SDK is missing or mismatched.
+- [x] Linux CI/build environment is pinned for release packaging.
+- [x] Package filenames include the product version and build date.
+- [ ] Complete clean artifact, deployment, upgrade, rollback and hardware checks on one release
       candidate.
-- [ ] Publish the first Core + Web Control release that passes all gates.
+- [ ] Publish the first 1.0 release candidate.
 
 ## 7. Web Control acceptance
 
 - [x] Library, playlist, queue, playback, downloads, statistics, cache, providers, settings and
-      plugins are exposed through the Core contract.
-- [x] Remove all Desktop capability branches/no-op compatibility facades from the Web renderer.
+      plugins are available from Web Control.
+- [x] Desktop-only capability branches and placeholder compatibility APIs are removed from Web.
 - [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
-- [ ] Validate long-running Web Control use without creating a second local authority.
+- [ ] Validate long-running Web Control use with playback continuing correctly across browser
+      refreshes and reconnects.
 
-## 8. Trusted-LAN security boundary
+## 8. Network scope
 
-These are not required for the current single-user trusted-LAN release. Promote them only if the
-network/product boundary changes:
+The current release is intended for a trusted home/LAN environment. Authentication, pairing, TLS,
+and stricter browser-origin controls can be added later if remote/untrusted-network access becomes a
+product goal.
 
-- authentication/pairing;
-- HTTP/WebSocket authorization;
-- CSRF/Origin policy;
-- TLS/reverse-proxy deployment guidance.
+## 9. Current priorities
 
-## 9. Current execution order
+1. Finish restart/SIGTERM/output-switch/reconnect hardware acceptance.
+2. Finish Qobuz real-account acceptance.
+3. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
+4. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
+5. Publish `1.0.0-rc.1`, collect real-world feedback, then prepare the 1.0 stable release.
 
-1. Pin the Linux release builder and enforce the GLIBC ABI audit.
-2. Complete final ALSA/Diretta/UPnP lifecycle and hardware acceptance.
-3. Complete real-account Netease/Qobuz/TIDAL/ListenBrainz acceptance.
-4. Validate multi-Web-Control long-running behavior.
-5. Run clean artifact install/upgrade/rollback acceptance and publish the first formal release.
-
-## 10. Document ownership
+## 10. Related documents
 
 ```text
-AGENTS.md                           durable architecture and implementation rules
-docs/atom-roadmap.md                current scope, priorities and acceptance state
-docs/atom-development.md            development environment and common gates
-docs/build-and-packaging.md         Core/Web build, packaging and Linux ABI rules
-docs/build-flavors.md               Core system/bundled and Diretta flavor rules
+docs/atom-development.md            development environment and common checks
+docs/build-and-packaging.md         Core/Web build and packaging
+docs/build-flavors.md               system/bundled and Diretta build variants
 docs/core-deployment.md             systemd, data, migration, upgrade and rollback
 docs/hardware-release-checklist.md  ALSA/Diretta/UPnP hardware acceptance
 docs/live-provider-acceptance.md    provider real-account acceptance
-docs/upnp-output-plan.md            UPnP source-preserving output design
+docs/upnp-output-plan.md            UPnP output design
 docs/native.md                      retained Rust/N-API modules
 ```

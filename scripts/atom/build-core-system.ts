@@ -2,12 +2,20 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
+import {
+  coreArtifactFileName,
+  readCoreReleaseMetadata,
+  resolveCoreBuildDate,
+} from "./core-artifact-name";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
 const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
+const release = readCoreReleaseMetadata();
+const buildDate = resolveCoreBuildDate();
+const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate };
 
 if (process.versions.node !== CORE_NODE_REFERENCE) {
   throw new Error(
@@ -24,7 +32,7 @@ const run = (label: string, command: string, commandArgs: string[]): void => {
   const result = spawnSync(command, commandArgs, {
     cwd: root,
     stdio: "inherit",
-    env: process.env,
+    env: buildEnv,
   });
   if (result.error) throw result.error;
   if (result.signal) throw new Error(`[CoreBuild] ${label} 被信号终止: ${result.signal}`);
@@ -51,11 +59,5 @@ run("验收最终 tar artifact", bin("tsx"), [
 ]);
 
 console.log(
-  `[CoreBuild] PASS ${path.join(
-    root,
-    "out",
-    bundleNode
-      ? "splayer-atom-core-bundled-linux-x64.tar.gz"
-      : "splayer-atom-core-system-linux-x64.tar.gz",
-  )}`,
+  `[CoreBuild] PASS ${path.join(root, "out", coreArtifactFileName(bundleNode, release.version, buildDate))}`,
 );
