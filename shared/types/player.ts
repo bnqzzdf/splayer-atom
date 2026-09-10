@@ -284,8 +284,6 @@ export interface DirectStageResult {
   staged: boolean;
   /** 本地音源提前探测到的 detail；只读 metadata，不进入 normal playback pipeline */
   detail?: TrackDetail;
-  /** 本地音源提前探测到的展示元数据；Direct boundary 用于补全 canonical Track。 */
-  mediaInfo?: MediaInfo;
 }
 
 /** 播放器 API */

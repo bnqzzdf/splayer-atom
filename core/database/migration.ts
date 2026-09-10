@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 4;
+export const DATABASE_SCHEMA_VERSION = 5;
 
 type TableInfoRow = { name: string };
 
@@ -57,6 +57,28 @@ export const migrate = (d: Database.Database): void => {
         d.exec("ALTER TABLE tracks ADD COLUMN cue_end_ms INTEGER");
       }
       v = 4;
+    }
+
+    // v4 → v5: 旧 Native DSD 扫描未读取容器标签。只作废一次文件指纹，
+    // 让下一轮增量扫描重新入库；成功后 scanner 会写回真实 mtime，恢复正常增量跳过。
+    if (v < 5) {
+      if (
+        hasColumn(d, "tracks", "path") &&
+        hasColumn(d, "tracks", "file_mtime") &&
+        hasColumn(d, "tracks", "cue_path")
+      ) {
+        d.exec(`
+          UPDATE tracks
+          SET file_mtime = NULL
+          WHERE cue_path IS NULL
+            AND (
+              lower(path) LIKE '%.dsf'
+              OR lower(path) LIKE '%.dff'
+              OR lower(path) LIKE '%.dsdiff'
+            )
+        `);
+      }
+      v = 5;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

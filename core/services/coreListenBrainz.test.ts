@@ -45,14 +45,9 @@ test("ListenBrainz is runtime-zero while disabled and never joins the position e
 test("ListenBrainz reuses the authoritative normal and Direct track boundaries", () => {
   assert.match(
     playerLoadSource,
-    /listenbrainz\.onTrackLoaded\(listenbrainzTrack, durationMs, autoPlay\)/,
+    /listenbrainz\.onTrackLoaded\(authoritative, durationMs, autoPlay\)/,
   );
   assert.match(directGaplessSource, /listenbrainz\.onTrackLoaded\(track, durationMs, true\)/);
-  assert.match(
-    playerLoadSource,
-    /authoritative\.artists\.length > 0[\s\S]*data\.mediaInfo\.artists/,
-  );
-  assert.match(playbackSessionSource, /prepared\.directMediaInfo[\s\S]*enrichLocalTrack/);
   assert.match(serviceSource, /createPlayProgress<ListenSession>/);
   assert.match(serviceSource, /Math\.min\(durationSec \/ 2, 240\) \* 1000/);
   assert.match(serviceSource, /thresholdTimer = setTimeout\([\s\S]*progress\.tick\(\)/);
@@ -65,7 +60,7 @@ test("same-track Core reloads preserve the current ListenBrainz listen session",
   assert.match(playerLoadSource, /preserveListenBrainzSession\?: boolean/);
   assert.match(
     playerLoadSource,
-    /if \(!runtime\.preserveListenBrainzSession\) \{[\s\S]*?listenbrainz\.onTrackLoaded\(listenbrainzTrack, durationMs, autoPlay\)/,
+    /if \(!runtime\.preserveListenBrainzSession\) \{\s*listenbrainz\.onTrackLoaded/,
   );
   assert.match(
     playbackSessionSource,
