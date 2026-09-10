@@ -60,7 +60,7 @@ splayer.on("musicUrl", async (req) => {
 });
 ```
 
-保存为 `example.js`，在 **设置 → 插件管理 → 本地导入** 即可使用。
+把 `example.js` 托管在可访问的 HTTPS 地址，在 **设置 → 插件管理 → 在线导入** 中粘贴 raw URL 即可使用。
 
 ::: tip
 `@type source` 可省略（缺省即为 `source`）。音源插件不依赖控制类能力，播放地址 / 歌词 / 封面写 `1` 或 `2` 均可；若声明 `musicComment`，需写 `3`。各级别新增能力见[插件总览 · API 级别与变更记录](/plugins/#api-级别与变更记录)。

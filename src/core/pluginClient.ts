@@ -1,5 +1,4 @@
 import type {
-  MarketPlugin,
   MusicUrlRes,
   PluginInfo,
   PluginInvokeMenuArgs,
@@ -22,8 +21,6 @@ const post = <T>(path: string, body?: unknown): Promise<T> =>
 /** Web Control 的 Core Plugin client。 */
 export const pluginClient = {
   list: (): Promise<PluginInfo[]> => request<PluginInfo[]>("/plugins"),
-  market: (): Promise<{ ok: boolean; plugins: MarketPlugin[]; error?: string }> =>
-    request("/plugins/market"),
   installFromUrl: (url: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
     post("/plugins/install-url", { url }),
   uninstall: (id: string): Promise<{ ok: boolean; error?: string }> =>

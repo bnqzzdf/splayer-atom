@@ -1,6 +1,6 @@
 # 插件使用指南
 
-SPlayer Atom 支持通过 Core 插件扩展**音源**（解析歌曲的播放地址）与**控制**（联动播放状态、反向控制播放）。本文面向最终用户，介绍如何安装、启用与管理插件。想自己写插件，见 [插件开发](/plugins/)。
+SPlayer Atom 保留并迁移了 SPlayer-Next 的插件能力，可通过 Core 插件扩展**音源**（解析歌曲的播放地址）与**控制**（联动播放状态、反向控制播放）。不依赖 Desktop/Electron 专有接口的 SPlayer-Next 插件通常可以继续使用。本文面向最终用户，介绍如何安装、启用与管理插件。想自己写插件，见 [插件开发](/plugins/)。
 
 ## 打开插件管理
 
@@ -8,10 +8,7 @@ SPlayer Atom 支持通过 Core 插件扩展**音源**（解析歌曲的播放地
 
 ## 安装插件
 
-两种方式，效果相同：
-
-- **本地导入**：选择一个 `.js` 脚本文件。
-- **在线导入**：粘贴一个指向 `.js` 脚本的 `http(s)` 链接（如 GitHub / Gitee 的 raw 地址）。
+Web Control 只提供 **URL 导入**：粘贴一个指向 `.js` 脚本的 HTTPS 链接（如 GitHub / Gitee 的 raw 地址），由 Core 下载、校验并安装。这样浏览器不需要访问 Core 主机的本地文件选择器。
 
 部分作者会以 `gz_` 前缀分发压缩脚本，Core 会**自动识别并解压**，无需额外操作。
 
@@ -24,9 +21,11 @@ SPlayer Atom 支持通过 Core 插件扩展**音源**（解析歌曲的播放地
 
 状态徽章：**已就绪**（可用）、**加载中**、**错误**（卡片下方会显示原因）、**已禁用**。
 
-## 兼容 lx 插件
+## SPlayer-Next / LX 插件兼容
 
-SPlayer Atom Core 兼容 [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) 的 `user_api` 脚本，多数公开脚本可直接导入使用。若脚本用到了未实现接口，可能会加载失败。
+SPlayer Atom 的原生插件接口来自 SPlayer-Next 插件系统并已迁移到 Node Core；插件若只使用当前文档列出的 `splayer` API，可继续在 Atom 中运行。
+
+Core 同时兼容 [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) 的 `user_api` 脚本，多数公开脚本可通过 raw URL 直接导入。若插件依赖 Atom 未实现的 API、Electron/DOM 或其它宿主专有能力，则可能无法加载。
 
 ## 常见问题
 

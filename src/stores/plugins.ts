@@ -1,12 +1,10 @@
-import type { PluginInfo, MarketPlugin } from "@shared/types/plugin";
+import type { PluginInfo } from "@shared/types/plugin";
 import { pluginClient } from "@/core/pluginClient";
 
 /** 插件管理 Pinia store */
 export const usePluginsStore = defineStore("plugins", () => {
   const list = shallowRef<PluginInfo[]>([]);
   const loaded = ref(false);
-  const marketPlugins = shallowRef<MarketPlugin[]>([]);
-  const marketLoaded = ref(false);
   let unsubscribe: (() => void) | null = null;
 
   /** 仅 manifest.type 不为 "control" 的插件（音源类，含 type 缺省） */
@@ -56,22 +54,6 @@ export const usePluginsStore = defineStore("plugins", () => {
     if (res.ok) await load();
     return res;
   };
-
-  /** 拉取插件市场列表 */
-  const fetchMarket = async (force = false): Promise<{ ok: boolean; error?: string }> => {
-    if (marketLoaded.value && !force) return { ok: true };
-    const res = await pluginClient.market();
-    if (res.ok) {
-      marketPlugins.value = res.plugins;
-      marketLoaded.value = true;
-    }
-    return { ok: res.ok, error: res.error };
-  };
-
-  /** 从市场安装 / 更新 */
-  const installFromMarket = (
-    plugin: MarketPlugin,
-  ): Promise<{ ok: boolean; id?: string; error?: string }> => installFromUrl(plugin.updateUrl);
 
   const uninstall = async (id: string): Promise<{ ok: boolean; error?: string }> => {
     const res = await pluginClient.uninstall(id);
@@ -154,9 +136,6 @@ export const usePluginsStore = defineStore("plugins", () => {
     sourcePlugins,
     controlPlugins,
     menuContributions,
-    marketPlugins,
-    fetchMarket,
-    installFromMarket,
     load,
     installFromUrl,
     uninstall,

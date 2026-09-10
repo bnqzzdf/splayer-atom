@@ -97,19 +97,24 @@ interface Dependency {
   url: string;
 }
 
-/** 依赖的开源项目 */
-const dependencies: Dependency[] = [
+/** 本项目建立在这些开源项目的工作之上。 */
+const dependencies = computed<Dependency[]>(() => [
+  {
+    name: "SPlayer-Next",
+    description: t("settings.about.thanks.splayerNext"),
+    url: "https://github.com/SPlayer-Dev/SPlayer-Next",
+  },
   {
     name: "applemusic-like-lyrics",
-    description: "类 Apple Music 歌词显示组件库",
+    description: t("settings.about.thanks.appleMusicLyrics"),
     url: "https://github.com/Steve-xmh/applemusic-like-lyrics",
   },
   {
     name: "NeteaseCloudMusicApiEnhanced",
-    description: "网易云音乐 API 备份 + 增强",
+    description: t("settings.about.thanks.neteaseApi"),
     url: "https://github.com/neteasecloudmusicapienhanced/api-enhanced",
   },
-];
+]);
 
 /** 社区与资讯入口 */
 const community = computed(() => [

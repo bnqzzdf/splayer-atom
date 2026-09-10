@@ -48,7 +48,7 @@ splayer.on("musicUrl", async ({ musicInfo, quality }) => {
 });
 ```
 
-Save as `example.js` and import it under **Settings → Plugin Management → Local import**. `@type source` may be omitted. URL, lyric, and cover features require API level 1; comments require level 3.
+Host `example.js` at an accessible HTTPS URL and paste its raw URL under **Settings → Plugin Management → From URL**. `@type source` may be omitted. URL, lyric, and cover features require API level 1; comments require level 3.
 
 ## `splayer.register(capabilities)`
 

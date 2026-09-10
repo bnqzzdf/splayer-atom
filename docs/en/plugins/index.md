@@ -2,6 +2,8 @@
 
 SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A plugin interacts with Core only through the injected global `splayer` object.
 
+This plugin model is inherited from SPlayer-Next and adapted for the Web + Core runtime. Atom does not operate a plugin market; authors host their own scripts and users install them from raw HTTPS URLs.
+
 - [Source plugins](/en/plugins/source) resolve playable URLs and can provide fallback lyrics, covers, and comments.
 - [Control plugins](/en/plugins/control) receive playback events, control the player, expose settings, and add track menu items.
 - [Plugin updates](/en/plugins/update) describes update metadata and in-place upgrades.
@@ -17,11 +19,9 @@ End users should see [Using Plugins](/en/plugins-usage).
 
 A script has one type, selected by `@type`; the default is `source`.
 
-## Publishing to the plugin market
+## Distributing plugins
 
-Submit a plugin to [SPlayer-Dev/plugins](https://github.com/SPlayer-Dev/plugins) through the New Plugin issue template. Automated checks validate the manifest and conventions, a pull request is generated for maintainer review, and merging rebuilds the market index.
-
-Use the Update Plugin template for a new version. Keep `@id` unchanged so users can update in place. See [Plugin Updates](/en/plugins/update).
+Atom does not maintain a plugin market. Authors can host a script on GitHub, Gitee, or another HTTPS location and share its raw `.js` URL. Declare a stable `@updateUrl` in the manifest so installed plugins can still check for and apply updates from **Settings → Plugin Management**. See [Plugin Updates](/en/plugins/update).
 
 ## Architecture
 
@@ -100,7 +100,7 @@ Metadata is declared in a leading JSDoc block:
 | `@changelog`   |          | Release notes                                                                  |
 
 ::: warning Stable identity
-Native SPlayer plugins should explicitly declare `@name`, `@version`, and `@id`; the plugin market validates them. Identity uses `@id` when present and otherwise derives from the name. Re-importing the same identity replaces the existing plugin. Change the version and code for a release, not the ID or fallback name.
+Native SPlayer plugins should explicitly declare `@name`, `@version`, and `@id`. Identity uses `@id` when present and otherwise derives from the name. Re-importing the same identity replaces the existing plugin. Change the version and code for a release, not the ID or fallback name.
 :::
 
 ## Permissions

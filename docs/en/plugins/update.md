@@ -43,7 +43,7 @@ lx.send(lx.EVENT_NAMES.updateAlert, {
 });
 ```
 
-LX alerts do not include a version. If the URL is a web page rather than raw JavaScript, the app opens it and the user must download and import manually.
+LX alerts do not include a version. If the URL is a web page rather than raw JavaScript, the app opens it; the user must locate the new script's raw URL and install it again from Plugin Management.
 
 ## Applying an update
 

@@ -45,7 +45,7 @@ splayer.player.on("playStateChange", ({ state, position }) => {
 });
 ```
 
-保存为 `.js`，在 **设置 → 插件管理 → 本地导入** 即可使用。
+把脚本托管在可访问的 HTTPS 地址，在 **设置 → 插件管理 → 在线导入** 中粘贴 raw URL 即可使用。
 
 ## `splayer.register(args)`
 

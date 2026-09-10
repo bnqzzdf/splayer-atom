@@ -5,8 +5,8 @@ import { isExternalUrl, openExternal } from "@/utils/url";
 
 defineOptions({ inheritAttrs: false });
 
-/** 插件开发文档地址 */
-const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
+/** Atom 插件开发文档地址。 */
+const DOCS_URL = "https://github.com/bnqzzdf/splayer-atom/tree/dev/docs/plugins";
 
 const { t } = useI18n();
 const pluginsStore = usePluginsStore();

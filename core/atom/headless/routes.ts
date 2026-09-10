@@ -61,7 +61,6 @@ import {
 import {
   applyPluginUpdate,
   checkPluginUpdate,
-  getPluginMarket,
   installPluginFromUrl,
   invokePluginMenu,
   listPlugins,
@@ -239,7 +238,6 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.get("/plugins", (c) => c.json(listPlugins()));
-  api.get("/plugins/market", async (c) => c.json(await getPluginMarket()));
   api.post("/plugins/install-url", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { url?: unknown } | null;
     if (typeof body?.url !== "string" || !body.url) {

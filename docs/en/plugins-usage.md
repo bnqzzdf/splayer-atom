@@ -1,6 +1,6 @@
 # Using Plugins
 
-Plugins can extend **music sources** (resolve playable track URLs) and **control** (react to playback and control the player). This page is for plugin users. Authors should start with [Plugin Development](/en/plugins/).
+SPlayer Atom keeps the plugin model inherited from SPlayer-Next and runs it in Node Core. Plugins can extend **music sources** (resolve playable track URLs) and **control** (react to playback and control the player). SPlayer-Next plugins that do not depend on Desktop/Electron-only APIs can generally continue to work. This page is for plugin users. Authors should start with [Plugin Development](/en/plugins/).
 
 ## Opening plugin management
 
@@ -8,8 +8,7 @@ Open **Settings → Plugin Management**. Each installed plugin card shows its na
 
 ## Installing a plugin
 
-- **Local import:** Select a `.js` file.
-- **Import from URL:** Paste an `http(s)` URL to a `.js` file, such as a GitHub or Gitee raw URL.
+Web Control installs plugins **from URL only**. Paste an HTTPS URL to a `.js` file, such as a GitHub or Gitee raw URL; Core downloads, validates, and installs the script without requiring a local file picker on the Core host.
 
 Scripts distributed with a `gz_` prefix are detected and decompressed automatically.
 
@@ -22,9 +21,11 @@ Scripts distributed with a `gz_` prefix are detected and decompressed automatica
 
 States are **Ready**, **Loading**, **Error** (with a reason), and **Disabled**.
 
-## LX plugin compatibility
+## SPlayer-Next / LX compatibility
 
-SPlayer Atom Core supports [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) `user_api` scripts. Most public LX scripts can be imported directly, though scripts using unsupported APIs may fail to load.
+Atom's native plugin API is derived from the SPlayer-Next plugin system and now runs in Node Core. Plugins that use the documented `splayer` API can continue to run in Atom.
+
+Core also supports [lx-music-desktop](https://github.com/lyswhut/lx-music-desktop) `user_api` scripts. Most public LX scripts can be installed directly from a raw URL. Scripts that depend on unsupported APIs, Electron/DOM, or other host-specific capabilities may fail to load.
 
 ## Troubleshooting
 

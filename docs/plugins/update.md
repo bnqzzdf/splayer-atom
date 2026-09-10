@@ -56,7 +56,7 @@ lx.send(lx.EVENT_NAMES.updateAlert, {
 });
 ```
 
-lx 的 `updateAlert` 只有 `log` 与 `updateUrl`、没有版本号，因此卡片上只显示「有更新」而不带具体版本。其 `updateUrl` 多指向介绍页而非 raw `.js`，这种情况下一键更新会**回退为打开该地址**，需用户手动下载并重新导入。
+lx 的 `updateAlert` 只有 `log` 与 `updateUrl`、没有版本号，因此卡片上只显示「有更新」而不带具体版本。其 `updateUrl` 多指向介绍页而非 raw `.js`，这种情况下一键更新会**回退为打开该地址**；用户需要找到新版脚本的 raw URL，再通过插件管理重新导入。
 
 ## 一键更新
 

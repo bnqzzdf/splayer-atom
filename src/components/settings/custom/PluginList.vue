@@ -168,47 +168,11 @@ const pendingName = computed(() => {
 const isEmpty = computed(
   () => sourcePlugins.value.length === 0 && controlPlugins.value.length === 0,
 );
-
-/** 插件开发文档 */
-const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
-/** 提交入口 */
-const SUBMIT_URL = "https://github.com/SPlayer-Dev/plugins/issues/new/choose";
-
-/** 已安装 / 插件市场 切换 */
-const tab = ref("installed");
-const tabs = computed(() => [
-  { key: "installed", label: t("settings.plugins.installed") },
-  { key: "market", label: t("settings.plugins.market") },
-]);
-
-/** 市场子组件引用，供刷新按钮调用 */
-const marketRef = ref<{ refresh: (force?: boolean) => Promise<void> } | null>(null);
-const refreshing = ref(false);
-const refreshMarket = async (): Promise<void> => {
-  refreshing.value = true;
-  await marketRef.value?.refresh(true);
-  refreshing.value = false;
-};
 </script>
 
 <template>
   <div class="flex flex-col gap-3">
-    <div class="flex items-center justify-between gap-2">
-      <STabs v-model="tab" type="bar" :tabs="tabs" />
-      <SButton
-        v-if="tab === 'market'"
-        variant="text"
-        size="small"
-        :loading="refreshing"
-        @click="refreshMarket"
-      >
-        <template #icon><IconLucideRefreshCw class="size-4" /></template>
-        {{ t("common.refreshCache") }}
-      </SButton>
-    </div>
-
-    <!-- 已安装 -->
-    <div v-if="tab === 'installed'" class="flex flex-col gap-4">
+    <div class="flex flex-col gap-4">
       <!-- 空态 -->
       <div
         v-if="isEmpty"
@@ -264,25 +228,6 @@ const refreshMarket = async (): Promise<void> => {
           />
         </div>
       </div>
-    </div>
-
-    <!-- 插件市场 -->
-    <PluginMarket v-else ref="marketRef" />
-
-    <!-- 发布入口 -->
-    <div
-      class="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 pt-4 text-xs text-on-surface-variant/60"
-    >
-      <span>{{ t("settings.plugins.publishHint") }}</span>
-      <SButton variant="text" type="primary" size="tiny" @click="openExternal(SUBMIT_URL)">
-        <template #icon><IconLucideUpload /></template>
-        {{ t("settings.plugins.publishAction") }}
-      </SButton>
-      <span class="opacity-40">·</span>
-      <SButton variant="text" type="primary" size="tiny" @click="openExternal(DOCS_URL)">
-        <template #icon><IconLucideBookOpen /></template>
-        {{ t("settings.plugins.docs") }}
-      </SButton>
     </div>
 
     <!-- 卸载确认 -->

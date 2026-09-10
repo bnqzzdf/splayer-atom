@@ -1,5 +1,4 @@
 import type {
-  MarketPlugin,
   MusicUrlRes,
   PluginInfo,
   PluginInvokeMenuArgs,
@@ -13,7 +12,7 @@ import type {
 import { pluginRegistry } from "@main/plugins/registry";
 import { invokeMenu, resolveUrl } from "@main/plugins/router";
 import { matchCover, matchLyric } from "@main/plugins/metadata";
-import { fetchMarket, fetchScript } from "@main/plugins/net";
+import { fetchScript } from "@main/plugins/net";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 
 const errorText = (error: unknown): string =>
@@ -21,19 +20,6 @@ const errorText = (error: unknown): string =>
 
 /** Core 持有的插件列表。 */
 export const listPlugins = (): PluginInfo[] => pluginRegistry.listInfo();
-
-/** Core 拉取插件市场索引。 */
-export const getPluginMarket = async (): Promise<{
-  ok: boolean;
-  plugins: MarketPlugin[];
-  error?: string;
-}> => {
-  try {
-    return { ok: true, plugins: await fetchMarket() };
-  } catch (error) {
-    return { ok: false, plugins: [], error: errorText(error) };
-  }
-};
 
 /** 从远端源码 URL 安装插件。 */
 export const installPluginFromUrl = async (

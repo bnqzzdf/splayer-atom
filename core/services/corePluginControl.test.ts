@@ -33,6 +33,11 @@ const pluginImportSource = readFileSync(
   new URL("../../src/components/settings/custom/PluginImport.vue", import.meta.url),
   "utf8",
 );
+const pluginNetSource = readFileSync(new URL("../plugins/net.ts", import.meta.url), "utf8");
+const pluginDefaultsSource = readFileSync(
+  new URL("../../shared/defaults/plugin-api.ts", import.meta.url),
+  "utf8",
+);
 
 test("Plugin Core service reuses the unique registry/router/metadata authority", () => {
   assert.doesNotMatch(serviceSource, /from ["']electron["']/);
@@ -47,13 +52,14 @@ test("Plugin Core service reuses the unique registry/router/metadata authority",
   assert.match(serviceSource, /invokeMenu\(args\)/);
   assert.match(serviceSource, /matchLyric\(args\)/);
   assert.match(serviceSource, /matchCover\(args\)/);
-  assert.match(serviceSource, /fetchMarket\(\)/);
+  assert.doesNotMatch(serviceSource, /fetchMarket|getPluginMarket/);
+  assert.doesNotMatch(pluginNetSource, /fetchMarket|PLUGIN_REGISTRY_URL/);
+  assert.doesNotMatch(pluginDefaultsSource, /PLUGIN_REGISTRY_URL|SPlayer-Dev\/plugins/);
 });
 
 test("Plugin Core routes and shared client use one path contract", () => {
   for (const path of [
     "/plugins",
-    "/plugins/market",
     "/plugins/install-url",
     "/plugins/resolve-url",
     "/plugins/invoke-menu",
@@ -69,6 +75,8 @@ test("Plugin Core routes and shared client use one path contract", () => {
   assert.match(routesSource, /\/plugins\/:id\/check-update/);
   assert.match(routesSource, /\/plugins\/:id\/apply-update/);
   assert.match(pluginClientSource, /encodeURIComponent\(id\)/);
+  assert.doesNotMatch(routesSource, /\/plugins\/market/);
+  assert.doesNotMatch(pluginClientSource, /\/plugins\/market/);
 });
 
 test("Plugin status uses the unified CoreControlEvent envelope", () => {
@@ -91,7 +99,10 @@ test("Web Plugin UI uses the Core client and URL installation only", () => {
   assert.match(pluginStoreSource, /pluginClient\.list\(\)/);
   assert.match(pluginStoreSource, /pluginClient\.installFromUrl\(url\)/);
   assert.match(pluginStoreSource, /pluginClient\.onStatus/);
-  assert.doesNotMatch(pluginStoreSource, /window\.api|pickAndInstall/);
+  assert.doesNotMatch(
+    pluginStoreSource,
+    /window\.api|pickAndInstall|fetchMarket|installFromMarket/,
+  );
   assert.doesNotMatch(pluginImportSource, /handleImportLocal|importLocal|pickAndInstall/);
   assert.match(pluginImportSource, /installFromUrl\(url\)/);
   assert.match(settingsSchemaSource, /pluginsCategory/);
