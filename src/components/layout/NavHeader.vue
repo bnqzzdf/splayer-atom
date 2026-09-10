@@ -5,7 +5,6 @@ import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import IconSun from "~icons/lucide/sun";
 import IconMoon from "~icons/lucide/moon";
 import IconMonitor from "~icons/lucide/monitor";
-import IconRefreshCw from "~icons/lucide/refresh-cw";
 import IconSettings from "~icons/lucide/settings";
 import IconScaling from "~icons/lucide/scaling";
 
@@ -37,13 +36,11 @@ const menuItems = computed<DropdownMenuItem[]>(() => [
     disabled: theme.appearanceStyle === "image",
   },
   { key: "uiZoom", label: t("uiZoom.title"), icon: IconScaling },
-  { key: "reload", label: t("nav.reload"), icon: IconRefreshCw, separator: true },
-  { key: "settings", label: t("nav.globalSettings"), icon: IconSettings },
+  { key: "settings", label: t("nav.globalSettings"), icon: IconSettings, separator: true },
 ]);
 
 const onMenuSelect = (key: string): void => {
   if (key === "theme") theme.cycleMode();
-  else if (key === "reload") location.reload();
   else if (key === "uiZoom") uiZoomOpen.value = true;
   else if (key === "settings") showSettings();
 };
