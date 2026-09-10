@@ -114,9 +114,6 @@ export const loadPlayerSource = async (
     const fallbackTitle = meta.title || source.split(/[/\\]/).pop() || source;
     const displayTitle = authoritative?.title ?? fallbackTitle;
     neteaseScrobble.onTrackLoaded(authoritative, options.context, durationMs, autoPlay);
-    if (!runtime.preserveListenBrainzSession) {
-      listenbrainz.onTrackLoaded(authoritative, durationMs, autoPlay);
-    }
 
     const quality = {
       sampleRate: meta.originalSampleRate,
@@ -143,6 +140,27 @@ export const loadPlayerSource = async (
         quality,
       },
     };
+    if (!runtime.preserveListenBrainzSession) {
+      let listenbrainzTrack = authoritative;
+      if (authoritative?.source === "local") {
+        const fileName = authoritative.path?.split(/[/\\]/).pop() ?? "";
+        const derivedTitle = fileName.replace(/\.[^.]+$/, "");
+        listenbrainzTrack = {
+          ...authoritative,
+          title:
+            !authoritative.title || authoritative.title === derivedTitle
+              ? data.mediaInfo.title || authoritative.title
+              : authoritative.title,
+          artists:
+            authoritative.artists.length > 0
+              ? authoritative.artists
+              : (data.mediaInfo.artists ?? []),
+          album: authoritative.album ?? data.mediaInfo.album,
+          duration: authoritative.duration || durationMs,
+        };
+      }
+      listenbrainz.onTrackLoaded(listenbrainzTrack, durationMs, autoPlay);
+    }
     if (authoritative) {
       beginCorePlayStats(
         {

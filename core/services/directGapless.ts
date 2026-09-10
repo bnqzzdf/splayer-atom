@@ -8,6 +8,7 @@ import { playerLog } from "@main/utils/logger";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";
 import { beginCorePlayStats } from "@main/services/headlessPlayStats";
+import { parseAlbum, parseArtists } from "@main/utils/metadata";
 
 /** 使用现有 native Direct runtime 预备同 wire-format 下一首。 */
 export const stageDirectPlaybackNext = async (
@@ -42,6 +43,19 @@ export const stageDirectPlaybackNext = async (
             path: item.path,
             format: item.format as LyricFormat,
           })),
+        },
+        mediaInfo: {
+          title: meta.title,
+          artists: parseArtists(meta.artist ?? ""),
+          album: parseAlbum(meta.album ?? ""),
+          duration: Math.max(0, durationMs),
+          quality: {
+            sampleRate: meta.originalSampleRate,
+            channels: meta.channels,
+            bitsPerSample: meta.bitsPerSample,
+            bitRate: meta.bitRate,
+            codec: meta.codec,
+          },
         },
       };
     } catch (error) {

@@ -27,6 +27,9 @@ const servicesUiSource = read(
 const settingsSchemaSource = read(new URL("../../src/settings/schema.ts", import.meta.url));
 const clientSource = read(new URL("../../src/core/listenbrainzClient.ts", import.meta.url));
 const coreViteSource = read(new URL("../../scripts/atom/vite.core.config.ts", import.meta.url));
+const listenbrainzProcessSource = read(
+  new URL("../atom/runtime/listenbrainzProcess.ts", import.meta.url),
+);
 
 test("ListenBrainz is runtime-zero while disabled and never joins the position event path", () => {
   assert.match(defaultsSource, /listenbrainz:\s*\{\s*enabled: false,/);
@@ -42,9 +45,14 @@ test("ListenBrainz is runtime-zero while disabled and never joins the position e
 test("ListenBrainz reuses the authoritative normal and Direct track boundaries", () => {
   assert.match(
     playerLoadSource,
-    /listenbrainz\.onTrackLoaded\(authoritative, durationMs, autoPlay\)/,
+    /listenbrainz\.onTrackLoaded\(listenbrainzTrack, durationMs, autoPlay\)/,
   );
   assert.match(directGaplessSource, /listenbrainz\.onTrackLoaded\(track, durationMs, true\)/);
+  assert.match(
+    playerLoadSource,
+    /authoritative\.artists\.length > 0[\s\S]*data\.mediaInfo\.artists/,
+  );
+  assert.match(playbackSessionSource, /prepared\.directMediaInfo[\s\S]*enrichLocalTrack/);
   assert.match(serviceSource, /createPlayProgress<ListenSession>/);
   assert.match(serviceSource, /Math\.min\(durationSec \/ 2, 240\) \* 1000/);
   assert.match(serviceSource, /thresholdTimer = setTimeout\([\s\S]*progress\.tick\(\)/);
@@ -57,7 +65,7 @@ test("same-track Core reloads preserve the current ListenBrainz listen session",
   assert.match(playerLoadSource, /preserveListenBrainzSession\?: boolean/);
   assert.match(
     playerLoadSource,
-    /if \(!runtime\.preserveListenBrainzSession\) \{\s*listenbrainz\.onTrackLoaded/,
+    /if \(!runtime\.preserveListenBrainzSession\) \{[\s\S]*?listenbrainz\.onTrackLoaded\(listenbrainzTrack, durationMs, autoPlay\)/,
   );
   assert.match(
     playbackSessionSource,
@@ -101,6 +109,10 @@ test("ListenBrainz durable I/O and network work live only in the child process",
   assert.match(childSource, /SET state = 'dead'/);
   assert.match(childSource, /latestNowPlaying/);
   assert.doesNotMatch(serviceSource, /new Database\(|fetch\(/);
+});
+
+test("ListenBrainz child IPC consumes asynchronous send errors during shutdown races", () => {
+  assert.match(listenbrainzProcessSource, /child\.send\(message as any, \(\) => \{\}\)/);
 });
 
 test("ListenBrainz child is emitted and owned by Node Core", () => {

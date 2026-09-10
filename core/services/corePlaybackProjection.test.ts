@@ -65,5 +65,8 @@ test("Control reuses session current as loading presentation without mutating lo
 });
 
 test("Direct Core boundary publishes the same loaded-track projection contract", () => {
-  assert.match(session, /publishTrackLoaded\(prepared\.item, prepared\.directSource/);
+  assert.match(
+    session,
+    /publishTrackLoaded\(\s*prepared\.item,\s*prepared\.directSource/,
+  );
 });

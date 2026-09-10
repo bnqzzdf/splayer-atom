@@ -255,6 +255,23 @@ const publishTrackLoaded = (
   publishCoreControlEvent(event);
 };
 
+/** 用实际本地音源 metadata 补全扫描阶段缺失的 canonical Track 字段。 */
+const enrichLocalTrack = (track: Track, mediaInfo: MediaInfo): Track => {
+  if (track.source !== "local") return track;
+  const fileName = track.path?.split(/[/\\]/).pop() ?? "";
+  const derivedTitle = fileName.replace(/\.[^.]+$/, "");
+  return {
+    ...track,
+    title:
+      !track.title || track.title === derivedTitle ? mediaInfo.title || track.title : track.title,
+    artists: track.artists.length > 0 ? track.artists : (mediaInfo.artists ?? []),
+    album: track.album ?? mediaInfo.album,
+    duration: track.duration || mediaInfo.duration,
+    cover: track.cover ?? mediaInfo.cover,
+    quality: track.quality ?? mediaInfo.quality,
+  };
+};
+
 const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatus()): void => {
   const player = getPlayer();
   const playing = remote.state === "playing";
@@ -582,19 +599,7 @@ const loadIndex = async (
 
   if (resolved.cacheAfterLoad && !cacheStartedFromDirectInput) cacheResolvedSource();
   if (track.source === "local") {
-    const mediaInfo = result.data.mediaInfo;
-    const fileName = track.path?.split(/[/\\]/).pop() ?? "";
-    const derivedTitle = fileName.replace(/\.[^.]+$/, "");
-    item.track = {
-      ...track,
-      title:
-        !track.title || track.title === derivedTitle ? mediaInfo.title || track.title : track.title,
-      artists: track.artists.length > 0 ? track.artists : (mediaInfo.artists ?? []),
-      album: track.album ?? mediaInfo.album,
-      duration: track.duration || mediaInfo.duration,
-      cover: track.cover ?? mediaInfo.cover,
-      quality: track.quality ?? mediaInfo.quality,
-    };
+    item.track = enrichLocalTrack(track, result.data.mediaInfo);
   }
 
   if (mode === "personalFm") {
@@ -1173,6 +1178,9 @@ export const onNativeDirectTrackBoundary = (
   }
 
   try {
+    if (prepared.directMediaInfo) {
+      prepared.item.track = enrichLocalTrack(prepared.item.track, prepared.directMediaInfo);
+    }
     const track = prepared.item.track;
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
     commitDirectPlaybackBoundary(prepared.directSource, duration, track, prepared.item.context);
@@ -1189,10 +1197,16 @@ export const onNativeDirectTrackBoundary = (
     nowPlaying.onPosition(0, true);
     nowPlaying.onPlayStateChange("playing");
     publish();
-    publishTrackLoaded(prepared.item, prepared.directSource, true, prepared.directDetail, {
-      duration,
-      quality: prepared.directDetail?.quality,
-    });
+    publishTrackLoaded(
+      prepared.item,
+      prepared.directSource,
+      true,
+      prepared.directDetail,
+      prepared.directMediaInfo ?? {
+        duration,
+        quality: prepared.directDetail?.quality,
+      },
+    );
     scheduleNextPlaybackPreload();
   } catch (error) {
     playerLog.error(`[session] Direct boundary commit failed: ${String(error)}`);

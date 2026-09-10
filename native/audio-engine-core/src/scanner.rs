@@ -188,17 +188,34 @@ fn probe_fast_with_directory_cover(
     }
 
     if crate::dsd::is_dsd_path(path) {
+        // Native DSD 的格式/时长由专用解析器负责，但标签仍从 FFmpeg 容器 metadata 读取。
+        // 过去这里直接返回导致 DSF/DFF 的 artist/album 丢失，播放时才会被 probeMetadata 补回。
+        let dsd_tags = fs::File::open(path)
+            .ok()
+            .and_then(|file| AudioReader::new(file).ok())
+            .map(|reader| {
+                let raw_metadata = reader.metadata();
+                metadata::repair_legacy_gbk_tags_for_path(
+                    metadata::extract_tags(&raw_metadata),
+                    path,
+                )
+            });
         if path.to_lowercase().ends_with(".dsf") {
             if let Ok(dsf) = crate::dsd::DsfReader::open(path) {
                 return Some(ScannedTrack {
                     path: path.to_string(),
-                    title: Path::new(path)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(String::from),
-                    artist: None,
-                    album: None,
-                    track: None,
+                    title: dsd_tags
+                        .as_ref()
+                        .and_then(|tags| tags.title.clone())
+                        .or_else(|| {
+                            Path::new(path)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .map(String::from)
+                        }),
+                    artist: dsd_tags.as_ref().and_then(|tags| tags.artist.clone()),
+                    album: dsd_tags.as_ref().and_then(|tags| tags.album.clone()),
+                    track: dsd_tags.as_ref().and_then(|tags| tags.track),
                     duration: dsf.duration_seconds,
                     codec: "dsd_dsf".to_string(),
                     sample_rate: dsf.sample_rate,
@@ -216,13 +233,18 @@ fn probe_fast_with_directory_cover(
             if let Ok(dff) = crate::dsd::DffReader::open(path) {
                 return Some(ScannedTrack {
                     path: path.to_string(),
-                    title: Path::new(path)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(String::from),
-                    artist: None,
-                    album: None,
-                    track: None,
+                    title: dsd_tags
+                        .as_ref()
+                        .and_then(|tags| tags.title.clone())
+                        .or_else(|| {
+                            Path::new(path)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .map(String::from)
+                        }),
+                    artist: dsd_tags.as_ref().and_then(|tags| tags.artist.clone()),
+                    album: dsd_tags.as_ref().and_then(|tags| tags.album.clone()),
+                    track: dsd_tags.as_ref().and_then(|tags| tags.track),
                     duration: dff.duration_seconds,
                     codec: "dsd_dff".to_string(),
                     sample_rate: dff.sample_rate,
@@ -600,12 +622,88 @@ pub fn probe_sacd_tracks(iso_path: &str) -> Vec<ScannedTrack> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    fn id3v23_frame(id: &[u8; 4], value: &str) -> Vec<u8> {
+        let mut payload = vec![0];
+        payload.extend_from_slice(value.as_bytes());
+        let mut frame = Vec::with_capacity(10 + payload.len());
+        frame.extend_from_slice(id);
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&payload);
+        frame
+    }
+
+    fn synchsafe(value: usize) -> [u8; 4] {
+        [
+            ((value >> 21) & 0x7f) as u8,
+            ((value >> 14) & 0x7f) as u8,
+            ((value >> 7) & 0x7f) as u8,
+            (value & 0x7f) as u8,
+        ]
+    }
+
+    fn write_tagged_dsf(path: &Path) {
+        let frames = [
+            id3v23_frame(b"TIT2", "DSD Track"),
+            id3v23_frame(b"TPE1", "DSD Artist"),
+            id3v23_frame(b"TALB", "DSD Album"),
+            id3v23_frame(b"TRCK", "2"),
+        ]
+        .concat();
+        let mut id3 = Vec::with_capacity(10 + frames.len());
+        id3.extend_from_slice(b"ID3");
+        id3.extend_from_slice(&[3, 0, 0]);
+        id3.extend_from_slice(&synchsafe(frames.len()));
+        id3.extend_from_slice(&frames);
+
+        let payload_size = 8192u64;
+        let metadata_offset = 28 + 52 + 12 + payload_size;
+        let file_size = metadata_offset + id3.len() as u64;
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(b"DSD ").unwrap();
+        file.write_all(&28u64.to_le_bytes()).unwrap();
+        file.write_all(&file_size.to_le_bytes()).unwrap();
+        file.write_all(&metadata_offset.to_le_bytes()).unwrap();
+        file.write_all(b"fmt ").unwrap();
+        file.write_all(&52u64.to_le_bytes()).unwrap();
+        file.write_all(&1u32.to_le_bytes()).unwrap();
+        file.write_all(&0u32.to_le_bytes()).unwrap();
+        file.write_all(&2u32.to_le_bytes()).unwrap();
+        file.write_all(&2u32.to_le_bytes()).unwrap();
+        file.write_all(&2_822_400u32.to_le_bytes()).unwrap();
+        file.write_all(&1u32.to_le_bytes()).unwrap();
+        file.write_all(&(2_822_400u64 * 2).to_le_bytes()).unwrap();
+        file.write_all(&4096u32.to_le_bytes()).unwrap();
+        file.write_all(&0u32.to_le_bytes()).unwrap();
+        file.write_all(b"data").unwrap();
+        file.write_all(&(payload_size + 12).to_le_bytes()).unwrap();
+        file.write_all(&vec![0x69; payload_size as usize]).unwrap();
+        file.write_all(&id3).unwrap();
+    }
 
     #[test]
     fn native_dsd_extensions_are_part_of_the_local_library_surface() {
         assert!(is_audio_file(Path::new("album/track.dsf")));
         assert!(is_audio_file(Path::new("album/track.DFF")));
         assert!(is_audio_file(Path::new("album/track.dsdiff")));
+    }
+
+    #[test]
+    fn dsf_scan_preserves_container_tags_while_using_native_dsd_format() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("tagged.dsf");
+        write_tagged_dsf(&path);
+
+        let track = probe_fast(path.to_str().unwrap(), None).unwrap();
+        assert_eq!(track.title.as_deref(), Some("DSD Track"));
+        assert_eq!(track.artist.as_deref(), Some("DSD Artist"));
+        assert_eq!(track.album.as_deref(), Some("DSD Album"));
+        assert_eq!(track.track, Some(2));
+        assert_eq!(track.codec, "dsd_dsf");
+        assert_eq!(track.sample_rate, 2_822_400);
+        assert_eq!(track.bits_per_sample, 1);
     }
 
     #[test]

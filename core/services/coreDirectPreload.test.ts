@@ -68,6 +68,7 @@ test("queue edits never run next-source preparation on the active Direct produce
 test("Node Core consumes Direct boundary into the authoritative session", () => {
   assert.match(coreEvents, /playbackSession\.onNativeDirectTrackBoundary\(generation, duration\)/);
   assert.match(session, /consumeDirectPlaybackBoundary\(generation, queue\)/);
+  assert.match(session, /prepared\.directMediaInfo[\s\S]*enrichLocalTrack/);
   assert.match(session, /commitDirectPlaybackBoundary/);
   assert.match(session, /scheduleNextPlaybackPreload\(\)/);
 });

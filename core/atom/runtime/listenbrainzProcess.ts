@@ -26,7 +26,9 @@ const spawnNodeChild: ListenBrainzProcessSpawner = (entry) => {
     onExit: (listener) => child.on("exit", listener),
     send: (message) => {
       if (!child.connected) throw new Error("ListenBrainz child process is not connected");
-      child.send(message as any);
+      // child.send 的 EPIPE 等失败可能异步发生；提供 callback 后错误不会变成未处理的
+      // ChildProcess "error" 事件把 Core 在 SIGTERM/disable 路径直接打崩。
+      child.send(message as any, () => {});
     },
     kill: () => child.kill(),
   };

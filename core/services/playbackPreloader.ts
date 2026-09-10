@@ -17,6 +17,7 @@ interface PreparedPlaybackSource {
   directGeneration: number | null;
   directSource: string | null;
   directDetail?: DirectStageResult["detail"];
+  directMediaInfo?: DirectStageResult["mediaInfo"];
 }
 
 export interface PreparedDirectPlaybackBoundary {
@@ -25,6 +26,7 @@ export interface PreparedDirectPlaybackBoundary {
   source: ResolvedPlaybackSource;
   directSource: string;
   directDetail?: DirectStageResult["detail"];
+  directMediaInfo?: DirectStageResult["mediaInfo"];
 }
 
 let preloadToken = 0;
@@ -125,7 +127,11 @@ const stageDirectSource = async (
   token: number,
   track: PlaybackQueueItem["track"],
   directSource: string,
-): Promise<{ generation: number; detail?: DirectStageResult["detail"] } | null> => {
+): Promise<{
+  generation: number;
+  detail?: DirectStageResult["detail"];
+  mediaInfo?: DirectStageResult["mediaInfo"];
+} | null> => {
   nextDirectGeneration = (nextDirectGeneration % 0xffff_ffff) + 1;
   const generation = nextDirectGeneration;
   const operation = directStageChain.then(async (): Promise<DirectStageResult | null> => {
@@ -146,7 +152,7 @@ const stageDirectSource = async (
   const result = await operation;
 
   if (token !== preloadToken || !result?.staged) return null;
-  return { generation, detail: result.detail };
+  return { generation, detail: result.detail, mediaInfo: result.mediaInfo };
 };
 
 /**
@@ -174,6 +180,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
       let directGeneration: number | null = null;
       let directSource: string | null = null;
       let directDetail: DirectStageResult["detail"] | undefined;
+      let directMediaInfo: DirectStageResult["mediaInfo"] | undefined;
       const directPrepared = await prepareDirectSource(token, item.track, source);
       if (token !== preloadToken) {
         if (directPrepared?.directSource) queueDirectCleanup(directPrepared.directSource);
@@ -190,6 +197,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         if (staged) {
           directGeneration = staged.generation;
           directDetail = staged.detail;
+          directMediaInfo = staged.mediaInfo;
         }
       }
 
@@ -202,6 +210,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         directGeneration,
         directSource,
         directDetail,
+        directMediaInfo,
       };
       playerLog.debug(
         directGeneration === null
@@ -256,6 +265,7 @@ export const consumeDirectPlaybackBoundary = (
     source: prepared.source,
     directSource: prepared.directSource,
     directDetail: prepared.directDetail,
+    directMediaInfo: prepared.directMediaInfo,
   };
   preloadToken++;
   clearPrepared(false);
