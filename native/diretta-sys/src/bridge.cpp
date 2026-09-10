@@ -163,7 +163,8 @@ void* open_direct_with_format(
     }
 
     connection->sync = std::make_unique<DirectSync>(source_context, next_block, release_block);
-    const auto thread_mode = static_cast<DIRETTA::Sync::THRED_MODE>(5);
+    // 保留发送线程优先级，使用 SDK 默认等待策略，避免忙等持续占核。
+    const auto thread_mode = DIRETTA::Sync::CRITICAL;
     const auto ifno = static_cast<std::uint16_t>(target.get_ifno());
     if (!connection->sync->open(
           thread_mode,
