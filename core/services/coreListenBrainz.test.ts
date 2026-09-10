@@ -110,14 +110,13 @@ test("ListenBrainz child IPC consumes asynchronous send errors during shutdown r
   assert.match(listenbrainzProcessSource, /child\.send\(message as any, \(\) => \{\}\)/);
 });
 
-test("ListenBrainz child is emitted and owned by Node Core", () => {
+test("ListenBrainz child is emitted and initialized by Node Core", () => {
   assert.match(
     coreViteSource,
     /"listenbrainz-child": resolve\(root, "core\/services\/listenbrainzChild\.ts"\)/,
   );
   assert.match(coreEntrySource, /ATOM_LISTENBRAINZ_CHILD_ENTRY/);
   assert.match(coreEntrySource, /listenbrainz\.initListenBrainz\(\)/);
-  assert.match(coreEntrySource, /listenbrainz\.shutdownListenBrainz\(\)/);
 });
 
 test("ListenBrainz settings and Control stay Core-owned and token-free on reads", () => {

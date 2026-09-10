@@ -85,7 +85,6 @@ test("Plugin status uses the unified CoreControlEvent envelope", () => {
   assert.match(eventClientSource, /event\.type === "pluginStatus"/);
   assert.match(pluginClientSource, /subscribeCoreControlEvent\("pluginStatus", callback\)/);
   assert.match(nodeCoreSource, /registerPluginControlEvents\(\)/);
-  assert.match(nodeCoreSource, /unregisterPluginControlEvents\(\)/);
 });
 
 test("Plugin projection is initialized during Web playback startup", () => {

@@ -55,10 +55,9 @@ test("Core download source resolution reuses existing provider and plugin seams"
   assert.match(resolverSource, /callNetease\("song_url"/);
 });
 
-test("Node Core owns download lifecycle", () => {
+test("Node Core owns download runtime initialization", () => {
   assert.match(coreNodeSource, /import\("@main\/services\/downloadManager"\)/);
   assert.match(coreNodeSource, /await downloadManager\.init\(\)/);
-  assert.match(coreNodeSource, /downloadManager\.shutdown\(\)/);
 });
 
 test("Web Control exposes real Core download queue management", () => {

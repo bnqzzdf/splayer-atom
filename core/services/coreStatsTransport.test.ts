@@ -32,7 +32,6 @@ test("Node Core owns the play statistics lifecycle", () => {
   assert.match(nodePlayerSource, /onCorePlayerState\(state\)/);
   assert.match(nodePlayerSource, /onCorePlayerEnded\(\)/);
   assert.match(coreStatsSource, /export const shutdownCorePlayStats/);
-  assert.match(nodeCoreSource, /corePlayStats\.shutdownCorePlayStats\(\)/);
 
   assert.doesNotMatch(rendererStatsSource, /Date\.now|window\.api\.stats|watch\(/);
   assert.doesNotMatch(rendererPlayerSource, /installPlayStats/);

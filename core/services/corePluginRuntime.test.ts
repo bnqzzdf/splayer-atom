@@ -24,9 +24,8 @@ test("plugin registry and host routing stay Electron-free inside the Core graph"
   assert.match(registrySource, /runtimeEnvironment\.appVersion/);
 });
 
-test("Node Core initializes and shuts down the same plugin registry", () => {
+test("Node Core initializes the plugin registry", () => {
   assert.match(coreEntrySource, /pluginRegistry\.init\(\)/);
-  assert.match(coreEntrySource, /await pluginRegistry\.shutdown\(\)/);
   assert.match(coreEntrySource, /ATOM_PLUGIN_HOST_ENTRY/);
 });
 

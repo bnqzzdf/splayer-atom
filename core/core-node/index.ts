@@ -34,11 +34,10 @@ const start = async (): Promise<void> => {
     playbackSession,
     corePlayerEvents,
     downloadManager,
-    corePlayStats,
     server,
     { store },
     { pluginRegistry },
-    { registerPluginControlEvents, unregisterPluginControlEvents },
+    { registerPluginControlEvents },
     listenbrainz,
   ] = await Promise.all([
     import("@main/utils/logger"),
@@ -47,7 +46,6 @@ const start = async (): Promise<void> => {
     import("@main/services/playbackSession"),
     import("@main/services/corePlayerEvents"),
     import("@main/services/downloadManager"),
-    import("@main/services/headlessPlayStats"),
     import("@main/server"),
     import("@main/store"),
     import("@main/plugins/registry"),
@@ -71,25 +69,24 @@ const start = async (): Promise<void> => {
     throw new Error(status.error?.message ?? "Atom Core HTTP/WS server failed to start");
   }
 
-  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+  const shutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) return;
     shuttingDown = true;
-    coreLog.info(`Atom Core 收到 ${signal}，开始停止服务`);
-    store.flushImmediate();
-    await playbackSession.shutdownPlaybackSession();
-    songCache.shutdown();
-    downloadManager.shutdown();
-    corePlayStats.shutdownCorePlayStats();
-    listenbrainz.shutdownListenBrainz();
-    unregisterPluginControlEvents();
-    await pluginRegistry.shutdown();
-    await server.stopServer();
-    database.closeDatabase();
-    process.exitCode = 0;
+    coreLog.info(`Atom Core 收到 ${signal}，保存用户配置后退出`);
+    let exitCode = 0;
+    try {
+      // SIGTERM 表示整个进程即将消失；只保证仍在内存中的用户配置落盘，
+      // 播放、下载、网络连接和 native runtime 都交给操作系统直接回收。
+      store.flushImmediate();
+    } catch (error) {
+      exitCode = 1;
+      coreLog.error("退出前保存用户配置失败", error);
+    }
+    process.exit(exitCode);
   };
 
-  process.once("SIGINT", () => void shutdown("SIGINT"));
-  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
   coreLog.info(`Atom Core 已启动: ${status.host ?? "0.0.0.0"}:${status.port ?? 14558}`);
 };
 
