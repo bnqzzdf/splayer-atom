@@ -1,7 +1,7 @@
 {
   "name": "splayer-atom",
   "productName": "SPlayer Atom",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "description": "Linux x86-64 Web + Core music player adapted from SPlayer-Next",
   "type": "module",
   "packageManager": "pnpm@11.5.2",
