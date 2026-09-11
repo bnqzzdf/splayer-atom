@@ -7,7 +7,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc;
+use std::thread;
 use std::time::{Instant, SystemTime};
 
 use ffmpeg_audio::AudioReader;
@@ -23,6 +25,8 @@ const AUDIO_EXTENSIONS: &[&str] = &[
 
 /// 每批回调的文件数
 const BATCH_SIZE: usize = 20;
+const SLOW_PROBE_THRESHOLD_MS: u128 = 50;
+const MAX_PROBE_WORKERS: usize = 8;
 
 /// 已有文件记录，用于增量扫描比对
 pub struct FileRecord {
@@ -316,6 +320,82 @@ fn cached_directory_cover(
         .clone()
 }
 
+struct ProbeResult {
+    path: String,
+    mtime: u64,
+    ctime: u64,
+    size: u64,
+    directory_cover: Option<PathBuf>,
+    track: Option<ScannedTrack>,
+    elapsed_ms: u128,
+}
+
+/// 并行执行独立文件的元数据探测，结果仍按收集顺序交给上层，保持进度和数据库写入稳定。
+fn probe_audio_files_parallel(
+    files: &[(String, u64, u64, u64, Option<PathBuf>)],
+    cover_cache_dir: Option<&str>,
+    cancel: &AtomicBool,
+) -> Vec<Option<ProbeResult>> {
+    if files.is_empty() {
+        return Vec::new();
+    }
+
+    let worker_count = std::thread::available_parallelism()
+        .map(|parallelism| parallelism.get())
+        .unwrap_or(1)
+        .min(MAX_PROBE_WORKERS)
+        .min(files.len());
+    let next_index = AtomicUsize::new(0);
+    let (sender, receiver) = mpsc::channel();
+
+    thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let sender = sender.clone();
+            let next_index = &next_index;
+            let cancel = &cancel;
+            scope.spawn(move || loop {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                let index = next_index.fetch_add(1, Ordering::Relaxed);
+                let Some((path, mtime, ctime, size, directory_cover)) = files.get(index) else {
+                    break;
+                };
+                let started = Instant::now();
+                let track = probe_fast_with_directory_cover(
+                    path,
+                    cover_cache_dir,
+                    directory_cover.as_deref(),
+                );
+                if sender
+                    .send((
+                        index,
+                        ProbeResult {
+                            path: path.clone(),
+                            mtime: *mtime,
+                            ctime: *ctime,
+                            size: *size,
+                            directory_cover: directory_cover.clone(),
+                            track,
+                            elapsed_ms: started.elapsed().as_millis(),
+                        },
+                    ))
+                    .is_err()
+                {
+                    break;
+                }
+            });
+        }
+    });
+    drop(sender);
+
+    let mut results = (0..files.len()).map(|_| None).collect::<Vec<_>>();
+    for (index, result) in receiver {
+        results[index] = Some(result);
+    }
+    results
+}
+
 /// 获取文件时间与大小：
 /// - mtime: 修改时间（Unix ms）
 /// - ctime: 创建时间（Unix ms，若不可用回退为 mtime）
@@ -443,12 +523,15 @@ pub fn scan_directories(
         walk_elapsed,
     );
 
-    // 第二遍：逐文件提取元数据，分批回调
+    // 第二遍：并行提取元数据，分批回调
     let parse_start = Instant::now();
     let mut scanned: u32 = 0;
     let mut batch: Vec<ScannedTrack> = Vec::with_capacity(BATCH_SIZE);
+    let mut slow_probes = 0_u32;
+    let mut cover_cache_misses = 0_u32;
+    let probe_results = probe_audio_files_parallel(&audio_files, cover_cache_dir, cancel);
 
-    for (path_str, mtime, ctime, size, directory_cover) in &audio_files {
+    for result in probe_results.into_iter().flatten() {
         if cancel.load(Ordering::Relaxed) {
             info!("扫描已取消（元数据提取阶段，已处理 {scanned}/{total}）");
             callback(ScanEvent::Done {
@@ -461,20 +544,38 @@ pub fn scan_directories(
             return;
         }
 
-        let current_name = Path::new(path_str)
+        let current_name = Path::new(&result.path)
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
 
-        match probe_fast_with_directory_cover(path_str, cover_cache_dir, directory_cover.as_deref())
-        {
+        let has_cover_cache_miss = result.directory_cover.is_some()
+            && result
+                .track
+                .as_ref()
+                .is_some_and(|track| track.cover.is_none());
+        if result.elapsed_ms >= SLOW_PROBE_THRESHOLD_MS {
+            slow_probes += 1;
+            warn!(
+                path = %result.path,
+                elapsed_ms = result.elapsed_ms,
+                cover_cache_miss = has_cover_cache_miss,
+                "曲库元数据探测较慢"
+            );
+        }
+        if has_cover_cache_miss {
+            cover_cache_misses += 1;
+            debug!(path = %result.path, "曲库封面缓存未命中");
+        }
+
+        match result.track {
             Some(mut track) => {
-                track.file_size = *size;
-                track.mtime = *mtime;
-                track.ctime = *ctime;
+                track.file_size = result.size;
+                track.mtime = result.mtime;
+                track.ctime = result.ctime;
                 batch.push(track);
             }
             None => {
-                debug!("跳过文件 {path_str}: FFmpeg 无法解析");
+                debug!("跳过文件 {}: FFmpeg 无法解析", result.path);
             }
         }
 
@@ -507,13 +608,15 @@ pub fn scan_directories(
         0.0
     };
     info!(
-        "扫描完成: 处理 {}/{} 个文件，目录遍历 {:.2?}，元数据解析 {:.2?}，总计 {:.2?}（{:.0} 文件/秒）",
+        "扫描完成: 处理 {}/{} 个文件，目录遍历 {:.2?}，元数据解析 {:.2?}，总计 {:.2?}（{:.0} 文件/秒，慢探测 {}，封面缓存未命中 {}）",
         scanned,
         scanned_paths.len(),
         walk_elapsed,
         parse_elapsed,
         total_elapsed,
         throughput,
+        slow_probes,
+        cover_cache_misses,
     );
 
     callback(ScanEvent::Done {
