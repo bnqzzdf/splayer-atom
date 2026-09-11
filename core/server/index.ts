@@ -143,8 +143,13 @@ export const stopServer = (): Promise<void> => {
     for (const client of wss?.clients ?? []) {
       client.close(1001, "Core server stopping");
     }
+    const forceCloseTimer = setTimeout(() => {
+      for (const client of wss?.clients ?? []) client.terminate();
+    }, 1000);
+    forceCloseTimer.unref?.();
     wss?.close();
     server.close((error) => {
+      clearTimeout(forceCloseTimer);
       if (error) serverLog.warn("Core HTTP/WS 关闭异常:", error);
       else serverLog.info("Core HTTP/WS 已关闭");
       resolve();

@@ -4,7 +4,7 @@
 //! 支持增量扫描：比对文件 mtime/size 跳过未变化的文件。
 //! 使用 FFmpeg 提取元数据，无需额外依赖 lofty。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -335,9 +335,10 @@ fn probe_audio_files_parallel(
     files: &[(String, u64, u64, u64, Option<PathBuf>)],
     cover_cache_dir: Option<&str>,
     cancel: &AtomicBool,
-) -> Vec<Option<ProbeResult>> {
+    on_result: &mut impl FnMut(ProbeResult),
+) {
     if files.is_empty() {
-        return Vec::new();
+        return;
     }
 
     let worker_count = std::thread::available_parallelism()
@@ -386,14 +387,23 @@ fn probe_audio_files_parallel(
                 }
             });
         }
-    });
-    drop(sender);
+        drop(sender);
 
-    let mut results = (0..files.len()).map(|_| None).collect::<Vec<_>>();
-    for (index, result) in receiver {
-        results[index] = Some(result);
-    }
-    results
+        // 正常扫描保持文件收集顺序；只保留尚未形成连续前缀的少量结果，避免整库驻留内存。
+        let mut pending = BTreeMap::new();
+        let mut next_index = 0;
+        for (index, result) in receiver {
+            pending.insert(index, result);
+            while let Some(result) = pending.remove(&next_index) {
+                on_result(result);
+                next_index += 1;
+            }
+        }
+        // 取消时某个较早索引可能仍未完成；释放已完成但未形成连续前缀的结果。
+        for (_, result) in pending {
+            on_result(result);
+        }
+    });
 }
 
 /// 获取文件时间与大小：
@@ -529,21 +539,12 @@ pub fn scan_directories(
     let mut batch: Vec<ScannedTrack> = Vec::with_capacity(BATCH_SIZE);
     let mut slow_probes = 0_u32;
     let mut cover_cache_misses = 0_u32;
-    let probe_results = probe_audio_files_parallel(&audio_files, cover_cache_dir, cancel);
-
-    for result in probe_results.into_iter().flatten() {
+    let mut cancelled = false;
+    probe_audio_files_parallel(&audio_files, cover_cache_dir, cancel, &mut |result| {
         if cancel.load(Ordering::Relaxed) {
-            info!("扫描已取消（元数据提取阶段，已处理 {scanned}/{total}）");
-            callback(ScanEvent::Done {
-                scanned,
-                total,
-                removed_paths: Vec::new(),
-                cue_files: std::mem::take(&mut cue_files),
-                unavailable_dirs,
-            });
+            cancelled = true;
             return;
         }
-
         let current_name = Path::new(&result.path)
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
@@ -590,6 +591,18 @@ pub fn scan_directories(
                 tracks: std::mem::replace(&mut batch, Vec::with_capacity(BATCH_SIZE)),
             });
         }
+    });
+
+    if cancelled || cancel.load(Ordering::Relaxed) {
+        info!("扫描已取消（元数据提取阶段，已处理 {scanned}/{total}）");
+        callback(ScanEvent::Done {
+            scanned,
+            total,
+            removed_paths: Vec::new(),
+            cue_files: std::mem::take(&mut cue_files),
+            unavailable_dirs,
+        });
+        return;
     }
 
     // 计算已删除的文件（在 existing 中但不在 scanned_paths 中）

@@ -11,6 +11,30 @@ type StreamingNativeModule = {
   ) => Promise<unknown>;
 };
 
+const REFRESHED_AUTH_ERROR_PREFIX = "SPLAYER_REFRESHED_AUTH_ERROR:";
+
+const decorateNativeError = (error: unknown): Error => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message.startsWith(REFRESHED_AUTH_ERROR_PREFIX)) {
+    return error instanceof Error ? error : new Error(message);
+  }
+  try {
+    const payload = JSON.parse(message.slice(REFRESHED_AUTH_ERROR_PREFIX.length)) as {
+      message?: string;
+      status?: number;
+      refreshedAuth?: unknown;
+    };
+    const decorated = new Error(payload.message ?? "Streaming request failed");
+    Object.assign(decorated, {
+      status: payload.status,
+      refreshedAuth: payload.refreshedAuth,
+    });
+    return decorated;
+  } catch {
+    return new Error(message);
+  }
+};
+
 let nativeModule: StreamingNativeModule | null | undefined;
 
 const getNativeModule = (): StreamingNativeModule => {
@@ -32,4 +56,10 @@ export const callStreamingNative = async (
   action: string,
   auth: Record<string, unknown> = {},
   params: Record<string, unknown> = {},
-): Promise<unknown> => getNativeModule().callStreamingProvider(platform, action, auth, params);
+): Promise<unknown> => {
+  try {
+    return await getNativeModule().callStreamingProvider(platform, action, auth, params);
+  } catch (error) {
+    throw decorateNativeError(error);
+  }
+};

@@ -104,7 +104,7 @@ impl TidalClient {
                         .refreshed_tokens
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner()) =
-                        Some((new_access.clone(), new_refresh, expires_at));
+                        Some((new_access.clone(), new_refresh.clone(), expires_at));
                     let (retry_status, retry_body) =
                         self.send_get(&url, &query, Some(&new_access)).await?;
                     if retry_status.is_success() {
@@ -165,6 +165,13 @@ impl TidalClient {
 
     /// 保留 TIDAL 原始错误和 subStatus，避免上层只能看到笼统的 403。
     fn api_error(status: u16, body: &Value) -> StreamingError {
+        StreamingError::Api {
+            status,
+            message: Self::api_error_message(body),
+        }
+    }
+
+    fn api_error_message(body: &Value) -> String {
         let raw = body
             .get("userMessage")
             .or_else(|| body.get("message"))
@@ -181,7 +188,7 @@ impl TidalClient {
             Some(sub_status) => format!("{friendly} [subStatus={sub_status} | {raw}]"),
             None => friendly.to_string(),
         };
-        StreamingError::Api { status, message }
+        message
     }
 }
 

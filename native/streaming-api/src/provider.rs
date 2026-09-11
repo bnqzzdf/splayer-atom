@@ -81,7 +81,22 @@ async fn call_provider_with_refresh(
                 auth_string(&auth, &["clientId", "client_id"]),
                 auth_string(&auth, &["clientSecret", "client_secret"]),
             );
-            let value = call_tidal_with_client(&client, action, params).await?;
+            let value = match call_tidal_with_client(&client, action, params).await {
+                Ok(value) => value,
+                Err(source) => {
+                    if let Some((access_token, refresh_token, expires_at)) =
+                        client.take_refreshed_tokens()
+                    {
+                        return Err(StreamingError::WithRefreshedAuth {
+                            source: Box::new(source),
+                            access_token,
+                            refresh_token,
+                            expires_at,
+                        });
+                    }
+                    return Err(source);
+                }
+            };
             Ok(ProviderCallResult {
                 value,
                 refreshed_tokens: client.take_refreshed_tokens(),

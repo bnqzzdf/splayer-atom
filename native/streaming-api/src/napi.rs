@@ -1,6 +1,7 @@
 use napi_derive::napi;
 use serde_json::{json, Value};
 
+use crate::error::StreamingError;
 use crate::provider::call_provider_with_refresh_result;
 
 /// Node Core 的 Qobuz/TIDAL 原生协议入口。
@@ -14,9 +15,34 @@ pub async fn call_streaming_provider(
     auth: Value,
     params: Value,
 ) -> napi::Result<Value> {
-    let result = call_provider_with_refresh_result(&platform, &action, auth, params)
-        .await
-        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    let result = match call_provider_with_refresh_result(&platform, &action, auth, params).await {
+        Ok(result) => result,
+        Err(StreamingError::WithRefreshedAuth {
+            source,
+            access_token,
+            refresh_token,
+            expires_at,
+        }) => {
+            let (status, message) = match source.as_ref() {
+                StreamingError::Api { status, message } => (Some(*status), message.clone()),
+                _ => (None, source.to_string()),
+            };
+            let payload = json!({
+                "kind": "refreshed-auth-error",
+                "status": status,
+                "message": message,
+                "refreshedAuth": {
+                    "accessToken": access_token,
+                    "refreshToken": refresh_token,
+                    "expiresAt": expires_at,
+                }
+            });
+            return Err(napi::Error::from_reason(format!(
+                "SPLAYER_REFRESHED_AUTH_ERROR:{payload}"
+            )));
+        }
+        Err(error) => return Err(napi::Error::from_reason(error.to_string())),
+    };
     if let Some((access_token, refresh_token, expires_at)) = result.refreshed_tokens {
         return Ok(json!({
             "result": result.value,

@@ -3,6 +3,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use ffmpeg_audio::AudioReader;
 
@@ -12,6 +13,7 @@ use super::folder_cover::find_folder_cover;
 const THUMB_SIZE: u32 = 300;
 
 const DIRECTORY_THUMB_PREFIX: &str = "directory_cover_";
+static CACHE_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// 计算源文件对应的封面缩略图缓存路径（按源路径哈希命名）
 pub fn cover_thumb_path(source: &str, cache_dir: &str) -> std::path::PathBuf {
@@ -52,7 +54,7 @@ pub fn extract_directory_cover_thumbnail(source: &Path, cache_dir: &str) -> Opti
 
     let cover = fs::read(source).ok()?;
     fs::create_dir_all(cache_dir).ok()?;
-    generate_cover_thumbnail(&cover, &thumb_file).ok()?;
+    generate_cover_thumbnail_atomic(&cover, &thumb_file).ok()?;
     Some(thumb_file.to_string_lossy().into_owned())
 }
 
@@ -98,7 +100,7 @@ pub fn extract_cover_thumbnail_with_directory_cover(
 
     if let Some(cover) = reader.cover() {
         fs::create_dir_all(cache_dir).ok()?;
-        generate_cover_thumbnail(&cover.data, &thumb_file).ok()?;
+        generate_cover_thumbnail_atomic(&cover.data, &thumb_file).ok()?;
         return Some(thumb_file.to_string_lossy().into_owned());
     }
 
@@ -145,6 +147,31 @@ fn generate_cover_thumbnail(
     let thumbnail = image.thumbnail(THUMB_SIZE, THUMB_SIZE);
     thumbnail.save_with_format(output_path, image::ImageFormat::Jpeg)?;
     Ok(())
+}
+
+/// 通过唯一临时文件与 rename 发布缩略图，避免并行扫描读到半写入文件。
+fn generate_cover_thumbnail_atomic(
+    data: &[u8],
+    output_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sequence = CACHE_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_path =
+        output_path.with_extension(format!("tmp-{}-{sequence}.jpg", std::process::id()));
+    let result = (|| {
+        generate_cover_thumbnail(data, &temp_path)?;
+        match fs::rename(&temp_path, output_path) {
+            Ok(()) => Ok(()),
+            Err(_error) if output_path.exists() => {
+                let _ = fs::remove_file(&temp_path);
+                Ok(())
+            }
+            Err(error) => Err(error.into()),
+        }
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
 }
 
 #[cfg(test)]

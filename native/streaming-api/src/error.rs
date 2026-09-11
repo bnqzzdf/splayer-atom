@@ -8,6 +8,15 @@ pub enum StreamingError {
     #[error("API error ({status}): {message}")]
     Api { status: u16, message: String },
 
+    #[error("{source}")]
+    WithRefreshedAuth {
+        #[source]
+        source: Box<StreamingError>,
+        access_token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<u64>,
+    },
+
     #[error("Authentication error: {0}")]
     Auth(String),
 

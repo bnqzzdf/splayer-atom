@@ -10,6 +10,23 @@ import { runtimeEnvironment } from "@main/atom/runtime/environment";
 
 export type TidalParams = Record<string, unknown>;
 
+let tidalCallTail: Promise<void> = Promise.resolve();
+
+const withTidalCallLock = async <T>(task: () => Promise<T>): Promise<T> => {
+  let release!: () => void;
+  const turn = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = tidalCallTail;
+  tidalCallTail = previous.then(() => turn);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+};
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 
@@ -76,21 +93,28 @@ const persistAuthResponse = (
   return response;
 };
 
-const unwrapRefreshedResponse = (value: unknown): unknown => {
-  const envelope = asRecord(value);
-  const refreshed = asRecord(envelope.refreshedAuth);
+const persistRefreshedAuth = (refreshed: Record<string, unknown>): boolean => {
   const accessToken = stringValue(refreshed.accessToken);
-  if (!accessToken) return value;
+  if (!accessToken) return false;
 
   const current = getTidalAuth();
-  if (!current) return value;
+  if (!current) return false;
   setTidalAuth({
     ...current,
     accessToken,
     refreshToken: stringValue(refreshed.refreshToken) ?? current.refreshToken,
     expiresAt: expiresAtMs(refreshed.expiresAt, refreshed.expiresIn) ?? current.expiresAt,
   });
-  return envelope.result;
+  return true;
+};
+
+const unwrapRefreshedResponse = (value: unknown): unknown => {
+  const envelope = asRecord(value);
+  const refreshed = asRecord(envelope.refreshedAuth);
+  if (stringValue(refreshed.accessToken) && persistRefreshedAuth(refreshed)) {
+    return envelope.result;
+  }
+  return value;
 };
 
 const authStatus = async (): Promise<unknown> => {
@@ -111,7 +135,7 @@ const authLogout = async (): Promise<unknown> => {
 /**
  * TIDAL Core 入口：Node Core 只持有 session，平台协议全部委托给 Rust streaming-api。
  */
-export const callTidal = async (name: string, params: TidalParams = {}): Promise<unknown> => {
+const callTidalUnlocked = async (name: string, params: TidalParams = {}): Promise<unknown> => {
   if (name === "auth_status" || name === "status" || name === "user_detail") {
     return authStatus();
   }
@@ -121,9 +145,15 @@ export const callTidal = async (name: string, params: TidalParams = {}): Promise
     name === "track_getStreamUrl" || name === "song_url"
       ? { ...params, _materialize_dir: runtimeEnvironment.tempDir }
       : params;
-  const response = unwrapRefreshedResponse(
-    await callStreamingNative("tidal", name, nativeAuth(), nativeParams),
-  );
+  let nativeResponse: unknown;
+  try {
+    nativeResponse = await callStreamingNative("tidal", name, nativeAuth(), nativeParams);
+  } catch (error) {
+    const refreshed = asRecord((error as { refreshedAuth?: unknown }).refreshedAuth);
+    if (stringValue(refreshed.accessToken)) persistRefreshedAuth(refreshed);
+    throw error;
+  }
+  const response = unwrapRefreshedResponse(nativeResponse);
   if (
     name === "auth_exchange" ||
     name === "exchange" ||
@@ -151,3 +181,6 @@ export const callTidal = async (name: string, params: TidalParams = {}): Promise
 
   return response;
 };
+
+export const callTidal = async (name: string, params: TidalParams = {}): Promise<unknown> =>
+  withTidalCallLock(() => callTidalUnlocked(name, params));

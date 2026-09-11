@@ -78,24 +78,43 @@ interface ConnectedControl {
 const connectControl = (url: string): Promise<ConnectedControl> =>
   new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("WebSocket hello timeout"));
+    }, 5000);
     const onMessage = (payload: WebSocket.RawData): void => {
       try {
         const message = JSON.parse(payload.toString()) as { kind?: string; clients?: number };
         if (message.kind === "hello") {
+          clearTimeout(timeout);
           socket.off("error", onError);
+          socket.off("close", onClose);
           socket.off("message", onMessage);
+          // 连接交给 closeControl 管理；保留 error listener 避免晚到的 socket 错误变成未处理事件。
+          socket.on("error", () => {});
           resolve({ socket, hello: message });
         }
       } catch (error) {
+        clearTimeout(timeout);
+        socket.close();
         reject(error);
       }
     };
     const onError = (error: Error): void => {
+      clearTimeout(timeout);
       socket.off("message", onMessage);
+      socket.off("close", onClose);
       reject(error);
+    };
+    const onClose = (): void => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+      reject(new Error("WebSocket closed before hello"));
     };
     socket.on("message", onMessage);
     socket.once("error", onError);
+    socket.once("close", onClose);
   });
 
 const closeControl = async (socket: WebSocket | null): Promise<void> => {
@@ -290,11 +309,11 @@ try {
     await waitForJson(`${baseUrl}/api/session`).catch((error) =>
       fail(`Core 重启后 session smoke 失败: ${String(error)}\n${restartOutput}`),
     );
-    restarted.kill("SIGTERM");
-    const [restartCode, restartSignal] = (await once(restarted, "exit")) as [
-      number | null,
-      NodeJS.Signals | null,
-    ];
+    if (restarted.exitCode === null && restarted.signalCode === null) restarted.kill("SIGTERM");
+    const [restartCode, restartSignal] =
+      restarted.exitCode !== null || restarted.signalCode !== null
+        ? [restarted.exitCode, restarted.signalCode]
+        : ((await once(restarted, "exit")) as [number | null, NodeJS.Signals | null]);
     if (restartSignal || restartCode !== 0) {
       fail(
         `Core 重启后的 SIGTERM 退出异常: code=${restartCode} signal=${restartSignal}\n${restartOutput}`,
