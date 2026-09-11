@@ -4,7 +4,14 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { writeExactHttpInput } from "./exactInput";
+import { sniffAudioFormat, writeExactHttpInput } from "./exactInput";
+
+test("online stream probe recognizes container signatures without rejecting unknown data", () => {
+  assert.equal(sniffAudioFormat(Buffer.from("fLaC")), "flac");
+  assert.equal(sniffAudioFormat(Buffer.from("RIFFxxxxWAVE")), "wav");
+  assert.equal(sniffAudioFormat(Buffer.from("xxxxftyp")), "mp4");
+  assert.equal(sniffAudioFormat(Buffer.from([0, 1, 2, 3])), "unknown");
+});
 
 test("exact HTTP input preserves response bytes and requests identity encoding", async () => {
   const bytes = Buffer.from([0, 1, 2, 3, 0xfe, 0xff, 9, 8, 7]);

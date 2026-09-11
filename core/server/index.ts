@@ -140,6 +140,9 @@ export const stopServer = (): Promise<void> => {
   runningPort = null;
   runningHost = null;
   return new Promise((resolve) => {
+    for (const client of wss?.clients ?? []) {
+      client.close(1001, "Core server stopping");
+    }
     wss?.close();
     server.close((error) => {
       if (error) serverLog.warn("Core HTTP/WS 关闭异常:", error);
