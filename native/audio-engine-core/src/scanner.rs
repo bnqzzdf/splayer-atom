@@ -194,16 +194,25 @@ fn probe_fast_with_directory_cover(
     if crate::dsd::is_dsd_path(path) {
         // Native DSD 的格式/时长由专用解析器负责，但标签仍从 FFmpeg 容器 metadata 读取。
         // 过去这里直接返回导致 DSF/DFF 的 artist/album 丢失，播放时才会被 probeMetadata 补回。
-        let dsd_tags = fs::File::open(path)
+        let dsd_reader = fs::File::open(path)
             .ok()
-            .and_then(|file| AudioReader::new(file).ok())
-            .map(|reader| {
-                let raw_metadata = reader.metadata();
-                metadata::repair_legacy_gbk_tags_for_path(
-                    metadata::extract_tags(&raw_metadata),
-                    path,
-                )
-            });
+            .and_then(|file| AudioReader::new(file).ok());
+        let dsd_tags = dsd_reader.as_ref().map(|reader| {
+            let raw_metadata = reader.metadata();
+            metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), path)
+        });
+        let dsd_cover = cover_cache_dir
+            .and_then(|dir| {
+                dsd_reader.as_ref().and_then(|reader| {
+                    metadata::extract_cover_thumbnail_with_directory_cover(
+                        reader,
+                        path,
+                        dir,
+                        directory_cover,
+                    )
+                })
+            })
+            .or_else(directory_cover_thumbnail);
         if path.to_lowercase().ends_with(".dsf") {
             if let Ok(dsf) = crate::dsd::DsfReader::open(path) {
                 return Some(ScannedTrack {
@@ -226,7 +235,7 @@ fn probe_fast_with_directory_cover(
                     bit_rate: (dsf.sample_rate as i64 * dsf.channels as i64),
                     channels: dsf.channels as u32,
                     bits_per_sample: 1,
-                    cover: directory_cover_thumbnail(),
+                    cover: dsd_cover.clone(),
                     file_size: dsf.data_size,
                     mtime: 0,
                     ctime: 0,
@@ -255,7 +264,7 @@ fn probe_fast_with_directory_cover(
                     bit_rate: (dff.sample_rate as i64 * dff.channels as i64),
                     channels: dff.channels as u32,
                     bits_per_sample: 1,
-                    cover: directory_cover_thumbnail(),
+                    cover: dsd_cover,
                     file_size: dff.data_size,
                     mtime: 0,
                     ctime: 0,
@@ -738,6 +747,7 @@ pub fn probe_sacd_tracks(iso_path: &str) -> Vec<ScannedTrack> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
     use std::io::Write;
 
     fn id3v23_frame(id: &[u8; 4], value: &str) -> Vec<u8> {
@@ -748,6 +758,24 @@ mod tests {
         frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
         frame.extend_from_slice(&[0, 0]);
         frame.extend_from_slice(&payload);
+        frame
+    }
+
+    fn id3v23_picture_frame() -> Vec<u8> {
+        let mut picture = vec![
+            0, b'i', b'm', b'a', b'g', b'e', b'/', b'p', b'n', b'g', 0, 3, 0,
+        ];
+        let mut image = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut image, image::ImageFormat::Png)
+            .unwrap();
+        picture.extend_from_slice(image.get_ref());
+
+        let mut frame = Vec::with_capacity(10 + picture.len());
+        frame.extend_from_slice(b"APIC");
+        frame.extend_from_slice(&(picture.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&[0, 0]);
+        frame.extend_from_slice(&picture);
         frame
     }
 
@@ -766,6 +794,7 @@ mod tests {
             id3v23_frame(b"TPE1", "DSD Artist"),
             id3v23_frame(b"TALB", "DSD Album"),
             id3v23_frame(b"TRCK", "2"),
+            id3v23_picture_frame(),
         ]
         .concat();
         let mut id3 = Vec::with_capacity(10 + frames.len());
@@ -820,6 +849,18 @@ mod tests {
         assert_eq!(track.codec, "dsd_dsf");
         assert_eq!(track.sample_rate, 2_822_400);
         assert_eq!(track.bits_per_sample, 1);
+    }
+
+    #[test]
+    fn dsf_scan_extracts_embedded_cover_after_native_probe() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("tagged.dsf");
+        let cache = temp.path().join("cache");
+        write_tagged_dsf(&path);
+
+        let track = probe_fast(path.to_str().unwrap(), cache.to_str()).unwrap();
+        let cover = track.cover.expect("DSF embedded cover should be cached");
+        assert!(Path::new(&cover).exists());
     }
 
     #[test]
