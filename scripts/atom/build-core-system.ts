@@ -12,6 +12,8 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
 const bundleNode = args.delete("--bundle-node");
+const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
+if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
 const release = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
@@ -43,6 +45,7 @@ const run = (label: string, command: string, commandArgs: string[]): void => {
 run("构建 Core native release", bin("tsx"), [
   "scripts/atom/build-core-native.ts",
   ...(requireDiretta ? ["--require-diretta"] : []),
+  ...(direttaVariantArg ? [direttaVariantArg] : []),
 ]);
 run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.config.ts"]);
 run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);

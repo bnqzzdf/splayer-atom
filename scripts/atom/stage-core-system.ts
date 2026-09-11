@@ -88,6 +88,7 @@ const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   modules?: string[];
   diretta?: boolean;
   direttaSdkRelease?: number | null;
+  direttaCpuVariant?: "v2" | "v3" | "v4" | null;
 };
 if (nativeBuild.profile !== "release" || nativeBuild.flavor !== "core-audio") {
   fail(
@@ -109,8 +110,14 @@ if (nativeBuild.diretta === true && nativeBuild.direttaSdkRelease !== DIRETTA_SD
     `Diretta Core artifact 必须使用 SDK ${DIRETTA_SDK_RELEASE}，当前为 ${nativeBuild.direttaSdkRelease ?? "unknown"}`,
   );
 }
+if (nativeBuild.diretta === true && !nativeBuild.direttaCpuVariant) {
+  fail("Diretta Core artifact 必须记录 CPU variant");
+}
 if (nativeBuild.diretta !== true && nativeBuild.direttaSdkRelease != null) {
   fail(`no-Diretta Core native metadata 不应携带 SDK release`);
+}
+if (nativeBuild.diretta !== true && nativeBuild.direttaCpuVariant != null) {
+  fail(`no-Diretta Core native metadata 不应携带 CPU variant`);
 }
 
 const betterSqlitePackageFile = require.resolve("better-sqlite3/package.json");
@@ -202,6 +209,7 @@ writeFileSync(
       },
       diretta: nativeBuild.diretta === true,
       direttaSdkRelease: nativeBuild.direttaSdkRelease ?? null,
+      direttaCpuVariant: nativeBuild.direttaCpuVariant ?? null,
     },
     null,
     2,

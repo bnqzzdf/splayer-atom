@@ -19,8 +19,13 @@ With a supported `DIRETTA_SDK_ROOT`, `audio-engine` adds the `diretta` feature. 
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
-  pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
+  pnpm exec tsx scripts/atom/build-core-system.ts \
+    --require-diretta --diretta-variant=v2
 ```
+
+`--diretta-variant` selects the x86-64 Host SDK library flavor (`v2`, `v3`, or `v4`). The selected
+variant is passed to the native Cargo build and recorded in the artifact metadata. A Diretta build
+must specify it explicitly; it is not silently defaulted to `v2`.
 
 The SDK remains external and is not bundled.
 

@@ -3,7 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { DIRETTA_SDK_RELEASE, readDirettaSdkRelease } from "./diretta-sdk";
+import {
+  DIRETTA_SDK_RELEASE,
+  parseDirettaCpuVariant,
+  readDirettaSdkRelease,
+  type DirettaCpuVariant,
+} from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const audioCrateDir = path.join(root, "native", "audio-engine");
@@ -16,14 +21,11 @@ const cargoBinDir = path.join(
   process.env.CARGO_HOME?.trim() || path.join(os.homedir(), ".cargo"),
   "bin",
 );
-const childEnv = {
-  ...process.env,
-  PATH: [process.env.PATH, cargoBinDir].filter(Boolean).join(path.delimiter),
-};
-
 const args = new Set(process.argv.slice(2));
 const isDev = args.delete("--dev");
 const requireDiretta = args.delete("--require-diretta");
+const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
+if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) {
   throw new Error(`未知 Core native 构建参数: ${[...args].join(" ")}`);
 }
@@ -34,12 +36,30 @@ const direttaSdkRoot = process.env.DIRETTA_SDK_ROOT?.trim() || null;
 if (requireDiretta && !direttaSdkRoot) {
   throw new Error("正式 Diretta Core 构建要求设置 DIRETTA_SDK_ROOT");
 }
+const direttaVariantValue =
+  direttaVariantArg?.slice("--diretta-variant=".length) ||
+  process.env.DIRETTA_CPU_VARIANT?.trim() ||
+  null;
+const direttaCpuVariant: DirettaCpuVariant | null = direttaSdkRoot
+  ? direttaVariantValue
+    ? parseDirettaCpuVariant(direttaVariantValue)
+    : null
+  : null;
+if (direttaSdkRoot && !direttaCpuVariant) {
+  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4");
+}
 const direttaSdkRelease = direttaSdkRoot ? readDirettaSdkRelease(direttaSdkRoot) : null;
 if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
   throw new Error(
     `Core Diretta 构建固定使用 SDK ${DIRETTA_SDK_RELEASE}，当前为 ${direttaSdkRelease}`,
   );
 }
+
+const childEnv = {
+  ...process.env,
+  PATH: [process.env.PATH, cargoBinDir].filter(Boolean).join(path.delimiter),
+  ...(direttaCpuVariant ? { DIRETTA_CPU_VARIANT: direttaCpuVariant } : {}),
+};
 
 rmSync(outputDir, { recursive: true, force: true });
 mkdirSync(outputDir, { recursive: true });
@@ -68,12 +88,11 @@ const commonArgs = [
 if (!isDev) commonArgs.push("--release");
 
 const audioFeatures = direttaSdkRoot ? "core-audio,diretta" : "core-audio";
-runNapiBuild(`audio-engine (ALSA-only${direttaSdkRoot ? ", Diretta" : ""})`, audioCrateDir, [
-  ...commonArgs,
-  "--no-default-features",
-  "--features",
-  audioFeatures,
-]);
+runNapiBuild(
+  `audio-engine (ALSA-only${direttaSdkRoot ? `, Diretta ${direttaCpuVariant}` : ""})`,
+  audioCrateDir,
+  [...commonArgs, "--no-default-features", "--features", audioFeatures],
+);
 runNapiBuild("streaming-api (Qobuz/TIDAL)", streamingCrateDir, commonArgs);
 
 const audioAddonPath = path.join(outputDir, "audio-engine.node");
@@ -95,6 +114,7 @@ writeFileSync(
       arch: process.arch,
       diretta: direttaSdkRoot !== null,
       direttaSdkRelease,
+      direttaCpuVariant,
     },
     null,
     2,

@@ -60,7 +60,8 @@ A normal build does not require the proprietary SDK. A formal Diretta artifact m
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
-  pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
+  pnpm exec tsx scripts/atom/build-core-system.ts \
+    --require-diretta --diretta-variant=v2
 ```
 
 The SDK itself is not bundled.

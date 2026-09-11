@@ -79,7 +79,8 @@ staging 内容包括 Core JS、Web Control、两个 native addons、`runtime.jso
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
-  pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta
+  pnpm exec tsx scripts/atom/build-core-system.ts \
+    --require-diretta --diretta-variant=v2
 ```
 
 SDK release 必须匹配仓库固定版本；缺失或不匹配会在 staging 前失败。SDK 本体不进入 artifact。

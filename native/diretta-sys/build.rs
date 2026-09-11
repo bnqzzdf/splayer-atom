@@ -2,6 +2,7 @@ use std::{env, path::PathBuf};
 
 fn main() {
     println!("cargo:rerun-if-env-changed=DIRETTA_SDK_ROOT");
+    println!("cargo:rerun-if-env-changed=DIRETTA_CPU_VARIANT");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
 
     if env::var_os("CARGO_FEATURE_SDK").is_none() {
@@ -24,6 +25,12 @@ fn main() {
     if !include_dir.is_dir() || !lib_dir.is_dir() {
         panic!("DIRETTA_SDK_ROOT must contain Host/ and lib/");
     }
+    let cpu_variant = env::var("DIRETTA_CPU_VARIANT")
+        .ok()
+        .filter(|value| matches!(value.as_str(), "v2" | "v3" | "v4"))
+        .unwrap_or_else(|| {
+            panic!("DIRETTA_CPU_VARIANT must be set to v2, v3, or v4");
+        });
 
     let mut bridge = cc::Build::new();
     bridge
@@ -54,15 +61,15 @@ fn main() {
         .expect("libstdc++.a path does not have a parent directory");
     bridge.compile("atom_diretta_bridge");
 
-    let (host_lib, acqua_lib) = if target_arch == "aarch64" {
+    let (host_lib, acqua_lib): (String, String) = if target_arch == "aarch64" {
         (
-            "DirettaHost_aarch64-linux-15-nolog",
-            "ACQUA_aarch64-linux-15-nolog",
+            "DirettaHost_aarch64-linux-15-nolog".to_owned(),
+            "ACQUA_aarch64-linux-15-nolog".to_owned(),
         )
     } else {
         (
-            "DirettaHost_x64-linux-15v2-nolog",
-            "ACQUA_x64-linux-15v2-nolog",
+            format!("DirettaHost_x64-linux-15{}-nolog", cpu_variant),
+            format!("ACQUA_x64-linux-15{}-nolog", cpu_variant),
         )
     };
 

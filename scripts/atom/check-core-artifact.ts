@@ -148,6 +148,7 @@ try {
     dataSchema?: { database?: number; config?: number };
     capabilities?: CoreInfo["capabilities"];
     direttaSdkRelease?: number | null;
+    direttaCpuVariant?: "v2" | "v3" | "v4" | null;
   };
   if (
     runtime.productName !== "SPlayer Atom" ||
@@ -192,8 +193,14 @@ try {
       `runtime.json Diretta SDK release 与正式构建不一致: ${runtime.direttaSdkRelease ?? "unknown"}`,
     );
   }
+  if (capabilities.diretta === true && !runtime.direttaCpuVariant) {
+    fail("runtime.json 缺少 Diretta CPU variant");
+  }
   if (capabilities.diretta !== true && runtime.direttaSdkRelease != null) {
     fail("runtime.json no-Diretta artifact 不应携带 SDK release");
+  }
+  if (capabilities.diretta !== true && runtime.direttaCpuVariant != null) {
+    fail("runtime.json no-Diretta artifact 不应携带 CPU variant");
   }
 
   const port = await reservePort();
