@@ -202,6 +202,46 @@ try {
   if (settings.__configVersion !== CONFIG_SCHEMA_VERSION) {
     fail(`Core settings schema 未初始化到 ${CONFIG_SCHEMA_VERSION}`);
   }
+
+  // 用同一份 data 重启一次，覆盖升级后最容易遗漏的持久化与 Web reconnect 路径。
+  const restarted = spawn(path.join(installRoot, "bin", "splayer-atom-core"), [], {
+    cwd: tempDir,
+    env: {
+      ...process.env,
+      ATOM_NODE_BIN: bundleNode ? "" : process.execPath,
+      ATOM_SERVER_PORT: String(port),
+      XDG_CACHE_HOME: path.join(tempDir, "cache"),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let restartOutput = "";
+  restarted.stdout?.on("data", (chunk) => {
+    restartOutput += chunk.toString();
+  });
+  restarted.stderr?.on("data", (chunk) => {
+    restartOutput += chunk.toString();
+  });
+  try {
+    await waitForJson(`${baseUrl}/api/info`).catch((error) =>
+      fail(`Core 重启后未能通过 /api/info: ${String(error)}\n${restartOutput}`),
+    );
+    await waitForJson(`${baseUrl}/api/session`).catch((error) =>
+      fail(`Core 重启后 session smoke 失败: ${String(error)}\n${restartOutput}`),
+    );
+    restarted.kill("SIGTERM");
+    const [restartCode, restartSignal] = (await once(restarted, "exit")) as [
+      number | null,
+      NodeJS.Signals | null,
+    ];
+    if (restartSignal || restartCode !== 0) {
+      fail(
+        `Core 重启后的 SIGTERM 退出异常: code=${restartCode} signal=${restartSignal}\n${restartOutput}`,
+      );
+    }
+  } finally {
+    if (restarted.exitCode === null) restarted.kill("SIGKILL");
+  }
+
   const stagedRequire = createRequire(path.join(installRoot, "app", "index.js"));
   const StagedDatabase = stagedRequire("better-sqlite3") as typeof import("better-sqlite3");
   const database = new StagedDatabase(path.join(installRoot, "data", "database", "library.db"), {
