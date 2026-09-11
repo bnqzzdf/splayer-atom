@@ -114,7 +114,7 @@ test("Web Download requests use one Core client and Core directory picker", () =
 test("Album download reuses the Core batch queue for all managed online providers", () => {
   assert.match(collectionPageSource, /buildDownloadQualityItems/);
   assert.match(collectionPageSource, /enqueueDownloads\(collection\.value\.tracks/);
-  assert.match(collectionPageSource, /type === 'album'/);
+  assert.match(collectionPageSource, /visible: type === "album" && source !== "local"/);
   assert.match(downloadComposableSource, /downloadClient\.startMany\(requests\)/);
 });
 

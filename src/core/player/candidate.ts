@@ -1,4 +1,4 @@
-import type { Track } from "@shared/types/player";
+import type { RepeatMode, Track } from "@shared/types/player";
 import type { ShuffleMode } from "@/stores/status";
 import { shouldSkipDjTrack } from "@/utils/preset/djMode";
 
@@ -9,6 +9,7 @@ export interface CandidateContext {
   fmMode: boolean;
   fuckDjMode: boolean;
   shuffleMode: ShuffleMode;
+  repeatMode: RepeatMode;
 }
 
 /** 候选查找结果 */
@@ -26,6 +27,7 @@ export const getNextTrackCandidate = (ctx: CandidateContext): CandidateResult | 
   if (ctx.fmMode) return null;
   const len = ctx.queue.length;
   if (len <= 1) return null;
+  if (ctx.repeatMode === "off" && ctx.playIndex >= len - 1) return null;
   // 随机模式到达队尾时不缓存
   if (ctx.shuffleMode === "on" && ctx.playIndex >= len - 1) return null;
 

@@ -120,10 +120,12 @@ impl TidalClient {
                     if let Ok((path, descriptor)) =
                         materialize_dash(&self.http, &xml, &temp_dir, &key).await
                     {
+                        let size = std::fs::metadata(&path).ok().map(|metadata| metadata.len());
                         return Ok(json!({
                             "code": 200,
                             "data": {
                                 "localPath": path.to_string_lossy(),
+                                "size": size,
                                 "audioQuality": sound_quality,
                                 "codec": descriptor.codec,
                                 "bitDepth": bit_depth,

@@ -62,6 +62,7 @@ export const scheduleNextTrackPreload = (): void => {
     fmMode: status.fmMode,
     fuckDjMode: settings.system.player.fuckDjMode,
     shuffleMode: status.shuffleMode,
+    repeatMode: status.repeatMode,
   });
   if (!candidate) {
     invalidateNextTrackPreload();
@@ -85,6 +86,7 @@ export const installNextTrackPreloadWatchers = (): void => {
       status.playIndex,
       status.fmMode,
       status.shuffleMode,
+      status.repeatMode,
       queue.queue.value,
       settings.lyric.lyricSourcePreference,
       settings.lyric.lyricSourceOrder.join(","),

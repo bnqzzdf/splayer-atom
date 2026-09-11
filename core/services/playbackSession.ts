@@ -627,6 +627,7 @@ const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promis
       playerLog.info(`[session] Fuck DJ Mode skipped: ${queue[candidateIndex].track.title}`);
       if (attempt + 1 >= maxAttempts) break;
       invalidatePlaybackPreload();
+      if (repeat === "off" && candidateIndex + 1 >= queue.length) break;
       candidateIndex = candidateIndex + 1 >= queue.length ? 0 : candidateIndex + 1;
       continue;
     }
@@ -642,6 +643,7 @@ const loadIndexWithPolicy = async (targetIndex: number, autoPlay = true): Promis
       if (!isSkippablePlaybackError(code)) throw error;
       if (attempt + 1 >= maxAttempts) break;
       invalidatePlaybackPreload();
+      if (repeat === "off" && candidateIndex + 1 >= queue.length) break;
       candidateIndex = candidateIndex + 1 >= queue.length ? 0 : candidateIndex + 1;
     }
   }
@@ -997,6 +999,7 @@ export const next = async (loadCurrent = true): Promise<boolean> => {
   if (!ownsPlayback()) return false;
   if (mode === "personalFm") return advancePersonalFm(loadCurrent);
   if (index + 1 >= queue.length && repeat === "off") {
+    ++loadGeneration;
     invalidatePlaybackPreload();
     stopCurrentOutputBestEffort();
     nowPlaying.onPlayStateChange("stopped");

@@ -73,3 +73,9 @@ test("No-repeat playback stops at the final queue item", () => {
   assert.match(stopAtEnd, /if \(shuffle === "on"/);
   assert.ok(stopAtEnd.indexOf('repeat === "off"') < stopAtEnd.indexOf('shuffle === "on"'));
 });
+
+test("Web display preload follows the Core repeat-off boundary", () => {
+  assert.match(rendererPreloaderSource, /repeatMode: status\.repeatMode/);
+  assert.match(rendererPreloaderSource, /status\.repeatMode/);
+  assert.match(rendererEventsSource, /repeatMode/);
+});
