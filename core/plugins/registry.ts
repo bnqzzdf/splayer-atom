@@ -147,7 +147,6 @@ class PluginRegistry extends EventEmitter {
 
   /** 应用启动时调用 */
   init(): void {
-    ensureDirs();
     pluginHost.setOnHostLost(() => this.handleHostLost());
     const stored = readStored();
     const enabledMap = store.get("plugins.enabled") as Record<string, boolean>;
@@ -186,8 +185,8 @@ class PluginRegistry extends EventEmitter {
     for (const rt of this.runtimes.values()) {
       if (rt.enabled) this.start(rt).catch(() => {});
     }
-    // 启动时静默检查一遍更新（不阻塞启动）
-    void this.checkAllUpdates();
+    // 无插件时不创建空目录，也不触发无意义的更新检查或网络请求。
+    if (this.runtimes.size > 0) void this.checkAllUpdates();
     coreLog.info(`[plugin] registry initialized, ${this.runtimes.size} plugins loaded`);
   }
 
