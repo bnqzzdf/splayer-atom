@@ -996,19 +996,18 @@ export const selectIndex = async (
 export const next = async (loadCurrent = true): Promise<boolean> => {
   if (!ownsPlayback()) return false;
   if (mode === "personalFm") return advancePersonalFm(loadCurrent);
+  if (index + 1 >= queue.length && repeat === "off") {
+    invalidatePlaybackPreload();
+    stopCurrentOutputBestEffort();
+    nowPlaying.onPlayStateChange("stopped");
+    publish();
+    return false;
+  }
   if (shuffle === "on" && index >= queue.length - 1 && queue.length > 1) {
     shuffleKeepingCurrent();
     publish();
     await selectIndex(1, loadCurrent, true);
     return true;
-  }
-  if (index + 1 >= queue.length && repeat === "off") {
-    invalidatePlaybackPreload();
-    stopCurrentOutputBestEffort();
-    active = false;
-    nowPlaying.onPlayStateChange("stopped");
-    publish();
-    return false;
   }
   const target = index + 1 >= queue.length ? 0 : index + 1;
   await selectIndex(target, loadCurrent, true);

@@ -21,8 +21,8 @@ const fetchAlbumTracks = async (
 ): Promise<TidalTrack[]> => {
   const limit = 50;
   const tracks = [...(firstPage.items ?? [])];
-  const total = firstPage.totalNumberOfItems ?? tracks.length;
-  while (tracks.length < total && tracks.length > 0) {
+  const total = firstPage.totalNumberOfItems;
+  while (tracks.length >= limit && (total == null || tracks.length < total)) {
     const page = await tidalCall<TidalAlbumTracksResponse>("album_getTracks", {
       album_id: albumId,
       limit,

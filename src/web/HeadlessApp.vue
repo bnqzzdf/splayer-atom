@@ -13,7 +13,7 @@ const session = ref<HeadlessSession>({
   originalQueue: null,
   index: -1,
   current: null,
-  repeat: "list",
+  repeat: "off",
   shuffle: "off",
 });
 const status = ref<PlayerStatus>({

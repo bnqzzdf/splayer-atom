@@ -328,7 +328,7 @@ const resolveTidal = async (
     size?: number;
   };
   if (resolved.localPath) {
-    return { source: resolved.localPath, provider: "official", format: "mp4", size: resolved.size };
+    return { source: resolved.localPath, provider: "official", format: "m4a", size: resolved.size };
   }
   if (!resolved.streamUrl) {
     throw sourceError(ErrorCode.URL_RESOLVE_FAILED, `TIDAL track unavailable: ${track.id}`);

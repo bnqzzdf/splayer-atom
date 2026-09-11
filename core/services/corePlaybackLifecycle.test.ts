@@ -69,6 +69,7 @@ test("No-repeat playback stops at the final queue item", () => {
   assert.ok(next);
   const stopAtEnd = next.split("const target = index + 1 >= queue.length ? 0 : index + 1")[0];
   assert.match(stopAtEnd, /index \+ 1 >= queue\.length && repeat === "off"/);
-  assert.match(stopAtEnd, /active = false/);
   assert.match(stopAtEnd, /nowPlaying\.onPlayStateChange\("stopped"\)/);
+  assert.match(stopAtEnd, /if \(shuffle === "on"/);
+  assert.ok(stopAtEnd.indexOf('repeat === "off"') < stopAtEnd.indexOf('shuffle === "on"'));
 });
