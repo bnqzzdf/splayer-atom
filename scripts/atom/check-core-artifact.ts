@@ -70,22 +70,21 @@ const waitForJson = async <T>(url: string): Promise<T> => {
   throw lastError ?? new Error(`请求超时: ${url}`);
 };
 
-const connectControl = (url: string): Promise<WebSocket> =>
+interface ConnectedControl {
+  socket: WebSocket;
+  hello: { clients?: number };
+}
+
+const connectControl = (url: string): Promise<ConnectedControl> =>
   new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
-    socket.once("open", () => resolve(socket));
-    socket.once("error", reject);
-  });
-
-const waitForHello = (socket: WebSocket): Promise<{ clients?: number }> =>
-  new Promise((resolve, reject) => {
     const onMessage = (payload: WebSocket.RawData): void => {
       try {
         const message = JSON.parse(payload.toString()) as { kind?: string; clients?: number };
         if (message.kind === "hello") {
           socket.off("error", onError);
           socket.off("message", onMessage);
-          resolve(message);
+          resolve({ socket, hello: message });
         }
       } catch (error) {
         reject(error);
@@ -232,17 +231,19 @@ try {
   let secondControl: WebSocket | null = null;
   let reconnectedControl: WebSocket | null = null;
   try {
-    firstControl = await connectControl(wsUrl);
-    const firstHello = await waitForHello(firstControl);
-    if (firstHello.clients !== 1) fail(`首个 Web Control hello 计数异常: ${firstHello.clients}`);
-    secondControl = await connectControl(wsUrl);
-    const secondHello = await waitForHello(secondControl);
+    const first = await connectControl(wsUrl);
+    firstControl = first.socket;
+    if (first.hello.clients !== 1) fail(`首个 Web Control hello 计数异常: ${first.hello.clients}`);
+    const second = await connectControl(wsUrl);
+    secondControl = second.socket;
+    const secondHello = second.hello;
     if (secondHello.clients !== 2)
       fail(`第二个 Web Control hello 计数异常: ${secondHello.clients}`);
     await closeControl(firstControl);
     firstControl = null;
-    reconnectedControl = await connectControl(wsUrl);
-    const reconnectHello = await waitForHello(reconnectedControl);
+    const reconnected = await connectControl(wsUrl);
+    reconnectedControl = reconnected.socket;
+    const reconnectHello = reconnected.hello;
     if (reconnectHello.clients !== 2) {
       fail(`Web Control 重连 hello 计数异常: ${reconnectHello.clients}`);
     }
