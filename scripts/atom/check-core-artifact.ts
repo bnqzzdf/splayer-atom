@@ -11,6 +11,7 @@ import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/no
 import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
 import type { CoreInfo } from "../../shared/types/core";
+import WebSocket from "ws";
 import {
   coreArtifactFileName,
   formatCoreBuildDate,
@@ -67,6 +68,41 @@ const waitForJson = async <T>(url: string): Promise<T> => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw lastError ?? new Error(`请求超时: ${url}`);
+};
+
+const connectControl = (url: string): Promise<WebSocket> =>
+  new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    socket.once("open", () => resolve(socket));
+    socket.once("error", reject);
+  });
+
+const waitForHello = (socket: WebSocket): Promise<{ clients?: number }> =>
+  new Promise((resolve, reject) => {
+    const onMessage = (payload: WebSocket.RawData): void => {
+      try {
+        const message = JSON.parse(payload.toString()) as { kind?: string; clients?: number };
+        if (message.kind === "hello") {
+          socket.off("error", onError);
+          socket.off("message", onMessage);
+          resolve(message);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const onError = (error: Error): void => {
+      socket.off("message", onMessage);
+      reject(error);
+    };
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
+
+const closeControl = async (socket: WebSocket | null): Promise<void> => {
+  if (!socket || socket.readyState === WebSocket.CLOSED) return;
+  socket.close();
+  await once(socket, "close").catch(() => {});
 };
 
 const tempDir = mkdtempSync(path.join(tmpdir(), "splayer-atom-core-artifact-"));
@@ -163,6 +199,7 @@ try {
   });
 
   const baseUrl = `http://127.0.0.1:${port}`;
+  const wsUrl = `ws://127.0.0.1:${port}/ws`;
   const info = await waitForJson<CoreInfo>(`${baseUrl}/api/info`).catch((error) =>
     fail(`Core 未能通过 /api/info 启动验收: ${String(error)}\n${output}`),
   );
@@ -190,6 +227,30 @@ try {
   if (!cacheDir.dir) fail("Core cache dir smoke 失败");
   const web = await fetch(`${baseUrl}/`);
   if (!web.ok || !(await web.text()).includes("<html")) fail("Web Control 根页 smoke 失败");
+
+  let firstControl: WebSocket | null = null;
+  let secondControl: WebSocket | null = null;
+  let reconnectedControl: WebSocket | null = null;
+  try {
+    firstControl = await connectControl(wsUrl);
+    const firstHello = await waitForHello(firstControl);
+    if (firstHello.clients !== 1) fail(`首个 Web Control hello 计数异常: ${firstHello.clients}`);
+    secondControl = await connectControl(wsUrl);
+    const secondHello = await waitForHello(secondControl);
+    if (secondHello.clients !== 2)
+      fail(`第二个 Web Control hello 计数异常: ${secondHello.clients}`);
+    await closeControl(firstControl);
+    firstControl = null;
+    reconnectedControl = await connectControl(wsUrl);
+    const reconnectHello = await waitForHello(reconnectedControl);
+    if (reconnectHello.clients !== 2) {
+      fail(`Web Control 重连 hello 计数异常: ${reconnectHello.clients}`);
+    }
+  } finally {
+    await closeControl(firstControl);
+    await closeControl(secondControl);
+    await closeControl(reconnectedControl);
+  }
 
   child.kill("SIGTERM");
   const [code, signal] = (await once(child, "exit")) as [number | null, NodeJS.Signals | null];

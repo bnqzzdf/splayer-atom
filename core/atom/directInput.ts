@@ -4,6 +4,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { writeExactHttpInput } from "@main/atom/exactInput";
+import { playerLog } from "@main/utils/logger";
 
 interface InFlightMaterialization {
   controller: AbortController;
@@ -62,7 +63,10 @@ export const materializeDirectInput = async (source: string): Promise<string> =>
 
   const controller = new AbortController();
   const promise = writeExactHttpInput(source, finalPath, controller.signal)
-    .then(() => finalPath)
+    .then(({ format }) => {
+      playerLog.debug(`Direct 在线输入格式探测: ${format} (${source})`);
+      return finalPath;
+    })
     .finally(() => inFlight.delete(source));
   inFlight.set(source, { controller, promise });
   return promise;
