@@ -5,8 +5,8 @@ import type { PersonalFmOptions } from "./personalFm";
 /** 播放器状态 */
 export type PlayerState = "idle" | "loading" | "playing" | "paused" | "stopped";
 
-/** 循环模式 */
-export type RepeatMode = "list" | "one";
+/** 循环模式：默认播放到队列末尾后停止 */
+export type RepeatMode = "off" | "list" | "one";
 
 /** 随机模式 */
 export type ShuffleMode = "off" | "on";

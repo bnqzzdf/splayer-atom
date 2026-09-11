@@ -29,6 +29,10 @@ const downloadComposableSource = readFileSync(
   new URL("../../src/composables/useDownload.ts", import.meta.url),
   "utf8",
 );
+const collectionPageSource = readFileSync(
+  new URL("../../src/pages/Collection.vue", import.meta.url),
+  "utf8",
+);
 
 test("Core download queue resolves sources without a renderer round-trip", () => {
   assert.match(managerSource, /resolveDownloadSource\(/);
@@ -105,6 +109,13 @@ test("Web Download requests use one Core client and Core directory picker", () =
   assert.doesNotMatch(downloadDirSource, /window\.api|hasHostCapability|isWebRemote/);
   assert.doesNotMatch(downloadStoreSource, /window\.api\.download\./);
   assert.doesNotMatch(downloadComposableSource, /window\.api\.download\./);
+});
+
+test("Album download reuses the Core batch queue for all managed online providers", () => {
+  assert.match(collectionPageSource, /buildDownloadQualityItems/);
+  assert.match(collectionPageSource, /enqueueDownloads\(collection\.value\.tracks/);
+  assert.match(collectionPageSource, /type === 'album'/);
+  assert.match(downloadComposableSource, /downloadClient\.startMany\(requests\)/);
 });
 
 test("Download jobs capture Control lyric preferences before entering Core", () => {

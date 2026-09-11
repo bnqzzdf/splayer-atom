@@ -14,6 +14,11 @@ interface EnqueueOptions {
   taskId?: string;
 }
 
+interface EnqueueManyOptions {
+  /** 批量下载时统一使用的音质 */
+  quality?: QualityLevel;
+}
+
 /** 可下载音质档位（展示顺序） */
 const DOWNLOAD_QUALITY_LEVELS: QualityLevel[] = ["hi-res", "lossless", "hq", "sq", "lq"];
 
@@ -105,11 +110,11 @@ export const useDownload = () => {
   };
 
   /** 批量下载 */
-  const enqueueMany = async (tracks: Track[]): Promise<void> => {
+  const enqueueMany = async (tracks: Track[], opts: EnqueueManyOptions = {}): Promise<void> => {
     try {
       const requests: DownloadRequest[] = [];
       for (const track of tracks) {
-        const req = await prepareRequest(track, {});
+        const req = await prepareRequest(track, { quality: opts.quality });
         if (req) requests.push(req);
       }
       const results = await downloadClient.startMany(requests);

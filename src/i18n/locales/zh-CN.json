@@ -482,6 +482,7 @@
       "empty": "没有可复制的内容"
     },
     "repeatMode": {
+      "off": "不循环",
       "list": "列表循环",
       "one": "单曲循环"
     },
@@ -1678,6 +1679,7 @@
     }
   },
   "collection": {
+    "downloadAlbum": "下载专辑",
     "totalDuration": "约 {time}",
     "unknownAlbum": "未知专辑",
     "empty": "暂无歌曲",

@@ -52,7 +52,7 @@ export const useStatusStore = defineStore(
     /** 当前播放索引 */
     const playIndex = ref(-1);
     /** 循环模式 */
-    const repeatMode = ref<RepeatMode>("list");
+    const repeatMode = ref<RepeatMode>("off");
     /** 随机模式 */
     const shuffleMode = ref<ShuffleMode>("off");
     /** 心动模式 */

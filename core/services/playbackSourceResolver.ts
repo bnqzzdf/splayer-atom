@@ -43,6 +43,10 @@ const TIDAL_QUALITY: Record<PluginQuality, string> = {
 export interface ResolvedPlaybackSource {
   source: string;
   provider: "local" | "cache" | "streaming" | "official" | "plugin" | "trial";
+  /** Provider 返回的容器/编码提示；下载路径可据此选择扩展名。 */
+  format?: string;
+  /** Provider 返回的已知字节数。 */
+  size?: number;
   cacheAfterLoad?: (materializedSource?: string) => Promise<string | null>;
 }
 
@@ -317,14 +321,23 @@ const resolveTidal = async (
   const resolved = (await callTidal("track_getStreamUrl", {
     track_id: track.id,
     quality: TIDAL_QUALITY[quality],
-  })) as { streamUrl?: string; localPath?: string };
-  if (resolved.localPath) return { source: resolved.localPath, provider: "official" };
+  })) as {
+    streamUrl?: string;
+    localPath?: string;
+    codec?: string;
+    size?: number;
+  };
+  if (resolved.localPath) {
+    return { source: resolved.localPath, provider: "official", format: "mp4", size: resolved.size };
+  }
   if (!resolved.streamUrl) {
     throw sourceError(ErrorCode.URL_RESOLVE_FAILED, `TIDAL track unavailable: ${track.id}`);
   }
   return {
     source: resolved.streamUrl,
     provider: "official",
+    format: resolved.codec,
+    size: resolved.size,
     cacheAfterLoad: cacheAfterLoad(track, cacheKey, resolved.streamUrl),
   };
 };
@@ -359,7 +372,8 @@ export const resolveDownloadSource = async (
     return { source: (await resolveQobuz(track, quality, null)).source };
   }
   if (track.source === "tidal") {
-    return { source: (await resolveTidal(track, quality, null)).source };
+    const resolved = await resolveTidal(track, quality, null);
+    return { source: resolved.source, format: resolved.format, size: resolved.size };
   }
   if (track.source === "qqmusic" || track.source === "kugou") {
     return { source: (await resolvePluginCompatibility(track, quality, null)).source };

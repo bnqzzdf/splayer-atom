@@ -494,6 +494,7 @@
       "empty": "Nothing to copy"
     },
     "repeatMode": {
+      "off": "No repeat",
       "list": "Repeat all",
       "one": "Repeat one"
     },
@@ -1690,6 +1691,7 @@
     }
   },
   "collection": {
+    "downloadAlbum": "Download album",
     "totalDuration": "About {time}",
     "unknownAlbum": "Unknown Album",
     "empty": "No songs",

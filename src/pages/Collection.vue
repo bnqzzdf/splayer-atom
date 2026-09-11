@@ -8,6 +8,9 @@ import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { useCopyText } from "@/composables/useCopyText";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
+import { buildDownloadQualityItems, useDownload } from "@/composables/useDownload";
+import { useSettingsStore } from "@/stores/settings";
+import type { QualityLevel } from "@/utils/quality";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
 import * as player from "@/core/player";
@@ -20,11 +23,14 @@ import IconLucideCalendar from "~icons/lucide/calendar";
 import IconLucideUser from "~icons/lucide/user";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconCopy from "~icons/lucide/copy";
+import IconLucideDownload from "~icons/lucide/download";
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { copy } = useCopyText();
+const { enqueueMany: enqueueDownloads } = useDownload();
+const settings = useSettingsStore();
 
 const source = route.params.source as TrackSource;
 const type = route.params.type as CollectionType;
@@ -149,6 +155,32 @@ const handlePlayAll = () => {
   player.playFrom(collection.value.tracks, 0, playbackContext.value);
 };
 
+const downloadQualityItems = computed(() =>
+  buildDownloadQualityItems(t("download.qualityDefault"), "download-album:"),
+);
+
+const handleDownloadAlbum = (key: string): void => {
+  if (!collection.value || source === "local") return;
+  const quality = key.slice("download-album:".length);
+  void enqueueDownloads(collection.value.tracks, {
+    quality: quality ? (quality as QualityLevel) : undefined,
+  });
+};
+
+const downloadAlbumAction = computed(() =>
+  createControlAction({
+    id: "downloadAlbum",
+    label: t("collection.downloadAlbum"),
+    icon: markRaw(IconLucideDownload),
+    visible: type === "album" && source !== "local" && settings.system.download.enabled,
+    enabled: !!collection.value?.tracks.length,
+    coreCommand: "download.start-many",
+    children: downloadQualityItems.value.map((item) =>
+      createControlAction({ id: item.key, label: item.label, coreCommand: "download.start-many" }),
+    ),
+  }),
+);
+
 const searchQuery = ref("");
 
 /** 歌曲列表引用 */
@@ -192,6 +224,7 @@ const collectionActions = computed<ControlAction[]>(() => {
       label: t("songList.batch.manage"),
       icon: markRaw(IconLucideListChecks),
     }),
+    downloadAlbumAction.value,
     createControlAction({
       id: "edit",
       label: editLabel.value,
@@ -244,7 +277,8 @@ const subscribeAction = computed(() =>
 const moreMenuItems = computed(() =>
   controlActionsToMenuItems(
     collectionActions.value.filter(
-      (action) => action.id !== "playAll" && action.id !== "toggleSubscribe",
+      (action) =>
+        action.id !== "playAll" && action.id !== "toggleSubscribe" && action.id !== "downloadAlbum",
     ),
   ),
 );
@@ -256,6 +290,8 @@ const handleCollectionAction = (key: string): void => {
       break;
     case "toggleSubscribe":
       void subscribe.toggle();
+      break;
+    case "downloadAlbum":
       break;
     case "batchManage":
       songListRef.value?.enterBatch();
@@ -274,6 +310,9 @@ const handleCollectionAction = (key: string): void => {
       break;
     case "copyUrl":
       copy(getCollectionShareUrl(collection.value));
+      break;
+    default:
+      if (key.startsWith("download-album:")) handleDownloadAlbum(key);
       break;
   }
 };
@@ -401,6 +440,19 @@ onBeforeUnmount(() => {
                 </template>
                 {{ t("common.playAll") }}
               </SButton>
+              <SDropdownMenu
+                v-if="downloadAlbumAction.visible"
+                :items="controlActionsToMenuItems(downloadAlbumAction.children ?? [])"
+                align="start"
+                @select="handleCollectionAction"
+              >
+                <template #trigger>
+                  <SButton variant="secondary" round :disabled="!downloadAlbumAction.enabled">
+                    <template #icon><IconLucideDownload /></template>
+                    {{ t("collection.downloadAlbum") }}
+                  </SButton>
+                </template>
+              </SDropdownMenu>
               <SButton
                 v-if="subscribeAction?.visible"
                 variant="secondary"

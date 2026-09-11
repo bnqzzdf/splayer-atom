@@ -888,7 +888,7 @@ export const buildHeadlessRoutes = (): Hono => {
       !Array.isArray(body?.items) ||
       !Number.isInteger(index) ||
       (body?.originalItems !== null && !Array.isArray(body?.originalItems)) ||
-      (body?.repeat !== "list" && body?.repeat !== "one") ||
+      (body?.repeat !== "off" && body?.repeat !== "list" && body?.repeat !== "one") ||
       (body?.shuffle !== "off" && body?.shuffle !== "on")
     ) {
       return c.json({ error: "valid legacy queue snapshot required" }, 400);
@@ -1020,8 +1020,8 @@ export const buildHeadlessRoutes = (): Hono => {
   });
   api.post("/session/repeat", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { mode?: RepeatMode } | null;
-    if (body?.mode !== "list" && body?.mode !== "one")
-      return c.json({ error: "mode must be list or one" }, 400);
+    if (body?.mode !== "off" && body?.mode !== "list" && body?.mode !== "one")
+      return c.json({ error: "mode must be off, list or one" }, 400);
     return c.json(setRepeat(body.mode));
   });
   api.post("/session/shuffle", async (c) => {

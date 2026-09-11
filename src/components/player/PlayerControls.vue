@@ -97,7 +97,7 @@ const hasTrack = computed(() => !!media.track);
       <template #icon>
         <IconLucideInfinity v-if="fmMode" />
         <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
-        <IconLucideRepeat v-else />
+        <IconLucideRepeat v-else :class="repeatMode === 'off' ? 'opacity-40' : undefined" />
       </template>
     </SButton>
   </div>

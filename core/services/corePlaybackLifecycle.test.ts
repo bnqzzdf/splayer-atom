@@ -60,3 +60,15 @@ test("Personal FM natural lifecycle ignores stale repeat-one and keeps provider 
   assert.ok(direct);
   assert.match(direct, /alignPersonalFmPool\(prepared\.queueIndex\)/);
 });
+
+test("No-repeat playback stops at the final queue item", () => {
+  assert.match(sessionSource, /let repeat: RepeatMode = "off"/);
+  const next = sessionSource.split(
+    "export const next = async (loadCurrent = true): Promise<boolean> => {",
+  )[1];
+  assert.ok(next);
+  const stopAtEnd = next.split("const target = index + 1 >= queue.length ? 0 : index + 1")[0];
+  assert.match(stopAtEnd, /index \+ 1 >= queue\.length && repeat === "off"/);
+  assert.match(stopAtEnd, /active = false/);
+  assert.match(stopAtEnd, /nowPlaying\.onPlayStateChange\("stopped"\)/);
+});

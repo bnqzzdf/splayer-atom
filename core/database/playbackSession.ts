@@ -21,7 +21,11 @@ const parseQueue = (value: string | null): PlaybackQueueItem[] | null => {
   return parsed as PlaybackQueueItem[];
 };
 
-const parseRepeat = (value: string): RepeatMode => (value === "one" ? "one" : "list");
+const parseRepeat = (value: string): RepeatMode => {
+  if (value === "one") return "one";
+  if (value === "list") return "list";
+  return "off";
+};
 const parseShuffle = (value: string): ShuffleMode => (value === "on" ? "on" : "off");
 
 /** playback session schema 属于 Atom delta，由本模块按需确保，不侵入 upstream library schema。 */

@@ -90,7 +90,7 @@ import {
 let queue: PlaybackQueueItem[] = [];
 let originalQueue: PlaybackQueueItem[] | null = null;
 let index = -1;
-let repeat: RepeatMode = "list";
+let repeat: RepeatMode = "off";
 let shuffle: ShuffleMode = "off";
 let active = false;
 let mode: PlaybackSessionMode = "queue";
@@ -1001,6 +1001,14 @@ export const next = async (loadCurrent = true): Promise<boolean> => {
     publish();
     await selectIndex(1, loadCurrent, true);
     return true;
+  }
+  if (index + 1 >= queue.length && repeat === "off") {
+    invalidatePlaybackPreload();
+    stopCurrentOutputBestEffort();
+    active = false;
+    nowPlaying.onPlayStateChange("stopped");
+    publish();
+    return false;
   }
   const target = index + 1 >= queue.length ? 0 : index + 1;
   await selectIndex(target, loadCurrent, true);

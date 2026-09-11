@@ -167,7 +167,8 @@ const selectOutput = (): void => {
 
 const toggleRepeat = (): void => {
   void run(async () => {
-    session.value = await headlessClient.setRepeat(session.value.repeat === "one" ? "list" : "one");
+    const cycle = { off: "list", list: "one", one: "off" } as const;
+    session.value = await headlessClient.setRepeat(cycle[session.value.repeat]);
   });
 };
 
@@ -241,7 +242,13 @@ onUnmounted(() => {
       <div class="mode-row">
         <button :class="{ active: session.shuffle === 'on' }" @click="toggleShuffle">随机</button>
         <button :class="{ active: session.repeat === 'one' }" @click="toggleRepeat">
-          {{ session.repeat === "one" ? "单曲循环" : "列表循环" }}
+          {{
+            session.repeat === "one"
+              ? "单曲循环"
+              : session.repeat === "list"
+                ? "列表循环"
+                : "不循环"
+          }}
         </button>
         <button @click="headlessClient.stop()">停止</button>
       </div>

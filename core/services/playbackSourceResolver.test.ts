@@ -90,6 +90,7 @@ describe("nextPlaybackPreloadIndex", () => {
 
   it("does not pre-resolve repeat-one, one-item, or shuffle rollover candidates", () => {
     assert.equal(nextPlaybackPreloadIndex(0, 3, "one", "off"), null);
+    assert.equal(nextPlaybackPreloadIndex(2, 3, "off", "off"), null);
     assert.equal(nextPlaybackPreloadIndex(0, 1, "list", "off"), null);
     assert.equal(nextPlaybackPreloadIndex(2, 3, "list", "on"), null);
   });

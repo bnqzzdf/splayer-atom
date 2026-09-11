@@ -501,7 +501,7 @@ const onQueueEnded = async (): Promise<void> => {
 
 /**
  * 设置循环模式
- * @param mode - list（列表循环）、one（单曲循环）
+ * @param mode - off（不循环）、list（列表循环）、one（单曲循环）
  */
 export const setRepeatMode = (mode: RepeatMode): void => {
   const status = useStatusStore();
@@ -512,10 +512,10 @@ export const setRepeatMode = (mode: RepeatMode): void => {
   });
 };
 
-/** 循环切换循环模式：list → one → list */
+/** 循环切换循环模式：off → list → one → off */
 export const cycleRepeatMode = (): void => {
   const status = useStatusStore();
-  const cycle: RepeatMode[] = ["list", "one"];
+  const cycle: RepeatMode[] = ["off", "list", "one"];
   const nextIndex = (cycle.indexOf(status.repeatMode) + 1) % cycle.length;
   setRepeatMode(cycle[nextIndex]);
 };

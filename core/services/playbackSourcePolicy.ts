@@ -66,6 +66,7 @@ export const nextPlaybackPreloadIndex = (
   shouldSkip: (candidateIndex: number) => boolean = () => false,
 ): number | null => {
   if (index < 0 || queueLength <= 1 || repeat === "one") return null;
+  if (repeat === "off" && index >= queueLength - 1) return null;
   let candidateIndex = index;
   for (let checked = 0; checked < queueLength - 1; checked++) {
     if (shuffle === "on" && candidateIndex >= queueLength - 1) return null;
