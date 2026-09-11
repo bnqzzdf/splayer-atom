@@ -52,20 +52,52 @@ async fn call_qobuz(
     }
 }
 
-async fn call_tidal(
+/// 一次 provider 调用及其可能产生的认证更新。
+pub struct ProviderCallResult {
+    pub value: Value,
+    pub refreshed_tokens: Option<(String, Option<String>, Option<u64>)>,
+}
+
+async fn call_provider_with_refresh(
+    platform: &str,
     action: &str,
-    auth: HashMap<String, Value>,
+    auth: Value,
+    params: Value,
+) -> Result<ProviderCallResult, StreamingError> {
+    let auth = object_map(auth, "auth")?;
+    let params = object_map(params, "params")?;
+
+    match platform {
+        "qobuz" => Ok(ProviderCallResult {
+            value: call_qobuz(action, auth, params).await?,
+            refreshed_tokens: None,
+        }),
+        "tidal" => {
+            let client = TidalClient::new(
+                auth_string(&auth, &["accessToken", "access_token"]),
+                auth_string(&auth, &["refreshToken", "refresh_token"]),
+                auth_string(&auth, &["userId", "user_id"]),
+                auth_string(&auth, &["countryCode", "country_code"]),
+                auth_string(&auth, &["clientId", "client_id"]),
+                auth_string(&auth, &["clientSecret", "client_secret"]),
+            );
+            let value = call_tidal_with_client(&client, action, params).await?;
+            Ok(ProviderCallResult {
+                value,
+                refreshed_tokens: client.take_refreshed_tokens(),
+            })
+        }
+        _ => Err(StreamingError::InvalidParam(format!(
+            "Unsupported streaming provider: {platform}",
+        ))),
+    }
+}
+
+async fn call_tidal_with_client(
+    client: &TidalClient,
+    action: &str,
     params: HashMap<String, Value>,
 ) -> Result<Value, StreamingError> {
-    let client = TidalClient::new(
-        auth_string(&auth, &["accessToken", "access_token"]),
-        auth_string(&auth, &["refreshToken", "refresh_token"]),
-        auth_string(&auth, &["userId", "user_id"]),
-        auth_string(&auth, &["countryCode", "country_code"]),
-        auth_string(&auth, &["clientId", "client_id"]),
-        auth_string(&auth, &["clientSecret", "client_secret"]),
-    );
-
     match action {
         "auth_authorize" | "authorize" => client.auth_authorize(&params).await,
         "auth_exchange" | "exchange" => client.auth_exchange(&params).await,
@@ -101,16 +133,18 @@ pub async fn call_provider(
     auth: Value,
     params: Value,
 ) -> Result<Value, StreamingError> {
-    let auth = object_map(auth, "auth")?;
-    let params = object_map(params, "params")?;
+    Ok(call_provider_with_refresh(platform, action, auth, params)
+        .await?
+        .value)
+}
 
-    match platform {
-        "qobuz" => call_qobuz(action, auth, params).await,
-        "tidal" => call_tidal(action, auth, params).await,
-        _ => Err(StreamingError::InvalidParam(format!(
-            "Unsupported streaming provider: {platform}",
-        ))),
-    }
+pub async fn call_provider_with_refresh_result(
+    platform: &str,
+    action: &str,
+    auth: Value,
+    params: Value,
+) -> Result<ProviderCallResult, StreamingError> {
+    call_provider_with_refresh(platform, action, auth, params).await
 }
 
 #[cfg(test)]

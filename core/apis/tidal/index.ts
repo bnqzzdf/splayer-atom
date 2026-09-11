@@ -76,6 +76,23 @@ const persistAuthResponse = (
   return response;
 };
 
+const unwrapRefreshedResponse = (value: unknown): unknown => {
+  const envelope = asRecord(value);
+  const refreshed = asRecord(envelope.refreshedAuth);
+  const accessToken = stringValue(refreshed.accessToken);
+  if (!accessToken) return value;
+
+  const current = getTidalAuth();
+  if (!current) return value;
+  setTidalAuth({
+    ...current,
+    accessToken,
+    refreshToken: stringValue(refreshed.refreshToken) ?? current.refreshToken,
+    expiresAt: expiresAtMs(refreshed.expiresAt, refreshed.expiresIn) ?? current.expiresAt,
+  });
+  return envelope.result;
+};
+
 const authStatus = async (): Promise<unknown> => {
   const projection = getTidalAuthStatus();
   if (!getTidalAuth()) return projection;
@@ -104,7 +121,9 @@ export const callTidal = async (name: string, params: TidalParams = {}): Promise
     name === "track_getStreamUrl" || name === "song_url"
       ? { ...params, _materialize_dir: runtimeEnvironment.tempDir }
       : params;
-  const response = await callStreamingNative("tidal", name, nativeAuth(), nativeParams);
+  const response = unwrapRefreshedResponse(
+    await callStreamingNative("tidal", name, nativeAuth(), nativeParams),
+  );
   if (
     name === "auth_exchange" ||
     name === "exchange" ||

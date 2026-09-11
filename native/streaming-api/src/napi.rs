@@ -1,7 +1,7 @@
 use napi_derive::napi;
-use serde_json::Value;
+use serde_json::{json, Value};
 
-use crate::provider::call_provider;
+use crate::provider::call_provider_with_refresh_result;
 
 /// Node Core 的 Qobuz/TIDAL 原生协议入口。
 ///
@@ -14,7 +14,18 @@ pub async fn call_streaming_provider(
     auth: Value,
     params: Value,
 ) -> napi::Result<Value> {
-    call_provider(&platform, &action, auth, params)
+    let result = call_provider_with_refresh_result(&platform, &action, auth, params)
         .await
-        .map_err(|error| napi::Error::from_reason(error.to_string()))
+        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
+    if let Some((access_token, refresh_token, expires_at)) = result.refreshed_tokens {
+        return Ok(json!({
+            "result": result.value,
+            "refreshedAuth": {
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
+                "expiresAt": expires_at,
+            }
+        }));
+    }
+    Ok(result.value)
 }
