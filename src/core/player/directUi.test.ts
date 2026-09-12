@@ -77,6 +77,10 @@ test("Web Control exposes one grouped Core-backed output selector", () => {
   assert.match(outputSelectorSource, /kind: "alsa"/);
   assert.match(outputSelectorSource, /kind: "diretta"/);
   assert.match(outputSelectorSource, /kind: "upnp"/);
+  assert.match(
+    outputSelectorSource,
+    /\.filter\(\(group\) => group\.kind !== "diretta" \|\| group\.devices\.length > 0\)/,
+  );
   assert.match(outputSelectorSource, /await refreshDevices\(\)/);
   assert.match(outputSelectorSource, /await switchDevice\(deviceId\)/);
   assert.doesNotMatch(outputSelectorSource, /services\/client|scanDiretta|window\.api/);

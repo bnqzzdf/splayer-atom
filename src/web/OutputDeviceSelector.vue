@@ -27,7 +27,7 @@ const groups = computed<OutputGroup[]>(() => {
     const kind = getOutputKind(device.id);
     if (kind) byKind[kind].push(device);
   }
-  return [
+  const allGroups: OutputGroup[] = [
     {
       kind: "alsa",
       label: t("settings.outputDevice.groups.alsa"),
@@ -47,6 +47,7 @@ const groups = computed<OutputGroup[]>(() => {
       refreshable: true,
     },
   ];
+  return allGroups.filter((group) => group.kind !== "diretta" || group.devices.length > 0);
 });
 
 const refreshDiscovery = async (): Promise<void> => {
