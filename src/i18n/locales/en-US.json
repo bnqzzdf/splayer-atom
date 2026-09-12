@@ -1634,8 +1634,8 @@
       "label": "Smart Foldering",
       "description": "Organize downloads into subfolders by rule",
       "none": "No subfolders",
-      "artist": "By artist",
-      "artistAlbum": "By artist / album"
+      "album": "By album artist / album",
+      "albumDisc": "By album artist / album / CD"
     },
     "downloadOverwrite": {
       "label": "Duplicate Handling",

@@ -145,6 +145,8 @@ interface TidalTrack {
   image?: TidalImageField;
   imageCover?: TidalImageField;
   trackNumber?: number;
+  volumeNumber?: number;
+  discNumber?: number;
   /** [FIX] TIDAL 音质档位：LOW / HIGH / LOSSLESS / HI_RES / HI_RES_LOSSLESS */
   audioQuality?: string;
   /** TIDAL 声音模式数组（STEREO / DOLBY_ATMOS 等） */
@@ -359,12 +361,17 @@ export const songToTrack = (track: TidalTrack): Track => {
           id: String(track.album.id ?? ""),
           name: track.album.title ?? "",
           cover: resolveCover(track.album, coverSizePair("tidal").small),
+          artist:
+            typeof track.album.artist === "string"
+              ? track.album.artist
+              : track.album.artist?.name,
         }
       : undefined,
     duration: (track.duration ?? 0) * 1000,
     cover: resolveCover(track, coverSizePair("tidal").small),
     coverOriginal: resolveCover(track, coverSizePair("tidal").large),
     track: track.trackNumber,
+    disc: track.volumeNumber ?? track.discNumber,
     quality: pickQuality(track),
   };
 };

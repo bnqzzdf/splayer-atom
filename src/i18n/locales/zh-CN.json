@@ -1622,8 +1622,8 @@
       "label": "文件智能分类",
       "description": "下载时按规则归入子文件夹",
       "none": "不分文件夹",
-      "artist": "按歌手分文件夹",
-      "artistAlbum": "按歌手 / 专辑分文件夹"
+      "album": "按专辑艺术家 / 专辑分文件夹",
+      "albumDisc": "按专辑艺术家 / 专辑 / CD 分文件夹"
     },
     "downloadOverwrite": {
       "label": "重名处理",

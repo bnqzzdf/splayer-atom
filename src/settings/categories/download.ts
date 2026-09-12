@@ -56,7 +56,7 @@ const downloadCategory: SettingCategory = {
             { value: "{artist} - {title}", labelKey: "settings.downloadFileTemplate.artistTitle" },
             { value: "{title} - {artist}", labelKey: "settings.downloadFileTemplate.titleArtist" },
           ],
-          defaultValue: "{artist} - {title}",
+          defaultValue: "{title}",
         },
         {
           key: "downloadFolderScheme",
@@ -64,10 +64,10 @@ const downloadCategory: SettingCategory = {
           binding: { store: "settings", path: "system.download.folderScheme" },
           options: [
             { value: "none", labelKey: "settings.downloadFolderScheme.none" },
-            { value: "artist", labelKey: "settings.downloadFolderScheme.artist" },
-            { value: "artist-album", labelKey: "settings.downloadFolderScheme.artistAlbum" },
+            { value: "album", labelKey: "settings.downloadFolderScheme.album" },
+            { value: "album-disc", labelKey: "settings.downloadFolderScheme.albumDisc" },
           ],
-          defaultValue: "none",
+          defaultValue: "album",
         },
         {
           key: "downloadOverwrite",

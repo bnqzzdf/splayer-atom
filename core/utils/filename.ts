@@ -8,8 +8,11 @@ import type { DownloadFolderScheme } from "@shared/types/download";
 /** 模板占位符取值 */
 interface TemplateVars {
   artist: string;
+  albumArtist?: string;
   title: string;
   album: string;
+  track?: number;
+  disc?: number;
 }
 
 /** 文件名非法字符 */
@@ -24,6 +27,17 @@ export const sanitizeSegment = (name: string): string =>
     .replace(/^\.+|\.+$/g, "")
     .trim();
 
+/** 按 UTF-8 字节数截断，避免多字节字符被截断成非法字符串。 */
+export const truncateUtf8 = (value: string, maxBytes: number): string => {
+  let result = value;
+  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  return result.replace(/[ ._-]+$/, "").trim();
+};
+
+/** 限制文件名总长度，同时保留扩展名。 */
+export const truncateFilename = (baseName: string, ext: string, maxBytes = 255): string =>
+  truncateUtf8(baseName, Math.max(1, maxBytes - Buffer.byteLength(ext, "utf8")));
+
 /** 填充占位符 {artist} {title} {album} */
 const fillTemplate = (template: string, vars: TemplateVars): string =>
   template
@@ -33,13 +47,18 @@ const fillTemplate = (template: string, vars: TemplateVars): string =>
 
 /** 智能分类对应的子文件夹段（清洗后丢弃空段） */
 const folderSegments = (scheme: DownloadFolderScheme, vars: TemplateVars): string[] => {
+  const albumArtist = vars.albumArtist || vars.artist || "Unknown Artist";
+  const album = vars.album || "Unknown Album";
+  const legacyScheme = scheme as string;
   const raw =
-    scheme === "artist"
-      ? [vars.artist]
-      : scheme === "artist-album"
-        ? [vars.artist, vars.album]
+    scheme === "album" || legacyScheme === "artist-album"
+      ? [albumArtist, album]
+      : scheme === "album-disc"
+        ? [albumArtist, album, vars.disc && vars.disc > 0 ? `CD ${vars.disc}` : ""]
+        : legacyScheme === "artist"
+          ? [vars.artist || "Unknown Artist"]
         : [];
-  return raw.map(sanitizeSegment).filter(Boolean);
+  return raw.map((segment) => truncateUtf8(sanitizeSegment(segment), 255)).filter(Boolean);
 };
 
 /**
@@ -56,9 +75,16 @@ export const renderDownloadPath = (
   fileTemplate: string,
   vars: TemplateVars,
 ): { relDir: string; baseName: string } => {
-  const baseName =
+  const titleName =
     sanitizeSegment(fillTemplate(fileTemplate, vars)) || sanitizeSegment(vars.title) || "untitled";
-  return { relDir: folderSegments(scheme, vars).join("/"), baseName };
+  const numberPrefix =
+    vars.track && vars.track > 0
+      ? `${vars.disc && vars.disc > 0 ? `${String(vars.disc).padStart(2, "0")}-` : ""}${String(vars.track).padStart(2, "0")} `
+      : "";
+  return {
+    relDir: folderSegments(scheme, vars).join("/"),
+    baseName: `${numberPrefix}${titleName}`,
+  };
 };
 
 /**

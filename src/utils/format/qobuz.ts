@@ -90,6 +90,8 @@ interface QobuzTrack {
   streamable?: boolean;
   isrc?: string;
   track_number?: number;
+  media_number?: number;
+  disc_number?: number;
 }
 
 interface QobuzAlbum {
@@ -185,6 +187,7 @@ export const songToTrack = (track: QobuzTrack): Track => {
           id: String(album.id ?? ""),
           name: album.title ?? "",
           cover: withCoverSize(cover, coverSizePair("qobuz").small),
+          artist: album.artist?.name,
         }
       : undefined,
     duration: (track.duration ?? 0) * 1000,
@@ -192,6 +195,7 @@ export const songToTrack = (track: QobuzTrack): Track => {
     coverOriginal,
     quality: pickQuality(track),
     track: track.track_number,
+    disc: track.media_number ?? track.disc_number,
   };
 };
 

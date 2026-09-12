@@ -16,7 +16,12 @@ import { downloadLog } from "@main/utils/logger";
 import { getEngine } from "@main/services/engine";
 import { fetchBytes } from "@main/utils/fetchBytes";
 import { resolveDownloadSource } from "@main/services/playbackSourceResolver";
-import { renderDownloadPath, dedupePath, resolveExtension } from "@main/utils/filename";
+import {
+  renderDownloadPath,
+  dedupePath,
+  resolveExtension,
+  truncateFilename,
+} from "@main/utils/filename";
 import * as db from "@main/database/downloads";
 import { ErrorCode } from "@shared/types/errors";
 import type { JsTagWriteRequest } from "@splayer/audio-engine";
@@ -141,7 +146,10 @@ const applyTags = async (req: DownloadRequest, filePath: string): Promise<boolea
   if (tagOptions.embedMeta) {
     writeRequest.title = req.track.title;
     writeRequest.artist = artistString(req);
+    writeRequest.albumArtist = req.track.album?.artist || artistString(req);
     if (req.track.album?.name) writeRequest.album = req.track.album.name;
+    writeRequest.trackNumber = req.track.track;
+    writeRequest.discNumber = req.track.disc;
     hasWrite = true;
   }
   if (tagOptions.embedLyric && req.lyricText) {
@@ -211,16 +219,19 @@ const runTask = async (
       store.get("download.fileTemplate"),
       {
         artist: artistString(req),
+        albumArtist: req.track.album?.artist,
         title: req.track.title,
         album: req.track.album?.name ?? "",
+        track: req.track.track,
+        disc: req.track.disc,
       },
     );
     const targetDir = path.join(downloadDir, relDir);
-    const finalNoExt = path.join(targetDir, baseName);
     const policy = store.get("download.overwritePolicy");
 
     // skip 策略：用预估扩展名提前命中已存在文件则跳过
     const guessExt = resolveExtension(req.declaredFormat, null, audioUrl);
+    const finalNoExt = path.join(targetDir, truncateFilename(baseName, guessExt));
     if (policy === "skip" && fs.existsSync(`${finalNoExt}${guessExt}`)) {
       task.status = "done";
       task.filePath = `${finalNoExt}${guessExt}`;

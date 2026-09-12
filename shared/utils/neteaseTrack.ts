@@ -9,6 +9,8 @@ interface NeteaseTrackAlbum {
   id: number | string;
   name: string;
   picUrl?: string;
+  artist?: string;
+  artists?: NeteaseTrackArtist[];
 }
 
 interface NeteaseTrackQuality {
@@ -85,7 +87,16 @@ export const neteaseSongToTrack = (song: NeteaseTrackSource): Track => {
     title: song.name,
     comment: aliases?.find((value) => value?.trim()) ?? undefined,
     artists: artists.map((artist) => ({ id: String(artist.id), name: artist.name })),
-    album: album ? { id: String(album.id), name: album.name, cover } : undefined,
+    album: album
+      ? {
+          id: String(album.id),
+          name: album.name,
+          cover,
+          artist:
+            album.artist ??
+            (album.artists?.map((artist) => artist.name).filter(Boolean).join(" / ") || undefined),
+        }
+      : undefined,
     duration: song.dt ?? song.duration ?? 0,
     cover,
     coverOriginal: withNeteasePicSize(album?.picUrl, 1024),

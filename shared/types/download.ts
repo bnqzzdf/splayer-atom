@@ -9,8 +9,8 @@ import type { PluginQuality } from "./plugin";
 /** 下载歌词文件保存格式：逐行 LRC / 逐字增强 LRC */
 export type DownloadLyricFormat = "lrc" | "enhanced-lrc";
 
-/** 下载文件智能分类：不分文件夹 / 按歌手 / 按歌手再按专辑 */
-export type DownloadFolderScheme = "none" | "artist" | "artist-album";
+/** 下载文件智能分类：不分文件夹 / 按专辑艺术家与专辑 / 追加碟片目录 */
+export type DownloadFolderScheme = "none" | "album" | "album-disc";
 
 /** 下载任务状态 */
 export type DownloadStatus =

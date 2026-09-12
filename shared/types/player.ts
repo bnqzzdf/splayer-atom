@@ -115,6 +115,8 @@ export interface Track {
   album?: Album;
   /** 曲目编号 */
   track?: number;
+  /** 碟片编号 */
+  disc?: number;
   /** 时长（毫秒） */
   duration: number;
   /** 封面 */
