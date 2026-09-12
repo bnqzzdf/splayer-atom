@@ -41,6 +41,7 @@
     "build:core": "vite build -c scripts/atom/vite.core.config.ts",
     "build:web": "vite build -c vite.config.ts",
     "build": "rimraf out/core out/renderer out/native && pnpm build:native && pnpm typecheck && pnpm build:core && pnpm build:web",
+    "package:core:debian11": "bash scripts/atom/build-debian11-bundled.sh",
     "start": "node out/core/index.js",
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "package:core": "tsx scripts/atom/build-core-system.ts",

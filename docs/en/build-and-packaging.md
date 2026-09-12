@@ -35,6 +35,17 @@ Bundled runtime:
 pnpm package:core:bundled
 ```
 
+For a glibc-compatible bundled artifact, use the pinned Debian 11 builder. It keeps
+`node_modules` and the pnpm store in Docker volumes, rebuilds `better-sqlite3` inside Debian 11,
+and rejects native artifacts requiring newer than glibc 2.31:
+
+```bash
+pnpm package:core:debian11
+```
+
+The builder uses the Tsinghua Debian main/updates mirrors and a fixed Debian security snapshot for
+explicit package installation only. It does not install or enable unattended security updates.
+
 Artifacts:
 
 ```text
