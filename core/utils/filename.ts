@@ -84,7 +84,7 @@ export const renderDownloadPath = (
     sanitizeSegment(fillTemplate(fileTemplate, vars)) || sanitizeSegment(vars.title) || "untitled";
   const numberPrefix =
     vars.track && vars.track > 0
-      ? `${vars.disc && vars.disc > 1 ? `${String(vars.disc).padStart(2, "0")}-` : ""}${String(vars.track).padStart(2, "0")} `
+      ? `${vars.disc && vars.disc > 0 ? `${String(vars.disc).padStart(2, "0")}-` : ""}${String(vars.track).padStart(2, "0")} `
       : "";
   return {
     relDir: folderSegments(scheme, vars).join("/"),
@@ -101,9 +101,14 @@ export const renderDownloadPath = (
 export const dedupePath = (pathWithoutExt: string, ext: string): string => {
   const directory = path.dirname(pathWithoutExt);
   const baseName = path.basename(pathWithoutExt);
-  let target = path.join(directory, `${truncateFilename(baseName, ext)}${ext}`);
+  const buildTarget = (suffix: string): string => {
+    const suffixBytes = Buffer.byteLength(suffix, "utf8");
+    const baseBudget = Math.max(1, 255 - Buffer.byteLength(ext, "utf8") - suffixBytes);
+    return path.join(directory, `${truncateUtf8(baseName, baseBudget)}${suffix}${ext}`);
+  };
+  let target = buildTarget("");
   for (let seq = 2; existsSync(target); seq++) {
-    target = path.join(directory, `${truncateFilename(`${baseName} (${seq})`, ext)}${ext}`);
+    target = buildTarget(` (${seq})`);
   }
   return target;
 };

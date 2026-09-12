@@ -276,6 +276,14 @@ const runTask = async (
 
     const ext = resolveExtension(req.declaredFormat, mime, audioUrl);
     const finalNoExt = path.join(targetDir, truncateFilename(baseName, ext));
+    if (policy === "skip" && fs.existsSync(`${finalNoExt}${ext}`)) {
+      await fsp.unlink(partPath).catch(() => {});
+      task.status = "done";
+      task.filePath = `${finalNoExt}${ext}`;
+      task.finishedAt = Date.now();
+      broadcastState(task);
+      return;
+    }
     const finalPath = policy === "rename" ? dedupePath(finalNoExt, ext) : `${finalNoExt}${ext}`;
     await moveFile(partPath, finalPath);
 

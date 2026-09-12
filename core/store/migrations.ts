@@ -13,7 +13,7 @@ export interface Migration {
  */
 export const migrations: Migration[] = [
   {
-    version: 1,
+    version: 2,
     migrate: (data) => {
       const scheme = data.download.folderScheme as string;
       if (scheme === "artist" || scheme === "artist-album") {
