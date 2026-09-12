@@ -3,6 +3,7 @@
  */
 
 import { existsSync } from "node:fs";
+import path from "node:path";
 import type { DownloadFolderScheme } from "@shared/types/download";
 
 /** 模板占位符取值 */
@@ -29,8 +30,12 @@ export const sanitizeSegment = (name: string): string =>
 
 /** 按 UTF-8 字节数截断，避免多字节字符被截断成非法字符串。 */
 export const truncateUtf8 = (value: string, maxBytes: number): string => {
-  let result = value;
-  while (Buffer.byteLength(result, "utf8") > maxBytes) result = result.slice(0, -1);
+  let result = "";
+  for (const character of value) {
+    const next = result + character;
+    if (Buffer.byteLength(next, "utf8") > maxBytes) break;
+    result = next;
+  }
   return result.replace(/[ ._-]+$/, "").trim();
 };
 
@@ -57,7 +62,7 @@ const folderSegments = (scheme: DownloadFolderScheme, vars: TemplateVars): strin
         ? [albumArtist, album, vars.disc && vars.disc > 0 ? `CD ${vars.disc}` : ""]
         : legacyScheme === "artist"
           ? [vars.artist || "Unknown Artist"]
-        : [];
+          : [];
   return raw.map((segment) => truncateUtf8(sanitizeSegment(segment), 255)).filter(Boolean);
 };
 
@@ -79,7 +84,7 @@ export const renderDownloadPath = (
     sanitizeSegment(fillTemplate(fileTemplate, vars)) || sanitizeSegment(vars.title) || "untitled";
   const numberPrefix =
     vars.track && vars.track > 0
-      ? `${vars.disc && vars.disc > 0 ? `${String(vars.disc).padStart(2, "0")}-` : ""}${String(vars.track).padStart(2, "0")} `
+      ? `${vars.disc && vars.disc > 1 ? `${String(vars.disc).padStart(2, "0")}-` : ""}${String(vars.track).padStart(2, "0")} `
       : "";
   return {
     relDir: folderSegments(scheme, vars).join("/"),
@@ -94,9 +99,11 @@ export const renderDownloadPath = (
  * @returns 不冲突的完整路径
  */
 export const dedupePath = (pathWithoutExt: string, ext: string): string => {
-  let target = `${pathWithoutExt}${ext}`;
+  const directory = path.dirname(pathWithoutExt);
+  const baseName = path.basename(pathWithoutExt);
+  let target = path.join(directory, `${truncateFilename(baseName, ext)}${ext}`);
   for (let seq = 2; existsSync(target); seq++) {
-    target = `${pathWithoutExt} (${seq})${ext}`;
+    target = path.join(directory, `${truncateFilename(`${baseName} (${seq})`, ext)}${ext}`);
   }
   return target;
 };

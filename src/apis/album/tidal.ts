@@ -50,9 +50,13 @@ export const fetchAlbum = async (
   ]);
   if (!data?.id) return null;
   const tracks = await fetchAlbumTracks(albumId, firstPage ?? {});
+  const album = toAlbum(data);
   return {
-    album: toAlbum(data),
-    tracks: songsToTracks(tracks),
+    album,
+    tracks: songsToTracks(tracks).map((track) => ({
+      ...track,
+      album: track.album ? { ...track.album, artist: track.album.artist ?? album.artist } : album,
+    })),
     description: data.description,
   };
 };

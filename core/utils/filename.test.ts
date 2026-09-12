@@ -15,7 +15,7 @@ test("下载文件名包含碟号、曲目号和完整作品标题", () => {
     }),
     {
       relDir: "Heinrich Schiff Hagen Quartett/Schubert String Quintet",
-      baseName: "01-01 Schubert String Quintet in C, D.956 - Allegro ma non troppo",
+      baseName: "01 Schubert String Quintet in C, D.956 - Allegro ma non troppo",
     },
   );
   assert.equal(
@@ -35,4 +35,7 @@ test("超长 UTF-8 文件名保留扩展名并按字节安全截断", () => {
   const name = truncateFilename(`01 ${"作品".repeat(200)}`, ".flac");
   assert.ok(Buffer.byteLength(`${name}.flac`, "utf8") <= 255);
   assert.equal(name.includes("�"), false);
+  const emojiName = truncateFilename("🎵".repeat(200), ".flac");
+  assert.ok(Buffer.byteLength(`${emojiName}.flac`, "utf8") <= 255);
+  assert.equal(emojiName.includes("�"), false);
 });

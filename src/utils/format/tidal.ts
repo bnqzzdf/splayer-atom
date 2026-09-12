@@ -130,6 +130,7 @@ interface TidalAlbumRef {
   image?: TidalImageField;
   imageCover?: TidalImageField;
   artist?: TidalArtistRef | string;
+  artists?: TidalArtistRef[];
 }
 
 interface TidalTrack {
@@ -345,6 +346,13 @@ const pickQuality = (track: TidalTrack): AudioQuality | undefined => {
   return pickFromTag((track.audioQuality || "").toUpperCase());
 };
 
+const albumArtistName = (album: {
+  artist?: TidalArtistRef | string;
+  artists?: TidalArtistRef[];
+}): string | undefined =>
+  (typeof album.artist === "string" ? album.artist : album.artist?.name) ??
+  album.artists?.[0]?.name;
+
 /**
  * Tidal track → 应用层 Track
  */
@@ -361,10 +369,7 @@ export const songToTrack = (track: TidalTrack): Track => {
           id: String(track.album.id ?? ""),
           name: track.album.title ?? "",
           cover: resolveCover(track.album, coverSizePair("tidal").small),
-          artist:
-            typeof track.album.artist === "string"
-              ? track.album.artist
-              : track.album.artist?.name,
+          artist: albumArtistName(track.album),
         }
       : undefined,
     duration: (track.duration ?? 0) * 1000,
@@ -384,10 +389,6 @@ export const songsToTracks = (tracks: TidalTrack[] | undefined | null): Track[] 
 
 /** Core/provider fixture compatibility name. */
 export const tidalTrackToTrack = songToTrack;
-
-const albumArtistName = (album: TidalAlbum): string | undefined =>
-  (typeof album.artist === "string" ? album.artist : album.artist?.name) ??
-  album.artists?.[0]?.name;
 
 /**
  * Tidal album → 应用层 Album

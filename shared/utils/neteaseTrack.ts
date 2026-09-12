@@ -35,6 +35,10 @@ export interface NeteaseTrackSource {
   l?: NeteaseTrackQuality | null;
   sq?: NeteaseTrackQuality | null;
   hr?: NeteaseTrackQuality | null;
+  /** 碟内序号 */
+  no?: number;
+  /** CD 编号 */
+  cd?: string;
   fee?: TrackFee;
   pc?: unknown;
 }
@@ -94,10 +98,16 @@ export const neteaseSongToTrack = (song: NeteaseTrackSource): Track => {
           cover,
           artist:
             album.artist ??
-            (album.artists?.map((artist) => artist.name).filter(Boolean).join(" / ") || undefined),
+            (album.artists
+              ?.map((artist) => artist.name)
+              .filter(Boolean)
+              .join(" / ") ||
+              undefined),
         }
       : undefined,
     duration: song.dt ?? song.duration ?? 0,
+    track: song.no,
+    disc: song.cd ? Number(song.cd) || undefined : undefined,
     cover,
     coverOriginal: withNeteasePicSize(album?.picUrl, 1024),
     quality: pickQuality(song),

@@ -231,10 +231,10 @@ const runTask = async (
 
     // skip 策略：用预估扩展名提前命中已存在文件则跳过
     const guessExt = resolveExtension(req.declaredFormat, null, audioUrl);
-    const finalNoExt = path.join(targetDir, truncateFilename(baseName, guessExt));
-    if (policy === "skip" && fs.existsSync(`${finalNoExt}${guessExt}`)) {
+    const guessNoExt = path.join(targetDir, truncateFilename(baseName, guessExt));
+    if (policy === "skip" && fs.existsSync(`${guessNoExt}${guessExt}`)) {
       task.status = "done";
-      task.filePath = `${finalNoExt}${guessExt}`;
+      task.filePath = `${guessNoExt}${guessExt}`;
       task.finishedAt = Date.now();
       broadcastState(task);
       return;
@@ -275,6 +275,7 @@ const runTask = async (
     if (!(await looksLikeAudio(partPath))) throw new Error("not audio");
 
     const ext = resolveExtension(req.declaredFormat, mime, audioUrl);
+    const finalNoExt = path.join(targetDir, truncateFilename(baseName, ext));
     const finalPath = policy === "rename" ? dedupePath(finalNoExt, ext) : `${finalNoExt}${ext}`;
     await moveFile(partPath, finalPath);
 

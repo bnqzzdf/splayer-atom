@@ -12,9 +12,13 @@ export const fetchAlbum = async (
   const body = await neteaseApi.album({ id: albumId });
   const raw = body?.album;
   if (!raw) return null;
+  const album = toAlbum(raw);
   return {
-    album: toAlbum(raw),
-    tracks: songsToTracks(body?.songs),
+    album,
+    tracks: songsToTracks(body?.songs).map((track) => ({
+      ...track,
+      album: track.album ? { ...track.album, artist: track.album.artist ?? album.artist } : album,
+    })),
     description: typeof raw.description === "string" ? raw.description : undefined,
   };
 };
