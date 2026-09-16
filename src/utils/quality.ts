@@ -36,7 +36,12 @@ const LOSSLESS_CODECS = new Set([
  * @param codec - 编解码器名称
  * @returns 是否为无损格式
  */
-export const isLosslessCodec = (codec: string): boolean => LOSSLESS_CODECS.has(codec.toLowerCase());
+export const isLosslessCodec = (codec: string): boolean => {
+  const lowerCodec = codec.toLowerCase();
+  return (
+    LOSSLESS_CODECS.has(lowerCodec) || lowerCodec === "pcm" || lowerCodec.startsWith("pcm_")
+  );
+};
 
 /** 等级短码文案 */
 export const QUALITY_LABELS: Record<QualityLevel, string> = {
