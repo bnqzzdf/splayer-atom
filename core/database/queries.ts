@@ -2,6 +2,7 @@ import path from "node:path";
 import type { Track, Artist, Album, AudioQuality } from "@shared/types/player";
 import type { AlbumSummary, ArtistSummary } from "@shared/types/library";
 import type { LibraryStats } from "@shared/types/stats";
+import { createLocalAlbumId, inferDiscNumberFromPath } from "@main/utils/localAlbum";
 import { getDb } from "./index";
 
 /** 数据库行类型 */
@@ -16,6 +17,7 @@ interface TrackRow {
   cue_end_frame75: number | null;
   title: string;
   track?: number;
+  disc: number | null;
   artists: string;
   album: string | null;
   duration: number;
@@ -32,12 +34,16 @@ interface TrackRow {
 }
 
 const trackOrder = (prefix = ""): string =>
-  `${prefix}track IS NULL, ${prefix}track, COALESCE(${prefix}cue_start_ms, 0), ${prefix}path COLLATE NOCASE`;
+  `COALESCE(${prefix}disc, 1), ${prefix}track IS NULL, ${prefix}track, COALESCE(${prefix}cue_start_ms, 0), ${prefix}path COLLATE NOCASE`;
 
 const libraryOrder = (prefix = ""): string =>
   `json_extract(${prefix}album, '$.name') IS NULL, COALESCE(json_extract(${prefix}album, '$.name'), '') COLLATE NOCASE, ${trackOrder(prefix)}`;
 
 /** 将数据库行解析为 Track */
+const albumPhysicalSource = (row: Pick<TrackRow, "path" | "cue_path" | "cue_audio_path">): string =>
+  row.cue_path ?? row.cue_audio_path ?? row.path;
+
+/** 将数据库行解析为 Track，并补齐本地专辑稳定 ID 与旧库的目录碟号 fallback。 */
 const rowToTrack = (row: TrackRow): Track => {
   const quality: AudioQuality | undefined =
     row.codec != null
@@ -49,6 +55,13 @@ const rowToTrack = (row: TrackRow): Track => {
           bitsPerSample: row.bits_per_sample ?? 0,
         }
       : undefined;
+
+  const album = row.album ? (JSON.parse(row.album) as Album) : undefined;
+  if (album?.name) album.id = createLocalAlbumId(album.name, albumPhysicalSource(row));
+  const disc =
+    row.disc ??
+    inferDiscNumberFromPath(row.cue_audio_path ?? row.cue_path ?? row.path) ??
+    inferDiscNumberFromPath(row.cue_path ?? row.path);
 
   return {
     id: row.id,
@@ -62,8 +75,9 @@ const rowToTrack = (row: TrackRow): Track => {
     cueEndFrame75: row.cue_end_frame75 ?? undefined,
     title: row.title,
     track: row.track ?? undefined,
+    disc,
     artists: JSON.parse(row.artists) as Artist[],
-    album: row.album ? (JSON.parse(row.album) as Album) : undefined,
+    album,
     duration: row.duration,
     cover: row.cover ?? undefined,
     fileSize: row.file_size ?? undefined,
@@ -144,6 +158,7 @@ export interface UpsertTrack {
   cueEndFrame75?: number;
   title: string;
   track?: number;
+  disc?: number;
   artists: Artist[];
   album?: Album;
   duration: number;
@@ -164,9 +179,9 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
   const d = getDb();
   const stmt = d.prepare(`
     INSERT OR REPLACE INTO tracks
-      (id, path, cue_path, cue_audio_path, cue_start_ms, cue_end_ms, cue_start_frame75, cue_end_frame75, title, track, artists, album, duration, cover, codec, sample_rate, bit_rate, channels, bits_per_sample, file_size, file_mtime, file_ctime, scanned_at)
+      (id, path, cue_path, cue_audio_path, cue_start_ms, cue_end_ms, cue_start_frame75, cue_end_frame75, title, track, disc, artists, album, duration, cover, codec, sample_rate, bit_rate, channels, bits_per_sample, file_size, file_mtime, file_ctime, scanned_at)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const getAddedAt = d.prepare(
     "SELECT scanned_at AS addedAt FROM tracks WHERE id = ? OR path = ? LIMIT 1",
@@ -186,6 +201,7 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
         t.cueEndFrame75 ?? null,
         t.title,
         t.track ?? null,
+        t.disc ?? null,
         JSON.stringify(t.artists),
         t.album ? JSON.stringify(t.album) : null,
         t.duration,
@@ -275,33 +291,59 @@ export const deleteTracksByDir = (dir: string): void => {
 export const getAlbumList = (): AlbumSummary[] => {
   const rows = getDb()
     .prepare(
-      `SELECT
-         json_extract(album, '$.name') AS name,
-         MAX(CASE WHEN cover IS NOT NULL THEN cover END) AS cover,
-         MAX(artists) AS artists,
-         COUNT(*) AS trackCount,
-         MAX(CAST(json_extract(album, '$.year') AS INTEGER)) AS year,
-         MIN(scanned_at) AS addedAt
+      `SELECT path, cue_path, cue_audio_path, album, artists, cover, scanned_at
        FROM tracks
-       WHERE album IS NOT NULL AND json_extract(album, '$.name') IS NOT NULL
-         AND ${excludeCueContainer()}
-       GROUP BY name`,
+       WHERE album IS NOT NULL AND json_valid(album)
+         AND json_extract(album, '$.name') IS NOT NULL
+         AND ${excludeCueContainer()}`,
     )
-    .all() as {
-    name: string;
-    cover: string | null;
-    artists: string;
-    trackCount: number;
-    year: number | null;
-    addedAt: number;
-  }[];
-  return rows.map((row) => ({
-    name: row.name,
-    cover: row.cover ?? undefined,
-    artist: (JSON.parse(row.artists) as Artist[]).map((a) => a.name).join(" / "),
-    trackCount: row.trackCount,
-    year: row.year ?? undefined,
-    addedAt: row.addedAt,
+    .all() as Pick<
+    TrackRow,
+    "path" | "cue_path" | "cue_audio_path" | "album" | "artists" | "cover" | "scanned_at"
+  >[];
+
+  const albums = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      cover?: string;
+      artists: Map<string, string>;
+      trackCount: number;
+      year?: number;
+      addedAt: number;
+    }
+  >();
+  for (const row of rows) {
+    if (!row.album) continue;
+    const album = JSON.parse(row.album) as Album;
+    if (!album.name) continue;
+    const id = createLocalAlbumId(album.name, albumPhysicalSource(row));
+    const existing = albums.get(id) ?? {
+      id,
+      name: album.name,
+      cover: undefined,
+      artists: new Map<string, string>(),
+      trackCount: 0,
+      year: undefined,
+      addedAt: row.scanned_at,
+    };
+    if (!existing.cover && row.cover) existing.cover = row.cover;
+    existing.trackCount++;
+    existing.addedAt = Math.min(existing.addedAt, row.scanned_at);
+    if (album.year != null) existing.year = Math.max(existing.year ?? 0, album.year);
+    const albumArtists = album.artist
+      ? [{ name: album.artist }]
+      : (JSON.parse(row.artists) as Artist[]);
+    for (const artist of albumArtists) {
+      const name = artist.name.trim();
+      if (name) existing.artists.set(name.toLocaleLowerCase(), name);
+    }
+    albums.set(id, existing);
+  }
+  return [...albums.values()].map(({ artists, ...album }) => ({
+    ...album,
+    artist: [...artists.values()].join(" / "),
   }));
 };
 
@@ -327,16 +369,43 @@ export const getArtistList = (): ArtistSummary[] => {
   }));
 };
 
-/** 按专辑名获取全部曲目 */
-export const getAlbumTracks = (albumName: string): Track[] => {
-  const rows = getDb()
-    .prepare(
-      `SELECT * FROM tracks
-       WHERE json_extract(album, '$.name') = ? AND ${excludeCueContainer()}
-       ORDER BY ${trackOrder()}`,
-    )
-    .all(albumName) as TrackRow[];
-  return rows.map(rowToTrack);
+const compareAlbumTracks = (a: Track, b: Track): number => {
+  const discDiff = (a.disc ?? 1) - (b.disc ?? 1);
+  if (discDiff) return discDiff;
+  if (a.track == null && b.track != null) return 1;
+  if (a.track != null && b.track == null) return -1;
+  const trackDiff = (a.track ?? 0) - (b.track ?? 0);
+  if (trackDiff) return trackDiff;
+  const cueDiff = (a.cueStartMs ?? 0) - (b.cueStartMs ?? 0);
+  if (cueDiff) return cueDiff;
+  return (a.path ?? "").localeCompare(b.path ?? "", undefined, { numeric: true });
+};
+
+/**
+ * 按本地专辑 ID 获取全部曲目。albumName 用于把候选集缩到同名专辑；
+ * 老链接仍可把专辑名直接作为第一个参数使用。
+ */
+export const getAlbumTracks = (albumId: string, albumName?: string): Track[] => {
+  const requestedName = albumName?.trim();
+  const queryByName = (name: string): TrackRow[] =>
+    getDb()
+      .prepare(
+        `SELECT * FROM tracks
+         WHERE json_valid(album) AND json_extract(album, '$.name') = ?
+           AND ${excludeCueContainer()}`,
+      )
+      .all(name) as TrackRow[];
+
+  if (requestedName) {
+    const matched = queryByName(requestedName)
+      .map(rowToTrack)
+      .filter((track) => track.album?.id === albumId)
+      .sort(compareAlbumTracks);
+    if (matched.length > 0) return matched;
+  }
+
+  // 兼容旧的 /collection/local/album/<album-name> 链接。
+  return queryByName(albumId).map(rowToTrack).sort(compareAlbumTracks);
 };
 
 /** 按歌手名获取全部曲目 */
@@ -367,14 +436,7 @@ export const getLibraryStats = (): LibraryStats => {
     )
     .get() as { trackCount: number; totalDurationMs: number; totalFileSize: number };
 
-  const albumRow = d
-    .prepare(
-      `SELECT COUNT(DISTINCT json_extract(album, '$.name')) AS count
-       FROM tracks
-       WHERE album IS NOT NULL AND json_extract(album, '$.name') IS NOT NULL
-         AND ${excludeCueContainer()}`,
-    )
-    .get() as { count: number };
+  const albumCount = getAlbumList().length;
 
   const artistRow = d
     .prepare(
@@ -398,7 +460,7 @@ export const getLibraryStats = (): LibraryStats => {
 
   return {
     trackCount: aggregate.trackCount,
-    albumCount: albumRow.count,
+    albumCount,
     artistCount: artistRow.count,
     totalDurationMs: aggregate.totalDurationMs,
     totalFileSize: aggregate.totalFileSize,

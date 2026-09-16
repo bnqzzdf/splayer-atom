@@ -28,11 +28,15 @@ pub struct JsScannedTrack {
     pub path: String,
     pub title: Option<String>,
     pub artist: Option<String>,
+    /// 专辑艺术家
+    pub album_artist: Option<String>,
     pub album: Option<String>,
     /// 发行年份
     pub year: Option<u32>,
     /// 音轨编号
     pub track: Option<u16>,
+    /// 碟片编号
+    pub disc: Option<u16>,
     /// 时长（秒）
     pub duration: f64,
     pub codec: String,
@@ -56,9 +60,11 @@ impl From<scanner::ScannedTrack> for JsScannedTrack {
             path: track.path,
             title: track.title,
             artist: track.artist,
+            album_artist: track.album_artist,
             album: track.album,
             year: track.year,
             track: track.track,
+            disc: track.disc,
             duration: track.duration,
             codec: track.codec,
             sample_rate: track.sample_rate,

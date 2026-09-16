@@ -167,7 +167,7 @@ const fetchTab = async (tab: TabKey, append: boolean): Promise<void> => {
               album.artist.toLocaleLowerCase().includes(needle),
           )
           .map((album: AlbumSummary) => ({
-            id: album.name,
+            id: album.id,
             title: album.name,
             cover: album.cover,
             subtitle: album.artist,

@@ -141,9 +141,11 @@ fn scanned_track_holds_all_expected_fields() {
         path: "tests/fixtures/track.mp3".to_string(),
         title: Some("Title".to_string()),
         artist: Some("Artist".to_string()),
+        album_artist: Some("Album Artist".to_string()),
         album: Some("Album".to_string()),
         year: Some(2001),
         track: Some(1),
+        disc: Some(2),
         duration: 180.5,
         codec: "mp3".to_string(),
         sample_rate: 44_100,
@@ -158,9 +160,11 @@ fn scanned_track_holds_all_expected_fields() {
 
     assert_eq!(track.title, Some("Title".to_string()));
     assert_eq!(track.artist, Some("Artist".to_string()));
+    assert_eq!(track.album_artist, Some("Album Artist".to_string()));
     assert_eq!(track.album, Some("Album".to_string()));
     assert_eq!(track.year, Some(2001));
     assert_eq!(track.track, Some(1));
+    assert_eq!(track.disc, Some(2));
     assert!((track.duration - 180.5).abs() < f64::EPSILON);
     assert_eq!(track.codec, "mp3");
     assert_eq!(track.sample_rate, 44_100);

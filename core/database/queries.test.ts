@@ -40,6 +40,76 @@ test("library queries keep albums, track numbers, and CUE positions in stable or
       ["a1", "b1a", "b1b", "b2"],
     );
 
+    const sameTitleRows = [
+      [
+        "r1d1t1",
+        "/music/recording-a/CD1/01.flac",
+        null,
+        "Recording A D1T1",
+        1,
+        artist,
+        '{"name":"Same Album"}',
+        1,
+        1,
+        2,
+      ],
+      [
+        "r1d1t2",
+        "/music/recording-a/CD1/02.flac",
+        null,
+        "Recording A D1T2",
+        2,
+        artist,
+        '{"name":"Same Album"}',
+        1,
+        1,
+        2,
+      ],
+      [
+        "r1d2t1",
+        "/music/recording-a/CD2/01.flac",
+        null,
+        "Recording A D2T1",
+        1,
+        artist,
+        '{"name":"Same Album"}',
+        1,
+        1,
+        2,
+      ],
+      [
+        "r2t1",
+        "/music/recording-b/01.flac",
+        null,
+        "Recording B T1",
+        1,
+        JSON.stringify([{ name: "Other Artist" }]),
+        '{"name":"Same Album"}',
+        1,
+        1,
+        3,
+      ],
+    ];
+    for (const row of sameTitleRows) insert.run(...row);
+
+    const sameAlbums = database.getAlbumList().filter((album) => album.name === "Same Album");
+    assert.equal(sameAlbums.length, 2, "不同物理专辑目录中的同名专辑必须保持独立");
+    assert.notEqual(sameAlbums[0]?.id, sameAlbums[1]?.id);
+    const recordingA = sameAlbums.find(
+      (album) => database.getAlbumTracks(album.id, album.name).length === 3,
+    );
+    assert.ok(recordingA);
+    const recordingATracks = database.getAlbumTracks(recordingA.id, recordingA.name);
+    assert.deepEqual(
+      recordingATracks.map((track) => track.id),
+      ["r1d1t1", "r1d1t2", "r1d2t1"],
+      "缺少 DISC 标签时应按 CD1/CD2 目录再按 track 排序",
+    );
+    assert.deepEqual(
+      recordingATracks.map((track) => track.disc),
+      [1, 1, 2],
+    );
+
     database.upsertTracks([
       {
         id: "a1",

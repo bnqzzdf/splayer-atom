@@ -64,10 +64,14 @@ export const libraryClient: LibraryApi = {
       (await request<{ data: ArtistSummary[] }>("/library/artists")).data.map(mapArtist),
     ),
 
-  getAlbumTracks: (albumName) =>
+  getAlbumTracks: (albumId, albumName) =>
     asIpc(async () =>
       (
-        await request<{ data: Track[] }>(`/library/albums/${encodeURIComponent(albumName)}/tracks`)
+        await request<{ data: Track[] }>(
+          `/library/albums/${encodeURIComponent(albumId)}/tracks${
+            albumName ? `?name=${encodeURIComponent(albumName)}` : ""
+          }`,
+        )
       ).data.map(mapTrack),
     ),
 

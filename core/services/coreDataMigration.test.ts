@@ -270,6 +270,33 @@ test("album year metadata migration invalidates only missing-year fingerprints o
   }
 });
 
+test("disc metadata migration adds the nullable disc column without forcing a rescan", () => {
+  const database = new Database(":memory:");
+  try {
+    database.exec(`
+      CREATE TABLE tracks(id TEXT, file_mtime INTEGER);
+      CREATE TABLE lyric_match_cache(fingerprint TEXT, extra TEXT);
+      INSERT INTO tracks(id, file_mtime) VALUES ('track', 123);
+    `);
+    database.pragma("user_version = 7");
+
+    migrate(database);
+
+    const columns = database.prepare("PRAGMA table_info(tracks)").all() as { name: string }[];
+    assert.equal(
+      columns.some((column) => column.name === "disc"),
+      true,
+    );
+    assert.equal(
+      database.prepare("SELECT file_mtime FROM tracks WHERE id = 'track'").pluck().get(),
+      123,
+    );
+    assert.equal(database.pragma("user_version", { simple: true }), DATABASE_SCHEMA_VERSION);
+  } finally {
+    database.close();
+  }
+});
+
 test("SQLite migration failure rolls back schema changes and user_version", () => {
   const database = new Database(":memory:");
   try {

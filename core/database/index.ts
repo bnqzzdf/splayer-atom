@@ -43,6 +43,7 @@ export const initDatabase = (): void => {
       cue_end_frame75 INTEGER,
       title TEXT NOT NULL,
       track INTEGER,
+      disc INTEGER,
       artists TEXT NOT NULL DEFAULT '[]',
       album TEXT,
       duration INTEGER NOT NULL,

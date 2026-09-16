@@ -101,9 +101,11 @@ export const buildAtomCompatRoutes = (): Hono => {
     }
   });
 
-  api.get("/library/albums/:albumName/tracks", (c) => {
+  api.get("/library/albums/:albumId/tracks", (c) => {
     try {
-      return c.json({ data: getAlbumTracks(c.req.param("albumName")) });
+      return c.json({
+        data: getAlbumTracks(c.req.param("albumId"), c.req.query("name")),
+      });
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 500);
     }

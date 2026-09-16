@@ -293,11 +293,15 @@ export interface JsScannedTrack {
   path: string
   title?: string
   artist?: string
+  /** 专辑艺术家 */
+  albumArtist?: string
   album?: string
   /** 发行年份 */
   year?: number
   /** 音轨编号 */
   track?: number
+  /** 碟片编号 */
+  disc?: number
   /** 时长（秒） */
   duration: number
   codec: string

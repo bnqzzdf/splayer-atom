@@ -3,6 +3,8 @@ import type { TrackTags, TagEditRequest, TagWriteOutcome } from "./tagEditor";
 
 /** 专辑聚合项 */
 export interface AlbumSummary {
+  /** Core 生成的本地专辑稳定 ID；不能假设专辑名称唯一。 */
+  id: string;
   name: string;
   cover?: string;
   artist: string;
@@ -50,7 +52,7 @@ export interface LibraryApi {
   /** 获取歌手聚合列表 */
   getArtists: () => Promise<IpcResponse<ArtistSummary[]>>;
   /** 获取某专辑下的全部曲目 */
-  getAlbumTracks: (albumName: string) => Promise<IpcResponse<Track[]>>;
+  getAlbumTracks: (albumId: string, albumName?: string) => Promise<IpcResponse<Track[]>>;
   /** 获取某歌手的全部曲目 */
   getArtistTracks: (artistName: string) => Promise<IpcResponse<Track[]>>;
   /** 按 ID 批量获取曲目 */

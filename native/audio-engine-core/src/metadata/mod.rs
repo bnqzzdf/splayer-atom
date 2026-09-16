@@ -61,9 +61,11 @@ pub struct StreamInfo {
 pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
+    pub album_artist: Option<String>,
     pub album: Option<String>,
     pub year: Option<u32>,
     pub track: Option<u16>,
+    pub disc: Option<u16>,
     pub comment: Option<String>,
 }
 
@@ -80,9 +82,12 @@ pub fn extract_stream_info(info: &SourceAudioInfo) -> StreamInfo {
 /// 从容器 metadata 提取常见 tag
 pub fn extract_tags(dict: &HashMap<String, String>) -> Tags {
     let title = dict_get(dict, "title").map(ToString::to_string);
-    let artist = dict_get(dict, "artist")
-        .or_else(|| dict_get(dict, "album_artist"))
+    let album_artist = dict_get(dict, "album_artist")
+        .or_else(|| dict_get(dict, "albumartist"))
         .map(ToString::to_string);
+    let artist = dict_get(dict, "artist")
+        .map(ToString::to_string)
+        .or_else(|| album_artist.clone());
     let album = dict_get(dict, "album").map(ToString::to_string);
     let parse_year = |raw: &str| {
         let raw = raw.trim();
@@ -94,14 +99,29 @@ pub fn extract_tags(dict: &HashMap<String, String>) -> Tags {
     let year = dict_get(dict, "year")
         .and_then(parse_year)
         .or_else(|| dict_get(dict, "date").and_then(parse_year));
-    let track = dict_get(dict, "track").and_then(|s| s.parse().ok());
+    let parse_index = |raw: &str| {
+        raw.trim()
+            .split(['/', '\\'])
+            .next()
+            .and_then(|value| value.trim().parse::<u16>().ok())
+            .filter(|value| *value > 0)
+    };
+    let track = dict_get(dict, "track")
+        .or_else(|| dict_get(dict, "tracknumber"))
+        .and_then(parse_index);
+    let disc = dict_get(dict, "disc")
+        .or_else(|| dict_get(dict, "discnumber"))
+        .or_else(|| dict_get(dict, "disk"))
+        .and_then(parse_index);
     let comment = dict_get(dict, "comment").map(ToString::to_string);
     Tags {
         title,
         artist,
+        album_artist,
         album,
         year,
         track,
+        disc,
         comment,
     }
 }
@@ -202,14 +222,17 @@ mod tests {
             ("TITLE".to_string(), "Track".to_string()),
             ("Album_Artist".to_string(), "Artist".to_string()),
             ("DATE".to_string(), "1987-10-01".to_string()),
-            ("TRACK".to_string(), "7".to_string()),
+            ("TRACK".to_string(), "7/12".to_string()),
+            ("DISCNUMBER".to_string(), "2/3".to_string()),
         ]);
 
         let tags = extract_tags(&dict);
         assert_eq!(tags.title.as_deref(), Some("Track"));
         assert_eq!(tags.artist.as_deref(), Some("Artist"));
+        assert_eq!(tags.album_artist.as_deref(), Some("Artist"));
         assert_eq!(tags.year, Some(1987));
         assert_eq!(tags.track, Some(7));
+        assert_eq!(tags.disc, Some(2));
     }
 
     #[test]
@@ -227,9 +250,11 @@ mod tests {
         let tags = Tags {
             title: Some("ÇôÄñ".to_string()),
             artist: Some("µË×ÏÆå".to_string()),
+            album_artist: None,
             album: Some("ÔÚÏßÈÈËÑ£¨»ªÓï£©ÏµÁÐ63".to_string()),
             year: None,
             track: None,
+            disc: None,
             comment: None,
         };
         let repaired = repair_legacy_gbk_tags_for_path(tags, "/music/囚鸟.mp3");
@@ -244,9 +269,11 @@ mod tests {
         let tags = Tags {
             title: Some("ÇôÄñ".to_string()),
             artist: Some("Beyoncé".to_string()),
+            album_artist: None,
             album: Some("Album".to_string()),
             year: None,
             track: None,
+            disc: None,
             comment: None,
         };
         let repaired = repair_legacy_gbk_tags_for_path(tags, "/music/Other Song.mp3");

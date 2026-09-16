@@ -16,6 +16,7 @@ import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { fromCacheUrl, toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
 import { parseArtists, parseAlbum } from "@main/utils/metadata";
+import { createLocalAlbumId, inferDiscNumberFromPath } from "@main/utils/localAlbum";
 import { getCoverCacheDir, isWin } from "@main/utils/config";
 import { libraryLog } from "@main/utils/logger";
 import { getCueAudioPath, parseCueSheet, extractCuePath } from "./cue";
@@ -56,12 +57,17 @@ const pathKey = (value: string): string => {
 export const scannedToUpsert = (track: JsScannedTrack): UpsertTrack => {
   const id = createHash("sha256").update(track.path).digest("hex").slice(0, 16);
   const album = parseAlbum(track.album ?? "");
-  if (album && track.year) album.year = track.year;
+  if (album) {
+    album.id = createLocalAlbumId(album.name, track.path);
+    if (track.albumArtist?.trim()) album.artist = track.albumArtist.trim();
+    if (track.year) album.year = track.year;
+  }
   return {
     id,
     path: track.path,
     title: track.title || track.path.split(/[/\\]/).pop() || track.path,
     track: track.track,
+    disc: track.disc ?? inferDiscNumberFromPath(track.path),
     artists: parseArtists(track.artist ?? ""),
     album,
     duration: toMs(track.duration),
@@ -214,7 +220,13 @@ const syncCueTracks = async (
         const id = createHash("sha256").update(cueTrack.path).digest("hex").slice(0, 16);
         const album = cueTrack.album
           ? { ...cueTrack.album, year: cueTrack.album.year ?? audio.album?.year }
-          : audio.album;
+          : audio.album
+            ? { ...audio.album }
+            : undefined;
+        if (album) {
+          album.id = createLocalAlbumId(album.name, cuePath);
+          if (!album.artist && audio.album?.artist) album.artist = audio.album.artist;
+        }
         nextPaths.add(cueTrack.path);
         upserts.push({
           id,
@@ -228,6 +240,8 @@ const syncCueTracks = async (
           cueEndFrame75: cueTrack.cueEndFrame75,
           title: cueTrack.title,
           track: cueTrack.track,
+          disc:
+            audio.disc ?? inferDiscNumberFromPath(audio.path) ?? inferDiscNumberFromPath(cuePath),
           artists: cueTrack.artists,
           album,
           duration: cueTrack.duration,

@@ -310,10 +310,14 @@ export const useLibraryStore = defineStore("library", () => {
   };
 
   /** 专辑详情 */
-  const getAlbumCollection = async (albumName: string): Promise<Collection | null> => {
-    const res = await libraryClient.getAlbumTracks(albumName);
+  const getAlbumCollection = async (
+    albumId: string,
+    albumName?: string,
+  ): Promise<Collection | null> => {
+    const res = await libraryClient.getAlbumTracks(albumId, albumName);
     if (!res.success || !res.data?.length) return null;
     const albumTracks = res.data;
+    const resolvedName = albumTracks[0]?.album?.name ?? albumName ?? albumId;
     const artistMap = new Map<string, Artist>();
     for (const t of albumTracks) {
       for (const a of t.artists) {
@@ -322,10 +326,10 @@ export const useLibraryStore = defineStore("library", () => {
       }
     }
     return {
-      id: encodeURIComponent(albumName),
+      id: albumId,
       type: "album",
       source: "local",
-      title: albumName,
+      title: resolvedName,
       cover: albumTracks.find((t) => t.cover)?.cover,
       artists: [...artistMap.values()],
       tracks: albumTracks,
@@ -340,21 +344,21 @@ export const useLibraryStore = defineStore("library", () => {
     const res = await libraryClient.getArtistTracks(name);
     if (!res.success || !res.data?.length) return null;
     const artistTracks = res.data;
-    const albumMap = new Map<string, { cover?: string; count: number }>();
+    const albumMap = new Map<string, { name: string; cover?: string; count: number }>();
     for (const t of artistTracks) {
       if (!t.album?.name) continue;
-      const key = t.album.name;
+      const key = t.album.id ?? t.album.name;
       const existing = albumMap.get(key);
       if (existing) {
         existing.count++;
         if (!existing.cover && t.cover) existing.cover = t.cover;
       } else {
-        albumMap.set(key, { cover: t.cover, count: 1 });
+        albumMap.set(key, { name: t.album.name, cover: t.cover, count: 1 });
       }
     }
-    const albums: CoverItem[] = [...albumMap.entries()].map(([albumName, info]) => ({
-      id: encodeURIComponent(albumName),
-      title: albumName,
+    const albums: CoverItem[] = [...albumMap.entries()].map(([albumId, info]) => ({
+      id: albumId,
+      title: info.name,
       cover: info.cover,
       trackCount: info.count,
     }));

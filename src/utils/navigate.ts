@@ -25,7 +25,7 @@ const playbackSourcePages = new Set<PlaybackSourcePage>(["library", "liked", "cl
 
 /**
  * 解析资源详情页使用的 ID
- * 本地专辑和歌手以名称作为聚合键，其余资源必须提供真实 ID
+ * 本地歌手仍以名称聚合；本地专辑优先使用 Core 生成的稳定 ID，旧调用可回退到名称。
  * @param target - 资源跳转目标
  * @returns 可用的路由 ID，不可跳转时返回 null
  */
@@ -36,9 +36,11 @@ const resolveResourceId = (target: ResourceNavigationTarget): string | null => {
   }
   const source = target.source ?? "local";
   const candidate =
-    source === "local" && (target.type === "album" || target.type === "artist")
+    source === "local" && target.type === "artist"
       ? target.name
-      : target.id;
+      : source === "local" && target.type === "album"
+        ? (target.id ?? target.name)
+        : target.id;
   return candidate?.trim() || null;
 };
 

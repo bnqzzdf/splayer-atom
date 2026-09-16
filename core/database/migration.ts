@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 7;
+export const DATABASE_SCHEMA_VERSION = 8;
 
 type TableInfoRow = { name: string };
 
@@ -129,6 +129,15 @@ export const migrate = (d: Database.Database): void => {
         `);
       }
       v = 7;
+    }
+
+    // v7 → v8: 持久化碟号。已有曲目无需强制重扫：查询层会先按 CD1/Disc 2
+    // 这类物理目录推断；后续任何扫描都会把显式 DISC metadata 写回该列。
+    if (v < 8) {
+      if (!hasColumn(d, "tracks", "disc")) {
+        d.exec("ALTER TABLE tracks ADD COLUMN disc INTEGER");
+      }
+      v = 8;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

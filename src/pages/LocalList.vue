@@ -81,7 +81,7 @@ const items = computed<CoverItem[]>(() => {
           trackCount: item.trackCount,
         }))
       : (filteredSource as AlbumSummary[]).map((item) => ({
-          id: encodeURIComponent(item.name),
+          id: item.id,
           title: item.name,
           cover: item.cover,
           subtitle: item.artist || t("song.unknownArtist"),
@@ -145,7 +145,7 @@ const config = computed(() =>
 
 const handleClick = (item: CoverItem): void => {
   if (mode === "artist") navigateToArtist(item.title);
-  else navigateToAlbum(item.title);
+  else navigateToAlbum(item.title, { albumId: item.id });
 };
 
 onMounted(async () => {

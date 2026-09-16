@@ -12,7 +12,7 @@ export const loadLocalCollection = async (
     type === "playlist"
       ? await usePlaylistStore().get(id)
       : type === "album"
-        ? await useLibraryStore().getAlbumCollection(decodeURIComponent(id))
+        ? await useLibraryStore().getAlbumCollection(decodeURIComponent(id), options.fallbackName)
         : null;
   if (!options.signal?.aborted) options.onUpdate(result);
 };
