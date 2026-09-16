@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import { useLibraryStore } from "@/stores/library";
 import IconFolder from "~icons/lucide/folder";
 import IconChevronLeft from "~icons/lucide/chevron-left";
 
 const { t } = useI18n();
+const libraryStore = useLibraryStore();
 defineEmits<{ (e: "next"): void; (e: "back"): void }>();
+
+onMounted(async () => {
+  if (!libraryStore.initialized) await libraryStore.load();
+});
 </script>
 
 <template>

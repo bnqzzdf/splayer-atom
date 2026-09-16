@@ -51,7 +51,6 @@ const mountWebControl = async (): Promise<void> => {
     { immediate: true },
   );
 
-  if (router.currentRoute.value.path === "/") await router.replace("/library");
   await router.isReady();
   app.mount("#app");
   initPlayer().catch(console.error);

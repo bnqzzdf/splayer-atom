@@ -5,11 +5,11 @@ import type { CoverItem } from "@/types/artist";
 import type { SSelectOption } from "@/components/ui/SSelect.vue";
 import type { AlbumSummary, ArtistSummary } from "@shared/types/library";
 import { useLibraryStore } from "@/stores/library";
+import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import CoverList from "@/components/list/CoverList.vue";
 import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
 import IconLucideUsers from "~icons/lucide/users";
 import IconLucideUserRound from "~icons/lucide/user-round";
-import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideArrowUpDown from "~icons/lucide/arrow-up-down";
 import IconLucideArrowDown from "~icons/lucide/arrow-down";
@@ -21,14 +21,15 @@ type SortOrder = "asc" | "desc";
 
 const { t } = useI18n();
 const route = useRoute();
-const router = useRouter();
 const libraryStore = useLibraryStore();
+const settingsDialog = useSettingsDialog();
 const { artistAvatars } = storeToRefs(libraryStore);
 
 const mode: Mode = route.name === "album-list" ? "album" : "artist";
 
 const sortMode = ref<SortMode>(mode === "album" ? "addedAt" : "default");
 const sortOrder = ref<SortOrder>("desc");
+const searchQuery = ref("");
 
 const sortOptions = computed<SSelectOption[]>(() =>
   mode === "album"
@@ -63,16 +64,23 @@ const compareOptionalNumber = (a: number | undefined, b: number | undefined): nu
 
 /** 组装最终列表 */
 const items = computed<CoverItem[]>(() => {
+  const query = searchQuery.value.trim().toLocaleLowerCase();
+  const filteredSource = source.value.filter((item) => {
+    if (!query) return true;
+    if (mode === "artist") return (item as ArtistSummary).name.toLocaleLowerCase().includes(query);
+    const album = item as AlbumSummary;
+    return `${album.name}\n${album.artist}`.toLocaleLowerCase().includes(query);
+  });
   const list: SortableCoverItem[] =
     mode === "artist"
-      ? source.value.map((item: ArtistSummary) => ({
+      ? (filteredSource as ArtistSummary[]).map((item) => ({
           id: encodeURIComponent(item.name),
           title: item.name,
           cover: artistAvatars.value[item.name.trim().toLowerCase()] ?? item.cover,
           subtitle: t("common.totalSongs", { count: item.trackCount }),
           trackCount: item.trackCount,
         }))
-      : (source.value as AlbumSummary[]).map((item) => ({
+      : (filteredSource as AlbumSummary[]).map((item) => ({
           id: encodeURIComponent(item.name),
           title: item.name,
           cover: item.cover,
@@ -163,9 +171,21 @@ onMounted(async () => {
           </span>
         </div>
         <div
-          v-if="items.length > 0"
+          v-if="source.length > 0"
           class="flex items-center gap-2 text-sm text-on-surface-variant/70"
         >
+          <SInput
+            v-model="searchQuery"
+            :placeholder="t(mode === 'album' ? 'library.searchAlbums' : 'library.searchArtists')"
+            clearable
+            round
+            class="w-44 focus-within:w-56"
+            data-search-input
+          >
+            <template #prefix>
+              <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
+            </template>
+          </SInput>
           <IconLucideArrowUpDown class="size-3.5 shrink-0" />
           <span class="shrink-0">{{ t("songList.sort.mode") }}</span>
           <div :class="[config.selectWidth, 'shrink-0']">
@@ -196,14 +216,24 @@ onMounted(async () => {
         :padding-bottom="24"
         @click="handleClick"
       />
+      <div v-else-if="source.length > 0" class="h-full flex items-center justify-center">
+        <div class="text-center text-on-surface-variant/50">
+          <IconLucideSearch class="size-10 mx-auto mb-3 opacity-30" />
+          <div class="text-sm">
+            {{ t(mode === "album" ? "library.noMatchingAlbums" : "library.noMatchingArtists") }}
+          </div>
+        </div>
+      </div>
       <div v-else class="h-full flex items-center justify-center">
         <div class="text-center text-on-surface-variant/50">
           <component :is="config.emptyIcon" class="size-12 mx-auto mb-3 opacity-30" />
-          <div class="text-sm mb-1">{{ t("library.noLocalData") }}</div>
-          <div class="text-xs mb-4 opacity-70">{{ t("library.noLocalDataHint") }}</div>
-          <SButton type="primary" variant="secondary" @click="router.push('/library')">
-            <template #icon><IconLucideMusic /></template>
-            {{ t("library.goLibrary") }}
+          <div class="text-sm mb-1">
+            {{ t(mode === "album" ? "library.noLocalAlbums" : "library.noLocalArtists") }}
+          </div>
+          <div class="text-xs mb-4 opacity-70">{{ t("library.configureHint") }}</div>
+          <SButton type="primary" variant="secondary" @click="settingsDialog.show('localLibrary')">
+            <template #icon><IconLucideSettings2 /></template>
+            {{ t("library.openSettings") }}
           </SButton>
         </div>
       </div>

@@ -103,7 +103,7 @@ test("Web renderer has no Desktop runtime or Host capability branch", () => {
   assert.doesNotMatch(mainSource, /installWebApi|web\/api/);
   assert.match(mainSource, /await useSettingsStore\(\)\.syncSystem\(\)/);
   assert.match(mainSource, /import\("\.\/App\.vue"\)/);
-  assert.match(mainSource, /await router\.replace\("\/library"\)/);
+  assert.doesNotMatch(mainSource, /router\.replace\("\/library"\)/);
 });
 
 test("Control volume and tempo commands cannot bypass output processing locks", () => {

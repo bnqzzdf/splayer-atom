@@ -283,9 +283,8 @@ const activeKey = computed(() => {
   if (route.path.startsWith("/artist/streaming/")) return "/streaming";
   // 专辑详情页归属专辑列表
   if (route.path.startsWith("/collection/local/album/")) return "/albums/local";
-  // 音乐库子页面
-  if (route.path.startsWith("/collection/") && !route.path.includes("/playlist/"))
-    return "/library";
+  // 本地歌曲相关子页面
+  if (route.path.startsWith("/collection/") && !route.path.includes("/playlist/")) return "/songs";
   // 歌手详情页归属歌手列表
   if (route.path.startsWith("/artist/local/")) return "/artists/local";
   const items = menuItems.value.filter((item) => !item.type || item.type === "item");

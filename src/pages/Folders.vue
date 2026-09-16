@@ -6,6 +6,7 @@ import type { FolderNode } from "@/types/folder";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useLibraryStore } from "@/stores/library";
 import { usePlaylistStore } from "@/stores/playlist";
+import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { toast } from "@/composables/useToast";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
@@ -19,9 +20,9 @@ import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideEllipsis from "~icons/lucide/ellipsis";
 
 const { t } = useI18n();
-const router = useRouter();
 const libraryStore = useLibraryStore();
 const playlistStore = usePlaylistStore();
+const settingsDialog = useSettingsDialog();
 const { tracks, initialized, folderTree, folderCount } = storeToRefs(libraryStore);
 
 const trackCount = computed(() => tracks.value.filter((tr) => !!tr.path).length);
@@ -225,11 +226,11 @@ onMounted(async () => {
     <div v-else class="flex-1 flex items-center justify-center">
       <div class="text-center text-on-surface-variant/50">
         <IconLucideFolder class="size-12 mx-auto mb-3 opacity-30" />
-        <div class="text-sm mb-1">{{ t("library.noLocalData") }}</div>
-        <div class="text-xs mb-4 opacity-70">{{ t("library.noLocalDataHint") }}</div>
-        <SButton type="primary" variant="secondary" @click="router.push('/library')">
-          <template #icon><IconLucideMusic /></template>
-          {{ t("library.goLibrary") }}
+        <div class="text-sm mb-1">{{ t("library.noLocalSongs") }}</div>
+        <div class="text-xs mb-4 opacity-70">{{ t("library.configureHint") }}</div>
+        <SButton type="primary" variant="secondary" @click="settingsDialog.show('localLibrary')">
+          <template #icon><IconLucideSettings2 /></template>
+          {{ t("library.openSettings") }}
         </SButton>
       </div>
     </div>

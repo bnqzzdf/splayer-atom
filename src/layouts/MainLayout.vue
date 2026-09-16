@@ -26,7 +26,7 @@ const routeKey = computed(() => {
 /** 需要受控缓存的页面组件白名单 */
 const cachedViews = [
   "Home",
-  "Library",
+  "Songs",
   "Liked",
   "History",
   "Download",

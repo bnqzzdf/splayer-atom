@@ -3,6 +3,7 @@ import generalCategory from "./categories/general";
 import appearanceCategory from "./categories/appearance";
 import playerCategory from "./categories/player";
 import lyricCategory from "./categories/lyric";
+import localLibraryCategory from "./categories/localLibrary";
 import servicesCategory from "./categories/services";
 import mediaSourceCategory from "./categories/streaming";
 import downloadCategory from "./categories/download";
@@ -47,6 +48,7 @@ export const settingsSchema: SettingCategory[] = [
   appearanceCategory,
   playerCategory,
   lyricCategory,
+  localLibraryCategory,
   controlServicesCategory,
   mediaSourceCategory,
   downloadCategory,

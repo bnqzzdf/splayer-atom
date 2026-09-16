@@ -25,9 +25,9 @@ export interface SidebarNavEntry {
 
 const SIDEBAR_NAV_ENTRIES: SidebarNavEntry[] = [
   { key: "/", labelKey: "nav.home", icon: IconLucideHome, hideable: false },
-  { key: "/library", labelKey: "nav.library", icon: IconLucideMusic, hideable: true },
-  { key: "/artists/local", labelKey: "artist.label", icon: IconLucideUser, hideable: true },
   { key: "/albums/local", labelKey: "album.label", icon: IconLucideDisc3, hideable: true },
+  { key: "/artists/local", labelKey: "artist.label", icon: IconLucideUser, hideable: true },
+  { key: "/songs", labelKey: "nav.songs", icon: IconLucideMusic, hideable: true },
   { key: "/folders", labelKey: "folder.label", icon: IconLucideFolder, hideable: true },
   { key: "/stats", labelKey: "stats.label", icon: IconLucideChartPie, hideable: true },
   {

@@ -23,6 +23,16 @@ import { settingsClient } from "@/core/settingsClient";
 
 const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
 const WEB_CONTROL_SETTING_PATHS = new Set(["system.onboardingCompleted", "system.uiZoom"]);
+const LEGACY_LIBRARY_NAV_KEY = "/library";
+const SONGS_NAV_KEY = "/songs";
+const LEGACY_DEFAULT_FIRST_NAV_GROUP = [
+  "/",
+  LEGACY_LIBRARY_NAV_KEY,
+  "/artists/local",
+  "/albums/local",
+  "/folders",
+  "/stats",
+];
 
 /** 读取当前浏览器 Control 自己持有的轻量配置。 */
 const loadWebControlEntries = (): Record<string, unknown> => {
@@ -76,15 +86,23 @@ const reconcileOrder = <T>(stored: T[], all: readonly T[]): T[] => {
  * @param stored - 存档分组
  * @returns 对账后的分组
  */
-const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
+export const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
   const all = DEFAULT_SIDEBAR_NAV_GROUPS.flatMap((group) => group.keys);
   const seen = new Set<string>();
   const groups: SidebarNavGroup[] = [];
-  for (const raw of Array.isArray(stored) ? stored : []) {
+  const source = Array.isArray(stored) ? stored : [];
+  for (let index = 0; index < source.length; index++) {
+    const raw = source[index];
     const record = raw as Partial<SidebarNavGroup> | null;
     if (!Array.isArray(record?.keys)) continue;
+    const keysSource =
+      index === 0 &&
+      record.keys.length === LEGACY_DEFAULT_FIRST_NAV_GROUP.length &&
+      record.keys.every((key, keyIndex) => key === LEGACY_DEFAULT_FIRST_NAV_GROUP[keyIndex])
+        ? DEFAULT_SIDEBAR_NAV_GROUPS[0].keys
+        : record.keys.map((key) => (key === LEGACY_LIBRARY_NAV_KEY ? SONGS_NAV_KEY : key));
     const keys: string[] = [];
-    for (const key of record.keys) {
+    for (const key of keysSource) {
       if (!all.includes(key) || seen.has(key)) continue;
       seen.add(key);
       keys.push(key);
@@ -107,13 +125,15 @@ const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
  * @param stored - 存档隐藏键
  * @returns 对账后的隐藏键
  */
-const reconcileHiddenKeys = (stored: string[]): string[] => {
+export const reconcileHiddenKeys = (stored: string[]): string[] => {
   const valid = new Set([
     ...DEFAULT_SIDEBAR_NAV_GROUPS.flatMap((group) => group.keys),
     SIDEBAR_GROUP_MY_PLAYLISTS,
     SIDEBAR_GROUP_SUBSCRIBED,
   ]);
-  return stored.filter((key) => key !== "/" && (valid.has(key) || key.startsWith("/collection/")));
+  return stored
+    .map((key) => (key === LEGACY_LIBRARY_NAV_KEY ? SONGS_NAV_KEY : key))
+    .filter((key) => key !== "/" && (valid.has(key) || key.startsWith("/collection/")));
 };
 
 /**

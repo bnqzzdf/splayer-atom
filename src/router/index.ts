@@ -18,9 +18,13 @@ const router = createRouter({
           component: () => import("@/pages/Home.vue"),
         },
         {
+          path: "songs",
+          name: "songs",
+          component: () => import("@/pages/Songs.vue"),
+        },
+        {
           path: "library",
-          name: "library",
-          component: () => import("@/pages/Library.vue"),
+          redirect: "/songs",
         },
         {
           path: "liked",

@@ -107,6 +107,8 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 加载曲目和目录列表 */
   const load = async (): Promise<void> => {
+    // 扫描进度是曲库域投影，由 store 常驻订阅，避免关闭设置页后丢失完成事件。
+    subscribeScanProgress();
     // 先从 IndexedDB 读缓存，立即渲染
     const [cached, likedCached] = await Promise.all([
       trackDb.getItem<Track[]>("tracks").catch(() => null),

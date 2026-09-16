@@ -94,7 +94,7 @@ export const DEFAULT_SIDEBAR_NAV_GROUPS: SidebarNavGroup[] = [
   {
     name: "",
     showName: false,
-    keys: ["/", "/library", "/artists/local", "/albums/local", "/folders", "/stats"],
+    keys: ["/", "/albums/local", "/artists/local", "/songs", "/folders", "/stats"],
   },
   {
     name: "",

@@ -58,11 +58,6 @@ const handleRemove = async (): Promise<void> => {
   removeConfirmOpen.value = false;
   emit("removed", dir);
 };
-
-/** 进入时确保已同步后端目录列表 */
-onMounted(() => {
-  if (!libraryStore.initialized) libraryStore.load();
-});
 </script>
 
 <template>
