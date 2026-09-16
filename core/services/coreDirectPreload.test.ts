@@ -61,7 +61,7 @@ test("queue edits never run next-source preparation on the active Direct produce
   assert.match(dsdProducer, /producer_ring\.finished[\s\S]*producer_staging\.take_current\(\)/);
   assert.match(
     nativeBinding,
-    /spawn_blocking\(move \|\| \{\s*handle\.stage_local\(&source, duration_secs, u64::from\(generation\)\)/,
+    /spawn_blocking\(move \|\| \{\s*handle\.stage_local\([\s\S]*&source,[\s\S]*duration_secs,[\s\S]*u64::from\(generation\),[\s\S]*cue_start_frame75\.map\(u64::from\),[\s\S]*cue_end_frame75\.map\(u64::from\)/,
   );
 });
 
@@ -77,7 +77,10 @@ test("Direct gapless boundary invalidates the previous raw cover", () => {
     .split("pub fn commit_direct_gapless_boundary")[1]
     ?.split("pub fn validate_direct_entry")[0];
   assert.ok(boundary, "Direct gapless boundary implementation should exist");
-  assert.match(boundary, /playback\.commit_gapless_boundary\(source, duration\)/);
+  assert.match(
+    boundary,
+    /playback\.commit_gapless_boundary\([\s\S]*source,[\s\S]*duration,[\s\S]*cue_start_frame75,[\s\S]*cue_end_frame75/,
+  );
   assert.match(boundary, /self\.cover_raw = None/);
   assert.ok(boundary.indexOf("self.cover_raw = None") < boundary.indexOf("self.current_source"));
 });

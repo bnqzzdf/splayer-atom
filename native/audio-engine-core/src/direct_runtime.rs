@@ -16,6 +16,19 @@ use std::path::Path;
 #[cfg(feature = "diretta")]
 use crate::diretta::{DirettaDirectConnection, DirettaDirectDsdConnection};
 
+#[cfg(any(feature = "diretta", test))]
+fn direct_segment_duration_secs(
+    physical_duration_secs: f64,
+    start_frame75: Option<u64>,
+    end_frame75: Option<u64>,
+) -> f64 {
+    match (start_frame75, end_frame75) {
+        (Some(start), Some(end)) if end > start => (end - start) as f64 / 75.0,
+        (Some(start), None) => (physical_duration_secs - start as f64 / 75.0).max(0.0),
+        _ => physical_duration_secs.max(0.0),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectFormat {
     Pcm(DirectPcmFormat),
@@ -113,7 +126,14 @@ pub enum DirectStageHandle {
 
 #[cfg(feature = "diretta")]
 impl DirectStageHandle {
-    pub fn stage_local(&self, source: &str, duration_secs: f64, generation: u64) -> Result<bool> {
+    pub fn stage_local(
+        &self,
+        source: &str,
+        duration_secs: f64,
+        generation: u64,
+        start_frame75: Option<u64>,
+        end_frame75: Option<u64>,
+    ) -> Result<bool> {
         if source.starts_with("http://") || source.starts_with("https://") {
             bail!("[Direct] 当前 gapless staging 仅支持本地 seekable 音源");
         }
@@ -124,13 +144,13 @@ impl DirectStageHandle {
                 if native_dsd {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
-                value.stage_local(path, duration_secs, generation)
+                value.stage_local(path, duration_secs, generation, start_frame75, end_frame75)
             }
             Self::Dsd(value) => {
                 if !native_dsd {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
-                value.stage_local(path, duration_secs, generation)
+                value.stage_local(path, duration_secs, generation, start_frame75, end_frame75)
             }
         }
     }
@@ -191,6 +211,8 @@ pub struct DirectPlayback {
     duration: f64,
     seek_base: f64,
     seek_transition_count: u64,
+    cue_start_frame75: Option<u64>,
+    cue_end_frame75: Option<u64>,
     #[cfg(feature = "diretta")]
     selector: String,
     #[cfg(feature = "diretta")]
@@ -209,27 +231,48 @@ impl DirectPlayback {
         duration: f64,
         position_secs: f64,
         auto_play: bool,
+        cue_start_frame75: Option<u64>,
+        cue_end_frame75: Option<u64>,
     ) -> Result<Self> {
         if source.starts_with("http://") || source.starts_with("https://") {
             bail!("[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源");
         }
         let path = Path::new(source);
         let native_dsd = is_native_dsd_source(source);
+        let direct_duration =
+            direct_segment_duration_secs(duration, cue_start_frame75, cue_end_frame75);
 
         let (transport, seek_base) = if native_dsd {
-            let (connection, actual_position) =
-                DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?;
+            let (connection, actual_position) = if let Some(start_frame75) = cue_start_frame75 {
+                DirettaDirectDsdConnection::open_local_segment(
+                    selector,
+                    path,
+                    start_frame75,
+                    cue_end_frame75,
+                    direct_duration,
+                )?
+            } else {
+                DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?
+            };
             (DirectTransport::Dsd(connection), actual_position)
         } else {
-            let (connection, actual_position) =
-                DirettaDirectConnection::open_local_at(selector, path, position_secs)?;
+            let (connection, actual_position) = if let Some(start_frame75) = cue_start_frame75 {
+                DirettaDirectConnection::open_local_segment(
+                    selector,
+                    path,
+                    start_frame75,
+                    cue_end_frame75,
+                )?
+            } else {
+                DirettaDirectConnection::open_local_at(selector, path, position_secs)?
+            };
             (DirectTransport::Pcm(connection), actual_position)
         };
 
         let duration = match &transport {
             DirectTransport::Pcm(value) => {
-                value.set_duration(duration);
-                duration
+                value.set_duration(direct_duration);
+                direct_duration
             }
             DirectTransport::Dsd(value) => value.monitor().duration(),
         };
@@ -237,6 +280,8 @@ impl DirectPlayback {
             duration,
             seek_base,
             seek_transition_count: 0,
+            cue_start_frame75,
+            cue_end_frame75,
             selector: selector.to_owned(),
             source: source.to_owned(),
             transport,
@@ -279,14 +324,26 @@ impl DirectPlayback {
         };
         self.seek_base = 0.0;
         self.seek_transition_count = self.monitor().transition_count();
+        self.cue_start_frame75 = None;
+        self.cue_end_frame75 = None;
         Ok(format)
     }
 
     pub fn seek_while_paused(&mut self, position_secs: f64) -> Result<f64> {
         #[cfg(feature = "diretta")]
         let actual_position = match &mut self.transport {
-            DirectTransport::Pcm(value) => value.seek_while_paused(position_secs)?,
-            DirectTransport::Dsd(value) => value.seek_while_paused(position_secs)?,
+            DirectTransport::Pcm(value) => match self.cue_start_frame75 {
+                Some(start) => {
+                    value.seek_segment_while_paused(start, self.cue_end_frame75, position_secs)?
+                }
+                None => value.seek_while_paused(position_secs)?,
+            },
+            DirectTransport::Dsd(value) => match self.cue_start_frame75 {
+                Some(start) => {
+                    value.seek_segment_while_paused(start, self.cue_end_frame75, position_secs)?
+                }
+                None => value.seek_while_paused(position_secs)?,
+            },
         };
         #[cfg(all(test, not(feature = "diretta")))]
         let actual_position = {
@@ -437,11 +494,19 @@ impl DirectPlayback {
     }
 
     #[cfg(feature = "diretta")]
-    pub fn commit_gapless_boundary(&mut self, source: &str, duration: f64) {
+    pub fn commit_gapless_boundary(
+        &mut self,
+        source: &str,
+        duration: f64,
+        cue_start_frame75: Option<u64>,
+        cue_end_frame75: Option<u64>,
+    ) {
         self.source = source.to_owned();
         self.duration = duration;
         self.seek_base = 0.0;
         self.seek_transition_count = self.monitor().transition_count();
+        self.cue_start_frame75 = cue_start_frame75;
+        self.cue_end_frame75 = cue_end_frame75;
     }
 
     pub fn failed(&self) -> bool {
@@ -462,6 +527,8 @@ impl DirectPlayback {
             duration,
             seek_base: 0.0,
             seek_transition_count: 0,
+            cue_start_frame75: None,
+            cue_end_frame75: None,
             #[cfg(feature = "diretta")]
             selector: "diretta:test".into(),
             #[cfg(feature = "diretta")]
@@ -478,5 +545,17 @@ impl DirectPlayback {
         match &self.transport {
             TestTransport::Fake(value) => std::sync::Arc::clone(value),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::direct_segment_duration_secs;
+
+    #[test]
+    fn cue_segment_duration_uses_exact_index_or_remaining_physical_duration() {
+        assert!((direct_segment_duration_secs(600.0, Some(750), Some(825)) - 1.0).abs() < 1e-9);
+        assert!((direct_segment_duration_secs(600.0, Some(750), None) - 590.0).abs() < 1e-9);
+        assert!((direct_segment_duration_secs(600.0, None, None) - 600.0).abs() < 1e-9);
     }
 }

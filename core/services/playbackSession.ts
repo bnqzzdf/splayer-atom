@@ -12,7 +12,11 @@ import type {
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { fileURLToPath } from "node:url";
-import { loadPlaybackSession, savePlaybackSession } from "@main/database/playbackSession";
+import {
+  loadPlaybackSession,
+  refreshPersistedCueCoordinates,
+  savePlaybackSession,
+} from "@main/database/playbackSession";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import {
@@ -37,6 +41,7 @@ import { discardDirectInput, materializeDirectInput } from "@main/atom/directInp
 import { parseSacdPlaybackSource, toNativeSacdPlaybackSource } from "@main/atom/sacdInput";
 import {
   clearActiveCueRange,
+  isActiveDirectCueSegment,
   toDisplayDurationMs,
   toDisplayPositionMs,
   toEnginePositionMs,
@@ -97,6 +102,7 @@ let mode: PlaybackSessionMode = "queue";
 let initialized = false;
 let loadGeneration = 0;
 let cueBoundaryGeneration = -1;
+let lastNativeDirectBoundaryGeneration: number | null = null;
 let sourceRecoveryAttempts = 0;
 let autoClose = {
   enabled: false,
@@ -734,9 +740,11 @@ export const migrateLegacyQueue = (
   legacyShuffle: ShuffleMode,
 ): PlaybackSessionSnapshot => {
   if (queue.length > 0) return snapshot();
-  queue = cloneQueue(items);
+  queue = refreshPersistedCueCoordinates(items);
   originalQueue =
-    legacyShuffle === "on" && legacyOriginalQueue ? cloneQueue(legacyOriginalQueue) : null;
+    legacyShuffle === "on" && legacyOriginalQueue
+      ? refreshPersistedCueCoordinates(legacyOriginalQueue)
+      : null;
   index = queue.length === 0 ? -1 : Math.max(0, Math.min(legacyIndex, queue.length - 1));
   repeat = legacyRepeat;
   shuffle = legacyShuffle;
@@ -1160,6 +1168,8 @@ export const onNativeDirectTrackBoundary = (
   eventDurationMs: number,
 ): boolean => {
   if (!ownsPlayback()) return false;
+  if (lastNativeDirectBoundaryGeneration === generation) return true;
+  lastNativeDirectBoundaryGeneration = generation;
 
   const recoverAuthoritativeQueue = async (): Promise<void> => {
     getPlayer().stop();
@@ -1234,6 +1244,7 @@ const advanceAfterNaturalEnd = (): void => {
 /** CUE 使用母版文件播放时，由 Core 在虚拟分轨结束位置收口并推进权威队列。 */
 export const onNativePosition = (enginePositionMs: number): boolean => {
   if (!ownsPlayback() || isUpnpSelected()) return false;
+  if (isActiveDirectCueSegment()) return false;
   const track = queue[index]?.track;
   const cueEndMs = track?.cueEndMs;
   if (

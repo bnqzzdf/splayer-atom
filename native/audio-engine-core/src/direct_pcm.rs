@@ -289,6 +289,28 @@ impl DirectPcmFrame {
         }
         Ok(())
     }
+
+    /// 保留当前 frame 起点后的前 keep 个每声道 sample，不修改任何样本值。
+    fn trim_end_samples(&mut self, keep: usize) -> Result<()> {
+        let format = self.format()?;
+        let available = self.samples_per_channel();
+        ensure!(
+            keep > 0 && keep <= available,
+            "Source Direct PCM 尾部截断范围无效"
+        );
+        if keep == available {
+            return Ok(());
+        }
+        let bytes_per_sample = usize::from(format.storage_bits / 8);
+        self.payload_len = keep
+            .checked_mul(usize::from(format.channels))
+            .and_then(|samples| samples.checked_mul(bytes_per_sample))
+            .context("Source Direct PCM 尾部 payload 长度溢出")?;
+        let raw = unsafe { self.raw.as_mut() };
+        raw.nb_samples = i32::try_from(self.sample_offset + keep)
+            .context("Source Direct PCM 尾部 sample count 越界")?;
+        Ok(())
+    }
 }
 
 unsafe fn interleave_planar<T: Copy>(
@@ -574,6 +596,89 @@ impl DirectPcmDecoder {
         unsafe { self.codec_context.as_ref().frame_size.max(0) as usize }
     }
 
+    fn sample_rate(&self) -> Result<u32> {
+        let sample_rate = unsafe { self.codec_context.as_ref().sample_rate };
+        let sample_rate =
+            u32::try_from(sample_rate).context("Source Direct PCM sample rate 越界")?;
+        ensure!(sample_rate > 0, "Source Direct PCM sample rate 无效");
+        Ok(sample_rate)
+    }
+
+    /// 按源 sample frame 精确 seek；用于 CUE 75fps 边界，避免先量化到微秒造成 off-by-one。
+    fn seek_sample_frame(&mut self, target_sample: u64, frame: &mut DirectPcmFrame) -> Result<u64> {
+        let sample_rate = self.sample_rate()?;
+        let sample_time_base = sys::AVRational {
+            num: 1,
+            den: i32::try_from(sample_rate).context("Source Direct PCM sample rate 超出 i32")?,
+        };
+        let target_sample_i64 =
+            i64::try_from(target_sample).context("Source Direct CUE sample 越界")?;
+        let mut target_pts =
+            unsafe { sys::av_rescale_q(target_sample_i64, sample_time_base, self.time_base) };
+        target_pts = target_pts.saturating_add(self.timeline_origin_pts);
+        let seek_result = unsafe {
+            sys::avformat_seek_file(
+                self.format_context.as_ptr(),
+                self.stream_index,
+                i64::MIN,
+                target_pts,
+                target_pts,
+                sys::AVSEEK_FLAG_BACKWARD.cast_signed(),
+            )
+        };
+        ffmpeg_result(seek_result, "Source Direct PCM CUE seek")?;
+        unsafe {
+            sys::avcodec_flush_buffers(self.codec_context.as_ptr());
+            sys::av_packet_unref(self.packet.as_ptr());
+        }
+        self.flushing = false;
+        self.drained = false;
+        self.seek_packet_timeline = Some(VecDeque::new());
+        self.active_seek_packet_timeline = None;
+        self.last_frame_packet_timestamp = None;
+
+        loop {
+            ensure!(
+                self.read_frame(frame)?,
+                "Source Direct CUE seek 超出音源末尾"
+            );
+            let raw = unsafe { frame.raw.as_ref() };
+            let timestamp = if raw.best_effort_timestamp != sys::AV_NOPTS_VALUE {
+                Some(raw.best_effort_timestamp)
+            } else if raw.pts != sys::AV_NOPTS_VALUE {
+                Some(raw.pts)
+            } else if raw.pkt_dts != sys::AV_NOPTS_VALUE {
+                Some(raw.pkt_dts)
+            } else {
+                self.last_frame_packet_timestamp
+            }
+            .context("Source Direct CUE seek 需要有效 frame/packet timestamp")?;
+            let relative_pts = timestamp.saturating_sub(self.timeline_origin_pts);
+            let frame_start =
+                unsafe { sys::av_rescale_q(relative_pts, self.time_base, sample_time_base) };
+            let frame_start =
+                u64::try_from(frame_start.max(0)).context("Source Direct CUE frame 起点越界")?;
+            let frame_samples =
+                u64::try_from(raw.nb_samples).context("Source Direct CUE frame samples 越界")?;
+            let frame_end = frame_start.saturating_add(frame_samples);
+            if frame_end <= target_sample {
+                continue;
+            }
+            ensure!(
+                frame_start <= target_sample,
+                "Source Direct CUE seek 无法证明精确 sample 起点"
+            );
+            let offset = usize::try_from(target_sample - frame_start)?;
+            if offset > 0 {
+                frame.trim_start_samples(offset)?;
+            }
+            self.seek_packet_timeline = None;
+            self.active_seek_packet_timeline = None;
+            self.last_frame_packet_timestamp = None;
+            return Ok(target_sample);
+        }
+    }
+
     fn seek_accurate(&mut self, position_secs: f64, frame: &mut DirectPcmFrame) -> Result<f64> {
         ensure!(
             position_secs.is_finite() && position_secs >= 0.0,
@@ -817,6 +922,12 @@ enum DirectPcmCommand {
         position_secs: f64,
         response: mpsc::SyncSender<Result<f64>>,
     },
+    SeekSegment {
+        start_frame75: u64,
+        end_frame75: Option<u64>,
+        position_secs: f64,
+        response: mpsc::SyncSender<Result<f64>>,
+    },
     ReplaceLocal {
         path: PathBuf,
         response: mpsc::SyncSender<Result<DirectPcmFormat>>,
@@ -987,7 +1098,146 @@ fn seek_pcm_ring(
 fn same_pcm_transport(left: DirectPcmFormat, right: DirectPcmFormat) -> bool {
     left.sample_rate == right.sample_rate
         && left.channels == right.channels
+        && left.valid_bits == right.valid_bits
         && left.storage_bits == right.storage_bits
+        && left.sample_format == right.sample_format
+}
+
+fn cue_frame75_to_pcm_sample(frame75: u64, sample_rate: u32) -> Result<u64> {
+    let scaled = frame75
+        .checked_mul(u64::from(sample_rate))
+        .context("Source Direct CUE PCM sample 边界溢出")?;
+    ensure!(
+        scaled % 75 == 0,
+        "[Direct] CUE 边界无法精确映射到当前 PCM sample rate"
+    );
+    Ok(scaled / 75)
+}
+
+fn limit_pcm_frame_to_remaining(
+    frame: &mut DirectPcmFrame,
+    remaining_frames: &mut Option<u64>,
+) -> Result<()> {
+    let Some(remaining) = remaining_frames.as_mut() else {
+        return Ok(());
+    };
+    ensure!(
+        *remaining > 0,
+        "Source Direct PCM segment 已结束仍收到 frame"
+    );
+    let available = u64::try_from(frame.samples_per_channel())?;
+    let keep = available.min(*remaining);
+    ensure!(keep > 0, "Source Direct PCM segment 最后 frame 为空");
+    if keep < available {
+        frame.trim_end_samples(usize::try_from(keep)?)?;
+    }
+    *remaining -= keep;
+    Ok(())
+}
+
+fn prepare_pcm_segment_first_frame(
+    decoder: &mut DirectPcmDecoder,
+    frame: &mut DirectPcmFrame,
+    start_frame75: u64,
+    end_frame75: Option<u64>,
+) -> Result<(f64, Option<u64>, Option<u64>)> {
+    let sample_rate = decoder.sample_rate()?;
+    let start_sample = cue_frame75_to_pcm_sample(start_frame75, sample_rate)?;
+    if start_sample > 0 {
+        decoder.seek_sample_frame(start_sample, frame)?;
+    } else {
+        ensure!(
+            decoder.read_frame(frame)?,
+            "Source Direct CUE PCM 音源没有可播放 frame"
+        );
+    }
+    let end_sample = end_frame75
+        .map(|frame75| cue_frame75_to_pcm_sample(frame75, sample_rate))
+        .transpose()?;
+    if let Some(end_sample) = end_sample {
+        ensure!(
+            end_sample > start_sample,
+            "Source Direct CUE PCM segment 长度无效"
+        );
+    }
+    let mut remaining_frames = end_sample.map(|end| end - start_sample);
+    limit_pcm_frame_to_remaining(frame, &mut remaining_frames)?;
+    Ok((
+        start_sample as f64 / f64::from(sample_rate),
+        remaining_frames,
+        end_sample.map(|end| end - start_sample),
+    ))
+}
+
+fn seek_pcm_segment_ring(
+    decoder: &mut DirectPcmDecoder,
+    ring: &DirectPcmRing,
+    expected_format: DirectPcmFormat,
+    start_frame75: u64,
+    end_frame75: Option<u64>,
+    position_secs: f64,
+) -> Result<(f64, Option<u64>)> {
+    ensure!(
+        position_secs.is_finite() && position_secs >= 0.0,
+        "Source Direct CUE seek 位置无效"
+    );
+    let sample_rate = expected_format.sample_rate;
+    let start_sample = cue_frame75_to_pcm_sample(start_frame75, sample_rate)?;
+    let offset_sample = (position_secs * f64::from(sample_rate))
+        .floor()
+        .clamp(0.0, u64::MAX as f64) as u64;
+    let target_sample = start_sample
+        .checked_add(offset_sample)
+        .context("Source Direct CUE seek sample 溢出")?;
+    let end_sample = end_frame75
+        .map(|frame75| cue_frame75_to_pcm_sample(frame75, sample_rate))
+        .transpose()?;
+    if let Some(end_sample) = end_sample {
+        ensure!(
+            target_sample < end_sample,
+            "Source Direct CUE seek 超出 segment 末尾"
+        );
+    }
+
+    ring.reset_for_transition();
+    let first_slot = &ring.slots[0];
+    first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
+    let first_frame = unsafe { &mut *first_slot.frame.get() };
+    decoder.seek_sample_frame(target_sample, first_frame)?;
+    ensure!(
+        first_frame.format()? == expected_format,
+        "Source Direct PCM CUE seek 后音频格式发生变化"
+    );
+    let mut remaining_frames = end_sample.map(|end| end - target_sample);
+    limit_pcm_frame_to_remaining(first_frame, &mut remaining_frames)?;
+    if expected_format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+        let max_samples_per_channel = decoder
+            .frame_samples_hint()
+            .max(first_frame.samples_per_channel());
+        let max_samples = max_samples_per_channel
+            .checked_mul(usize::from(expected_format.channels))
+            .context("Source Direct CUE seek repack 预分配长度溢出")?;
+        first_frame.preallocate_repack(expected_format.sample_format, max_samples)?;
+        first_frame.repack_planar(expected_format.sample_format, first_frame.sample_offset)?;
+        for slot in ring.slots.iter().skip(1) {
+            unsafe { &mut *slot.frame.get() }
+                .preallocate_repack(expected_format.sample_format, max_samples)?;
+        }
+    }
+    first_slot
+        .payload_ptr
+        .store(first_frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
+    first_slot
+        .payload_len
+        .store(first_frame.payload_len, Ordering::Relaxed);
+    first_slot
+        .sample_frames
+        .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+    first_slot.state.store(SLOT_READY, Ordering::Release);
+    Ok((
+        offset_sample as f64 / f64::from(sample_rate),
+        remaining_frames,
+    ))
 }
 
 struct StagedPcmSource {
@@ -996,6 +1246,7 @@ struct StagedPcmSource {
     format: DirectPcmFormat,
     duration_micros: u64,
     generation: u64,
+    remaining_frames: Option<u64>,
 }
 
 type StagedPcmEntry = (u64, StagedPcmSource);
@@ -1021,11 +1272,19 @@ impl DirectPcmStaging {
         current_format: DirectPcmFormat,
         duration_micros: u64,
         generation: u64,
+        start_frame75: Option<u64>,
+        end_frame75: Option<u64>,
     ) -> Result<bool> {
         // 每次新预载先使旧 generation 失效；慢 I/O/解码发生在调用线程，不进入 producer。
         let epoch = self.epoch.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
-        let candidate =
-            prepare_staged_pcm_source(path, current_format, duration_micros, generation)?;
+        let candidate = prepare_staged_pcm_source(
+            path,
+            current_format,
+            duration_micros,
+            generation,
+            start_frame75,
+            end_frame75,
+        )?;
         if self.epoch.load(Ordering::Acquire) != epoch {
             return Ok(false);
         }
@@ -1088,15 +1347,28 @@ impl DirectPcmStaging {
 fn prepare_staged_pcm_source(
     path: &Path,
     current_format: DirectPcmFormat,
-    duration_micros: u64,
+    mut duration_micros: u64,
     generation: u64,
+    start_frame75: Option<u64>,
+    end_frame75: Option<u64>,
 ) -> Result<StagedPcmSource> {
     let mut decoder = DirectPcmDecoder::open_local(path)?;
     let mut first_frame = DirectPcmFrame::new()?;
-    ensure!(
-        decoder.read_frame(&mut first_frame)?,
-        "Source Direct staged 音源没有可播放 PCM frame"
-    );
+    let (remaining_frames, exact_total_frames) = if let Some(start_frame75) = start_frame75 {
+        let (_, remaining, total) = prepare_pcm_segment_first_frame(
+            &mut decoder,
+            &mut first_frame,
+            start_frame75,
+            end_frame75,
+        )?;
+        (remaining, total)
+    } else {
+        ensure!(
+            decoder.read_frame(&mut first_frame)?,
+            "Source Direct staged 音源没有可播放 PCM frame"
+        );
+        (None, None)
+    };
     let format = first_frame.format()?;
     ensure!(
         same_pcm_transport(current_format, format),
@@ -1112,19 +1384,26 @@ fn prepare_staged_pcm_source(
         first_frame.preallocate_repack(format.sample_format, max_samples)?;
         first_frame.repack_planar(format.sample_format, first_frame.sample_offset)?;
     }
+    if let Some(total_frames) = exact_total_frames {
+        duration_micros = total_frames
+            .saturating_mul(1_000_000)
+            .checked_div(u64::from(format.sample_rate))
+            .unwrap_or(0);
+    }
     Ok(StagedPcmSource {
         decoder,
         first_frame,
         format,
         duration_micros,
         generation,
+        remaining_frames,
     })
 }
 
 fn install_staged_pcm_slot(
     mut staged: StagedPcmSource,
     slot: &DirectPcmSlot,
-) -> Result<(DirectPcmDecoder, DirectPcmFormat)> {
+) -> Result<(DirectPcmDecoder, DirectPcmFormat, Option<u64>)> {
     let frame = unsafe { &mut *slot.frame.get() };
     std::mem::swap(frame, &mut staged.first_frame);
     slot.payload_ptr
@@ -1138,7 +1417,7 @@ fn install_staged_pcm_slot(
         .store(staged.generation, Ordering::Relaxed);
     slot.boundary.store(true, Ordering::Relaxed);
     slot.state.store(SLOT_READY, Ordering::Release);
-    Ok((staged.decoder, staged.format))
+    Ok((staged.decoder, staged.format, staged.remaining_frames))
 }
 
 fn replace_pcm_ring(
@@ -1244,7 +1523,14 @@ pub struct DirectPcmStageHandle {
 }
 
 impl DirectPcmStageHandle {
-    pub fn stage_local(&self, path: &Path, duration_secs: f64, generation: u64) -> Result<bool> {
+    pub fn stage_local(
+        &self,
+        path: &Path,
+        duration_secs: f64,
+        generation: u64,
+        start_frame75: Option<u64>,
+        end_frame75: Option<u64>,
+    ) -> Result<bool> {
         ensure!(
             duration_secs.is_finite() && duration_secs >= 0.0,
             "Source Direct staged duration 无效"
@@ -1252,8 +1538,14 @@ impl DirectPcmStageHandle {
         let duration_micros = (duration_secs * 1_000_000.0)
             .round()
             .clamp(0.0, u64::MAX as f64) as u64;
-        self.staging
-            .stage(path, self.format, duration_micros, generation)
+        self.staging.stage(
+            path,
+            self.format,
+            duration_micros,
+            generation,
+            start_frame75,
+            end_frame75,
+        )
     }
 
     pub fn cancel(&self) {
@@ -1276,19 +1568,45 @@ impl DirectPcmSource {
     }
 
     pub fn open_local_at(path: &Path, position_secs: f64) -> Result<(Self, f64)> {
+        Self::open_local_configured(path, position_secs, None, None)
+    }
+
+    pub fn open_local_segment(
+        path: &Path,
+        start_frame75: u64,
+        end_frame75: Option<u64>,
+    ) -> Result<(Self, f64)> {
+        Self::open_local_configured(path, 0.0, Some(start_frame75), end_frame75)
+    }
+
+    fn open_local_configured(
+        path: &Path,
+        position_secs: f64,
+        start_frame75: Option<u64>,
+        end_frame75: Option<u64>,
+    ) -> Result<(Self, f64)> {
         let mut decoder = DirectPcmDecoder::open_local(path)?;
         let ring = Arc::new(DirectPcmRing::new()?);
         let first_slot = &ring.slots[0];
         first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
         let first_frame = unsafe { &mut *first_slot.frame.get() };
-        let actual_position = if position_secs > 0.0 {
-            decoder.seek_accurate(position_secs, first_frame)?
+        let (actual_position, initial_remaining_frames) = if let Some(start_frame75) = start_frame75
+        {
+            let (_, remaining, _) = prepare_pcm_segment_first_frame(
+                &mut decoder,
+                first_frame,
+                start_frame75,
+                end_frame75,
+            )?;
+            (0.0, remaining)
+        } else if position_secs > 0.0 {
+            (decoder.seek_accurate(position_secs, first_frame)?, None)
         } else {
             ensure!(
                 decoder.read_frame(first_frame)?,
                 "Source Direct 音源没有可播放 PCM frame"
             );
-            0.0
+            (0.0, None)
         };
         let format = first_frame.format()?;
         if format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
@@ -1324,6 +1642,7 @@ impl DirectPcmSource {
             .name("diretta-direct-decode".into())
             .spawn(move || {
                 let mut active_format = format;
+                let mut remaining_frames = initial_remaining_frames;
                 let mut next_slot = 1 % producer_ring.slots.len();
                 while !producer_ring.stopped.load(Ordering::Acquire) {
                     match control_rx.try_recv() {
@@ -1339,8 +1658,37 @@ impl DirectPcmSource {
                             );
                             if result.is_err() {
                                 producer_ring.failed.store(true, Ordering::Release);
+                            } else {
+                                remaining_frames = None;
                             }
                             let _ = response.send(result);
+                            next_slot = 1 % producer_ring.slots.len();
+                            continue;
+                        }
+                        Ok(DirectPcmCommand::SeekSegment {
+                            start_frame75,
+                            end_frame75,
+                            position_secs,
+                            response,
+                        }) => {
+                            let result = seek_pcm_segment_ring(
+                                &mut decoder,
+                                &producer_ring,
+                                active_format,
+                                start_frame75,
+                                end_frame75,
+                                position_secs,
+                            );
+                            match result {
+                                Ok((actual, remaining)) => {
+                                    remaining_frames = remaining;
+                                    let _ = response.send(Ok(actual));
+                                }
+                                Err(error) => {
+                                    producer_ring.failed.store(true, Ordering::Release);
+                                    let _ = response.send(Err(error));
+                                }
+                            }
                             next_slot = 1 % producer_ring.slots.len();
                             continue;
                         }
@@ -1350,6 +1698,7 @@ impl DirectPcmSource {
                                 Ok((new_decoder, new_format)) => {
                                     decoder = new_decoder;
                                     active_format = new_format;
+                                    remaining_frames = None;
                                     producer_staging.cancel();
                                     let _ = response.send(Ok(new_format));
                                     next_slot = 1 % producer_ring.slots.len();
@@ -1388,9 +1737,10 @@ impl DirectPcmSource {
                             continue;
                         }
                         match install_staged_pcm_slot(entry.1, slot) {
-                            Ok((new_decoder, new_format)) => {
+                            Ok((new_decoder, new_format, new_remaining)) => {
                                 decoder = new_decoder;
                                 active_format = new_format;
+                                remaining_frames = new_remaining;
                                 producer_ring.finished.store(false, Ordering::Release);
                                 next_slot = (next_slot + 1) % producer_ring.slots.len();
                             }
@@ -1417,6 +1767,27 @@ impl DirectPcmSource {
                     }
 
                     let frame = unsafe { &mut *slot.frame.get() };
+                    if remaining_frames == Some(0) {
+                        if let Some(entry) = producer_staging.take_current() {
+                            match install_staged_pcm_slot(entry.1, slot) {
+                                Ok((new_decoder, new_format, new_remaining)) => {
+                                    decoder = new_decoder;
+                                    active_format = new_format;
+                                    remaining_frames = new_remaining;
+                                    producer_ring.finished.store(false, Ordering::Release);
+                                    next_slot = (next_slot + 1) % producer_ring.slots.len();
+                                }
+                                Err(_) => {
+                                    slot.state.store(SLOT_FREE, Ordering::Release);
+                                    producer_ring.failed.store(true, Ordering::Release);
+                                }
+                            }
+                        } else {
+                            slot.state.store(SLOT_FREE, Ordering::Release);
+                            producer_ring.finished.store(true, Ordering::Release);
+                        }
+                        continue;
+                    }
                     match decoder.read_frame(frame) {
                         Ok(true) => {
                             let frame_format = match frame.format() {
@@ -1428,6 +1799,11 @@ impl DirectPcmSource {
                                 }
                             };
                             if frame_format != active_format {
+                                slot.state.store(SLOT_FREE, Ordering::Release);
+                                producer_ring.failed.store(true, Ordering::Release);
+                                return;
+                            }
+                            if limit_pcm_frame_to_remaining(frame, &mut remaining_frames).is_err() {
                                 slot.state.store(SLOT_FREE, Ordering::Release);
                                 producer_ring.failed.store(true, Ordering::Release);
                                 return;
@@ -1450,9 +1826,10 @@ impl DirectPcmSource {
                         Ok(false) => {
                             if let Some(entry) = producer_staging.take_current() {
                                 match install_staged_pcm_slot(entry.1, slot) {
-                                    Ok((new_decoder, new_format)) => {
+                                    Ok((new_decoder, new_format, new_remaining)) => {
                                         decoder = new_decoder;
                                         active_format = new_format;
+                                        remaining_frames = new_remaining;
                                         producer_ring.finished.store(false, Ordering::Release);
                                         next_slot = (next_slot + 1) % producer_ring.slots.len();
                                     }
@@ -1539,6 +1916,26 @@ impl DirectPcmSource {
         response_rx
             .recv()
             .context("等待 Source Direct PCM seek 结果失败")?
+    }
+
+    pub fn seek_segment_while_paused(
+        &mut self,
+        start_frame75: u64,
+        end_frame75: Option<u64>,
+        position_secs: f64,
+    ) -> Result<f64> {
+        let (response_tx, response_rx) = mpsc::sync_channel(0);
+        self.control_tx
+            .send(DirectPcmCommand::SeekSegment {
+                start_frame75,
+                end_frame75,
+                position_secs,
+                response: response_tx,
+            })
+            .context("提交 Source Direct PCM CUE seek 失败")?;
+        response_rx
+            .recv()
+            .context("等待 Source Direct PCM CUE seek 结果失败")?
     }
 
     pub fn replace_local_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
@@ -2337,7 +2734,7 @@ mod tests {
         let monitor = source.monitor();
         source
             .stage_handle()
-            .stage_local(&second.path, 2.0, 7)
+            .stage_local(&second.path, 2.0, 7, None, None)
             .unwrap();
 
         let mut collected = Vec::new();
@@ -2361,6 +2758,43 @@ mod tests {
         assert_eq!(monitor.transition_count(), 1);
         assert_eq!(monitor.boundary_generation(), 7);
         assert_eq!(monitor.duration(), 2.0);
+    }
+
+    #[test]
+    fn cue_frame75_pcm_segment_is_exactly_588_frames_at_44k1() {
+        let frames = 2_000_usize;
+        let mut pcm = Vec::with_capacity(frames * 4);
+        for index in 0..frames {
+            let left = index as i16;
+            let right = left.wrapping_neg();
+            pcm.extend_from_slice(&left.to_le_bytes());
+            pcm.extend_from_slice(&right.to_le_bytes());
+        }
+        let fixture = TempAudioFile::wav(44_100, 16, &pcm);
+        let (source, actual) =
+            DirectPcmSource::open_local_segment(&fixture.path, 1, Some(2)).unwrap();
+        assert_eq!(actual, 0.0);
+
+        let expected_start = 588_usize * 4;
+        let expected_len = 588_usize * 4;
+        let mut collected = Vec::new();
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while collected.len() < expected_len && std::time::Instant::now() < deadline {
+            let mut data = ptr::null();
+            let mut len = 0_usize;
+            if unsafe { direct_pcm_next_block(source.callback_context(), &mut data, &mut len) } {
+                collected.extend_from_slice(unsafe { slice::from_raw_parts(data, len) });
+            } else {
+                thread::sleep(Duration::from_millis(1));
+            }
+        }
+        unsafe { direct_pcm_release_block(source.callback_context()) };
+
+        assert_eq!(collected.len(), expected_len);
+        assert_eq!(
+            collected,
+            pcm[expected_start..expected_start + expected_len]
+        );
     }
 
     #[test]

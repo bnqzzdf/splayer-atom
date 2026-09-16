@@ -63,8 +63,15 @@ test("Direct staging respects Core playback semantics before handing audio to na
     /store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\)/,
   );
   assert.doesNotMatch(corePreloaderSource, /getSelectedDeviceName\(\)/);
-  assert.match(corePreloaderSource, /track\.cueStartMs != null \|\| track\.cueEndMs != null/);
-  assert.match(corePreloaderSource, /stageDirectPlaybackNext/);
+  assert.match(corePreloaderSource, /directCueSegmentFromTrack\(track\)/);
+  assert.match(
+    corePreloaderSource,
+    /track\.cueStartMs != null && track\.cueEndMs != null && !segment/,
+  );
+  assert.match(
+    corePreloaderSource,
+    /stageDirectPlaybackNext\([\s\S]*segment\?\.startFrame75,[\s\S]*segment\?\.endFrame75/,
+  );
   assert.match(sessionSource, /autoClose\.enabled && autoClose\.waitSongEnd/);
   assert.match(sessionSource, /nextPlaybackPreloadIndex/);
 });

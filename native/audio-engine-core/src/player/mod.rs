@@ -289,12 +289,18 @@ impl InnerPlayer {
     }
 
     #[cfg(feature = "diretta")]
-    pub fn commit_direct_gapless_boundary(&mut self, source: &str, duration: f64) -> Result<()> {
+    pub fn commit_direct_gapless_boundary(
+        &mut self,
+        source: &str,
+        duration: f64,
+        cue_start_frame75: Option<u64>,
+        cue_end_frame75: Option<u64>,
+    ) -> Result<()> {
         let playback = self
             .direct_playback
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("[Direct] 当前没有可提交的 gapless Direct runtime"))?;
-        playback.commit_gapless_boundary(source, duration);
+        playback.commit_gapless_boundary(source, duration, cue_start_frame75, cue_end_frame75);
         // staged gapless boundary 不会重新走完整 load，因此旧 raw cover 已不再属于当前 source；
         // 清空后由 Control 使用当前 Track 自己的 cover，避免全屏播放器显示上一首高清封面。
         self.cover_raw = None;

@@ -1,7 +1,7 @@
 import type { LyricFormat } from "@shared/types/lyrics";
 import type { DirectStageResult, PlaybackContext, Track } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
-import { clearActiveCueRange } from "@main/services/playerTimeline";
+import { directCueSegmentFromTrack, setActiveCueTrack } from "@main/services/playerTimeline";
 import { nextPlayerLoadSeq } from "@main/services/playerLoad";
 import { pruneDirectInputs } from "@main/atom/directInput";
 import { playerLog } from "@main/utils/logger";
@@ -14,6 +14,8 @@ export const stageDirectPlaybackNext = async (
   source: string,
   durationMs: number,
   generation: number,
+  cueStartFrame75?: number,
+  cueEndFrame75?: number,
 ): Promise<DirectStageResult> => {
   try {
     const safeGeneration = Math.max(0, Math.min(0xffff_ffff, Math.trunc(generation)));
@@ -22,6 +24,8 @@ export const stageDirectPlaybackNext = async (
       source,
       Math.max(0, durationMs) / 1000,
       safeGeneration,
+      cueStartFrame75,
+      cueEndFrame75,
     );
     if (!staged) return { staged: false };
 
@@ -68,9 +72,15 @@ export const commitDirectPlaybackBoundary = (
   track?: Track,
   context?: PlaybackContext,
 ): void => {
-  getPlayer().commitDirectGaplessBoundary(source, Math.max(0, durationMs) / 1000);
+  const segment = directCueSegmentFromTrack(track);
+  getPlayer().commitDirectGaplessBoundary(
+    source,
+    Math.max(0, durationMs) / 1000,
+    segment?.startFrame75,
+    segment?.endFrame75,
+  );
   void pruneDirectInputs(source);
-  clearActiveCueRange();
+  setActiveCueTrack(track, segment != null);
   nextPlayerLoadSeq();
   if (!track) return;
   beginCorePlayStats({ ...track, duration: track.duration || durationMs }, true);

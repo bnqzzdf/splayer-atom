@@ -60,7 +60,7 @@ test("main player load materializes every remote source before Diretta native lo
   assert.match(loadFlow, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
   assert.match(loadFlow, /\^https\?:\\\/\\\//i);
   assert.match(loadFlow, /loadSource = await materializeDirectInput\(source\)/);
-  assert.match(loadFlow, /inst\.load\(loadSource/);
+  assert.match(loadFlow, /inst\.load\(\s*loadSource,/);
   assert.doesNotMatch(loadFlow, /track\.source === "qobuz" \|\| track\.source === "tidal"/);
 });
 

@@ -162,10 +162,29 @@ mod imp {
             path: &Path,
             position_secs: f64,
         ) -> Result<(Self, f64)> {
+            let (source, actual_position) = DirectPcmSource::open_local_at(path, position_secs)?;
+            Self::open_source(selector, source, actual_position)
+        }
+
+        pub fn open_local_segment(
+            selector: &str,
+            path: &Path,
+            start_frame75: u64,
+            end_frame75: Option<u64>,
+        ) -> Result<(Self, f64)> {
+            let (source, actual_position) =
+                DirectPcmSource::open_local_segment(path, start_frame75, end_frame75)?;
+            Self::open_source(selector, source, actual_position)
+        }
+
+        fn open_source(
+            selector: &str,
+            source: DirectPcmSource,
+            actual_position: f64,
+        ) -> Result<(Self, f64)> {
             let target = selector_target(selector)
                 .ok_or_else(|| anyhow!("invalid Diretta output selector"))?;
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
-            let (source, actual_position) = DirectPcmSource::open_local_at(path, position_secs)?;
             let format = source.format();
             let raw = unsafe {
                 atom_diretta_open_direct(
@@ -207,6 +226,16 @@ mod imp {
             self.source.seek_while_paused(position_secs)
         }
 
+        pub fn seek_segment_while_paused(
+            &mut self,
+            start_frame75: u64,
+            end_frame75: Option<u64>,
+            position_secs: f64,
+        ) -> Result<f64> {
+            self.source
+                .seek_segment_while_paused(start_frame75, end_frame75, position_secs)
+        }
+
         pub fn replace_local_source_while_paused(
             &mut self,
             path: &Path,
@@ -246,11 +275,40 @@ mod imp {
             path: &Path,
             position_secs: f64,
         ) -> Result<(Self, f64)> {
+            let (source, actual_position) = DirectDsdSource::open_local_at(path, position_secs)?;
+            Self::open_source(selector, source, actual_position, None)
+        }
+
+        pub fn open_local_segment(
+            selector: &str,
+            path: &Path,
+            start_frame75: u64,
+            end_frame75: Option<u64>,
+            duration_secs: f64,
+        ) -> Result<(Self, f64)> {
+            let (source, actual_position) = DirectDsdSource::open_local_segment(
+                path,
+                start_frame75,
+                end_frame75,
+                duration_secs,
+            )?;
+            Self::open_source(
+                selector,
+                source,
+                actual_position,
+                Some((start_frame75, end_frame75)),
+            )
+        }
+
+        fn open_source(
+            selector: &str,
+            mut source: DirectDsdSource,
+            actual_position: f64,
+            segment: Option<(u64, Option<u64>)>,
+        ) -> Result<(Self, f64)> {
             let target = selector_target(selector)
                 .ok_or_else(|| anyhow!("invalid Diretta output selector"))?;
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
-            let (mut source, actual_position) =
-                DirectDsdSource::open_local_at(path, position_secs)?;
             let format = source.format();
             let source_lsb_first = format.bit_order == DirectDsdBitOrder::LsbFirst;
             let mut wire_lsb_first = source_lsb_first;
@@ -274,9 +332,17 @@ mod imp {
                 DirectDsdBitOrder::MsbFirst
             };
             if wire_bit_order != format.bit_order {
-                if let Err(error) =
+                let adapt = if let Some((start_frame75, end_frame75)) = segment {
+                    source.set_wire_bit_order_segment_while_paused(
+                        wire_bit_order,
+                        start_frame75,
+                        end_frame75,
+                        actual_position,
+                    )
+                } else {
                     source.set_wire_bit_order_while_paused(wire_bit_order, actual_position)
-                {
+                };
+                if let Err(error) = adapt {
                     unsafe { atom_diretta_close(raw.as_ptr()) };
                     return Err(anyhow!(
                         "failed to adapt Native DSD wire bit order: {error}"
@@ -308,6 +374,16 @@ mod imp {
 
         pub fn seek_while_paused(&mut self, position_secs: f64) -> Result<f64> {
             self.source.seek_while_paused(position_secs)
+        }
+
+        pub fn seek_segment_while_paused(
+            &mut self,
+            start_frame75: u64,
+            end_frame75: Option<u64>,
+            position_secs: f64,
+        ) -> Result<f64> {
+            self.source
+                .seek_segment_while_paused(start_frame75, end_frame75, position_secs)
         }
 
         pub fn replace_local_source_while_paused(

@@ -14,6 +14,7 @@ import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";
 import {
   clearActiveCueRange,
+  directCueSegmentFromTrack,
   setActiveCueTrack,
   toDisplayDurationMs,
 } from "@main/services/playerTimeline";
@@ -74,12 +75,14 @@ export const loadPlayerSource = async (
   cancelPendingReinit();
   const autoPlay = options.autoPlay ?? true;
   const authoritative = options.meta ?? null;
-  const cueRange = setActiveCueTrack(authoritative);
   const isRemote = authoritative != null && authoritative.source !== "local";
   const seq = nextPlayerLoadSeq();
   let loadSource = source;
   try {
     const inst = getPlayer();
+    const directOutput = inst.getSelectedDeviceName()?.startsWith("diretta:") === true;
+    const directCueSegment = directOutput ? directCueSegmentFromTrack(authoritative) : null;
+    const cueRange = setActiveCueTrack(authoritative, directCueSegment != null);
     const loadingEvent = {
       type: "status" as const,
       data: {
@@ -101,10 +104,15 @@ export const loadPlayerSource = async (
       loadSource = await materializeDirectInput(source);
     }
 
-    const meta = await inst.load(loadSource, cueRange ? false : autoPlay);
+    const meta = await inst.load(
+      loadSource,
+      cueRange && !directCueSegment ? false : autoPlay,
+      directCueSegment?.startFrame75,
+      directCueSegment?.endFrame75,
+    );
     if (loadSource !== source) runtime.onDirectMaterialized?.(loadSource);
     void pruneDirectInputs(loadSource);
-    if (cueRange) {
+    if (cueRange && !directCueSegment) {
       await inst.seek(cueRange.startMs / 1000);
       if (autoPlay) await inst.play();
     }

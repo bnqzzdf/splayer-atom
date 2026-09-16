@@ -4,6 +4,7 @@ import { toNativeSacdPlaybackSource } from "@main/atom/sacdInput";
 import { cancelDirectPlaybackNext, stageDirectPlaybackNext } from "@main/services/directGapless";
 import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
+import { directCueSegmentFromTrack } from "@main/services/playerTimeline";
 import {
   resolvePlaybackSource,
   type ResolvedPlaybackSource,
@@ -48,6 +49,10 @@ const buildPreloadKey = (queueIndex: number, item: PlaybackQueueItem): string =>
     item.track.originalId ?? "",
     item.track.path ?? "",
     item.track.cueAudioPath ?? "",
+    item.track.cueStartFrame75 ?? "",
+    item.track.cueEndFrame75 ?? "",
+    item.track.cueStartMs ?? "",
+    item.track.cueEndMs ?? "",
     store.get("player.songLevel"),
     store.get("player.allowTrialPlay"),
     store.get("player.outputDevice") ?? "",
@@ -97,7 +102,6 @@ const prepareDirectSource = async (
   resolved: ResolvedPlaybackSource,
 ): Promise<{ source: ResolvedPlaybackSource; directSource: string } | null> => {
   if (store.get("player.outputDevice")?.startsWith("diretta:") !== true) return null;
-  if (track.cueStartMs != null || track.cueEndMs != null) return null;
 
   let directSource =
     toNativeSacdPlaybackSource(resolved.source, track.track, track.duration) ?? resolved.source;
@@ -132,7 +136,20 @@ const stageDirectSource = async (
     if (token !== preloadToken) return null;
     cancelDirectStageNow();
     if (token !== preloadToken) return null;
-    const result = await stageDirectPlaybackNext(directSource, track.duration ?? 0, generation);
+    const segment = directCueSegmentFromTrack(track);
+    if (track.cueStartMs != null && track.cueEndMs != null && !segment) {
+      playerLog.warn(
+        `[session] Direct CUE preload skipped: missing canonical 75fps boundary track=${track.id}`,
+      );
+      return null;
+    }
+    const result = await stageDirectPlaybackNext(
+      directSource,
+      track.duration ?? 0,
+      generation,
+      segment?.startFrame75,
+      segment?.endFrame75,
+    );
     if (token !== preloadToken && result.staged) {
       cancelDirectStageNow();
       return null;

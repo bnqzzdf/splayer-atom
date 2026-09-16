@@ -34,7 +34,7 @@ export declare class AudioPlayer {
    * 3. 主线程持锁瞬间：提交输出流、构造 sink + attach + emit stateChanged
    * 持锁阶段都是纯内存操作，主线程其它同步 NAPI 调用最多等几微秒，不会被 IO 卡住
    */
-  load(source: string, autoPlay?: boolean): Promise<JsMusicMetadata>
+  load(source: string, autoPlay?: boolean, cueStartFrame75?: number, cueEndFrame75?: number): Promise<JsMusicMetadata>
   /** 恢复播放。如果已停止或播放结束，自动从头重新加载 */
   play(): Promise<void>
   /** 暂停播放 */
@@ -62,11 +62,11 @@ export declare class AudioPlayer {
    * 为当前 Diretta Source Direct 播放预备一个同 wire-format 的本地下一音源。
    * 返回 false 表示当前不是 Direct runtime；格式不兼容等 staging 错误会明确返回。
    */
-  stageDirectNext(source: string, durationSecs: number, generation: number): Promise<boolean>
+  stageDirectNext(source: string, durationSecs: number, generation: number, cueStartFrame75?: number, cueEndFrame75?: number): Promise<boolean>
   /** 作废尚未进入音频 ring 的 Direct staged 下一音源。 */
   cancelDirectNext(): void
   /** renderer 在 directTrackBoundary 后确认其 queue/media 已推进到实际正在播放的下一首。 */
-  commitDirectGaplessBoundary(source: string, durationSecs: number): void
+  commitDirectGaplessBoundary(source: string, durationSecs: number, cueStartFrame75?: number, cueEndFrame75?: number): void
   /** 设置音量（0.0 ~ 1.0） */
   setVolume(volume: number): void
   /** 获取当前音量（0.0 ~ 1.0） */

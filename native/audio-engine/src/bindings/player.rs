@@ -91,8 +91,18 @@ fn open_verified_direct_playback(
     auto_play: bool,
     load_token: &Arc<std::sync::atomic::AtomicU64>,
     token: u64,
+    cue_start_frame75: Option<u64>,
+    cue_end_frame75: Option<u64>,
 ) -> anyhow::Result<DirectPlayback> {
-    let mut playback = DirectPlayback::open_local(selector, source, duration_secs, 0.0, auto_play)?;
+    let mut playback = DirectPlayback::open_local(
+        selector,
+        source,
+        duration_secs,
+        0.0,
+        auto_play,
+        cue_start_frame75,
+        cue_end_frame75,
+    )?;
     if !auto_play {
         return Ok(playback);
     }
@@ -388,7 +398,7 @@ impl AudioPlayer {
                     }
                     if let Some(src) = source {
                         let is_remote = src.starts_with("http://") || src.starts_with("https://");
-                        if let Err(e) = self.load(src, Some(was_playing)).await {
+                        if let Err(e) = self.load(src, Some(was_playing), None, None).await {
                             if is_cancelled_napi_error(&e) {
                                 return Ok(());
                             }
@@ -421,7 +431,7 @@ impl AudioPlayer {
         // 没有 decoder_thread（例如上次 reinit 失败），但存在待恢复的曲目，走重新加载
         if let Some(src) = fallback_source {
             let is_remote = src.starts_with("http://") || src.starts_with("https://");
-            if let Err(e) = self.load(src, Some(was_playing_fallback)).await {
+            if let Err(e) = self.load(src, Some(was_playing_fallback), None, None).await {
                 if is_cancelled_napi_error(&e) {
                     return Ok(());
                 }
@@ -551,6 +561,8 @@ impl AudioPlayer {
         &self,
         source: String,
         #[napi(ts_arg_type = "boolean")] auto_play: Option<bool>,
+        #[napi(ts_arg_type = "number")] cue_start_frame75: Option<u32>,
+        #[napi(ts_arg_type = "number")] cue_end_frame75: Option<u32>,
     ) -> Result<JsMusicMetadata> {
         use crate::shared::Shared;
 
@@ -603,12 +615,14 @@ impl AudioPlayer {
         };
 
         #[cfg(not(feature = "diretta"))]
-        let _ = &direct_selector;
+        let _ = (&direct_selector, cue_start_frame75, cue_end_frame75);
 
         #[cfg(feature = "diretta")]
         if let Some(selector) = direct_selector {
             let source_for_direct = source.clone();
             let load_token_for_direct = Arc::clone(&load_token);
+            let cue_start_frame75 = cue_start_frame75.map(u64::from);
+            let cue_end_frame75 = cue_end_frame75.map(u64::from);
             let result = tokio::task::spawn_blocking(move || {
                 let replacing_direct_playback = old_threads.direct_playback.is_some();
                 if let Some(h) = old_threads.join_aux() {
@@ -634,6 +648,8 @@ impl AudioPlayer {
                     auto_play,
                     &load_token_for_direct,
                     token,
+                    cue_start_frame75,
+                    cue_end_frame75,
                 )?;
                 match playback.format() {
                     DirectFormat::Pcm(format) => {
@@ -791,7 +807,7 @@ impl AudioPlayer {
         };
         if let Some(source) = revival_source {
             let is_remote = source.starts_with("http://") || source.starts_with("https://");
-            if let Err(e) = self.load(source, Some(true)).await {
+            if let Err(e) = self.load(source, Some(true), None, None).await {
                 // 复活加载被更新的 load/stop 取代不是错误：已有更新的操作接管播放
                 if is_cancelled_napi_error(&e) {
                     return Ok(());
@@ -953,7 +969,7 @@ impl AudioPlayer {
                 }
                 if let Some(src) = current_source {
                     let is_remote = src.starts_with("http://") || src.starts_with("https://");
-                    if let Err(e) = self.load(src, Some(was_playing)).await {
+                    if let Err(e) = self.load(src, Some(was_playing), None, None).await {
                         if is_cancelled_napi_error(&e) {
                             return Ok(());
                         }
@@ -994,6 +1010,8 @@ impl AudioPlayer {
         source: String,
         duration_secs: f64,
         generation: u32,
+        #[napi(ts_arg_type = "number")] cue_start_frame75: Option<u32>,
+        #[napi(ts_arg_type = "number")] cue_end_frame75: Option<u32>,
     ) -> Result<bool> {
         #[cfg(feature = "diretta")]
         {
@@ -1001,7 +1019,13 @@ impl AudioPlayer {
                 return Ok(false);
             };
             let staged = tokio::task::spawn_blocking(move || {
-                handle.stage_local(&source, duration_secs, u64::from(generation))
+                handle.stage_local(
+                    &source,
+                    duration_secs,
+                    u64::from(generation),
+                    cue_start_frame75.map(u64::from),
+                    cue_end_frame75.map(u64::from),
+                )
             })
             .await
             .map_err(|error| {
@@ -1012,7 +1036,13 @@ impl AudioPlayer {
         }
         #[cfg(not(feature = "diretta"))]
         {
-            let _ = (source, duration_secs, generation);
+            let _ = (
+                source,
+                duration_secs,
+                generation,
+                cue_start_frame75,
+                cue_end_frame75,
+            );
             Ok(false)
         }
     }
@@ -1028,17 +1058,28 @@ impl AudioPlayer {
 
     /// renderer 在 directTrackBoundary 后确认其 queue/media 已推进到实际正在播放的下一首。
     #[napi]
-    pub fn commit_direct_gapless_boundary(&self, source: String, duration_secs: f64) -> Result<()> {
+    pub fn commit_direct_gapless_boundary(
+        &self,
+        source: String,
+        duration_secs: f64,
+        #[napi(ts_arg_type = "number")] cue_start_frame75: Option<u32>,
+        #[napi(ts_arg_type = "number")] cue_end_frame75: Option<u32>,
+    ) -> Result<()> {
         #[cfg(feature = "diretta")]
         {
             self.inner
                 .lock()
-                .commit_direct_gapless_boundary(&source, duration_secs)
+                .commit_direct_gapless_boundary(
+                    &source,
+                    duration_secs,
+                    cue_start_frame75.map(u64::from),
+                    cue_end_frame75.map(u64::from),
+                )
                 .into_napi()
         }
         #[cfg(not(feature = "diretta"))]
         {
-            let _ = (source, duration_secs);
+            let _ = (source, duration_secs, cue_start_frame75, cue_end_frame75);
             Err(Error::from_reason(
                 "[Direct] 当前 audio-engine 未编译 Diretta Host SDK 支持".to_string(),
             ))
@@ -1282,7 +1323,7 @@ impl AudioPlayer {
         let Some(source) = source else {
             return Ok(());
         };
-        self.load(source, Some(false)).await?;
+        self.load(source, Some(false), None, None).await?;
         if position > 0.0 {
             self.seek(position).await?;
         }

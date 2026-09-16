@@ -38,7 +38,7 @@ test("Diretta opens and stages the same SACD virtual DSD stream without material
     preloader,
     /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/,
   );
-  assert.match(preloader, /stageDirectPlaybackNext\(directSource/);
+  assert.match(preloader, /stageDirectPlaybackNext\(\s*directSource,/);
   assert.doesNotMatch(preloader, /prepareSacdPlaybackInput|extractSacdDsf/);
   assert.match(directRuntime, /parse_sacd_virtual_path\(source\)/);
   assert.match(directDsd, /SacdDsfStream::open_virtual_path\(source\)/);
