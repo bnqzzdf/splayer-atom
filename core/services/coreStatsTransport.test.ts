@@ -8,7 +8,6 @@ const coreStatsSource = read("./headlessPlayStats.ts");
 const playerLoadSource = read("./playerLoad.ts");
 const directGaplessSource = read("./directGapless.ts");
 const nodePlayerSource = read("./corePlayerEvents.ts");
-const nodeCoreSource = read("../core-node/index.ts");
 const statsTypesSource = read("../../shared/types/stats.ts");
 const rendererStatsSource = read("../../src/core/player/stats.ts");
 const rendererPlayerSource = read("../../src/core/player/index.ts");
