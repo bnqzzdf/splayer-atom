@@ -168,9 +168,13 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
     VALUES
       (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const getAddedAt = d.prepare(
+    "SELECT scanned_at AS addedAt FROM tracks WHERE id = ? OR path = ? LIMIT 1",
+  );
   const now = Date.now();
   const tx = d.transaction(() => {
     for (const t of tracks) {
+      const existing = getAddedAt.get(t.id, t.path) as { addedAt: number } | undefined;
       stmt.run(
         t.id,
         t.path,
@@ -194,7 +198,7 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
         t.fileSize,
         t.mtime,
         t.ctime,
-        now,
+        existing?.addedAt ?? now,
       );
     }
   });
@@ -275,18 +279,29 @@ export const getAlbumList = (): AlbumSummary[] => {
          json_extract(album, '$.name') AS name,
          MAX(CASE WHEN cover IS NOT NULL THEN cover END) AS cover,
          MAX(artists) AS artists,
-         COUNT(*) AS trackCount
+         COUNT(*) AS trackCount,
+         MAX(CAST(json_extract(album, '$.year') AS INTEGER)) AS year,
+         MIN(scanned_at) AS addedAt
        FROM tracks
        WHERE album IS NOT NULL AND json_extract(album, '$.name') IS NOT NULL
          AND ${excludeCueContainer()}
        GROUP BY name`,
     )
-    .all() as { name: string; cover: string | null; artists: string; trackCount: number }[];
+    .all() as {
+    name: string;
+    cover: string | null;
+    artists: string;
+    trackCount: number;
+    year: number | null;
+    addedAt: number;
+  }[];
   return rows.map((row) => ({
     name: row.name,
     cover: row.cover ?? undefined,
     artist: (JSON.parse(row.artists) as Artist[]).map((a) => a.name).join(" / "),
     trackCount: row.trackCount,
+    year: row.year ?? undefined,
+    addedAt: row.addedAt,
   }));
 };
 

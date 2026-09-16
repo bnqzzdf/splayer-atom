@@ -55,13 +55,15 @@ const pathKey = (value: string): string => {
  */
 export const scannedToUpsert = (track: JsScannedTrack): UpsertTrack => {
   const id = createHash("sha256").update(track.path).digest("hex").slice(0, 16);
+  const album = parseAlbum(track.album ?? "");
+  if (album && track.year) album.year = track.year;
   return {
     id,
     path: track.path,
     title: track.title || track.path.split(/[/\\]/).pop() || track.path,
     track: track.track,
     artists: parseArtists(track.artist ?? ""),
-    album: parseAlbum(track.album ?? ""),
+    album,
     duration: toMs(track.duration),
     cover: toCacheUrl(track.cover),
     codec: track.codec,
@@ -210,6 +212,9 @@ const syncCueTracks = async (
       const cueTracks = parseCueSheet(content, cuePath, audio.duration);
       for (const cueTrack of cueTracks) {
         const id = createHash("sha256").update(cueTrack.path).digest("hex").slice(0, 16);
+        const album = cueTrack.album
+          ? { ...cueTrack.album, year: cueTrack.album.year ?? audio.album?.year }
+          : audio.album;
         nextPaths.add(cueTrack.path);
         upserts.push({
           id,
@@ -224,7 +229,7 @@ const syncCueTracks = async (
           title: cueTrack.title,
           track: cueTrack.track,
           artists: cueTrack.artists,
-          album: cueTrack.album,
+          album,
           duration: cueTrack.duration,
           cover: audio.cover,
           codec: audio.quality?.codec,

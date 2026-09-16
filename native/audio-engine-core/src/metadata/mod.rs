@@ -62,6 +62,7 @@ pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    pub year: Option<u32>,
     pub track: Option<u16>,
     pub comment: Option<String>,
 }
@@ -83,12 +84,23 @@ pub fn extract_tags(dict: &HashMap<String, String>) -> Tags {
         .or_else(|| dict_get(dict, "album_artist"))
         .map(ToString::to_string);
     let album = dict_get(dict, "album").map(ToString::to_string);
+    let parse_year = |raw: &str| {
+        let raw = raw.trim();
+        raw.get(..4)
+            .or(Some(raw))
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|year| *year > 0)
+    };
+    let year = dict_get(dict, "year")
+        .and_then(parse_year)
+        .or_else(|| dict_get(dict, "date").and_then(parse_year));
     let track = dict_get(dict, "track").and_then(|s| s.parse().ok());
     let comment = dict_get(dict, "comment").map(ToString::to_string);
     Tags {
         title,
         artist,
         album,
+        year,
         track,
         comment,
     }
@@ -189,13 +201,25 @@ mod tests {
         let dict = HashMap::from([
             ("TITLE".to_string(), "Track".to_string()),
             ("Album_Artist".to_string(), "Artist".to_string()),
+            ("DATE".to_string(), "1987-10-01".to_string()),
             ("TRACK".to_string(), "7".to_string()),
         ]);
 
         let tags = extract_tags(&dict);
         assert_eq!(tags.title.as_deref(), Some("Track"));
         assert_eq!(tags.artist.as_deref(), Some("Artist"));
+        assert_eq!(tags.year, Some(1987));
         assert_eq!(tags.track, Some(7));
+    }
+
+    #[test]
+    fn invalid_year_falls_back_to_date() {
+        let dict = HashMap::from([
+            ("YEAR".to_string(), "".to_string()),
+            ("DATE".to_string(), "1978-05-12".to_string()),
+        ]);
+
+        assert_eq!(extract_tags(&dict).year, Some(1978));
     }
 
     #[test]
@@ -204,6 +228,7 @@ mod tests {
             title: Some("ÇôÄñ".to_string()),
             artist: Some("µË×ÏÆå".to_string()),
             album: Some("ÔÚÏßÈÈËÑ£¨»ªÓï£©ÏµÁÐ63".to_string()),
+            year: None,
             track: None,
             comment: None,
         };
@@ -220,6 +245,7 @@ mod tests {
             title: Some("ÇôÄñ".to_string()),
             artist: Some("Beyoncé".to_string()),
             album: Some("Album".to_string()),
+            year: None,
             track: None,
             comment: None,
         };

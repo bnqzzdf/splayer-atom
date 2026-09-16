@@ -5,6 +5,7 @@ import { parseCueSheet, toCueTrackPath } from "./cue";
 
 const sample = `
 REM GENRE Classical
+REM DATE 1961
 PERFORMER "Serge Prokofiev"
 TITLE "Archive Recordings"
 FILE "Serge Prokofiev - Archive Recordings.flac" WAVE
@@ -29,6 +30,7 @@ describe("parseCueSheet", () => {
     assert.equal(tracks[0].title, "Piano Sonata No. 3 in A Minor, Op. 28");
     assert.equal(tracks[0].artists[0].name, "Serge Prokofiev");
     assert.equal(tracks[0].album?.name, "Archive Recordings");
+    assert.equal(tracks[0].album?.year, 1961);
     assert.equal(tracks[0].track, 1);
     assert.equal(tracks[0].cueStartMs, 0);
     assert.equal(tracks[0].cueEndMs, 434_240);

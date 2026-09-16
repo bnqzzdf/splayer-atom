@@ -294,6 +294,8 @@ export interface JsScannedTrack {
   title?: string
   artist?: string
   album?: string
+  /** 发行年份 */
+  year?: number
   /** 音轨编号 */
   track?: number
   /** 时长（秒） */

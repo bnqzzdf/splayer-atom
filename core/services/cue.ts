@@ -4,7 +4,7 @@ import type { Artist } from "@shared/types/player";
 export interface CueTrackInfo {
   title: string;
   artists: Artist[];
-  album?: { name: string; artist?: string };
+  album?: { name: string; artist?: string; year?: number };
   track: number;
   path: string;
   cuePath: string;
@@ -31,6 +31,7 @@ interface ParsedCueTrack {
 interface CueSheetState {
   albumTitle?: string;
   albumPerformer?: string;
+  albumYear?: number;
   files: CueFile[];
 }
 
@@ -117,6 +118,12 @@ const parseState = (content: string): CueSheetState => {
       continue;
     }
 
+    if (command === "REM" && !currentTrack) {
+      const date = value.trim().match(/^DATE\s+"?(\d{4})/i);
+      if (date) state.albumYear = Number(date[1]);
+      continue;
+    }
+
     if (command === "INDEX" && currentTrack) {
       const parts = value.trim().split(/\s+/);
       if (parts[0] !== "01") continue;
@@ -170,7 +177,7 @@ export const parseCueSheet = (
       const performer = track.performer || state.albumPerformer || "";
       const artists = performer ? [{ name: performer }] : [];
       const album = state.albumTitle
-        ? { name: state.albumTitle, artist: state.albumPerformer }
+        ? { name: state.albumTitle, artist: state.albumPerformer, year: state.albumYear }
         : undefined;
       return {
         title: track.title || `${path.basename(cuePath, path.extname(cuePath))} #${track.number}`,

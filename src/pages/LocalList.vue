@@ -12,9 +12,12 @@ import IconLucideUserRound from "~icons/lucide/user-round";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
 import IconLucideArrowUpDown from "~icons/lucide/arrow-up-down";
+import IconLucideArrowDown from "~icons/lucide/arrow-down";
+import IconLucideArrowUp from "~icons/lucide/arrow-up";
 
 type Mode = "artist" | "album";
-type SortMode = "default" | "name" | "trackCount";
+type SortMode = "default" | "addedAt" | "year" | "name" | "artist" | "trackCount";
+type SortOrder = "asc" | "desc";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -24,19 +27,43 @@ const { artistAvatars } = storeToRefs(libraryStore);
 
 const mode: Mode = route.name === "album-list" ? "album" : "artist";
 
-const sortMode = ref<SortMode>("default");
+const sortMode = ref<SortMode>(mode === "album" ? "addedAt" : "default");
+const sortOrder = ref<SortOrder>("desc");
 
-const sortOptions = computed<SSelectOption[]>(() => [
-  { value: "default", label: t("songList.sort.default") },
-  { value: "name", label: t("songList.sort.byName") },
-  { value: "trackCount", label: t("songList.sort.byTrackCount") },
-]);
+const sortOptions = computed<SSelectOption[]>(() =>
+  mode === "album"
+    ? [
+        { value: "addedAt", label: t("songList.sort.byAddedAt") },
+        { value: "year", label: t("songList.sort.byYear") },
+        { value: "name", label: t("songList.sort.byName") },
+        { value: "artist", label: t("songList.sort.byArtist") },
+        { value: "trackCount", label: t("songList.sort.byTrackCount") },
+      ]
+    : [
+        { value: "default", label: t("songList.sort.default") },
+        { value: "name", label: t("songList.sort.byName") },
+        { value: "trackCount", label: t("songList.sort.byTrackCount") },
+      ],
+);
 
 const source = shallowRef<ArtistSummary[] | AlbumSummary[]>([]);
 
+type SortableCoverItem = CoverItem & {
+  artist?: string;
+  year?: number;
+  addedAt?: number;
+};
+
+const compareOptionalNumber = (a: number | undefined, b: number | undefined): number => {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return sortOrder.value === "asc" ? a - b : b - a;
+};
+
 /** 组装最终列表 */
 const items = computed<CoverItem[]>(() => {
-  const list: CoverItem[] =
+  const list: SortableCoverItem[] =
     mode === "artist"
       ? source.value.map((item: ArtistSummary) => ({
           id: encodeURIComponent(item.name),
@@ -51,13 +78,39 @@ const items = computed<CoverItem[]>(() => {
           cover: item.cover,
           subtitle: item.artist || t("song.unknownArtist"),
           trackCount: item.trackCount,
+          artist: item.artist,
+          year: item.year,
+          addedAt: item.addedAt,
         }));
-  if (sortMode.value === "name") {
-    list.sort((a, b) => a.title.localeCompare(b.title));
-  } else if (sortMode.value === "trackCount") {
-    list.sort((a, b) => b.trackCount - a.trackCount || a.title.localeCompare(b.title));
-  }
+  if (sortMode.value === "default") return list;
+
+  const direction = sortOrder.value === "asc" ? 1 : -1;
+  list.sort((a, b) => {
+    let result = 0;
+    switch (sortMode.value) {
+      case "addedAt":
+        result = compareOptionalNumber(a.addedAt, b.addedAt);
+        break;
+      case "year":
+        result = compareOptionalNumber(a.year, b.year);
+        break;
+      case "artist":
+        result = (a.artist ?? "").localeCompare(b.artist ?? "") * direction;
+        break;
+      case "trackCount":
+        result = (a.trackCount - b.trackCount) * direction;
+        break;
+      case "name":
+        result = a.title.localeCompare(b.title) * direction;
+        break;
+    }
+    return result || a.title.localeCompare(b.title);
+  });
   return list;
+});
+
+watch(sortMode, (value) => {
+  sortOrder.value = value === "name" || value === "artist" ? "asc" : "desc";
 });
 
 const config = computed(() =>
@@ -118,6 +171,18 @@ onMounted(async () => {
           <div :class="[config.selectWidth, 'shrink-0']">
             <SSelect v-model="sortMode" :options="sortOptions" />
           </div>
+          <SButton
+            v-if="mode === 'album'"
+            variant="secondary"
+            circle
+            :title="t(sortOrder === 'asc' ? 'songList.sort.asc' : 'songList.sort.desc')"
+            @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'"
+          >
+            <template #icon>
+              <IconLucideArrowUp v-if="sortOrder === 'asc'" />
+              <IconLucideArrowDown v-else />
+            </template>
+          </SButton>
         </div>
       </div>
     </div>

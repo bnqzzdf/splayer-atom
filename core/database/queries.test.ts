@@ -39,6 +39,24 @@ test("library queries keep albums, track numbers, and CUE positions in stable or
       database.getAllTracks().map((track) => track.id),
       ["a1", "b1a", "b1b", "b2"],
     );
+
+    database.upsertTracks([
+      {
+        id: "a1",
+        path: "/music/a-01.flac",
+        title: "A 1 updated",
+        track: 1,
+        artists: [{ name: "Artist" }],
+        album: { name: "Album A", year: 1999 },
+        duration: 1,
+        fileSize: 1,
+        mtime: 2,
+        ctime: 1,
+      },
+    ]);
+    const albumA = database.getAlbumList().find((album) => album.name === "Album A");
+    assert.equal(albumA?.year, 1999);
+    assert.equal(albumA?.addedAt, 1, "更新既有曲目时应保留首次入库时间");
   } finally {
     database.closeDatabase();
     if (previousDataDir === undefined) {

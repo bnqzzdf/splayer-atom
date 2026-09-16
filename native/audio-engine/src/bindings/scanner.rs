@@ -29,6 +29,8 @@ pub struct JsScannedTrack {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub album: Option<String>,
+    /// 发行年份
+    pub year: Option<u32>,
     /// 音轨编号
     pub track: Option<u16>,
     /// 时长（秒）
@@ -55,6 +57,7 @@ impl From<scanner::ScannedTrack> for JsScannedTrack {
             title: track.title,
             artist: track.artist,
             album: track.album,
+            year: track.year,
             track: track.track,
             duration: track.duration,
             codec: track.codec,

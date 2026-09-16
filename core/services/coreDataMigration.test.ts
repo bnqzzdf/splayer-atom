@@ -230,6 +230,46 @@ test("CUE 75fps migration restores only boundaries backed by the next INDEX star
   }
 });
 
+test("album year metadata migration invalidates only missing-year fingerprints once", () => {
+  const database = new Database(":memory:");
+  try {
+    database.exec(`
+      CREATE TABLE tracks(path TEXT, file_mtime INTEGER, album TEXT);
+      CREATE TABLE lyric_match_cache(fingerprint TEXT, extra TEXT);
+      INSERT INTO tracks(path, file_mtime, album) VALUES
+        ('/music/old.flac', 101, '{"name":"Old Album"}'),
+        ('/music/tagged.flac', 102, '{"name":"Tagged Album","year":1988}'),
+        ('/music/no-album.flac', 103, NULL),
+        ('/music/bad-album.flac', 104, 'legacy plain text');
+    `);
+    database.pragma("user_version = 6");
+
+    migrate(database);
+
+    const rows = database
+      .prepare("SELECT path, file_mtime AS mtime FROM tracks ORDER BY path")
+      .all() as { path: string; mtime: number | null }[];
+    const byPath = new Map(rows.map((row) => [row.path, row.mtime]));
+    assert.equal(byPath.get("/music/old.flac"), null);
+    assert.equal(byPath.get("/music/tagged.flac"), 102);
+    assert.equal(byPath.get("/music/no-album.flac"), 103);
+    assert.equal(byPath.get("/music/bad-album.flac"), 104);
+    assert.equal(database.pragma("user_version", { simple: true }), DATABASE_SCHEMA_VERSION);
+
+    database.prepare("UPDATE tracks SET file_mtime = 201 WHERE path = '/music/old.flac'").run();
+    migrate(database);
+    assert.equal(
+      database
+        .prepare("SELECT file_mtime FROM tracks WHERE path = '/music/old.flac'")
+        .pluck()
+        .get(),
+      201,
+    );
+  } finally {
+    database.close();
+  }
+});
+
 test("SQLite migration failure rolls back schema changes and user_version", () => {
   const database = new Database(":memory:");
   try {

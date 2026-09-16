@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 6;
+export const DATABASE_SCHEMA_VERSION = 7;
 
 type TableInfoRow = { name: string };
 
@@ -113,6 +113,22 @@ export const migrate = (d: Database.Database): void => {
         `);
       }
       v = 6;
+    }
+
+    // v6 → v7: 本地扫库开始持久化专辑发行年份。只作废缺年份专辑曲目的文件指纹，
+    // 让下一轮增量扫描补齐 metadata；upsert 会保留原 scanned_at，不改变“添加时间”。
+    if (v < 7) {
+      if (hasColumn(d, "tracks", "album") && hasColumn(d, "tracks", "file_mtime")) {
+        d.exec(`
+          UPDATE tracks
+          SET file_mtime = NULL
+          WHERE album IS NOT NULL
+            AND json_valid(album)
+            AND json_extract(album, '$.name') IS NOT NULL
+            AND json_extract(album, '$.year') IS NULL
+        `);
+      }
+      v = 7;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

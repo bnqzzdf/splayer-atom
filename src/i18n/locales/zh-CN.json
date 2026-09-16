@@ -512,6 +512,8 @@
       "bySize": "按大小",
       "byMtime": "按修改时间",
       "byCtime": "按创建时间",
+      "byAddedAt": "按添加时间",
+      "byYear": "按发行年份",
       "byName": "按名称",
       "byTrackCount": "按歌曲数量",
       "byTrack": "按曲目编号"

@@ -7,6 +7,10 @@ export interface AlbumSummary {
   cover?: string;
   artist: string;
   trackCount: number;
+  /** 发行年份 */
+  year?: number;
+  /** 首次加入本地曲库的时间（Unix ms） */
+  addedAt: number;
 }
 
 /** 歌手聚合项 */
