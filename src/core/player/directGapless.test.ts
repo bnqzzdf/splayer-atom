@@ -7,7 +7,6 @@ const preloaderSource = readFileSync(
   new URL("../../services/nextTrackPreloader.ts", import.meta.url),
   "utf8",
 );
-const audioSource = readFileSync(new URL("../../services/audioSource.ts", import.meta.url), "utf8");
 const sharedPlayerSource = readFileSync(
   new URL("../../../shared/types/player.ts", import.meta.url),
   "utf8",
@@ -110,8 +109,4 @@ test("renderer-facing Direct staging and materialization protocol is removed end
     /stageDirectNext|cancelDirectNext|commitDirectGaplessBoundary|materializeDirectInput/;
   assert.doesNotMatch(sharedPlayerSource, forbidden);
   assert.doesNotMatch(headlessRoutesSource, /\/player\/direct-input\/materialize/);
-  assert.doesNotMatch(
-    audioSource,
-    /prepareDirectTrackSource|window\.api\.player\.materializeDirectInput/,
-  );
 });

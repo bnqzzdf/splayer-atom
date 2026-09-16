@@ -7,17 +7,17 @@ SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音�
 本文介绍插件系统的整体架构、运行模型与两类插件共用的通用 API。具体的编写方式见：
 
 - [音源插件](/plugins/source)：解析歌曲的播放地址（`musicUrl`），并可兜底歌词与封面（内置来源拿不到时，不限在线平台）。
-- [控制插件](/plugins/control)：监听播放状态、反向控制播放、声明设置项、向歌曲菜单添加菜单项。
+- [控制插件](/plugins/control)：反向控制播放、声明设置项、向歌曲菜单添加菜单项。
 - [插件更新](/plugins/update)：脚本如何声明更新地址、宿主如何检查版本、用户如何一键更新（两类插件通用）。
 
 最终用户的安装与管理方式见 [插件使用](/plugins-usage)。
 
 ## 插件能做什么
 
-| 类型                         | `@type`   | 用途                                                                        |
-| ---------------------------- | --------- | --------------------------------------------------------------------------- |
-| [音源插件](/plugins/source)  | `source`  | 为歌曲提供可播放的 URL，扩展可播放的曲库                                    |
-| [控制插件](/plugins/control) | `control` | 订阅播放/歌词事件，反向控制播放器，声明用户设置项，并可向歌曲菜单添加菜单项 |
+| 类型                         | `@type`   | 用途                                                     |
+| ---------------------------- | --------- | -------------------------------------------------------- |
+| [音源插件](/plugins/source)  | `source`  | 为歌曲提供可播放的 URL，扩展可播放的曲库                 |
+| [控制插件](/plugins/control) | `control` | 反向控制播放器，声明用户设置项，并可向歌曲菜单添加菜单项 |
 
 一个脚本只能是其中一种类型，由头部 `@type` 决定，缺省为 `source`。
 
@@ -56,7 +56,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 
 **音源插件是「被调用方」**：当播放器需要某首歌的播放地址时，会选中一个已就绪、支持该音源的插件，调用你注册的 `musicUrl` 处理器，由你返回真实地址。
 
-**控制插件是「被通知方」**：当播放状态（曲目、歌词、播放态）变化时，宿主把变化推送到你注册的事件回调；你也可以反过来调用 `splayer.player.*` 控制播放器。
+**控制插件是「宿主能力调用方」**：可声明自己的设置项与歌曲菜单，并在授予权限后调用 `splayer.player.*` 反向控制播放器。`events` / `splayer.player.on(...)` 目前仅保留协议兼容，当前 Atom Core 不主动下发播放事件，新插件不要依赖这组接口。
 
 ### 生命周期与状态
 
@@ -133,11 +133,11 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 
 `@apiLevel` 声明插件需要的宿主能力级别。能力是**累加**的：高级别包含低级别的全部能力，新增能力会提升级别。这里是插件 API 级别的唯一变更记录；其它页面只说明具体能力要求的最低级别。
 
-| 级别 | 相对上一等级新增的能力                                                                                                                                                                  | 用到这些能力时                                  |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `1`  | 基础音源能力：`register({ sources })`、`musicUrl` 处理器；元数据兜底处理器：`musicSearch` / `musicLyric` / `musicPic`；通用 API：`request` / `storage` / `log` / `getSetting` / `utils` | 播放地址、歌词、封面插件声明 `@apiLevel 1` 即可 |
-| `2`  | 控制能力：`register({ events, controls, settings })`、`splayer.player` 事件订阅与反向控制、`onSettingChange`；界面能力：`register({ menus })`、`menuClick` 处理器（需 `@grant ui`）     | 控制插件或菜单扩展声明 `@apiLevel 2`            |
-| `3`  | 评论能力：`musicComment` 处理器。宿主先用 `musicSearch` 匹配曲目，再向声明了 `musicComment` 的源请求热门 / 最新评论                                                                     | 评论插件能力声明 `@apiLevel 3`                  |
+| 级别 | 相对上一等级新增的能力                                                                                                                                                                                               | 用到这些能力时                                  |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `1`  | 基础音源能力：`register({ sources })`、`musicUrl` 处理器；元数据兜底处理器：`musicSearch` / `musicLyric` / `musicPic`；通用 API：`request` / `storage` / `log` / `getSetting` / `utils`                              | 播放地址、歌词、封面插件声明 `@apiLevel 1` 即可 |
+| `2`  | 控制能力：`register({ controls, settings })`、`splayer.player` 反向控制、`onSettingChange`；界面能力：`register({ menus })`、`menuClick` 处理器（需 `@grant ui`）。`events` 字段保留兼容，但当前 Core 不下发播放事件 | 控制插件或菜单扩展声明 `@apiLevel 2`            |
+| `3`  | 评论能力：`musicComment` 处理器。宿主先用 `musicSearch` 匹配曲目，再向声明了 `musicComment` 的源请求热门 / 最新评论                                                                                                  | 评论插件能力声明 `@apiLevel 3`                  |
 
 当前宿主级别为 **3**。规则：
 
@@ -294,22 +294,30 @@ console.log(resp.status, resp.body);
 
 ## 调试
 
-在应用的 DevTools 控制台可直接调用插件接口验证：
+Web Control 与 Core 同源时，可在浏览器 DevTools 里直接调用 Core HTTP API 验证：
 
 ```js
 // 列出全部插件及状态
-await window.api.plugins.list();
+await fetch("/api/plugins").then((response) => response.json());
 
 // 直接触发一次音源解析
-await window.api.plugins.resolveUrl({
-  pluginId: "my-plugin-splayer",
-  source: "wy",
-  quality: "hq",
-  musicInfo: { songmid: "123" },
-});
+await fetch("/api/plugins/resolve-url", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    pluginId: "my-plugin-splayer",
+    source: "wy",
+    quality: "hq",
+    musicInfo: { songmid: "123" },
+  }),
+}).then((response) => response.json());
 
 // 修改某控制类插件的设置（会实时下发到插件）
-await window.api.plugins.setSetting("my-plugin-splayer", "someKey", true);
+await fetch("/api/plugins/my-plugin-splayer/setting", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ key: "someKey", value: true }),
+}).then((response) => response.json());
 ```
 
 插件内的 `console.*` / `splayer.log.*` 输出会汇入应用主日志（`{userData}/app-data/logs/`）。修改脚本后重新导入一次即可，旧版本会被自动替换。

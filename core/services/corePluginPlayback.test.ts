@@ -11,10 +11,6 @@ const resolverSource = readFileSync(
   new URL("./playbackSourceResolver.ts", import.meta.url),
   "utf8",
 );
-const rendererSource = readFileSync(
-  new URL("../../src/services/audioSource.ts", import.meta.url),
-  "utf8",
-);
 
 test("inherited plugin source mapping stays limited to upstream-compatible platforms", () => {
   assert.equal(pluginPlaybackSource("netease"), "wy");
@@ -25,7 +21,7 @@ test("inherited plugin source mapping stays limited to upstream-compatible platf
   assert.equal(pluginPlaybackSource("streaming"), null);
 });
 
-test("Core and legacy renderer use one musicUrl compatibility payload", () => {
+test("Core plugin fallback uses the shared musicUrl compatibility payload", () => {
   const track: Track = {
     id: "0123456789abcdef0123456789abcdef",
     source: "kugou",
@@ -47,8 +43,7 @@ test("Core and legacy renderer use one musicUrl compatibility payload", () => {
   assert.equal(info.hash, track.id);
   assert.equal(info.albumId, "album");
   assert.equal((info.meta as { picUrl?: string | null })?.picUrl, track.cover);
-  assert.doesNotMatch(rendererSource, /PLATFORM_TO_PLUGIN_SOURCE/);
-  assert.match(rendererSource, /buildPluginPlaybackMusicInfo/);
+  assert.match(resolverSource, /buildPluginPlaybackMusicInfo\(track, pluginSource\)/);
 });
 
 test("Core preserves official-first Netease fallback and inherited QQ/Kugou compatibility", () => {

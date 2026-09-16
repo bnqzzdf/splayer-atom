@@ -269,13 +269,19 @@ The automatically injected `lx` compatibility layer implements common `user_api`
 
 ## Debugging
 
+When Web Control is served by Core, use the browser DevTools console to call the Core HTTP API directly:
+
 ```js
-await window.api.plugins.resolveUrl({
-  pluginId: "example-splayer",
-  source: "wy",
-  quality: "hq",
-  musicInfo: { songmid: "track-id", name: "Title", singer: "Artist" },
-});
+await fetch("/api/plugins/resolve-url", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    pluginId: "example-splayer",
+    source: "wy",
+    quality: "hq",
+    musicInfo: { songmid: "track-id", name: "Title", singer: "Artist" },
+  }),
+}).then((response) => response.json());
 
 const track = {
   id: "x",
@@ -284,6 +290,21 @@ const track = {
   artists: [{ name: "Artist" }],
   duration: 269000,
 };
-await window.api.plugins.matchLyric({ pluginId: "kw-metadata-splayer", source: "kw", track });
-await window.api.plugins.matchCover({ pluginId: "kw-metadata-splayer", source: "kw", track });
+const postPlugin = (path, body) =>
+  fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((response) => response.json());
+
+await postPlugin("/api/plugins/match-lyric", {
+  pluginId: "kw-metadata-splayer",
+  source: "kw",
+  track,
+});
+await postPlugin("/api/plugins/match-cover", {
+  pluginId: "kw-metadata-splayer",
+  source: "kw",
+  track,
+});
 ```

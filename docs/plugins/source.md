@@ -406,18 +406,22 @@ SPlayer Atom Core 提供 `lx` 兼容层，覆盖 [lx-music-desktop](https://gith
 
 ## 调试
 
-在应用的 DevTools 控制台直接触发解析，无需真的播放：
+Web Control 与 Core 同源时，可在浏览器 DevTools 里直接调用 Core HTTP API，无需真的播放：
 
 ```js
-await window.api.plugins.resolveUrl({
-  pluginId: "example-splayer",
-  source: "wy",
-  quality: "hq",
-  musicInfo: { songmid: "歌曲ID", name: "歌名", singer: "歌手" },
-});
+await fetch("/api/plugins/resolve-url", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    pluginId: "example-splayer",
+    source: "wy",
+    quality: "hq",
+    musicInfo: { songmid: "歌曲ID", name: "歌名", singer: "歌手" },
+  }),
+}).then((response) => response.json());
 ```
 
-歌词 / 封面兜底也可直接触发（`track` 传一个 Track 形状对象即可，`pluginId` 取自 `window.api.plugins.list()`）：
+歌词 / 封面兜底也可直接触发（`track` 传一个 Track 形状对象即可，插件 ID 可从 `GET /api/plugins` 获取）：
 
 ```js
 const track = {
@@ -427,8 +431,23 @@ const track = {
   artists: [{ name: "歌手" }],
   duration: 269000,
 };
-await window.api.plugins.matchLyric({ pluginId: "kw-metadata-splayer", source: "kw", track });
-await window.api.plugins.matchCover({ pluginId: "kw-metadata-splayer", source: "kw", track });
+const postPlugin = (path, body) =>
+  fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((response) => response.json());
+
+await postPlugin("/api/plugins/match-lyric", {
+  pluginId: "kw-metadata-splayer",
+  source: "kw",
+  track,
+});
+await postPlugin("/api/plugins/match-cover", {
+  pluginId: "kw-metadata-splayer",
+  source: "kw",
+  track,
+});
 ```
 
 更多调试方式与错误码见 [总览 · 调试](/plugins/#调试) 与 [错误码](/plugins/#错误码)。

@@ -1,6 +1,6 @@
 # Using Plugins
 
-SPlayer Atom keeps the plugin model inherited from SPlayer-Next and runs it in Node Core. Plugins can extend **music sources** (resolve playable track URLs) and **control** (react to playback and control the player). SPlayer-Next plugins that do not depend on Desktop/Electron-only APIs can generally continue to work. This page is for plugin users. Authors should start with [Plugin Development](/en/plugins/).
+SPlayer Atom keeps the plugin model inherited from SPlayer-Next and runs it in Node Core. Plugins can extend **music sources** (resolve playable track URLs) and **control** (reverse playback control, plugin settings, and track-menu actions). SPlayer-Next plugins that do not depend on Desktop/Electron-only APIs and stay within the currently documented API can generally continue to work. This page is for plugin users. Authors should start with [Plugin Development](/en/plugins/).
 
 ## Opening plugin management
 

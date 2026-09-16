@@ -13,7 +13,6 @@ const sharedTypes = read("shared/types/streaming.ts");
 const eventTypes = read("shared/types/coreEvents.ts");
 const storeSource = read("src/stores/streaming.ts");
 const lyricRequestSource = read("src/services/lyric/request.ts");
-const audioSource = read("src/services/audioSource.ts");
 const playbackResolver = read("core/services/playbackSourceResolver.ts");
 
 const migratedIpcMethods = [
@@ -80,7 +79,6 @@ test("Web Streaming Control uses Core Protocol while playable URLs stay out of i
   }
   assert.doesNotMatch(sharedTypes, /interface StreamingApi/);
   assert.doesNotMatch(storeSource, /window\.api\.streaming|getStreamUrl/);
-  assert.doesNotMatch(audioSource, /useStreamingStore|store\.getStreamUrl|window\.api\.streaming/);
   assert.match(playbackResolver, /adapter\.getStreamUrl/);
 });
 

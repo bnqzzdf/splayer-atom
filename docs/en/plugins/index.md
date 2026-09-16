@@ -5,17 +5,17 @@ SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A p
 This plugin model is inherited from SPlayer-Next and adapted for the Web + Core runtime. Atom does not operate a plugin market; authors host their own scripts and users install them from raw HTTPS URLs.
 
 - [Source plugins](/en/plugins/source) resolve playable URLs and can provide fallback lyrics, covers, and comments.
-- [Control plugins](/en/plugins/control) receive playback events, control the player, expose settings, and add track menu items.
+- [Control plugins](/en/plugins/control) control the player, expose settings, and add track menu items.
 - [Plugin updates](/en/plugins/update) describes update metadata and in-place upgrades.
 
 End users should see [Using Plugins](/en/plugins-usage).
 
 ## Plugin types
 
-| Type                                  | `@type`   | Purpose                                               |
-| ------------------------------------- | --------- | ----------------------------------------------------- |
-| [Source plugin](/en/plugins/source)   | `source`  | Provide playable URLs and metadata fallbacks          |
-| [Control plugin](/en/plugins/control) | `control` | Subscribe to events and extend playback or UI control |
+| Type                                  | `@type`   | Purpose                                                   |
+| ------------------------------------- | --------- | --------------------------------------------------------- |
+| [Source plugin](/en/plugins/source)   | `source`  | Provide playable URLs and metadata fallbacks              |
+| [Control plugin](/en/plugins/control) | `control` | Extend playback control, settings, and track-menu actions |
 
 A script has one type, selected by `@type`; the default is `source`.
 
@@ -48,7 +48,7 @@ All enabled plugins share a dedicated plugin-host process. Each plugin runs in i
 
 ### Interaction models
 
-A **source plugin is called** when the player needs a URL or metadata. A **control plugin is notified** about track, lyric, and playback changes and may call `splayer.player.*` in return.
+A **source plugin is called** when the player needs a URL or metadata. A **control plugin** can expose settings and track-menu actions and, with permission, call `splayer.player.*` back into the player. The `events` / `splayer.player.on(...)` surface remains for protocol compatibility, but the current Atom Core does not publish playback events to plugins. New plugins should not depend on it.
 
 ### Lifecycle and states
 
@@ -119,11 +119,11 @@ Native SPlayer plugins should explicitly declare `@name`, `@version`, and `@id`.
 
 Capabilities accumulate: a higher level includes all lower levels.
 
-| Level | New capabilities                                                                          |
-| ----- | ----------------------------------------------------------------------------------------- |
-| `1`   | Source registration, `musicUrl`, `musicSearch`, `musicLyric`, `musicPic`, and common APIs |
-| `2`   | Playback events/control, settings, `onSettingChange`, menus, and `menuClick`              |
-| `3`   | `musicComment`; the host searches for a candidate before requesting comments              |
+| Level | New capabilities                                                                                                                  |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `1`   | Source registration, `musicUrl`, `musicSearch`, `musicLyric`, `musicPic`, and common APIs                                         |
+| `2`   | Reverse playback control, settings, `onSettingChange`, menus, and `menuClick`; `events` is compatibility-only in the current Core |
+| `3`   | `musicComment`; the host searches for a candidate before requesting comments                                                      |
 
 The current host level is **3**. A plugin requiring a newer level is rejected with `PLUGIN_API_LEVEL_MISMATCH`. Declare the lowest level actually used. Control plugins require at least level 2; comment plugins require level 3.
 
@@ -239,17 +239,27 @@ Moving the portable edition's complete `app-data` directory preserves all plugin
 
 ## Debugging
 
+When Web Control is served by Core, the browser DevTools console can call the Core HTTP API directly:
+
 ```js
-await window.api.plugins.list();
+await fetch("/api/plugins").then((response) => response.json());
 
-await window.api.plugins.resolveUrl({
-  pluginId: "my-plugin-splayer",
-  source: "wy",
-  quality: "hq",
-  musicInfo: { songmid: "123" },
-});
+await fetch("/api/plugins/resolve-url", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    pluginId: "my-plugin-splayer",
+    source: "wy",
+    quality: "hq",
+    musicInfo: { songmid: "123" },
+  }),
+}).then((response) => response.json());
 
-await window.api.plugins.setSetting("my-plugin-splayer", "someKey", true);
+await fetch("/api/plugins/my-plugin-splayer/setting", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ key: "someKey", value: true }),
+}).then((response) => response.json());
 ```
 
 Plugin logs are written to `{userData}/app-data/logs/`. Re-import a modified script to replace the old version.
