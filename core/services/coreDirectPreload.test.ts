@@ -36,7 +36,7 @@ test("preload invalidation cancels native staging immediately without touching t
   assert.match(preloader, /cancelDirectPlaybackNext\(\)/);
   assert.match(
     preloader,
-    /const clearPrepared = [\s\S]*if \(cleanupDirect\) \{\s*cancelDirectStageNow\(\);/,
+    /const clearPrepared = [\s\S]*if \(cleanupOwned\) \{\s*cancelDirectStageNow\(\);/,
   );
   assert.doesNotMatch(preloader, /queueDirectCleanup\([^)]*cancelStaged/);
 });

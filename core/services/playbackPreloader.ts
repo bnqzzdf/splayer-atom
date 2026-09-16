@@ -6,6 +6,11 @@ import { store } from "@main/store";
 import { playerLog } from "@main/utils/logger";
 import { directCueSegmentFromTrack } from "@main/services/playerTimeline";
 import {
+  discardPreparedUpnpMedia,
+  prepareUpnpPlaybackMedia,
+  type PreparedUpnpMedia,
+} from "@main/atom/upnp/media";
+import {
   resolvePlaybackSource,
   type ResolvedPlaybackSource,
 } from "@main/services/playbackSourceResolver";
@@ -18,6 +23,12 @@ interface PreparedPlaybackSource {
   directGeneration: number | null;
   directSource: string | null;
   directDetail?: DirectStageResult["detail"];
+  upnpMedia?: PreparedUpnpMedia;
+}
+
+export interface ConsumedPlaybackPreload {
+  source: ResolvedPlaybackSource;
+  upnpMedia?: PreparedUpnpMedia;
 }
 
 export interface PreparedDirectPlaybackBoundary {
@@ -78,13 +89,22 @@ const queueDirectCleanup = (source: string | null, discardSource = true): void =
     );
 };
 
-const clearPrepared = (cleanupDirect: boolean): void => {
+const queueUpnpCleanup = (media: PreparedUpnpMedia | undefined): void => {
+  if (!media) return;
+  void discardPreparedUpnpMedia(media).catch((error) =>
+    playerLog.debug(`[session] UPnP preload cleanup skipped: ${String(error)}`),
+  );
+};
+
+const clearPrepared = (cleanupOwned: boolean): void => {
   const directSource = prepared?.directSource ?? null;
+  const upnpMedia = prepared?.upnpMedia;
   pendingKey = null;
   prepared = null;
-  if (cleanupDirect) {
+  if (cleanupOwned) {
     cancelDirectStageNow();
     queueDirectCleanup(directSource);
+    queueUpnpCleanup(upnpMedia);
   }
 };
 
@@ -167,8 +187,8 @@ const stageDirectSource = async (
 };
 
 /**
- * 后台解析下一首 canonical Track，并在 Core Local Output 为 Diretta 时准备同 connection staging。
- * 失败只丢弃预载结果，真正切歌时仍会走正常 fresh resolve/load。
+ * 后台解析下一首 canonical Track：Diretta 准备 Native staging，UPnP 准备最终本地媒体表示。
+ * 失败只丢弃对应优化结果，真正切歌时仍会走正常 fresh resolve/load。
  */
 export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueItem): void => {
   if (!shouldPrepareNextInput()) {
@@ -191,6 +211,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
       let directGeneration: number | null = null;
       let directSource: string | null = null;
       let directDetail: DirectStageResult["detail"] | undefined;
+      let upnpMedia: PreparedUpnpMedia | undefined;
       const directPrepared = await prepareDirectSource(token, item.track, source);
       if (token !== preloadToken) {
         if (directPrepared?.directSource) queueDirectCleanup(directPrepared.directSource);
@@ -208,6 +229,18 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
           directGeneration = staged.generation;
           directDetail = staged.detail;
         }
+      } else if (store.get("player.outputDevice")?.startsWith("upnp:") === true) {
+        try {
+          upnpMedia = await prepareUpnpPlaybackMedia(item, source);
+        } catch (error) {
+          if (token === preloadToken) {
+            playerLog.debug(`[session] UPnP media preload skipped: ${String(error)}`);
+          }
+        }
+        if (token !== preloadToken || buildPreloadKey(queueIndex, item) !== key) {
+          await discardPreparedUpnpMedia(upnpMedia ?? null);
+          return;
+        }
       }
 
       pendingKey = null;
@@ -219,11 +252,14 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         directGeneration,
         directSource,
         directDetail,
+        upnpMedia,
       };
       playerLog.debug(
-        directGeneration === null
-          ? `[session] preloaded source: ${item.track.title}`
-          : `[session] preloaded Direct next: ${item.track.title} generation=${directGeneration}`,
+        directGeneration !== null
+          ? `[session] preloaded Direct next: ${item.track.title} generation=${directGeneration}`
+          : upnpMedia
+            ? `[session] preloaded UPnP media: ${item.track.title}`
+            : `[session] preloaded source: ${item.track.title}`,
       );
     } catch (error) {
       if (token !== preloadToken) return;
@@ -237,7 +273,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
 export const consumePlaybackPreload = (
   queueIndex: number,
   item: PlaybackQueueItem,
-): ResolvedPlaybackSource | null => {
+): ConsumedPlaybackPreload | null => {
   if (!shouldPrepareNextInput()) {
     invalidatePlaybackPreload();
     return null;
@@ -248,11 +284,14 @@ export const consumePlaybackPreload = (
     invalidatePlaybackPreload();
     return null;
   }
-  const source = prepared.source;
+  const result: ConsumedPlaybackPreload = {
+    source: prepared.source,
+    upnpMedia: prepared.upnpMedia,
+  };
   preloadToken++;
   cancelDirectStageNow();
   clearPrepared(false);
-  return source;
+  return result;
 };
 
 /** native 已跨过 Direct boundary 时，只接受仍匹配当前 Core queue/policy 的 staged generation。 */

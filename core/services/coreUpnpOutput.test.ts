@@ -10,6 +10,7 @@ const routes = read("core/atom/headless/routes.ts");
 const outputDevices = read("src/core/outputDevices.ts");
 const upnpOutput = read("core/atom/upnp/output.ts");
 const upnpMedia = read("core/atom/upnp/media.ts");
+const preloader = read("core/services/playbackPreloader.ts");
 const sharedPlayer = read("shared/types/player.ts");
 const nativePlayer = read("native/audio-engine/src/bindings/player.rs");
 const nativeCore = read("native/audio-engine-core/src/lib.rs");
@@ -70,13 +71,17 @@ test("UPnP P2 keeps renderer observations and output switching inside existing C
 
 test("UPnP online input reuses exact-byte materialization without provider or Direct ownership", () => {
   assert.match(upnpMedia, /materializeUpnpInput/);
-  assert.match(session, /materializeUpnpInput\(resolved\.source\)/);
-  assert.match(session, /cacheAfterLoad\(temporaryInput\)/);
+  assert.match(upnpMedia, /prepareUpnpPlaybackMedia/);
+  assert.match(upnpMedia, /materializeUpnpInput\(resolved\.source\)/);
+  assert.match(preloader, /prepareUpnpPlaybackMedia\(item, source\)/);
   const upnpLoad = session
     .split("const loadUpnpResolvedTrack = async (")[1]
     ?.split("const scheduleNextPlaybackPreload")[0];
   assert.ok(upnpLoad);
   assert.doesNotMatch(upnpLoad, /materializeDirectInput/);
+  assert.doesNotMatch(upnpLoad, /materializeUpnpInput|extractUpnpCue|extractUpnpSacd/);
+  assert.match(upnpLoad, /preparedMedia \?\? \(await prepareUpnpPlaybackMedia\(item, resolved\)\)/);
+  assert.match(upnpLoad, /cacheAfterLoad\(media\.filePath\)/);
 });
 
 test("terminal Core commands invalidate pending slow UPnP media preparation", () => {
@@ -91,16 +96,55 @@ test("terminal Core commands invalidate pending slow UPnP media preparation", ()
   assert.ok(shutdownBody);
   assert.ok(upnpLoad);
   assert.match(stopBody, /\+\+loadGeneration/);
+  assert.match(stopBody, /invalidatePlaybackPreload\(\)/);
   assert.match(shutdownBody, /\+\+loadGeneration/);
+  assert.match(shutdownBody, /invalidatePlaybackPreload\(\)/);
   assert.match(upnpLoad, /expectedGeneration !== loadGeneration/);
-  assert.match(upnpLoad, /await discardUpnpInput\(temporaryInput\)/);
+  assert.match(upnpLoad, /await discardPreparedUpnpMedia\(media\)/);
+  assert.match(preloader, /token !== preloadToken/);
+  assert.match(preloader, /discardPreparedUpnpMedia\(upnpMedia \?\? null\)/);
 });
 
 test("UPnP projects quality from the actual local representation", () => {
   assert.match(upnpMedia, /getEngine\(\)\.probeMediaQuality\(filePath\)/);
-  assert.match(session, /probeUpnpMediaQuality\(filePath\)/);
+  assert.match(
+    upnpMedia,
+    /const quality = \(await probeUpnpMediaQuality\(filePath\)\) \?\? track\.quality/,
+  );
+  assert.match(session, /quality: media\.quality/);
   assert.match(session, /item\.track = \{ \.\.\.item\.track, quality: mediaInfo\.quality \}/);
   assert.match(session, /quality: mediaInfo\.quality, externalLyrics: \[\]/);
+});
+
+test("UPnP next-media preparation stays Core-side and does not touch Renderer transport", () => {
+  assert.match(preloader, /startsWith\("upnp:"\)/);
+  assert.match(preloader, /prepareUpnpPlaybackMedia\(item, source\)/);
+  assert.match(preloader, /upnpMedia\?: PreparedUpnpMedia/);
+  assert.match(
+    preloader,
+    /prepareDirectSource[\s\S]*startsWith\("diretta:"\) !== true\) return null/,
+  );
+  assert.doesNotMatch(preloader, /setAvTransportUri|playUpnpOutput|registerMediaFile/);
+  assert.doesNotMatch(upnpMedia, /setAvTransportUri|playAvTransport|scanUpnpDevices/);
+  assert.doesNotMatch(upnpOutput, /SetNextAVTransportURI|setNextAvTransportUri/);
+  assert.match(
+    preloader,
+    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*startsWith\("diretta:"\) === true/,
+  );
+  assert.match(preloader, /store\.get\("player\.outputDevice"\) \?\? ""/);
+  assert.match(
+    preloader,
+    /if \(prepared\.key !== key\) \{\s*invalidatePlaybackPreload\(\);\s*return null;/,
+  );
+  assert.match(upnpMedia, /track\.quality\?\.channels && track\.quality\.channels !== 2/);
+  const upnpLoad = session
+    .split("const loadUpnpResolvedTrack = async (")[1]
+    ?.split("const scheduleNextPlaybackPreload")[0];
+  assert.ok(upnpLoad);
+  assert.match(
+    upnpLoad,
+    /catch \(error\) \{\s*await discardPreparedUpnpMedia\(preparedMedia \?\? null\);\s*throw error;/,
+  );
 });
 
 test("library scanner expands SACD ISO through the Atom-owned sync seam", () => {
@@ -123,9 +167,10 @@ test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   const media = read("core/atom/upnp/media.ts");
   const atomExtract = read("native/audio-engine/src/atom_media_extract.rs");
   const coreExtract = read("native/audio-engine-core/src/media_extract.rs");
-  assert.match(session, /extractUpnpCueWav\(track\.cuePath, cueNum\)/);
-  assert.match(session, /extractUpnpCueDsf\(track\.cuePath, cueNum\)/);
-  assert.match(session, /extractUpnpSacdDsf\(sacd\.isoPath, sacd\.trackNum\)/);
+  assert.match(media, /extractUpnpCueWav\(track\.cuePath, cueNum\)/);
+  assert.match(media, /extractUpnpCueDsf\(track\.cuePath, cueNum\)/);
+  assert.match(media, /extractUpnpSacdDsf\(sacd\.isoPath, sacd\.trackNum\)/);
+  assert.doesNotMatch(session, /extractUpnpCueWav|extractUpnpCueDsf|extractUpnpSacdDsf/);
   assert.match(media, /getEngine\(\)\.extractCueWav/);
   assert.match(media, /getEngine\(\)\.extractCueDsf/);
   assert.match(media, /getEngine\(\)\.extractSacdDsf/);

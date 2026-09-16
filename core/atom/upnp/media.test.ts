@@ -4,7 +4,13 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { inferUpnpMime, registerMediaFile, releaseMediaResource, shutdownUpnpMedia } from "./media";
+import {
+  discardPreparedUpnpMedia,
+  inferUpnpMime,
+  registerMediaFile,
+  releaseMediaResource,
+  shutdownUpnpMedia,
+} from "./media";
 
 test("UPnP media listener serves immutable file bytes with HEAD and single Range", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "splayer-atom-upnp-media-"));
@@ -133,6 +139,23 @@ test("release deletes generated media only when ownership is explicit", async ()
     assert.equal(closed, true);
   } finally {
     await shutdownUpnpMedia();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prepared-media cleanup never deletes borrowed local files", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "splayer-atom-upnp-prepared-"));
+  const borrowed = path.join(dir, "borrowed.flac");
+  await writeFile(borrowed, Buffer.from("borrowed"));
+  try {
+    await discardPreparedUpnpMedia({
+      filePath: borrowed,
+      durationMs: 1000,
+      mime: "audio/flac",
+      deleteOnRelease: false,
+    });
+    await access(borrowed);
+  } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });

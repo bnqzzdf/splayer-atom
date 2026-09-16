@@ -84,7 +84,7 @@ test("Full Direct loads wait for background preload cleanup while queue invalida
   assert.match(corePreloaderSource, /const cancelDirectStageNow = \(\): void =>/);
   assert.match(
     corePreloaderSource,
-    /const clearPrepared = [\s\S]*if \(cleanupDirect\) \{\s*cancelDirectStageNow\(\);/,
+    /const clearPrepared = [\s\S]*if \(cleanupOwned\) \{\s*cancelDirectStageNow\(\);/,
   );
   const cleanupFlow = between(
     corePreloaderSource,

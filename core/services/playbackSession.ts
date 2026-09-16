@@ -11,7 +11,6 @@ import type {
   TrackDetail,
 } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
-import { fileURLToPath } from "node:url";
 import {
   loadPlaybackSession,
   refreshPersistedCueCoordinates,
@@ -72,13 +71,12 @@ import {
   type UpnpOutputStatus,
 } from "@main/atom/upnp/output";
 import {
-  discardUpnpInput,
-  extractUpnpCueDsf,
-  extractUpnpCueWav,
-  extractUpnpSacdDsf,
-  inferUpnpMime,
-  materializeUpnpInput,
-  probeUpnpMediaQuality,
+  discardPreparedUpnpMedia,
+  isUpnpDsdCueTrack,
+  isUpnpIntegerLosslessCueTrack,
+  prepareUpnpPlaybackMedia,
+  upnpCueTrackNumber,
+  type PreparedUpnpMedia,
 } from "@main/atom/upnp/media";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";
@@ -336,23 +334,6 @@ const stopCurrentOutputBestEffort = (): void => {
   getPlayer().stop();
 };
 
-const cueTrackNumber = (item: PlaybackQueueItem): number | null => {
-  if (!item.track.cuePath) return null;
-  const value = item.track.track;
-  return Number.isInteger(value) && (value ?? 0) > 0 ? value! : null;
-};
-
-const isDsdCueTrack = (item: PlaybackQueueItem): boolean => {
-  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
-  const source = item.track.cueAudioPath?.toLowerCase() ?? "";
-  return codec === "dsd_dsf" || codec === "dsd_dff" || /\.(?:dsf|dff|dsdiff)$/.test(source);
-};
-
-const isIntegerLosslessCueTrack = (item: PlaybackQueueItem): boolean => {
-  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
-  return /^(?:flac|ape|alac|wavpack|tta|shorten|pcm_[su])/.test(codec);
-};
-
 const assertUpnpResolvedTrackSupported = (
   item: PlaybackQueueItem,
   resolved: ResolvedPlaybackSource,
@@ -364,10 +345,10 @@ const assertUpnpResolvedTrackSupported = (
       "UPnP output currently supports stereo only",
     );
   }
-  if (track.cuePath && cueTrackNumber(item) === null) {
+  if (track.cuePath && upnpCueTrackNumber(item) === null) {
     throw new CorePlaybackLoadError(ErrorCode.UNKNOWN, "UPnP CUE track number is unavailable");
   }
-  if (track.cuePath && !isDsdCueTrack(item) && !isIntegerLosslessCueTrack(item)) {
+  if (track.cuePath && !isUpnpDsdCueTrack(item) && !isUpnpIntegerLosslessCueTrack(item)) {
     throw new CorePlaybackLoadError(
       ErrorCode.UNKNOWN,
       "UPnP CUE requires integer lossless PCM or native DSD source",
@@ -382,81 +363,53 @@ const assertUpnpResolvedTrackSupported = (
 const loadUpnpResolvedTrack = async (
   item: PlaybackQueueItem,
   resolved: ResolvedPlaybackSource,
+  preparedMedia: PreparedUpnpMedia | undefined,
   autoPlay: boolean,
   preserveListenBrainzSession: boolean,
   expectedGeneration: number,
 ): Promise<MediaInfo | null> => {
   const track = item.track;
-  assertUpnpResolvedTrackSupported(item, resolved);
-  let filePath: string;
-  let temporaryInput: string | null = null;
-  let representationDurationMs = track.duration;
-  const cueNum = cueTrackNumber(item);
-  const sacd = parseSacdPlaybackSource(resolved.source, item.track.track);
-
-  if (track.cuePath && cueNum != null) {
-    const generated = isDsdCueTrack(item)
-      ? await extractUpnpCueDsf(track.cuePath, cueNum)
-      : await extractUpnpCueWav(track.cuePath, cueNum);
-    temporaryInput = generated.filePath;
-    filePath = generated.filePath;
-    representationDurationMs = generated.durationMs;
-  } else if (sacd) {
-    const generated = await extractUpnpSacdDsf(sacd.isoPath, sacd.trackNum);
-    temporaryInput = generated.filePath;
-    filePath = generated.filePath;
-    representationDurationMs = generated.durationMs;
-  } else if (/^https?:\/\//i.test(resolved.source)) {
-    temporaryInput = await materializeUpnpInput(resolved.source);
-    if (expectedGeneration !== loadGeneration) {
-      await discardUpnpInput(temporaryInput);
-      return null;
-    }
-    filePath = temporaryInput;
-    if (resolved.cacheAfterLoad) {
-      void resolved
-        .cacheAfterLoad(temporaryInput)
-        .catch((error) => playerLog.warn(`[upnp] source cache failed: ${String(error)}`));
-    }
-  } else {
-    filePath = resolved.source.startsWith("file:")
-      ? fileURLToPath(resolved.source)
-      : resolved.source;
+  try {
+    assertUpnpResolvedTrackSupported(item, resolved);
+  } catch (error) {
+    await discardPreparedUpnpMedia(preparedMedia ?? null);
+    throw error;
   }
+  const media = preparedMedia ?? (await prepareUpnpPlaybackMedia(item, resolved));
   if (expectedGeneration !== loadGeneration) {
-    if (temporaryInput) await discardUpnpInput(temporaryInput);
+    await discardPreparedUpnpMedia(media);
     return null;
   }
-  const representationQuality = (await probeUpnpMediaQuality(filePath)) ?? track.quality;
-  if (expectedGeneration !== loadGeneration) {
-    if (temporaryInput) await discardUpnpInput(temporaryInput);
-    return null;
+  if (media.deleteOnRelease && /^https?:\/\//i.test(resolved.source) && resolved.cacheAfterLoad) {
+    void resolved
+      .cacheAfterLoad(media.filePath)
+      .catch((error) => playerLog.warn(`[upnp] source cache failed: ${String(error)}`));
   }
   try {
     await loadUpnpFile({
-      filePath,
-      title: track.title || filePath.split(/[/\\]/).pop() || filePath,
-      durationMs: representationDurationMs,
-      mime: inferUpnpMime(filePath, representationQuality?.codec ?? track.quality?.codec),
+      filePath: media.filePath,
+      title: track.title || media.filePath.split(/[/\\]/).pop() || media.filePath,
+      durationMs: media.durationMs,
+      mime: media.mime,
       autoPlay: false,
-      deleteOnRelease: temporaryInput != null,
+      deleteOnRelease: media.deleteOnRelease,
     });
   } catch (error) {
-    if (temporaryInput) await discardUpnpInput(temporaryInput);
+    await discardPreparedUpnpMedia(media);
     throw error;
   }
   const observed = getUpnpOutputStatus();
-  const duration = Math.max(representationDurationMs || 0, observed.duration || 0);
+  const duration = Math.max(media.durationMs || 0, observed.duration || 0);
   neteaseScrobble.onTrackLoaded(track, item.context, duration, false);
   if (!preserveListenBrainzSession) listenbrainz.onTrackLoaded(track, duration, false);
-  beginCorePlayStats({ ...track, duration, quality: representationQuality }, false);
+  beginCorePlayStats({ ...track, duration, quality: media.quality }, false);
   return {
     title: track.title,
     artists: track.artists,
     album: track.album,
     duration,
     cover: track.cover,
-    quality: representationQuality,
+    quality: media.quality,
   };
 };
 
@@ -506,7 +459,8 @@ const loadIndex = async (
   const generation = ++loadGeneration;
   const item = queue[targetIndex];
   const track = item.track;
-  let resolved = runtime.resolvedOverride ?? consumePlaybackPreload(targetIndex, item);
+  const preloaded = runtime.resolvedOverride ? null : consumePlaybackPreload(targetIndex, item);
+  let resolved = runtime.resolvedOverride ?? preloaded?.source;
   if (!resolved) {
     try {
       resolved = await resolvePlaybackSource(track);
@@ -525,6 +479,7 @@ const loadIndex = async (
     const mediaInfo = await loadUpnpResolvedTrack(
       item,
       resolved,
+      preloaded?.upnpMedia,
       autoPlay,
       runtime.preserveListenBrainzSession === true,
       generation,

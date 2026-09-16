@@ -6,9 +6,11 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import { writeExactHttpInput } from "@main/atom/exactInput";
+import { parseSacdPlaybackSource } from "@main/atom/sacdInput";
 import { getEngine } from "@main/services/engine";
-import type { AudioQuality } from "@shared/types/player";
+import type { AudioQuality, PlaybackQueueItem } from "@shared/types/player";
 
 export interface UpnpMediaResource {
   id: string;
@@ -19,6 +21,18 @@ export interface UpnpMediaResource {
   title: string;
   durationMs: number;
   deleteOnRelease: boolean;
+}
+
+export interface PreparedUpnpMedia {
+  filePath: string;
+  durationMs: number;
+  quality?: AudioQuality;
+  mime: string;
+  deleteOnRelease: boolean;
+}
+
+export interface UpnpPreparationSource {
+  source: string;
 }
 
 interface RegisterMediaOptions {
@@ -269,6 +283,92 @@ export const probeUpnpMediaQuality = async (filePath: string): Promise<AudioQual
   } catch {
     return null;
   }
+};
+
+export const upnpCueTrackNumber = (item: PlaybackQueueItem): number | null => {
+  if (!item.track.cuePath) return null;
+  const value = item.track.track;
+  return Number.isInteger(value) && (value ?? 0) > 0 ? value! : null;
+};
+
+export const isUpnpDsdCueTrack = (item: PlaybackQueueItem): boolean => {
+  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
+  const source = item.track.cueAudioPath?.toLowerCase() ?? "";
+  return codec === "dsd_dsf" || codec === "dsd_dff" || /\.(?:dsf|dff|dsdiff)$/.test(source);
+};
+
+export const isUpnpIntegerLosslessCueTrack = (item: PlaybackQueueItem): boolean => {
+  const codec = item.track.quality?.codec?.toLowerCase() ?? "";
+  return /^(?:flac|ape|alac|wavpack|tta|shorten|pcm_[su])/.test(codec);
+};
+
+/**
+ * 把一首 canonical Track 准备成 Renderer 最终会拉取的本地媒体表示。
+ * 这里只做 Core 侧文件工作，不注册资源、不扫描 Renderer、不发送任何 AVTransport 命令。
+ */
+export const prepareUpnpPlaybackMedia = async (
+  item: PlaybackQueueItem,
+  resolved: UpnpPreparationSource,
+): Promise<PreparedUpnpMedia> => {
+  const track = item.track;
+  if (track.quality?.channels && track.quality.channels !== 2) {
+    throw new Error("UPnP output currently supports stereo only");
+  }
+  let filePath: string;
+  let durationMs = track.duration;
+  let deleteOnRelease = false;
+  let ownedPath: string | null = null;
+  const cueNum = upnpCueTrackNumber(item);
+  const sacd = parseSacdPlaybackSource(resolved.source, track.track);
+
+  try {
+    if (track.cuePath) {
+      if (cueNum == null) throw new Error("UPnP CUE track number is unavailable");
+      if (!isUpnpDsdCueTrack(item) && !isUpnpIntegerLosslessCueTrack(item)) {
+        throw new Error("UPnP CUE requires integer lossless PCM or native DSD source");
+      }
+      const generated = isUpnpDsdCueTrack(item)
+        ? await extractUpnpCueDsf(track.cuePath, cueNum)
+        : await extractUpnpCueWav(track.cuePath, cueNum);
+      filePath = generated.filePath;
+      durationMs = generated.durationMs;
+      deleteOnRelease = true;
+      ownedPath = filePath;
+    } else if (/\.iso(?:$|\|Track\d+\|)/i.test(resolved.source)) {
+      if (!sacd) throw new Error("UPnP SACD track identity is unavailable");
+      const generated = await extractUpnpSacdDsf(sacd.isoPath, sacd.trackNum);
+      filePath = generated.filePath;
+      durationMs = generated.durationMs;
+      deleteOnRelease = true;
+      ownedPath = filePath;
+    } else if (/^https?:\/\//i.test(resolved.source)) {
+      filePath = await materializeUpnpInput(resolved.source);
+      deleteOnRelease = true;
+      ownedPath = filePath;
+    } else {
+      filePath = resolved.source.startsWith("file:")
+        ? fileURLToPath(resolved.source)
+        : resolved.source;
+    }
+
+    const quality = (await probeUpnpMediaQuality(filePath)) ?? track.quality;
+    return {
+      filePath,
+      durationMs,
+      quality,
+      mime: inferUpnpMime(filePath, quality?.codec ?? track.quality?.codec),
+      deleteOnRelease,
+    };
+  } catch (error) {
+    if (ownedPath) await discardUpnpInput(ownedPath);
+    throw error;
+  }
+};
+
+/** 释放尚未交给 media resource 的 prepared media；用户原始本地文件永不删除。 */
+export const discardPreparedUpnpMedia = async (media: PreparedUpnpMedia | null): Promise<void> => {
+  if (!media?.deleteOnRelease) return;
+  await discardUpnpInput(media.filePath);
 };
 
 /** 注册一个已经准备完成的本地媒体文件并返回 Renderer 可访问 URL。 */
