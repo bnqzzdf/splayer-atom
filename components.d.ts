@@ -236,7 +236,6 @@ declare module 'vue' {
     SNumberInput: typeof import('./src/components/ui/SNumberInput.vue')['default']
     SongList: typeof import('./src/components/list/SongList.vue')['default']
     SpeedDialog: typeof import('./src/components/modals/SpeedDialog.vue')['default']
-    SPerformanceMonitor: typeof import('./src/components/SPerformanceMonitor.vue')['default']
     SPopover: typeof import('./src/components/ui/SPopover.vue')['default']
     SPopselect: typeof import('./src/components/ui/SPopselect.vue')['default']
     SRadio: typeof import('./src/components/ui/SRadio.vue')['default']

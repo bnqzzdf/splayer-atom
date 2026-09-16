@@ -715,7 +715,6 @@
     "subtitle": "调整您的专属配置",
     "search": "搜索设置项...",
     "group": {
-      "general": "常规设置",
       "player": "播放设置",
       "lyric": "歌词设置",
       "localLibrary": "本地曲库",
@@ -772,7 +771,6 @@
       "downloadGeneral": "下载选项",
       "downloadTags": "写入内容",
       "backupReset": "备份与重置",
-      "debug": "调试",
       "preset": "强迫症配置",
       "envInfo": "环境信息"
     },
@@ -1427,10 +1425,6 @@
         "cookieSuccess": "{name} Cookie 设置成功",
         "cookieInvalid": "Cookie 无效，请检查后重试"
       }
-    },
-    "showPerformanceMonitor": {
-      "label": "性能监视器",
-      "description": "悬浮显示 FPS / 帧时间 / 内存占用，点击切换指标"
     },
     "networkProxyProtocol": {
       "label": "网络代理",

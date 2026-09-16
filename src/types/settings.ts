@@ -273,8 +273,6 @@ export interface AppearanceSettings {
   rememberCloseChoice: boolean;
   /** 全局字体 */
   fontFamily: string;
-  /** 性能监视器悬浮卡片 */
-  showPerformanceMonitor: boolean;
 }
 
 /** 强迫症设置 */

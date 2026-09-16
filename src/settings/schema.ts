@@ -1,5 +1,4 @@
 import type { SettingCategory, SettingSection } from "@/types/settings-schema";
-import generalCategory from "./categories/general";
 import appearanceCategory from "./categories/appearance";
 import playerCategory from "./categories/player";
 import lyricCategory from "./categories/lyric";
@@ -44,7 +43,6 @@ const controlServicesCategory: SettingCategory = {
 };
 
 export const settingsSchema: SettingCategory[] = [
-  generalCategory,
   appearanceCategory,
   playerCategory,
   lyricCategory,

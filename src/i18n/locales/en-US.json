@@ -727,7 +727,6 @@
     "subtitle": "Tailor your experience",
     "search": "Search settings...",
     "group": {
-      "general": "General",
       "player": "Player",
       "lyric": "Lyrics",
       "localLibrary": "Local Library",
@@ -784,7 +783,6 @@
       "cache": "Cache Management",
       "database": "Database Management",
       "backupReset": "Backup & Reset",
-      "debug": "Debug",
       "preset": "OCD Settings",
       "envInfo": "Environment Info"
     },
@@ -1439,10 +1437,6 @@
         "cookieSuccess": "{name} Cookie set successfully",
         "cookieInvalid": "Invalid Cookie, please check and retry"
       }
-    },
-    "showPerformanceMonitor": {
-      "label": "Performance Monitor",
-      "description": "Floating widget showing FPS / frame time / memory. Click to switch"
     },
     "networkProxyProtocol": {
       "label": "Network Proxy",

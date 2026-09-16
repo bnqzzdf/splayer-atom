@@ -1,6 +1,7 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
+import { LOCALES } from "@shared/types/settings";
 import FontConfig from "@/components/settings/custom/FontConfig.vue";
 import BackgroundImagePicker from "@/components/settings/custom/BackgroundImagePicker.vue";
 import SidebarCustomizeConfig from "@/components/settings/custom/SidebarCustomizeConfig.vue";
@@ -10,6 +11,18 @@ const appearanceCategory: SettingCategory = {
   id: "appearance",
   icon: IconLucidePalette,
   sections: [
+    {
+      id: "language",
+      items: [
+        {
+          key: "language",
+          type: "select",
+          binding: { store: "settings", path: "locale" },
+          options: LOCALES.map(({ value, label }) => ({ value, label })),
+          defaultValue: "zh-CN",
+        },
+      ],
+    },
     {
       id: "theme",
       items: [
@@ -243,8 +256,7 @@ const appearanceCategory: SettingCategory = {
             contentKey: "settings.confirm.highResourceContent",
             type: "warning",
           },
-          childrenCondition: () =>
-            useSettingsStore().player.playerBgType === "animation",
+          childrenCondition: () => useSettingsStore().player.playerBgType === "animation",
           hideChildren: true,
           children: [
             {
