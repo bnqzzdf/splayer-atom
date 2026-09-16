@@ -42,7 +42,7 @@ SPlayer Atom Node Core
 ## 环境要求
 
 - Linux x86-64
-- Node.js `>=24.18.0 <25`
+- Node.js `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
 - ALSA 开发依赖、Clang、pkg-config

@@ -13,7 +13,7 @@ splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
 splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 ```
 
-- **system-runtime**：使用系统 Node `>=24.18.0 <25`；
+- **system-runtime**：使用系统 Node `>=22.19.0`；
 - **bundled-runtime**：包含构建时 reference Node。
 
 两者运行同一个 Node Core 和 Web Control。

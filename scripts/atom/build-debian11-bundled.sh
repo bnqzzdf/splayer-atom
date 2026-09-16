@@ -46,7 +46,7 @@ run_docker run --rm \
   "$IMAGE_NAME" \
   sh -eu -c '
     git config --global --add safe.directory /src
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --store-dir /root/.local/share/pnpm/store
 
     sqlite_dir=$(dirname "$(node -p "require.resolve(\"better-sqlite3/package.json\")")")
     npm --prefix "$sqlite_dir" run build-release

@@ -42,7 +42,7 @@ SPlayer Atom Node Core
 ## Requirements
 
 - Linux x86-64
-- Node.js `>=24.18.0 <25`
+- Node.js `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
 - ALSA development headers, Clang, and pkg-config

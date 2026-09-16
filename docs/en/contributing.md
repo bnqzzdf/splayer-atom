@@ -5,7 +5,7 @@ Contributions to SPlayer Atom are welcome.
 ## Environment
 
 - Linux x86-64
-- Node `>=24.18.0 <25`
+- Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
 

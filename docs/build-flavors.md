@@ -35,7 +35,7 @@ The SDK remains external and is not bundled.
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz` and requires a compatible system Node `>=24.18.0 <25`.
+Produces `splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz` and requires a compatible system Node `>=22.19.0`.
 
 ## bundled-runtime
 

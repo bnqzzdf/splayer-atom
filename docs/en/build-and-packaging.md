@@ -16,7 +16,7 @@ There is no Electron build, Windows/macOS build, or Desktop package target.
 ## Environment
 
 - Linux x86-64
-- Node `>=24.18.0 <25`; release reference `24.18.0`
+- Node `>=22.19.0`; formal build and bundled-runtime reference `24.18.0`
 - pnpm `>=10`
 - Rust stable
 - ALSA headers, Clang, pkg-config, libarchive-tools

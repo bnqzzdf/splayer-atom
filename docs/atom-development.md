@@ -10,7 +10,7 @@ SPlayer Atom has one runtime shape:
 
 ## Requirements
 
-- Node `>=24.18.0 <25`
+- Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
 - Linux x86-64

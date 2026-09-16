@@ -20,7 +20,7 @@ Diretta SDK 与已验证源码路径一致。
 ## 1. 前置条件
 
 - 使用从干净 checkout 生成并已通过 final-artifact smoke 的 Linux x86-64 Core `tar.gz`。
-- system-runtime 使用 Node `24.18.0`；bundled-runtime 必须确认实际进程使用包内 Node。
+- 正式构建使用 reference Node `24.18.0`；system-runtime 运行最低要求为 Node `22.19.0`，bundled-runtime 必须确认实际进程使用包内 Node。
 - Diretta-branded artifact 必须记录 `diretta=true`、`direttaSdkRelease=150`，并由受控 SDK 150 gate 生成。
 - ALSA 验收使用明确的真实 `alsa:hw:*` device，不以 `default`、PipeWire 或 PulseAudio 代替。
 - Linux Diretta Host Core 以 root 运行；普通用户发现到 Target 不代表具备连接权限。
@@ -40,7 +40,7 @@ Diretta SDK 与已验证源码路径一致。
 Core 默认地址为 `http://127.0.0.1:14558`：
 
 ```bash
-ARTIFACT=out/splayer-atom-core-1.0.0-rc.1-20260910-system-linux-x64.tar.gz
+ARTIFACT=out/splayer-atom-core-1.0.0-rc.3-20260916-system-linux-x64.tar.gz
 pnpm check:hardware-release -- \
   --artifact "$ARTIFACT"
 ```

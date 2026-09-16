@@ -6,7 +6,7 @@ SPlayer Atom is a Linux x86-64 music player adapted from SPlayer-Next and rebuil
 **Web + Core** model. The main architecture migration is complete. Current work is focused on final
 hardware checks, multi-client Web testing, provider acceptance, and release packaging.
 
-Target release: **1.0.0-rc.1**.
+Target release: **1.0.0-rc.3**.
 
 - **Node Core** runs the music library, settings, providers, queue, playback, cache, downloads,
   plugins, statistics and audio outputs.
@@ -77,7 +77,7 @@ Target release: **1.0.0-rc.1**.
 
 ## 6. Packaging and release
 
-- [x] Core runtime range is Node `>=24.18.0 <25`; release reference is `24.18.0`.
+- [x] Core runtime minimum is Node `22.19.0`; formal build and bundled-runtime reference remain `24.18.0`.
 - [x] system-runtime and bundled-runtime use the same Core JS/native/Web build.
 - [x] Artifact staging validates native addon loading, plugin-host startup, HTTP/WS/Web startup and
       termination.
@@ -110,7 +110,7 @@ product goal.
 2. Finish Qobuz real-account acceptance.
 3. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
 4. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
-5. Publish `1.0.0-rc.1`, collect real-world feedback, then prepare the 1.0 stable release.
+5. Publish `1.0.0-rc.3`, collect real-world feedback, then prepare the 1.0 stable release.
 
 ## 10. Related documents
 

@@ -16,7 +16,7 @@
 ## 环境
 
 - Linux x86-64
-- Node `>=24.18.0 <25`，正式 reference 为 `24.18.0`
+- Node `>=22.19.0`，正式构建与 bundled-runtime reference 仍为 `24.18.0`
 - pnpm `>=10`
 - Rust stable
 - ALSA headers、Clang、pkg-config、libarchive-tools

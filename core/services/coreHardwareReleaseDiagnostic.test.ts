@@ -46,7 +46,7 @@ const responses = {
     platform: "linux",
     arch: "x64",
     node: "24.18.0",
-    nodeRange: ">=24.18.0 <25",
+    nodeRange: ">=22.19.0",
     nodeReference: "24.18.0",
     protocol: { version: 1 },
     capabilities: {

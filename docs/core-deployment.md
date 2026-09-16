@@ -4,10 +4,10 @@ This document describes the Linux x86-64 system-runtime and bundled-runtime depl
 
 ## Runtime contract
 
-- Core requires Node `>=24.18.0 <25`.
+- Core requires Node `>=22.19.0`.
 - Release/reference validation uses Node `24.18.0`.
 - The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
-- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node in `>=24.18.0 <25`.
+- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
 - The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
 
 ## Installation layout
@@ -88,7 +88,7 @@ sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
 3. Extract the new release into the original installation path.
 
 ```bash
-ARCHIVE=/path/to/splayer-atom-core-1.0.0-rc.1-20260910-system-linux-x64.tar.gz
+ARCHIVE=/path/to/splayer-atom-core-1.0.0-rc.3-20260916-system-linux-x64.tar.gz
 sudo mkdir -p /opt/splayer-atom-core
 sudo tar -xzf "$ARCHIVE" \
   -C /opt/splayer-atom-core --strip-components=1
