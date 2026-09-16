@@ -187,6 +187,49 @@ test("DSD metadata migration invalidates only physical DSD fingerprints once", (
   }
 });
 
+test("CUE 75fps migration restores only boundaries backed by the next INDEX start", () => {
+  const database = new Database(":memory:");
+  try {
+    database.exec(`
+      CREATE TABLE tracks(
+        id TEXT,
+        path TEXT,
+        cue_path TEXT,
+        cue_audio_path TEXT,
+        cue_start_ms INTEGER,
+        cue_end_ms INTEGER,
+        file_mtime INTEGER
+      );
+      CREATE TABLE lyric_match_cache(fingerprint TEXT, extra TEXT);
+      INSERT INTO tracks(id, path, cue_path, cue_audio_path, cue_start_ms, cue_end_ms) VALUES
+        ('01', 'cue://album#01', '/music/album.cue', '/music/album.flac', 0, 13),
+        ('02', 'cue://album#02', '/music/album.cue', '/music/album.flac', 13, 2000),
+        ('03', 'cue://album#03', '/music/album.cue', '/music/disc2.flac', 2000, 3000);
+    `);
+    database.pragma("user_version = 5");
+
+    migrate(database);
+
+    const rows = database
+      .prepare(
+        `
+        SELECT id, cue_start_frame75 AS start75, cue_end_frame75 AS end75
+        FROM tracks
+        ORDER BY id
+      `,
+      )
+      .all() as { id: string; start75: number | null; end75: number | null }[];
+    assert.deepEqual(rows, [
+      { id: "01", start75: 0, end75: 1 },
+      { id: "02", start75: 1, end75: null },
+      { id: "03", start75: 150, end75: null },
+    ]);
+    assert.equal(database.pragma("user_version", { simple: true }), DATABASE_SCHEMA_VERSION);
+  } finally {
+    database.close();
+  }
+});
+
 test("SQLite migration failure rolls back schema changes and user_version", () => {
   const database = new Database(":memory:");
   try {

@@ -32,8 +32,26 @@ describe("parseCueSheet", () => {
     assert.equal(tracks[0].track, 1);
     assert.equal(tracks[0].cueStartMs, 0);
     assert.equal(tracks[0].cueEndMs, 434_240);
+    assert.equal(tracks[0].cueStartFrame75, 0);
+    assert.equal(tracks[0].cueEndFrame75, 32_568);
     assert.equal(tracks[0].duration, 434_240);
+    assert.equal(tracks[1].cueStartFrame75, 32_568);
+    assert.equal(tracks[1].cueEndFrame75, 70_587);
     assert.equal(tracks[2].cueEndMs, 1_200_000);
+    assert.equal(tracks[2].cueEndFrame75, undefined);
+  });
+
+  it("保留 CUE 75fps 原始边界，不用毫秒反推 Direct sample 边界", () => {
+    const cuePath = path.join("C:", "Music", "exact.cue");
+    const tracks = parseCueSheet(
+      `FILE "exact.flac" WAVE\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n  TRACK 02 AUDIO\n    INDEX 01 00:00:01`,
+      cuePath,
+      10_000,
+    );
+
+    assert.equal(tracks[0].cueEndMs, 13);
+    assert.equal(tracks[0].cueEndFrame75, 1);
+    assert.equal(tracks[1].cueStartFrame75, 1);
   });
 
   it("生成稳定且可入库的虚拟路径", () => {

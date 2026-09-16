@@ -219,6 +219,8 @@ const syncCueTracks = async (
           cueAudioPath: audio.path,
           cueStartMs: cueTrack.cueStartMs,
           cueEndMs: cueTrack.cueEndMs,
+          cueStartFrame75: cueTrack.cueStartFrame75,
+          cueEndFrame75: cueTrack.cueEndFrame75,
           title: cueTrack.title,
           track: cueTrack.track,
           artists: cueTrack.artists,

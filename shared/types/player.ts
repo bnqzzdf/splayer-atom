@@ -101,6 +101,10 @@ export interface Track {
   cueStartMs?: number;
   /** CUE 分轨结束时间（毫秒） */
   cueEndMs?: number;
+  /** CUE INDEX 01 的原始 75fps 整数帧位置 */
+  cueStartFrame75?: number;
+  /** 下一条 INDEX 01 的原始 75fps 整数帧位置；最后一轨省略并播放到物理 EOF */
+  cueEndFrame75?: number;
   /** 流媒体服务器实例 ID（仅 source==='streaming'） */
   serverId?: string;
   /** 流媒体服务器原生 ID（仅 source==='streaming'） */

@@ -11,6 +11,8 @@ export interface CueTrackInfo {
   cueAudioPath: string;
   cueStartMs: number;
   cueEndMs: number;
+  cueStartFrame75: number;
+  cueEndFrame75?: number;
   duration: number;
 }
 
@@ -23,7 +25,7 @@ interface ParsedCueTrack {
   number: number;
   title?: string;
   performer?: string;
-  index01?: number;
+  index01Frame75?: number;
 }
 
 interface CueSheetState {
@@ -61,16 +63,18 @@ const readToken = (value: string): string => {
   return token;
 };
 
-/** 解析 mm:ss:ff，CUE 帧率固定为 75fps */
-const parseIndexMs = (value: string): number | null => {
+/** 解析 mm:ss:ff 为 CUE 原始 75fps 整数帧。 */
+const parseIndexFrame75 = (value: string): number | null => {
   const match = value.trim().match(/^(\d+):(\d{2}):(\d{2})$/);
   if (!match) return null;
   const minutes = Number(match[1]);
   const seconds = Number(match[2]);
   const frames = Number(match[3]);
   if (!Number.isFinite(minutes) || seconds > 59 || frames > 74) return null;
-  return (minutes * 60 + seconds) * 1000 + Math.round((frames * 1000) / 75);
+  return (minutes * 60 + seconds) * 75 + frames;
 };
+
+const cueFrame75ToMs = (frame: number): number => Math.round((frame * 1000) / 75);
 
 /** 解析 CUE 文本为内部结构 */
 const parseState = (content: string): CueSheetState => {
@@ -116,8 +120,8 @@ const parseState = (content: string): CueSheetState => {
     if (command === "INDEX" && currentTrack) {
       const parts = value.trim().split(/\s+/);
       if (parts[0] !== "01") continue;
-      const ms = parseIndexMs(parts[1] ?? "");
-      if (ms != null) currentTrack.index01 = ms;
+      const frame = parseIndexFrame75(parts[1] ?? "");
+      if (frame != null) currentTrack.index01Frame75 = frame;
     }
   }
 
@@ -151,13 +155,16 @@ export const parseCueSheet = (
   const file = state.files[0];
   const audioPath = path.resolve(path.dirname(cuePath), file.path);
   const indexedTracks = file.tracks
-    .filter((track) => track.index01 != null)
-    .sort((a, b) => (a.index01 ?? 0) - (b.index01 ?? 0));
+    .filter((track) => track.index01Frame75 != null)
+    .sort((a, b) => (a.index01Frame75 ?? 0) - (b.index01Frame75 ?? 0));
 
   return indexedTracks
     .map((track, index): CueTrackInfo | null => {
-      const start = track.index01 ?? 0;
-      const nextStart = indexedTracks[index + 1]?.index01 ?? audioDurationMs;
+      const startFrame75 = track.index01Frame75 ?? 0;
+      const nextStartFrame75 = indexedTracks[index + 1]?.index01Frame75;
+      const start = cueFrame75ToMs(startFrame75);
+      const nextStart =
+        nextStartFrame75 == null ? audioDurationMs : cueFrame75ToMs(nextStartFrame75);
       const end = Math.min(audioDurationMs, nextStart);
       if (end <= start) return null;
       const performer = track.performer || state.albumPerformer || "";
@@ -175,6 +182,8 @@ export const parseCueSheet = (
         cueAudioPath: audioPath,
         cueStartMs: start,
         cueEndMs: end,
+        cueStartFrame75: startFrame75,
+        cueEndFrame75: nextStartFrame75,
         duration: end - start,
       };
     })

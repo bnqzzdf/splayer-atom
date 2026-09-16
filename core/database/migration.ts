@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 5;
+export const DATABASE_SCHEMA_VERSION = 6;
 
 type TableInfoRow = { name: string };
 
@@ -79,6 +79,40 @@ export const migrate = (d: Database.Database): void => {
         `);
       }
       v = 5;
+    }
+
+    // v5 → v6: 保留 CUE 原始 75fps INDEX 坐标，Direct 路径据此换算精确 sample/bit 边界。
+    if (v < 6) {
+      if (!hasColumn(d, "tracks", "cue_start_frame75")) {
+        d.exec("ALTER TABLE tracks ADD COLUMN cue_start_frame75 INTEGER");
+      }
+      if (!hasColumn(d, "tracks", "cue_end_frame75")) {
+        d.exec("ALTER TABLE tracks ADD COLUMN cue_end_frame75 INTEGER");
+      }
+      if (hasColumn(d, "tracks", "cue_start_ms")) {
+        d.exec(`
+          UPDATE tracks
+          SET cue_start_frame75 = ROUND(cue_start_ms * 75.0 / 1000.0)
+          WHERE cue_start_ms IS NOT NULL AND cue_start_frame75 IS NULL
+        `);
+      }
+      if (hasColumn(d, "tracks", "cue_end_ms")) {
+        // 只有能与同一 CUE 的下一条起点对应时才回填 end；最后一轨保持 NULL，直接读到物理 EOF。
+        d.exec(`
+          UPDATE tracks AS current
+          SET cue_end_frame75 = ROUND(current.cue_end_ms * 75.0 / 1000.0)
+          WHERE current.cue_end_ms IS NOT NULL
+            AND current.cue_end_frame75 IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM tracks AS next
+              WHERE next.cue_path = current.cue_path
+                AND next.cue_audio_path = current.cue_audio_path
+                AND next.cue_start_ms = current.cue_end_ms
+            )
+        `);
+      }
+      v = 6;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

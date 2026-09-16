@@ -3,8 +3,10 @@ import type {
   PlaybackSessionSnapshot,
   RepeatMode,
   ShuffleMode,
+  Track,
 } from "@shared/types/player";
 import { getDb, isDbOpen } from "./index";
+import { getTracksByIds } from "./queries";
 
 interface PlaybackSessionRow {
   queue_json: string;
@@ -27,6 +29,49 @@ const parseRepeat = (value: string): RepeatMode => {
   return "off";
 };
 const parseShuffle = (value: string): ShuffleMode => (value === "on" ? "on" : "off");
+
+const isLocalCueTrack = (track: Track): boolean =>
+  track.source === "local" && track.cuePath != null && track.cueAudioPath != null;
+
+/**
+ * 旧 playback_session JSON 可能只有 cueStartMs/cueEndMs。Direct 精确边界不能从毫秒
+ * 猜测，因此恢复时只从当前 library canonical Track 补齐原始 75fps INDEX 坐标。
+ * 找不到 canonical Track 时保持旧数据原样，让 Direct 路径安全退回非 segment 行为。
+ */
+export const refreshPersistedCueCoordinates = (items: PlaybackQueueItem[]): PlaybackQueueItem[] => {
+  const cueIds = [
+    ...new Set(items.filter((item) => isLocalCueTrack(item.track)).map((item) => item.track.id)),
+  ];
+  if (cueIds.length === 0) return items.map((item) => ({ ...item, track: { ...item.track } }));
+
+  const canonicalById = new Map(
+    getTracksByIds(cueIds)
+      .filter(isLocalCueTrack)
+      .map((track) => [track.id, track] as const),
+  );
+
+  return items.map((item) => {
+    const track = item.track;
+    if (!isLocalCueTrack(track)) return { ...item, track: { ...track } };
+    const canonical = canonicalById.get(track.id);
+    if (
+      !canonical ||
+      canonical.cuePath !== track.cuePath ||
+      canonical.cueAudioPath !== track.cueAudioPath ||
+      canonical.cueStartFrame75 == null
+    ) {
+      return { ...item, track: { ...track } };
+    }
+    return {
+      ...item,
+      track: {
+        ...track,
+        cueStartFrame75: canonical.cueStartFrame75,
+        cueEndFrame75: canonical.cueEndFrame75,
+      },
+    };
+  });
+};
 
 /** playback session schema 属于 Atom delta，由本模块按需确保，不侵入 upstream library schema。 */
 const ensurePlaybackSessionTable = (): void => {
@@ -55,8 +100,11 @@ export const loadPlaybackSession = (): PlaybackSessionSnapshot | null => {
     )
     .get() as PlaybackSessionRow | undefined;
   if (!row) return null;
-  const queue = parseQueue(row.queue_json) ?? [];
-  const originalQueue = parseQueue(row.original_queue_json);
+  const queue = refreshPersistedCueCoordinates(parseQueue(row.queue_json) ?? []);
+  const parsedOriginalQueue = parseQueue(row.original_queue_json);
+  const originalQueue = parsedOriginalQueue
+    ? refreshPersistedCueCoordinates(parsedOriginalQueue)
+    : null;
   const index =
     queue.length === 0 ? -1 : Math.max(0, Math.min(row.current_index, queue.length - 1));
   return {

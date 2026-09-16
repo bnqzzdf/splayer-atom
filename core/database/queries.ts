@@ -12,6 +12,8 @@ interface TrackRow {
   cue_audio_path: string | null;
   cue_start_ms: number | null;
   cue_end_ms: number | null;
+  cue_start_frame75: number | null;
+  cue_end_frame75: number | null;
   title: string;
   track?: number;
   artists: string;
@@ -56,6 +58,8 @@ const rowToTrack = (row: TrackRow): Track => {
     cueAudioPath: row.cue_audio_path ?? undefined,
     cueStartMs: row.cue_start_ms ?? undefined,
     cueEndMs: row.cue_end_ms ?? undefined,
+    cueStartFrame75: row.cue_start_frame75 ?? undefined,
+    cueEndFrame75: row.cue_end_frame75 ?? undefined,
     title: row.title,
     track: row.track ?? undefined,
     artists: JSON.parse(row.artists) as Artist[],
@@ -136,6 +140,8 @@ export interface UpsertTrack {
   cueAudioPath?: string;
   cueStartMs?: number;
   cueEndMs?: number;
+  cueStartFrame75?: number;
+  cueEndFrame75?: number;
   title: string;
   track?: number;
   artists: Artist[];
@@ -158,9 +164,9 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
   const d = getDb();
   const stmt = d.prepare(`
     INSERT OR REPLACE INTO tracks
-      (id, path, cue_path, cue_audio_path, cue_start_ms, cue_end_ms, title, track, artists, album, duration, cover, codec, sample_rate, bit_rate, channels, bits_per_sample, file_size, file_mtime, file_ctime, scanned_at)
+      (id, path, cue_path, cue_audio_path, cue_start_ms, cue_end_ms, cue_start_frame75, cue_end_frame75, title, track, artists, album, duration, cover, codec, sample_rate, bit_rate, channels, bits_per_sample, file_size, file_mtime, file_ctime, scanned_at)
     VALUES
-      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const now = Date.now();
   const tx = d.transaction(() => {
@@ -172,6 +178,8 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
         t.cueAudioPath ?? null,
         t.cueStartMs ?? null,
         t.cueEndMs ?? null,
+        t.cueStartFrame75 ?? null,
+        t.cueEndFrame75 ?? null,
         t.title,
         t.track ?? null,
         JSON.stringify(t.artists),
