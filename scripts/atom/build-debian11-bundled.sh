@@ -6,6 +6,11 @@ IMAGE_NAME=${ATOM_DEBIAN11_IMAGE:-splayer-atom-debian11-builder}
 CONTAINER_NAME=${ATOM_DEBIAN11_CONTAINER:-splayer-atom-debian11-build}
 NODE_VOLUME=${ATOM_DEBIAN11_NODE_VOLUME:-splayer-atom-debian11-node-modules}
 PNPM_VOLUME=${ATOM_DEBIAN11_PNPM_VOLUME:-splayer-atom-debian11-pnpm-store}
+CARGO_REGISTRY_VOLUME=${ATOM_DEBIAN11_CARGO_REGISTRY_VOLUME:-splayer-atom-debian11-cargo-registry}
+CARGO_GIT_VOLUME=${ATOM_DEBIAN11_CARGO_GIT_VOLUME:-splayer-atom-debian11-cargo-git}
+CARGO_HTTP_TIMEOUT=${CARGO_HTTP_TIMEOUT:-600}
+CARGO_HTTP_LOW_SPEED_LIMIT=${CARGO_HTTP_LOW_SPEED_LIMIT:-1}
+CARGO_NET_RETRY=${CARGO_NET_RETRY:-10}
 DOCKER_BIN=${DOCKER_BIN:-docker}
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -34,6 +39,10 @@ run_docker build \
 
 run_docker volume inspect "$NODE_VOLUME" >/dev/null 2>&1 || run_docker volume create "$NODE_VOLUME" >/dev/null
 run_docker volume inspect "$PNPM_VOLUME" >/dev/null 2>&1 || run_docker volume create "$PNPM_VOLUME" >/dev/null
+run_docker volume inspect "$CARGO_REGISTRY_VOLUME" >/dev/null 2>&1 \
+  || run_docker volume create "$CARGO_REGISTRY_VOLUME" >/dev/null
+run_docker volume inspect "$CARGO_GIT_VOLUME" >/dev/null 2>&1 \
+  || run_docker volume create "$CARGO_GIT_VOLUME" >/dev/null
 run_docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
 echo "[Debian11] 在隔离 node_modules 和 pnpm store 的容器内打包"
@@ -42,6 +51,12 @@ run_docker run --rm \
   --volume "$ROOT_DIR:/src" \
   --volume "$NODE_VOLUME:/src/node_modules" \
   --volume "$PNPM_VOLUME:/root/.local/share/pnpm/store" \
+  --volume "$CARGO_REGISTRY_VOLUME:/root/.cargo/registry" \
+  --volume "$CARGO_GIT_VOLUME:/root/.cargo/git" \
+  --env "CARGO_HOME=/root/.cargo" \
+  --env "CARGO_HTTP_TIMEOUT=$CARGO_HTTP_TIMEOUT" \
+  --env "CARGO_HTTP_LOW_SPEED_LIMIT=$CARGO_HTTP_LOW_SPEED_LIMIT" \
+  --env "CARGO_NET_RETRY=$CARGO_NET_RETRY" \
   --workdir /src \
   "$IMAGE_NAME" \
   sh -eu -c '
@@ -70,8 +85,8 @@ run_docker run --rm \
       *) echo "[Debian11] 拒绝超过 glibc 2.31 的 better-sqlite3: $sqlite_glibc" >&2; exit 1 ;;
     esac
 
-    archive=$(find out -maxdepth 1 -type f -name "splayer-atom-core-*-bundled-linux-x64.tar.gz" -print -quit)
-    test -n "$archive"
+    archive=$(node -e "const runtime = require(\"./out/core-system/runtime.json\"); const date = runtime.buildDate.replace(/-/g, \"\"); process.stdout.write([\"out/splayer-atom-core\", runtime.atomVersion, date, \"bundled-linux-x64.tar.gz\"].join(\"-\"))")
+    test -f "$archive"
     sha256sum "$archive"
     echo "[Debian11] PASS $archive"
   '
