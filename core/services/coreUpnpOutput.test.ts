@@ -16,6 +16,10 @@ const nativePlayer = read("native/audio-engine/src/bindings/player.rs");
 const nativeCore = read("native/audio-engine-core/src/lib.rs");
 const scannerService = read("core/services/scanner.ts");
 const sacdInput = read("core/atom/sacdInput.ts");
+const stopUpnpOutput =
+  upnpOutput
+    .split("export const stopUpnpOutput = async (")[1]
+    ?.split("export const seekUpnpOutput")[0] ?? "";
 
 test("UPnP remains an Atom-owned early branch without a generic output framework", () => {
   assert.match(session, /if \(isUpnpSelected\(\)\) \{/);
@@ -67,6 +71,17 @@ test("UPnP P2 keeps renderer observations and output switching inside existing C
   assert.match(session, /isNearUpnpEnd/);
   assert.match(session, /prepareUpnpOutput\(deviceId!\)/);
   assert.doesNotMatch(session, /切换到 UPnP 将在 P2 实现|从 UPnP 切换输出将在 P2 实现/);
+});
+
+test("UPnP stop always releases local execution state after a remote failure", () => {
+  const commandIndex = stopUpnpOutput.indexOf("await runCommand");
+  const finallyIndex = stopUpnpOutput.indexOf("finally");
+  const resetIndex = stopUpnpOutput.indexOf('status = { state: "stopped"');
+  const releaseIndex = stopUpnpOutput.indexOf("await releaseMediaResource(previous)");
+  assert.ok(commandIndex >= 0);
+  assert.ok(finallyIndex > commandIndex);
+  assert.ok(resetIndex > finallyIndex);
+  assert.ok(releaseIndex > resetIndex);
 });
 
 test("UPnP online input reuses exact-byte materialization without provider or Direct ownership", () => {

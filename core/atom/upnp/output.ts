@@ -243,15 +243,18 @@ export const pauseUpnpOutput = async (): Promise<void> => {
 export const stopUpnpOutput = async (): Promise<void> => {
   ++generation;
   stopPolling();
-  await runCommand(async () => {
-    const renderer = selectedId ? await ensureDescriptor() : null;
-    if (renderer) await stopAvTransport(renderer);
-  });
-  const previous = currentResource;
-  currentResource = null;
-  status = { state: "stopped", position: 0, duration: 0, isFinished: false };
-  notifyObserver();
-  await releaseMediaResource(previous);
+  try {
+    await runCommand(async () => {
+      const renderer = selectedId ? await ensureDescriptor() : null;
+      if (renderer) await stopAvTransport(renderer);
+    });
+  } finally {
+    const previous = currentResource;
+    currentResource = null;
+    status = { state: "stopped", position: 0, duration: 0, isFinished: false };
+    notifyObserver();
+    await releaseMediaResource(previous);
+  }
 };
 
 export const seekUpnpOutput = async (positionMs: number): Promise<void> => {

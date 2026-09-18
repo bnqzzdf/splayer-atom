@@ -1275,6 +1275,14 @@ export const scanUpnpOutputDevices = (): Promise<AudioDevice[]> =>
     return [];
   });
 
+const stopUpnpOutputForSwitch = async (): Promise<void> => {
+  try {
+    await stopUpnpOutput();
+  } catch (error) {
+    playerLog.warn(`[upnp] previous output stop failed during switch: ${String(error)}`);
+  }
+};
+
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertCoreDirettaPrivilege(deviceId);
   invalidatePlaybackPreload();
@@ -1317,7 +1325,7 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
     }
 
     try {
-      if (previousWasUpnp) await stopUpnpOutput();
+      if (previousWasUpnp) await stopUpnpOutputForSwitch();
       else if (shouldReloadCurrent) player.stop();
 
       selectUpnpOutput(deviceId!);
@@ -1406,7 +1414,7 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
     }
 
     try {
-      await stopUpnpOutput();
+      await stopUpnpOutputForSwitch();
       await player.setOutputDevice(deviceId ?? undefined);
       store.set("player.outputDevice", deviceId);
       await releaseUpnpOutput();

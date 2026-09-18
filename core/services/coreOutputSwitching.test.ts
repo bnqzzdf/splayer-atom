@@ -10,6 +10,8 @@ const controlSource = readFileSync(
 
 const outputSwitch = sessionSource.split("export const setOutputDevice = async (")[1] ?? "";
 const nativeOutputSwitch = outputSwitch.split("const state = player.getStatus().state;")[1] ?? "";
+const stopUpnpForSwitch =
+  sessionSource.split("const stopUpnpOutputForSwitch = async (")[1]?.split("\n};")[0] ?? "";
 
 test("Core resolves and materializes the current canonical Track before a Diretta switch", () => {
   const resolveIndex = nativeOutputSwitch.indexOf("resolvePlaybackSource(item.track)");
@@ -34,6 +36,25 @@ test("Core output switching restores old output and playback when the switch its
   );
   assert.match(outputSwitch, /if \(resumePositionMs > 0\) await seek\(resumePositionMs\)/);
   assert.match(outputSwitch, /if \(state === "playing"\) await play\(\)/);
+});
+
+test("Core output switching ignores an unavailable previous UPnP renderer", () => {
+  const stopIndex = stopUpnpForSwitch.indexOf("await stopUpnpOutput()");
+  const catchIndex = stopUpnpForSwitch.indexOf("catch (error)");
+  assert.ok(stopIndex >= 0);
+  assert.ok(catchIndex > stopIndex);
+  const upnpTargetSwitch = outputSwitch.split("if (isUpnpOutput(previousPreference))")[0] ?? "";
+  const upnpTargetCommit = upnpTargetSwitch.split("    try {")[1]?.split("    } catch")[0] ?? "";
+  assert.match(
+    upnpTargetCommit,
+    /await stopUpnpOutputForSwitch\(\);[\s\S]*selectUpnpOutput\(deviceId!\)/,
+  );
+  assert.doesNotMatch(upnpTargetCommit, /releaseUpnpOutput\(\)/);
+  const upnpSourceSwitch = outputSwitch.split("if (isUpnpOutput(previousPreference))")[1] ?? "";
+  assert.match(
+    upnpSourceSwitch,
+    /await stopUpnpOutputForSwitch\(\);\s*await player\.setOutputDevice[\s\S]*store\.set\("player\.outputDevice", deviceId\);\s*await releaseUpnpOutput\(\)/,
+  );
 });
 
 test("Core applies pause-on-device-switch policy when restoring playback on the new output", () => {
