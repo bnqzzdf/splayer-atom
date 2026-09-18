@@ -1,6 +1,6 @@
 import { useSettingsStore } from "@/stores/settings";
 import { useMediaStore } from "@/stores/media";
-import { findLyricIndex } from "@shared/utils/lyric";
+import { findLyricIndex, getLyricLineText } from "@shared/utils/lyric";
 import { formatTime } from "@/utils/time";
 
 /**
@@ -26,7 +26,7 @@ export const useProgressLyric = () => {
 
     const line = lyrics[index];
     // 获取歌词文本
-    const text = line.words?.map((w) => w.word).join("") || line.translatedLyric || "";
+    const text = getLyricLineText(line) || line.translatedLyric || "";
     if (!text) return null;
 
     // 截断过长的歌词

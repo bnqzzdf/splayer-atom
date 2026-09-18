@@ -35,10 +35,14 @@ const toDownloadLyric = (lyric: ResolvedLyric): DownloadLyric => ({
 const toUsableDownloadLyric = (lyric: ResolvedLyric | null): DownloadLyric | null => {
   if (!lyric) return null;
   const downloadLyric = toDownloadLyric(lyric);
-  const hasContent =
-    buildDownloadLyric(downloadLyric, downloadLyric.format, "lrc") ||
-    buildDownloadLyric(downloadLyric, downloadLyric.format, "ttml");
-  return hasContent ? downloadLyric : null;
+  try {
+    const hasContent =
+      buildDownloadLyric(downloadLyric, downloadLyric.format, "lrc") ||
+      buildDownloadLyric(downloadLyric, downloadLyric.format, "ttml");
+    return hasContent ? downloadLyric : null;
+  } catch {
+    return null;
+  }
 };
 
 /** 在线歌词优先尝试 TTML，失败再回落原结果 */
@@ -47,11 +51,35 @@ const resolveOnlineDownloadLyric = async (
   online: OnlineResult | null,
 ): Promise<DownloadLyric | null> => {
   if (!online) return null;
-  const ttml = await resolveTTMLOverlay(track, online);
+  let ttml: ResolvedLyric | null = null;
+  try {
+    ttml = await resolveTTMLOverlay(track, online);
+  } catch {
+    // 下载仍以基础歌词兜底，TTML 网络失败不能使整个下载失败。
+  }
   return (
     toUsableDownloadLyric(ttml) ??
     toUsableDownloadLyric({ source: online.source, input: online.input })
   );
+};
+
+/** 流媒体在线候选在下载前同步完成 TTML 决议 */
+const resolveStreamingDownloadLyric = async (
+  track: Track,
+  lyric: ResolvedLyric | null,
+): Promise<DownloadLyric | null> => {
+  if (!lyric) return null;
+  if (lyric.source.source === "online" && lyric.source.platform) {
+    return resolveOnlineDownloadLyric(track, {
+      source: {
+        source: "online",
+        format: lyric.source.format,
+        platform: lyric.source.platform,
+      },
+      input: lyric.input,
+    });
+  }
+  return toUsableDownloadLyric(lyric);
 };
 
 /**
@@ -67,7 +95,10 @@ export const resolveDownloadLyric = async (track: Track): Promise<DownloadLyric 
   if (track.source === "streaming") {
     // 插件优选：请求先行发出，与正常来源并发
     const pluginTask = isPluginLyricPreferred() ? resolvePluginLyric(track) : null;
-    const streaming = toUsableDownloadLyric(await resolveStreamingByPreference(track));
+    const streaming = await resolveStreamingDownloadLyric(
+      track,
+      await resolveStreamingByPreference(track),
+    );
     if (pluginTask) {
       const plugin = toUsableDownloadLyric(await pluginTask);
       if (plugin && isBetterFormat(plugin.format, streaming?.format ?? null)) return plugin;

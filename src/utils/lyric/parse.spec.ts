@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getLyricLineText } from "@shared/utils/lyric";
 import { bestExternalIndex, detectFormat, parseLyric } from "./parse";
 
 describe("lyric parse", () => {
@@ -78,5 +79,20 @@ describe("lyric parse", () => {
       { startTime: 1_000, endTime: 2_000, word: "B" },
     ]);
     expect(line.endTime).toBe(2_000);
+  });
+
+  it.each([
+    ["yrc", "[0,1000](0,400,0)Hello(400,100,0) (500,500,0)world"],
+    ["qrc", "[0,1000]Hello(0,400) (400,100)world(500,500)"],
+    ["krc", "[00:00.000]<0,400>Hello<400,100> <500,500>world"],
+    [
+      "ttml",
+      '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="0s" end="1s"><span begin="0s" end="0.4s">Hello</span> <span begin="0.5s" end="1s">world</span></p></div></body></tt>',
+    ],
+  ] as const)("%s 英文逐词歌词保留单词间空格", (format, content) => {
+    const [line] = parseLyric({ content }, format);
+
+    // TrackInfo、进度条和复制歌词共用该文本合并入口。
+    expect(getLyricLineText(line)).toBe("Hello world");
   });
 });

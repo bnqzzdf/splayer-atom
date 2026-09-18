@@ -145,8 +145,9 @@ export const useMediaStore = defineStore("media", () => {
    * 原子写入歌词
    * @param source - 歌词源
    * @param input - 主歌词 + 可选翻译 / 音译；传 null 即清空
+   * @returns 是否写入了有效歌词；无效候选不会破坏当前歌词
    */
-  const setLyric = (source: LyricData, input: LyricInput | null): void => {
+  const setLyric = (source: LyricData, input: LyricInput | null): boolean => {
     let nextLines: LyricLine[] = [];
     const settings = useSettingsStore();
     if (source && input) {
@@ -168,6 +169,7 @@ export const useMediaStore = defineStore("media", () => {
     }
     // 解析后无有效行视作无歌词
     const hasContent = nextLines.length > 0;
+    if (source && input && !hasContent) return false;
     activeLyric.value = hasContent ? source : null;
     lyricContent.value = hasContent ? input : null;
     parsedLyric.value = nextLines;
@@ -176,6 +178,7 @@ export const useMediaStore = defineStore("media", () => {
     lyricIndex.value = -1;
     lyricLoading.value = false;
     syncToMain();
+    return hasContent;
   };
 
   /**

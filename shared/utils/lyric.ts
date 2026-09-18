@@ -1,5 +1,9 @@
 import type { LyricLine } from "@shared/types/lyrics";
 
+/** 合并一行歌词的逐词文本并保留解析器提供的空格 */
+export const getLyricLineText = (line: LyricLine): string =>
+  line.words.map((word) => word.word).join("");
+
 /**
  * 根据播放时间查找当前歌词行索引（二分查找）
  * @param lines 已按 startTime 排序的歌词行数组

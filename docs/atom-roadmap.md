@@ -98,13 +98,45 @@ Target release: **1.0.0-rc.3**.
 - [ ] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.
 
-## 8. Network scope
+## 8. Lyric quality work
+
+The current lyric work is limited to the concrete P0/P1 correctness gaps identified against the
+recent SPlayer changes. It does not include a parser or renderer replacement.
+
+### P0
+
+- [x] Make an explicit lyric-platform preference fall back through `lyricSourceOrder` when the
+      preferred platform has no result; keep `self` strict.
+- [x] Add one validated lyric-candidate commit path for online, plugin, local-TTML and preload
+      results. A candidate must parse to valid lines before replacing the current lyric.
+- [x] Prevent lower-ranked candidates, malformed TTML, and failed plugin results from clearing or
+      replacing an already valid lyric. Preserve the explicit-platform-switch exception described
+      in [`lyric-improvements.md`](./lyric-improvements.md).
+- [x] Remove TTML waiting from streaming and preload display paths: show the base lyric first, then
+      apply a token- and track-guarded background TTML upgrade. Download resolution remains
+      synchronous so exported lyrics use the final usable result.
+- [x] Let preferred plugin lyrics compete as soon as they return, using the same validity and
+      format-quality gate as built-in sources.
+
+### P1
+
+- [x] Add loader and resolver regression tests for explicit-platform fallback, candidate quality
+      ordering, malformed TTML preservation, streaming/preload non-blocking behavior, plugin
+      takeover, and fast track changes.
+- [x] Add YRC/QRC/KRC/TTML English word-spacing regression tests and verify TrackInfo, progress
+      lyric text, and lyric copy output. Do not introduce a second whitespace representation unless
+      the tests demonstrate a real Atom parser gap.
+
+The detailed implementation boundary, call paths, acceptance criteria, and explicitly rejected
+SPlayer changes are recorded in [`lyric-improvements.md`](./lyric-improvements.md).
+
+## 9. Network scope
 
 The current release is intended for a trusted home/LAN environment. Authentication, pairing, TLS,
 and stricter browser-origin controls can be added later if remote/untrusted-network access becomes a
 product goal.
 
-## 9. Current priorities
+## 10. Current priorities
 
 1. Finish restart/SIGTERM/output-switch/reconnect hardware acceptance.
 2. Finish Qobuz real-account acceptance.
@@ -112,7 +144,7 @@ product goal.
 4. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
 5. Publish `1.0.0-rc.3`, collect real-world feedback, then prepare the 1.0 stable release.
 
-## 10. Related documents
+## 11. Related documents
 
 ```text
 docs/atom-development.md            development environment and common checks
@@ -121,6 +153,7 @@ docs/build-flavors.md               system/bundled and Diretta build variants
 docs/core-deployment.md             systemd, data, migration, upgrade and rollback
 docs/hardware-release-checklist.md  ALSA/Diretta/UPnP hardware acceptance
 docs/live-provider-acceptance.md    provider real-account acceptance
+docs/lyric-improvements.md          P0/P1 lyric correctness plan and technical design
 docs/upnp-output-plan.md            UPnP output design
 docs/native.md                      retained Rust/N-API modules
 ```

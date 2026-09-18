@@ -142,14 +142,21 @@ export const resolveOnlineByPreference = async (
   if (preference === "self") {
     return isPlatform(track.source) ? resolvePlatformLyric(track.source, track) : null;
   }
-  if (preference !== "auto") return resolvePlatformLyric(preference, track);
+
+  let preferredPlatform: Platform | null = null;
+  if (preference !== "auto") {
+    preferredPlatform = preference;
+    const preferred = await resolvePlatformLyric(preference, track);
+    if (!isCurrent()) return null;
+    if (preferred) return preferred;
+  }
 
   const order = settings.lyric.lyricSourceOrder ?? DEFAULT_LYRIC_SOURCE_ORDER;
   const formatOrder = settings.lyric.lyricFormatOrder ?? DEFAULT_LYRIC_FORMAT_ORDER;
-  let candidates: Platform[] = [...order];
+  let candidates: Platform[] = order.filter((platform) => platform !== preferredPlatform);
   if (options.hasLocal) {
     if (!settings.lyric.smartPreferOnline || !options.localFormat) return null;
-    candidates = order.filter((platform) =>
+    candidates = candidates.filter((platform) =>
       platformCanUpgrade(platform, options.localFormat!, formatOrder),
     );
     if (candidates.length === 0) return null;
@@ -235,7 +242,7 @@ export const resolveTTMLOverlay = async (
  * 按歌词来源偏好解析流媒体歌词
  * @param track - 流媒体歌曲
  * @param shouldContinue - 竞态检查
- * @returns 最终歌词候选，不存在则返回 null
+ * @returns 可立即显示的基础歌词候选，不存在则返回 null
  */
 export const resolveStreamingByPreference = async (
   track: Track,
@@ -257,11 +264,10 @@ export const resolveStreamingByPreference = async (
   });
   if (!shouldContinue()) return null;
   if (online) {
-    const ttml = await resolveTTMLOverlay(track, online);
-    if (!shouldContinue()) return null;
-    return ttml ?? { source: online.source, input: online.input };
+    // 自动模式会以服务端歌词为本地基准，在线结果只可能是格式升级。
+    return { source: online.source, input: online.input };
   }
-  if (serverLyric || preference === "auto") return serverLyric;
+  if (preference === "auto") return serverLyric;
 
   return resolveStreamingLyric(track);
 };
@@ -321,7 +327,7 @@ export const isPluginLyricPreferred = (): boolean =>
  * 本地歌曲依赖实际加载后的 TrackDetail，不在此处提前解析
  * @param track - 候选歌曲
  * @param shouldContinue - 竞态检查
- * @returns 最终歌词，不存在或不支持预载则返回 null
+ * @returns 可立即显示的基础歌词，不存在或不支持预载则返回 null
  */
 export const resolveLyricForPreload = async (
   track: Track,
@@ -360,9 +366,7 @@ export const resolveLyricForPreload = async (
   if (!shouldContinue()) return null;
   let normal: ResolvedLyric | null = null;
   if (online) {
-    const ttml = await resolveTTMLOverlay(track, online);
-    if (!shouldContinue()) return null;
-    normal = ttml ?? { source: online.source, input: online.input };
+    normal = { source: online.source, input: online.input };
   }
   if (pluginTask) {
     const plugin = await pluginTask;

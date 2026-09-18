@@ -4,6 +4,7 @@ import { useThemeStore } from "@/stores/theme";
 import { useCopyText } from "@/composables/useCopyText";
 import { toast } from "@/composables/useToast";
 import { createLyricPoster } from "@/utils/lyric/poster";
+import { getLyricLineText } from "@shared/utils/lyric";
 
 const props = defineProps<{ open: boolean }>();
 
@@ -29,7 +30,7 @@ const displayLyrics = computed(() =>
     .filter((line) => !line.isBG)
     .map((line, index) => ({
       index,
-      text: line.words.map((word) => word.word).join(""),
+      text: getLyricLineText(line),
       translation: line.translatedLyric || "",
       romaji: line.romanLyric || line.words.map((word) => word.romanWord ?? "").join(""),
       duet: line.isDuet,
