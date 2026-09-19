@@ -596,7 +596,7 @@ impl DirectPcmDecoder {
         unsafe { self.codec_context.as_ref().frame_size.max(0) as usize }
     }
 
-    fn sample_rate(&self) -> Result<u32> {
+    pub(crate) fn sample_rate(&self) -> Result<u32> {
         let sample_rate = unsafe { self.codec_context.as_ref().sample_rate };
         let sample_rate =
             u32::try_from(sample_rate).context("Source Direct PCM sample rate 越界")?;
@@ -605,7 +605,11 @@ impl DirectPcmDecoder {
     }
 
     /// 按源 sample frame 精确 seek；用于 CUE 75fps 边界，避免先量化到微秒造成 off-by-one。
-    fn seek_sample_frame(&mut self, target_sample: u64, frame: &mut DirectPcmFrame) -> Result<u64> {
+    pub(crate) fn seek_sample_frame(
+        &mut self,
+        target_sample: u64,
+        frame: &mut DirectPcmFrame,
+    ) -> Result<u64> {
         let sample_rate = self.sample_rate()?;
         let sample_time_base = sys::AVRational {
             num: 1,

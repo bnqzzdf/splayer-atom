@@ -236,38 +236,44 @@ pub fn extract_cue_track_to_wav(
     let result = (|| -> Result<CueWavResult> {
         let mut decoder = DirectPcmDecoder::open_local(&track.physical_path)?;
         let mut frame = DirectPcmFrame::new()?;
-        let mut writer: Option<WavWriter> = None;
-        let mut format: Option<DirectPcmFormat> = None;
-        let mut decoded_samples = 0_u64;
-        let mut written_samples = 0_u64;
-        let mut start_sample = 0_u64;
-        let mut end_sample: Option<u64> = None;
 
-        while decoder.read_frame(&mut frame)? {
+        // 利用 codec context 预先获取 sample rate，计算 CUE 边界
+        let sample_rate = decoder.sample_rate()?;
+        let start_sample = cue_frame_to_sample(u64::from(track.cue_start_frames), sample_rate)?;
+        let end_sample = track
+            .cue_duration_frames
+            .map(|duration| {
+                cue_frame_to_sample(
+                    u64::from(track.cue_start_frames) + u64::from(duration),
+                    sample_rate,
+                )
+            })
+            .transpose()?;
+
+        // 如果 CUE 起点 > 0，seek 到目标位置避免顺序解码浪费。
+        // seek_sample_frame 会定位到包含 start_sample 的帧并 trim 前部样本，
+        // 返回后 frame 已填充有效数据。
+        let mut decoded_samples = if start_sample > 0 {
+            decoder.seek_sample_frame(start_sample, &mut frame)?
+        } else {
+            ensure!(decoder.read_frame(&mut frame)?, "CUE 母版没有可解码 PCM");
+            0
+        };
+
+        let format = frame.format()?;
+        ensure!(format.channels == 2, "UPnP CUE 仅支持双声道");
+        // seek 后验证 sample rate 与 codec context 一致
+        ensure!(
+            format.sample_rate == sample_rate,
+            "CUE 母版 seek 后 sample rate 与 codec context 不一致"
+        );
+        let mut writer = WavWriter::create(&part, format)?;
+        let mut written_samples = 0_u64;
+
+        loop {
+            // 验证格式没有中途变化
             let current_format = frame.format()?;
-            if let Some(expected) = format {
-                ensure!(
-                    expected == current_format,
-                    "CUE 母版播放中 PCM 格式发生变化"
-                );
-            } else {
-                ensure!(current_format.channels == 2, "UPnP CUE 仅支持双声道");
-                start_sample = cue_frame_to_sample(
-                    u64::from(track.cue_start_frames),
-                    current_format.sample_rate,
-                )?;
-                end_sample = track
-                    .cue_duration_frames
-                    .map(|duration| {
-                        cue_frame_to_sample(
-                            u64::from(track.cue_start_frames) + u64::from(duration),
-                            current_format.sample_rate,
-                        )
-                    })
-                    .transpose()?;
-                writer = Some(WavWriter::create(&part, current_format)?);
-                format = Some(current_format);
-            }
+            ensure!(current_format == format, "CUE 母版播放中 PCM 格式发生变化");
 
             let frame_samples = u64::try_from(frame.samples_per_channel())?;
             let frame_start = decoded_samples;
@@ -279,10 +285,7 @@ pub fn extract_cue_track_to_wav(
             if overlap_end > overlap_start {
                 let offset = usize::try_from(overlap_start - frame_start)?;
                 let count = usize::try_from(overlap_end - overlap_start)?;
-                writer
-                    .as_mut()
-                    .context("CUE WAV writer 未初始化")?
-                    .write_frames(frame.payload_bytes()?, offset, count)?;
+                writer.write_frames(frame.payload_bytes()?, offset, count)?;
                 written_samples = written_samples
                     .checked_add(u64::try_from(count)?)
                     .context("CUE output sample count 溢出")?;
@@ -291,9 +294,12 @@ pub fn extract_cue_track_to_wav(
             if end_sample.is_some_and(|end| decoded_samples >= end) {
                 break;
             }
+
+            if !decoder.read_frame(&mut frame)? {
+                break;
+            }
         }
 
-        let format = format.context("CUE 母版没有可解码 PCM")?;
         ensure!(decoded_samples > start_sample, "CUE 起点超出母版末尾");
         if let Some(end) = end_sample {
             ensure!(decoded_samples >= end, "CUE 母版在分轨结束前提前 EOF");
@@ -303,7 +309,7 @@ pub fn extract_cue_track_to_wav(
             );
         }
         ensure!(written_samples > 0, "CUE 分轨没有 PCM samples");
-        writer.context("CUE WAV writer 未初始化")?.finish()?;
+        writer.finish()?;
         let output_storage_bits = wav_storage_bits(format.valid_bits)?;
         let duration_ms = written_samples
             .checked_mul(1000)

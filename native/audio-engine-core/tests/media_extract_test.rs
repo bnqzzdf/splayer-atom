@@ -106,6 +106,28 @@ fn cue_wav_extract_preserves_exact_16bit_sample_range() {
 }
 
 #[test]
+fn cue_wav_extract_seeks_to_second_track_correctly() {
+    let temp = TempDir::new();
+    let source = temp.path.join("master.wav");
+    let cue = temp.path.join("album.cue");
+    let output = temp.path.join("track02.wav");
+    let source_pcm = write_pcm_wav(&source, 44_100, 16, 88_200);
+    write_two_track_cue(&cue, "master.wav", "00:01:00");
+
+    let result = extract_cue_track_to_wav(&cue, 2, &output).unwrap();
+    assert_eq!(result.sample_rate, 44_100);
+    assert_eq!(result.channels, 2);
+    assert_eq!(result.valid_bits, 16);
+    assert_eq!(result.storage_bits, 16);
+    assert_eq!(result.samples_per_channel, 44_100);
+    assert_eq!(result.duration_ms, 1000);
+
+    let output_bytes = fs::read(output).unwrap();
+    let output_pcm = &output_bytes[44..];
+    assert_eq!(output_pcm, &source_pcm[44_100 * 4..]);
+}
+
+#[test]
 fn cue_wav_extract_repackages_24bit_without_changing_sample_bits() {
     let temp = TempDir::new();
     let source = temp.path.join("master24.wav");
