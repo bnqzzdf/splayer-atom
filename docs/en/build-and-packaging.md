@@ -11,8 +11,6 @@ The only formal product is **Linux x86-64 Node Core + Web Control**.
 | Web Control | `pnpm build:web`    | `out/renderer/`                                      |
 | Full build  | `pnpm build`        | all of the above                                     |
 
-There is no Electron build, Windows/macOS build, or Desktop package target.
-
 ## Environment
 
 - Linux x86-64
@@ -57,7 +55,8 @@ The version comes from `package.json` and the date is the packaging date in `YYY
 Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible date is required. `runtime.json` also records a
 human-readable `buildDate`.
 
-Both contain the same Core JS, Web Control, native addons, protocol, and data schema.
+Both contain the same Core JS, Web Control, project-built addons, runtime dependencies (including
+`better-sqlite3`), protocol, and data schema.
 
 ## Release identity
 

@@ -11,14 +11,14 @@ SPlayer Atom 的原生运行时只服务于 Linux x86-64 Node Core。
 | `native/streaming-api`     | Qobuz / TIDAL 唯一 native protocol engine                              |
 | `native/diretta-sys`       | Diretta Host SDK FFI，正式 SDK 外置                                    |
 
-正式 Core artifact 只携带：
+Core 构建生成两个自研 addon：
 
 ```text
 audio-engine.node
 streaming-api.node
 ```
 
-项目不再包含 Desktop 媒体控制、任务栏歌词、音频采集或其他桌面专属 native addon。
+发布包另外包含 `better-sqlite3` 等必需的第三方原生依赖。
 
 ## 构建
 

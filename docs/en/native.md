@@ -11,14 +11,14 @@ SPlayer Atom native code exists only for the Linux x86-64 Node Core runtime.
 | `native/streaming-api`     | The only native Qobuz/TIDAL protocol engine                                                   |
 | `native/diretta-sys`       | Diretta Host SDK FFI; the formal SDK remains external                                         |
 
-Formal Core artifacts ship only:
+The Core build produces two project-owned addons:
 
 ```text
 audio-engine.node
 streaming-api.node
 ```
 
-There are no Desktop media-control, taskbar-lyric, audio-capture, or other desktop-only native addons.
+Artifacts also include required third-party native dependencies such as `better-sqlite3`.
 
 ## Build
 

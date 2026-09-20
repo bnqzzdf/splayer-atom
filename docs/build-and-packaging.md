@@ -11,8 +11,6 @@
 | Web Control | `pnpm build:web`    | `out/renderer/`                                      |
 | 全量        | `pnpm build`        | 上述全部                                             |
 
-项目没有 Electron build、Windows/macOS build 或 Desktop package target。
-
 ## 环境
 
 - Linux x86-64
@@ -53,7 +51,7 @@ out/splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
 版本号来自 `package.json`，日期为打包当天的 `YYYYMMDD`。需要可重复构建时可以通过
 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期。`runtime.json` 同时记录可读的 `buildDate`。
 
-staging 内容包括 Core JS、Web Control、两个 native addons、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
+staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
 
 ## runtime.json
 
