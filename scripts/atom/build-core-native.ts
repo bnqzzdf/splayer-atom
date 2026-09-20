@@ -129,5 +129,14 @@ if (/lib(?:pipewire|pulse)/i.test(dynamicDeps)) {
   throw new Error("Core audio-engine 仍携带 PipeWire/PulseAudio 动态依赖");
 }
 
+const streamingLdd = spawnSync("ldd", [streamingAddonPath], { encoding: "utf8" });
+if (streamingLdd.error) throw streamingLdd.error;
+if (streamingLdd.status !== 0) {
+  throw new Error(`streaming-api ldd 检查失败: ${streamingLdd.stderr || streamingLdd.stdout}`);
+}
+if (/lib(?:ssl|crypto)\.so/i.test(`${streamingLdd.stdout}\n${streamingLdd.stderr}`)) {
+  throw new Error("Core streaming-api 仍携带 OpenSSL 动态依赖");
+}
+
 console.log(`[CoreNative] PASS ${audioAddonPath}`);
 console.log(`[CoreNative] PASS ${streamingAddonPath}`);

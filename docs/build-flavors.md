@@ -11,6 +11,10 @@ The supported Linux x86-64 Core native runtime contains:
 
 The audio addon is built with the `core-audio` feature set. It must not pull PipeWire/PulseAudio or Desktop-only native modules into the formal artifact.
 
+The streaming addon uses Rustls with system CA certificates and must not dynamically depend on
+OpenSSL (`libssl.so` or `libcrypto.so`). The target system still needs a usable CA certificate store
+for HTTPS provider requests.
+
 ## Diretta capability
 
 Without `DIRETTA_SDK_ROOT`, Core builds without Diretta.

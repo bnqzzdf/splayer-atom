@@ -46,9 +46,16 @@ run_docker volume inspect "$CARGO_GIT_VOLUME" >/dev/null 2>&1 \
 run_docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
 echo "[Debian11] 在隔离 node_modules 和 pnpm store 的容器内打包"
+set --
+if [ -f "$ROOT_DIR/.git" ]; then
+  GIT_COMMON_DIR=$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir)
+  set -- --volume "$ROOT_DIR:$ROOT_DIR" --volume "$GIT_COMMON_DIR:$GIT_COMMON_DIR:ro" \
+    --env GIT_OPTIONAL_LOCKS=0
+fi
 run_docker run --rm \
   --name "$CONTAINER_NAME" \
   --volume "$ROOT_DIR:/src" \
+  "$@" \
   --volume "$NODE_VOLUME:/src/node_modules" \
   --volume "$PNPM_VOLUME:/root/.local/share/pnpm/store" \
   --volume "$CARGO_REGISTRY_VOLUME:/root/.cargo/registry" \
