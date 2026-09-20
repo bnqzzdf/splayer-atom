@@ -81,6 +81,7 @@ struct WavWriter {
     output_storage_bits: u8,
     data_size_pos: u64,
     data_bytes: u64,
+    scratch: Vec<u8>,
 }
 
 impl WavWriter {
@@ -141,6 +142,7 @@ impl WavWriter {
             output_storage_bits,
             data_size_pos,
             data_bytes: 0,
+            scratch: Vec::new(),
         })
     }
 
@@ -162,42 +164,58 @@ impl WavWriter {
         let end = start.checked_add(len).context("CUE PCM slice end 溢出")?;
         ensure!(end <= payload.len(), "CUE PCM frame payload 越界");
         let source = &payload[start..end];
-
-        match (self.format.storage_bits, self.output_storage_bits) {
-            (16, 16) => {
-                for chunk in source.chunks_exact(2) {
-                    let value = i16::from_ne_bytes([chunk[0], chunk[1]]);
-                    self.file.write_all(&value.to_le_bytes())?;
-                }
-            }
-            (32, 32) => {
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
-                    self.file.write_all(&value.to_le_bytes())?;
-                }
-            }
-            (32, 24) => {
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
-                    ensure!(value & 0xff == 0, "24-bit WAV 转换发现非零低 8 bit");
-                    let packed = (value >> 8).to_le_bytes();
-                    self.file.write_all(&packed[..3])?;
-                }
-            }
-            (32, 16) => {
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
-                    ensure!(value & 0xffff == 0, "16-bit WAV 转换发现非零低 16 bit");
-                    self.file.write_all(&(value >> 16).to_le_bytes()[..2])?;
-                }
-            }
-            pair => bail!("WAV PCM 位宽转换不支持: {} -> {}", pair.0, pair.1),
-        }
-
         let written = u64::try_from(frames)?
             .checked_mul(u64::from(self.format.channels))
             .and_then(|samples| samples.checked_mul(u64::from(self.output_storage_bits / 8)))
             .context("WAV data size 溢出")?;
+
+        match (self.format.storage_bits, self.output_storage_bits) {
+            (16, 16) | (32, 32) if cfg!(target_endian = "little") => {
+                self.file.write_all(source)?;
+            }
+            (16, 16) => {
+                self.scratch.clear();
+                self.scratch.reserve(usize::try_from(written)?);
+                for chunk in source.chunks_exact(2) {
+                    let value = i16::from_ne_bytes([chunk[0], chunk[1]]);
+                    self.scratch.extend_from_slice(&value.to_le_bytes());
+                }
+                self.file.write_all(&self.scratch)?;
+            }
+            (32, 32) => {
+                self.scratch.clear();
+                self.scratch.reserve(usize::try_from(written)?);
+                for chunk in source.chunks_exact(4) {
+                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                    self.scratch.extend_from_slice(&value.to_le_bytes());
+                }
+                self.file.write_all(&self.scratch)?;
+            }
+            (32, 24) => {
+                self.scratch.clear();
+                self.scratch.reserve(usize::try_from(written)?);
+                for chunk in source.chunks_exact(4) {
+                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                    ensure!(value & 0xff == 0, "24-bit WAV 转换发现非零低 8 bit");
+                    let packed = (value >> 8).to_le_bytes();
+                    self.scratch.extend_from_slice(&packed[..3]);
+                }
+                self.file.write_all(&self.scratch)?;
+            }
+            (32, 16) => {
+                self.scratch.clear();
+                self.scratch.reserve(usize::try_from(written)?);
+                for chunk in source.chunks_exact(4) {
+                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                    ensure!(value & 0xffff == 0, "16-bit WAV 转换发现非零低 16 bit");
+                    self.scratch
+                        .extend_from_slice(&(value >> 16).to_le_bytes()[..2]);
+                }
+                self.file.write_all(&self.scratch)?;
+            }
+            pair => bail!("WAV PCM 位宽转换不支持: {} -> {}", pair.0, pair.1),
+        }
+
         self.data_bytes = self
             .data_bytes
             .checked_add(written)
@@ -216,6 +234,65 @@ impl WavWriter {
         self.file.write_all(&data_size.to_le_bytes())?;
         self.file.flush()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod wav_writer_tests {
+    use super::*;
+    use crate::direct_pcm::{DirectPcmMemoryPath, DirectPcmSampleFormat};
+
+    #[test]
+    fn writes_32bit_samples_without_changing_values() {
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("track.wav");
+        let format = DirectPcmFormat {
+            sample_rate: 44_100,
+            channels: 2,
+            valid_bits: 32,
+            storage_bits: 32,
+            sample_format: DirectPcmSampleFormat::Signed32,
+            memory_path: DirectPcmMemoryPath::ZeroCopyPacked,
+        };
+        let samples = [0x1234_5678_i32, i32::MIN, i32::MAX, -1_i32];
+        let source: Vec<u8> = samples
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect();
+        let expected: Vec<u8> = samples
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        let mut writer = WavWriter::create(&output, format).unwrap();
+        writer.write_frames(&source, 0, 2).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(&fs::read(output).unwrap()[44..], expected);
+    }
+
+    #[test]
+    fn writes_16bit_effective_samples_from_32bit_slots() {
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("track.wav");
+        let format = DirectPcmFormat {
+            sample_rate: 44_100,
+            channels: 2,
+            valid_bits: 16,
+            storage_bits: 32,
+            sample_format: DirectPcmSampleFormat::Signed32,
+            memory_path: DirectPcmMemoryPath::BitPerfectRepack,
+        };
+        let samples = [0x1234_0000_i32, i32::MIN, 0x7fff_0000, -65_536_i32];
+        let source: Vec<u8> = samples
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect();
+        let mut writer = WavWriter::create(&output, format).unwrap();
+        writer.write_frames(&source, 0, 2).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(
+            &fs::read(output).unwrap()[44..],
+            &[0x34, 0x12, 0x00, 0x80, 0xff, 0x7f, 0xff, 0xff],
+        );
     }
 }
 
