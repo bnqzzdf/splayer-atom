@@ -3,38 +3,39 @@
 ## 1. Current status
 
 SPlayer Atom is a Linux x86-64 music player adapted from SPlayer-Next and rebuilt around a
-**Web + Core** model. The main architecture migration is complete. Current work is focused on final
-hardware checks, multi-client Web testing, provider acceptance, and release packaging.
+**Web + Core** model. The main architecture migration is complete. The next audio objective is a
+complete ALSA output replacement with one backend and explicit Direct / Processed PCM modes,
+including Native DSD, retained lossy playback and existing PCM DSP features.
+Final hardware checks and release packaging follow that work; release timing does not reduce its scope.
 
 Target release: **1.0.0-rc.3**.
 
-- **Node Core** runs the music library, settings, providers, queue, playback, cache, downloads,
-  plugins, statistics and audio outputs.
-- **Web Control** is the browser UI and communicates with Core over HTTP/WebSocket.
-- **Linux x86-64** is the supported release platform.
+Lasting constraints are defined in the repository's `AGENTS.md`; development and release workflows
+are in the [development guide](./atom-development.md).
 
 ## 2. Core and Web foundation
 
-- [x] Database, settings, library, queue, providers, playback, cache, downloads, statistics,
+- [x] Database, music-domain settings, library, queue, providers, playback, cache, downloads, statistics,
       plugins and output selection run in Node Core.
 - [x] Web Control sends playback/library/provider commands through the Core HTTP/WS API and keeps
       its UI state synchronized with Core.
-- [x] Core native runtime is limited to `audio-engine.node` and `streaming-api.node`.
+- [x] Project-built native addons are consolidated into `audio-engine.node` and `streaming-api.node`.
 - [x] ALSA, Diretta Source Direct and UPnP use the same Core playback flow.
 - [x] CUE/SACD virtual tracks and track boundaries are handled by Core.
 - [x] ListenBrainz Now Playing/Scrobble runs in Core, with no background worker when disabled.
 
-## 3. Web + Core migration
+## 3. Completed Web + Core migration
 
 - [x] Electron runtime/build dependencies and Electron-specific configuration are removed.
 - [x] Core sources live under `core/**`.
-- [x] Preload/IPC/window/tray/hotkey/updater/desktop-protocol code is removed.
+- [x] Electron preload/renderer IPC, window/tray/hotkey/updater/desktop-protocol code is removed.
 - [x] Desktop/taskbar/dynamic-island lyric windows and related Web branches are removed.
 - [x] Desktop-only native crates are removed.
 - [x] Windows/macOS packaging and CI jobs are removed.
 - [x] Standalone Web Vite is the UI build.
 - [x] Linux x86-64 Core artifacts are the application packaging path.
 - [x] Web Control no longer installs the old `window.api`/Host compatibility layer.
+- [x] Desktop-only capability branches and placeholder compatibility APIs are removed from Web.
 
 ## 4. Audio and output acceptance
 
@@ -43,7 +44,18 @@ Target release: **1.0.0-rc.3**.
 - [x] Mixed PCM/Native-DSD Diretta queues have completed long-run transition testing.
 - [x] UPnP playback uses the same Core queue/source/cache flow.
 - [x] UPnP CUE/SACD extraction/materialization is isolated from normal and Direct playback.
-- [x] Complete final release-candidate ALSA coverage for common rate/channel/bit-depth combinations.
+- [x] Complete legacy ALSA playback coverage for common rate/channel/bit-depth combinations;
+      this is not bit-perfect acceptance for the replacement path.
+- [ ] Implement the complete [ALSA output plan](./alsa-output-plan.md): one ALSA backend with
+      Direct / Processed PCM modes, exact PCM/Native DSD, retained lossy playback and PCM DSP,
+      Core/Web migration, and removal of the old CPAL output and duplicate lifecycle code.
+- [ ] Adapt existing output selection, volume, EQ/tempo dialogs, player settings and shortcuts to
+      Core-authoritative mode/capabilities; Direct must reject DSP controls and Processed PCM must
+      never display a bit-perfect output indicator, including during switching and reconnection.
+      Keep playback UI unobtrusive: no persistent technical status text; use an optional small icon
+      or no indicator, with details available on demand.
+- [ ] Obtain separate ALSA bitstream evidence and complete lifecycle/long-run acceptance for the
+      replacement path; repeat affected Diretta and UPnP checks.
 - [ ] Complete restart/SIGTERM/output-switch/reconnect lifecycle acceptance on the final artifact.
 - [ ] Repeat the final hardware checklist from a clean release artifact.
 
@@ -77,7 +89,8 @@ Target release: **1.0.0-rc.3**.
 
 ## 6. Packaging and release
 
-- [x] Core runtime minimum is Node `22.19.0`; formal build and bundled-runtime reference remain `24.18.0`.
+- [x] Runtime compatibility checks and a separate release reference runtime are implemented;
+      current versions are listed in the [development guide](./atom-development.md#requirements).
 - [x] system-runtime and bundled-runtime use the same Core JS/native/Web build.
 - [x] Artifact staging validates native addon loading, plugin-host startup, HTTP/WS/Web startup and
       termination.
@@ -93,7 +106,6 @@ Target release: **1.0.0-rc.3**.
 
 - [x] Library, playlist, queue, playback, downloads, statistics, cache, providers, settings and
       plugins are available from Web Control.
-- [x] Desktop-only capability branches and placeholder compatibility APIs are removed from Web.
 - [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
 - [ ] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.
@@ -138,11 +150,13 @@ product goal.
 
 ## 10. Current priorities
 
-1. Finish restart/SIGTERM/output-switch/reconnect hardware acceptance.
-2. Finish Qobuz real-account acceptance.
-3. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
-4. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
-5. Publish `1.0.0-rc.3`, collect real-world feedback, then prepare the 1.0 stable release.
+1. Complete the ALSA dual-mode design, existing UI adaptation and old-output removal as one
+   implementation objective; retain DSP in the Processed PCM path.
+2. Finish bitstream, restart/SIGTERM/output-switch/reconnect and long-run hardware acceptance.
+3. Finish Qobuz real-account acceptance.
+4. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
+5. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
+6. Publish `1.0.0-rc.3` after the acceptance gates pass, then prepare the 1.0 stable release.
 
 ## 11. Related documents
 
@@ -154,6 +168,7 @@ docs/core-deployment.md             systemd, data, migration, upgrade and rollba
 docs/hardware-release-checklist.md  ALSA/Diretta/UPnP hardware acceptance
 docs/live-provider-acceptance.md    provider real-account acceptance
 docs/lyric-improvements.md          P0/P1 lyric correctness plan and technical design
+docs/alsa-output-plan.md            shared ALSA backend, Direct/Processed PCM modes and UI design
 docs/upnp-output-plan.md            UPnP output design
 docs/native.md                      retained Rust/N-API modules
 ```
