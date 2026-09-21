@@ -12,9 +12,6 @@ import * as player from "@/core/player";
 import IconFavorite from "~icons/material-symbols/favorite-rounded";
 import IconFavoriteOutline from "~icons/material-symbols/favorite-outline-rounded";
 import IconLucideMoreHorizontal from "~icons/lucide/more-horizontal";
-import IconLucidePlay from "~icons/lucide/play";
-import IconLucidePause from "~icons/lucide/pause";
-import IconLucideSkipForward from "~icons/lucide/skip-forward";
 
 const status = useStatusStore();
 const settings = useSettingsStore();
@@ -52,68 +49,32 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
 </script>
 
 <template>
-  <!-- 手机紧凑双行布局（<768px） -->
-  <div v-if="isMobile" class="relative flex flex-col px-3 pt-0.5 pb-2 min-w-0">
-    <!-- 顶部进度条：细轨道，至少 24px 触摸高度 -->
-    <div class="h-6 -mt-1 flex items-center">
+  <!-- 手机紧凑单行布局（<768px） -->
+  <div v-if="isMobile" class="relative h-14 flex items-center justify-between px-3 gap-2 min-w-0">
+    <!-- 顶部贴合细轨道进度条 -->
+    <div class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
       <SSlider
         :model-value="position"
         :min="0"
         :max="duration"
         :step="100"
-        :track-height="3"
-        :thumb-size="10"
+        :track-height="2"
+        :thumb-size="8"
         :always-show-thumb="false"
         :show-popover="showTooltip"
         :disabled="!media.track"
-        class="flex-1"
+        class="w-full"
         @drag-end="onSeekDragEnd"
       >
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
 
-    <!-- 第一行（起步 56px）：44px 封面、可收缩的曲名/艺人、播放暂停、下一首 -->
-    <div class="min-h-14 flex items-center justify-between gap-2 min-w-0">
-      <TrackInfo compact class="flex-1 min-w-0" />
-      <div class="flex items-center gap-1 shrink-0">
-        <SButton
-          type="primary"
-          variant="secondary"
-          circle
-          ripple
-          :size="40"
-          :loading="status.isLoading"
-          :disabled="!media.track && !status.isLoading"
-          @click="player.togglePlay()"
-        >
-          <template #icon>
-            <SIconSwap :active="status.isPlaying">
-              <template #on><IconLucidePause class="size-5" /></template>
-              <template #off><IconLucidePlay class="size-5" /></template>
-            </SIconSwap>
-          </template>
-        </SButton>
-        <SButton
-          type="primary"
-          variant="ghost"
-          circle
-          ripple
-          :size="36"
-          :disabled="!media.track"
-          @click="player.nextTrack()"
-        >
-          <template #icon><IconLucideSkipForward class="size-4.5" /></template>
-        </SButton>
-      </div>
-    </div>
+    <!-- 左侧：封面与歌曲信息（点击可展开全屏播放器） -->
+    <TrackInfo compact class="flex-1 min-w-0" />
 
-    <!-- 第二行（起步 44px）：输出设备、队列、播放模式与工具 -->
-    <div
-      class="min-h-11 flex items-center justify-between gap-1 min-w-0 pt-0.5 border-t border-t-solid border-t-on-surface/5"
-    >
-      <Toolbar compact />
-    </div>
+    <!-- 右侧：输出设备、播放/暂停、下一首、歌单队列 -->
+    <Toolbar compact />
   </div>
 
   <!-- 宽屏浮动模式 -->

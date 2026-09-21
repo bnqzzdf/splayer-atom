@@ -117,9 +117,9 @@ const playerBarInnerClass = computed(() => {
 </script>
 
 <template>
-  <!-- 主界面：支持 dvh 与 safe area -->
+  <!-- 主界面：支持 svh、dvh 与 safe area -->
   <div
-    class="h-screen h-[100dvh] flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
+    class="h-full h-screen h-[100svh] h-[100dvh] flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
     :class="isPlayerExpanded ? 'scale-95 opacity-0 pointer-events-none' : ''"
   >
     <!-- 侧边栏：手机隐藏，平板与桌面常驻 -->
@@ -141,8 +141,12 @@ const playerBarInnerClass = computed(() => {
         <NavHeader />
       </header>
 
-      <!-- 主内容区：独立滚动 -->
-      <main ref="mainContainerRef" class="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0">
+      <!-- 主内容区：独立滚动，窄屏预留固定底栏高度 -->
+      <main
+        ref="mainContainerRef"
+        class="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0"
+        :class="!isDesktop && showPlayerBar ? 'pb-16' : ''"
+      >
         <RouterView v-slot="{ Component }">
           <Transition :name="routeTransitionName" mode="out-in" @after-enter="handleAfterEnter">
             <KeepAlive :max="10" :include="cachedViews">
@@ -152,11 +156,11 @@ const playerBarInnerClass = computed(() => {
         </RouterView>
       </main>
 
-      <!-- 窄屏正常流底部播放栏（常驻外框底部，不随内容滚动） -->
+      <!-- 窄屏/移动端固定底部播放栏（强制贴合当前可视区底端，避免被移动浏览器自带底栏遮挡） -->
       <footer
         v-if="!isDesktop && showPlayerBar"
-        class="shrink-0 z-20 bg-surface-panel border-t border-t-solid border-t-primary/10 pb-[env(safe-area-inset-bottom,0px)]"
-        :class="isPlayerExpanded ? 'pointer-events-none' : 'pointer-events-auto'"
+        class="fixed bottom-0 left-0 right-0 z-30 bg-surface-panel border-t border-t-solid border-t-primary/10 pb-[env(safe-area-inset-bottom,0px)]"
+        :class="isPlayerExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'"
       >
         <PlayerBar />
       </footer>

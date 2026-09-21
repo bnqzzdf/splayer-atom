@@ -17,6 +17,11 @@ select {
   color: inherit;
 }
 
+button {
+  background-color: transparent;
+  border: none;
+}
+
 a,
 img {
   -webkit-user-drag: none;
@@ -49,7 +54,11 @@ html[data-appearance-style="image"] {
 .safe-right { padding-right: env(safe-area-inset-right, 0px); }
 
 html,
-body {
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background-color: var(--s-app-bg);
   color: rgb(var(--s-on-surface));
   font-family: var(--user-font, var(--app-font));
