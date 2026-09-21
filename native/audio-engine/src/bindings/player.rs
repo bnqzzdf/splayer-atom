@@ -221,6 +221,8 @@ pub struct JsAudioDevice {
     pub id: String,
     /// 显示名
     pub name: String,
+    /// Diretta Target 被发现时使用的本机网络接口名
+    pub interface_name: Option<String>,
     /// 是否为系统默认设备
     pub is_default: bool,
 }
@@ -1170,6 +1172,7 @@ impl AudioPlayer {
             .map(|(id, name, is_default)| JsAudioDevice {
                 id,
                 name,
+                interface_name: None,
                 is_default,
             })
             .collect()
@@ -1189,6 +1192,7 @@ impl AudioPlayer {
             .map(|device| JsAudioDevice {
                 id: device.id,
                 name: device.name,
+                interface_name: device.interface_name,
                 is_default: false,
             })
             .collect())

@@ -19,6 +19,7 @@ pub const DEVICE_PREFIX: &str = "diretta:";
 pub struct DirettaDevice {
     pub id: String,
     pub name: String,
+    pub interface_name: Option<String>,
 }
 
 pub fn selector_target(selector: &str) -> Option<&str> {
@@ -117,6 +118,21 @@ mod imp {
             .into_owned()
     }
 
+    fn interface_name(target_id: &str) -> Option<String> {
+        let scope = target_id.split('%').nth(1)?.split(',').next()?;
+        let index = scope.parse::<libc::c_uint>().ok()?;
+        let mut buffer = [0 as c_char; libc::IFNAMSIZ];
+        let ptr = unsafe { libc::if_indextoname(index, buffer.as_mut_ptr()) };
+        if ptr.is_null() {
+            return None;
+        }
+        unsafe { CStr::from_ptr(ptr) }
+            .to_str()
+            .ok()
+            .filter(|name| !name.is_empty())
+            .map(ToOwned::to_owned)
+    }
+
     pub fn scan_devices() -> Result<Vec<DirettaDevice>> {
         let mut raw = vec![RawDevice::default(); MAX_SCAN_DEVICES];
         let discovered = unsafe { atom_diretta_scan(raw.as_mut_ptr(), raw.len()) };
@@ -144,6 +160,7 @@ mod imp {
                     } else {
                         name
                     },
+                    interface_name: interface_name(&id),
                 })
             })
             .collect())

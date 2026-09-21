@@ -4,7 +4,7 @@ import { refreshDevices, switchDevice } from "@/core/player";
 import {
   getOutputDisplayName,
   getOutputKind,
-  getOutputPathIndex,
+  getOutputInterfaceName,
   type OutputKind,
 } from "@/core/outputDevices";
 import { useStatusStore } from "@/stores/status";
@@ -58,10 +58,8 @@ const groups = computed<OutputGroup[]>(() => {
 
 const outputLabel = (device: AudioDevice, devices: AudioDevice[]): string => {
   const name = getOutputDisplayName(device);
-  const pathIndex = getOutputPathIndex(device, devices);
-  return pathIndex === null
-    ? name
-    : `${name} (${t("settings.outputDevice.networkPath", { index: pathIndex })})`;
+  const interfaceName = getOutputInterfaceName(device, devices);
+  return interfaceName === null ? name : `${name} (${interfaceName})`;
 };
 
 const refreshDiscovery = async (): Promise<void> => {

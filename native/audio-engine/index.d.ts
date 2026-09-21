@@ -165,6 +165,8 @@ export interface JsAudioDevice {
   id: string
   /** 显示名 */
   name: string
+  /** Diretta Target 被发现时使用的本机网络接口名。 */
+  interfaceName?: string
   /** Headless ALSA 不维护系统默认；本地端点恒为 false。 */
   isDefault: boolean
 }

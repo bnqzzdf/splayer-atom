@@ -20,11 +20,11 @@ export const getOutputDisplayName = (device: Pick<AudioDevice, "id" | "name">): 
     .replace(/\s*·\s*Diretta$/i, "")
     .trim();
 
-/** 返回同名 Diretta Target 在当前列表中的简短路径序号。 */
-export const getOutputPathIndex = (
-  device: Pick<AudioDevice, "id" | "name">,
-  devices: readonly Pick<AudioDevice, "id" | "name">[],
-): number | null => {
+/** 返回同名 Diretta Target 的真实本机网络接口名。 */
+export const getOutputInterfaceName = (
+  device: Pick<AudioDevice, "id" | "name" | "interfaceName">,
+  devices: readonly Pick<AudioDevice, "id" | "name" | "interfaceName">[],
+): string | null => {
   if (getOutputKind(device.id) !== "diretta") return null;
   const sameName = devices.filter(
     (candidate) =>
@@ -32,8 +32,7 @@ export const getOutputPathIndex = (
       getOutputDisplayName(candidate) === getOutputDisplayName(device),
   );
   if (sameName.length < 2) return null;
-  const index = sameName.findIndex((candidate) => candidate.id === device.id);
-  return index >= 0 ? index + 1 : null;
+  return "interfaceName" in device ? (device.interfaceName ?? null) : null;
 };
 
 /** HDMI / DisplayPort HDA 端点默认不占用快捷输出列表；Core 仍保留完整硬件能力。 */

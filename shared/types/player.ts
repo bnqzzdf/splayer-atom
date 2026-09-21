@@ -254,6 +254,8 @@ export interface AudioDevice {
   id: string;
   /** 显示名，可能重复、可被用户改名，仅用于展示 */
   name: string;
+  /** Diretta Target 被发现时使用的本机网络接口名。 */
+  interfaceName?: string;
   /** Headless 本地 ALSA 不维护桌面默认设备；保留字段仅兼容统一输出展示模型。 */
   isDefault: boolean;
 }

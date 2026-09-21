@@ -30,7 +30,7 @@ const serverSource = read("core/server/index.ts");
 test("SPlayer Atom owns a Node Core and Web Control product identity", () => {
   assert.equal(packageJson.name, "splayer-atom");
   assert.equal(packageJson.productName, "SPlayer Atom");
-  assert.equal(packageJson.version, "1.0.0-rc.3");
+  assert.equal(packageJson.version, "1.0.0-rc.4");
   assert.match(packageJson.description ?? "", /Web \+ Core music player adapted from SPlayer-Next/);
   assert.equal(packageJson.repository?.url, "https://github.com/bnqzzdf/splayer-atom");
   assert.equal(packageJson.bugs?.url, "https://github.com/bnqzzdf/splayer-atom/issues");
