@@ -512,11 +512,6 @@ defineExpose({
                     : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12'
               "
               @click="batch.active.value ? batch.toggle(item.id) : player.playFrom(sortedItems, index, props.playbackContext)"
-              @dblclick="
-                batch.active.value
-                  ? undefined
-                  : player.playFrom(sortedItems, index, props.playbackContext)
-              "
               @contextmenu="contextTrack = item"
             >
               <!-- 序号 / 多选 -->

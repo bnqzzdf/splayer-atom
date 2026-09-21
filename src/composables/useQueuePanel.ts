@@ -13,9 +13,8 @@ export interface UseQueuePanelOptions {
 }
 
 /**
- * 播放队列面板的共享逻辑（与拖排序解耦）
+ * 播放队列面板的共享逻辑
  * 视觉表达交给具体组件，这里只管：播放、移除、清空、定位
- * 拖排序按需在 consumer 里直接调 useDragSort，避免不需要的组件白付出 ref/closure 开销
  */
 export const useQueuePanel = (options: UseQueuePanelOptions) => {
   const { t } = useI18n();
