@@ -128,7 +128,7 @@ const playerBarInnerClass = computed(() => {
       class="shrink-0 bg-surface-panel overflow-y-auto z-10 transition-[width,margin] duration-300"
       :class="[appearance.sidebarCollapsed ? 'w-16' : 'w-60', sidebarClass]"
     >
-      <SideBar :collapsed="appearance.sidebarCollapsed" />
+      <SideBar />
     </aside>
 
     <!-- 右侧主区域（窄屏下包含正常流 Header、独立滚动 Main 与常驻 Footer） -->
