@@ -159,24 +159,26 @@ watch(activeTab, async (next, prev) => {
         ? t('comments.title', { name: status.commentsTrack.title })
         : t('comments.name')
     "
-    width="min(860px, 92vw)"
-    height="min(720px, 84vh)"
+    width="min(860px, calc(100vw - 24px))"
+    height="min(720px, calc(100dvh - 32px))"
     destroy-on-close
   >
-    <div class="flex h-full min-h-0 flex-col gap-3 px-5 pb-4">
-      <div class="flex shrink-0 items-center gap-3">
+    <div class="flex h-full min-h-0 flex-col gap-3 px-2 sm:px-5 pb-4">
+      <div class="flex shrink-0 flex-wrap items-center gap-2 sm:gap-3">
         <div class="min-w-0 flex-1">
           <STabs v-model="activeTab" :tabs="tabs" type="bar" size="medium" />
         </div>
-        <SButton variant="ghost" circle size="small" :loading="loading" @click="refresh">
-          <template #icon><IconLucideRefreshCw /></template>
-        </SButton>
-        <div class="w-28 shrink-0">
-          <SSelect
-            v-model="sourceId"
-            :options="sourceOptions"
-            :disabled="sources.length === 0 || loading"
-          />
+        <div class="flex items-center gap-2 shrink-0">
+          <SButton variant="ghost" circle size="small" :loading="loading" @click="refresh">
+            <template #icon><IconLucideRefreshCw /></template>
+          </SButton>
+          <div class="w-28 shrink-0">
+            <SSelect
+              v-model="sourceId"
+              :options="sourceOptions"
+              :disabled="sources.length === 0 || loading"
+            />
+          </div>
         </div>
       </div>
 

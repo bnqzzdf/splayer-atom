@@ -55,13 +55,14 @@ const isColorActive = (hex: string): boolean =>
         {{ t("settings.section.language") }}
       </h3>
       <div
-        class="flex items-center justify-between gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
+        class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
       >
         <span class="text-sm">{{ t("onboarding.preferences.languageLabel") }}</span>
-        <div class="shrink-0 w-40 flex justify-end">
+        <div class="w-full sm:w-40 sm:shrink-0 flex justify-start sm:justify-end">
           <SSelect
             :model-value="settings.locale"
             :options="LOCALES"
+            class="w-full"
             @update:model-value="settings.locale = $event as typeof settings.locale"
           />
         </div>
@@ -73,10 +74,10 @@ const isColorActive = (hex: string): boolean =>
       </h3>
       <div class="flex flex-col gap-2">
         <div
-          class="flex items-center justify-between gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
         >
           <span class="text-sm">{{ t("onboarding.preferences.modeLabel") }}</span>
-          <div class="shrink-0 flex items-center gap-1.5">
+          <div class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
             <SButton
               v-for="m in MODES"
               :key="m.value"
@@ -94,10 +95,10 @@ const isColorActive = (hex: string): boolean =>
         </div>
 
         <div
-          class="flex items-center justify-between gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
         >
           <span class="text-sm shrink-0">{{ t("onboarding.preferences.colorLabel") }}</span>
-          <div class="shrink-0 flex flex-wrap items-center gap-1.5 justify-end">
+          <div class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
             <SButton
               v-for="hex in PRESET_COLORS"
               :key="hex"

@@ -60,8 +60,13 @@ const descriptionText = computed(() =>
     />
     <div
       v-else
-      class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 transition-all duration-300"
-      :class="highlighted ? 'animate-highlight-pulse' : ''"
+      class="rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5 transition-all duration-300"
+      :class="[
+        highlighted ? 'animate-highlight-pulse' : '',
+        item.type === 'switch'
+          ? 'flex items-center justify-between gap-4'
+          : 'flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4',
+      ]"
     >
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 text-base">
@@ -75,7 +80,13 @@ const descriptionText = computed(() =>
         </div>
       </div>
 
-      <div class="shrink-0 w-50 flex justify-end">
+      <div
+        :class="[
+          item.type === 'switch'
+            ? 'shrink-0'
+            : 'w-full sm:w-50 shrink-0 flex justify-start sm:justify-end',
+        ]"
+      >
         <SSwitch
           v-if="item.type === 'switch'"
           :model-value="model"
@@ -87,6 +98,7 @@ const descriptionText = computed(() =>
           :model-value="model"
           :options="selectOptions"
           :disabled="isDisabled"
+          class="w-full"
           @update:model-value="applyChange($event)"
         />
         <SSlider
