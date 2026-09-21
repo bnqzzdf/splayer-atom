@@ -81,6 +81,18 @@ const onAfterLeave = () => {
   lyricMounted.value = false;
 };
 
+
+// 手机端打开全屏播放器时，默认展示封面而不是歌词
+watch(
+  () => status.isPlayerExpanded,
+  (open) => {
+    if (open && isMobile.value) {
+      showLyric.value = false;
+    }
+  },
+  { immediate: true }
+);
+
 // 重新挂载时，刷新初始时间
 watch(hasLyric, (value) => {
   if (value && lyricMounted.value) {
@@ -348,6 +360,7 @@ const showComments = (): void => {
             <!-- 歌词区域 -->
             <div
               class="lyric-area relative flex-1 min-h-0"
+              @click="isMobile && (showLyric = false)"
               :style="{
                 fontSize: lyricFontSize,
                 fontWeight: String(settings.lyric.fontWeight),
