@@ -286,7 +286,7 @@ const showComments = (): void => {
             v-if="!fullscreenCover"
             class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              isMobile && (status.fullQueueOpen || mobileLyricActive) ? 'hidden' : '',
+              isMobile && (status.fullQueueOpen || mobileLyricActive) ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100',
               isMobile ? 'px-4' : 'px-12',
             ]"
             :style="{
@@ -329,8 +329,7 @@ const showComments = (): void => {
           <div
             class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              isMobile && !mobileLyricActive ? 'hidden' : '',
-              coverCentered || status.fullQueueOpen
+              (isMobile && !mobileLyricActive) || coverCentered || status.fullQueueOpen
                 ? 'opacity-0 pointer-events-none'
                 : 'opacity-100',
             ]"
@@ -438,8 +437,7 @@ const showComments = (): void => {
           <div
             class="absolute inset-y-0 right-0 px-2 md:pl-4 md:py-6 flex items-center"
             :class="[
-              status.fullQueueOpen ? '' : 'pointer-events-none',
-              isMobile && !status.fullQueueOpen ? 'hidden' : '',
+              status.fullQueueOpen ? '' : 'opacity-0 pointer-events-none',
             ]"
             :style="{
               width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
