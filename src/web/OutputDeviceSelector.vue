@@ -104,8 +104,12 @@ onMounted(() => {
           v-for="device in group.devices"
           :key="device.id"
           type="button"
-          class="relative flex min-h-10 w-full items-center rounded-lg px-2.5 pr-9 text-left text-sm transition-colors hover:bg-on-surface/8 disabled:cursor-wait disabled:opacity-60"
-          :class="device.id === status.selectedOutputDevice ? 'text-primary' : 'text-on-surface'"
+          class="relative flex min-h-10 w-full items-center rounded-lg px-2.5 pr-9 text-left text-sm transition-colors border-0 outline-none appearance-none disabled:cursor-wait disabled:opacity-60"
+          :class="
+            device.id === status.selectedOutputDevice
+              ? 'bg-primary/15 text-primary font-medium'
+              : 'bg-transparent text-on-surface hover:bg-on-surface/8'
+          "
           :disabled="selectingId !== null"
           :title="getOutputDisplayName(device)"
           @click="onSelect(device.id)"
