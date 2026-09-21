@@ -257,7 +257,6 @@ declare module 'vue' {
     STooltip: typeof import('./src/components/ui/STooltip.vue')['default']
     StreamingLoginDialog: typeof import('./src/components/modals/StreamingLoginDialog.vue')['default']
     StreamingServerList: typeof import('./src/components/settings/custom/StreamingServerList.vue')['default']
-    STree: typeof import('./src/components/ui/STree.vue')['default']
     SVirtualList: typeof import('./src/components/ui/SVirtualList.vue')['default']
     SwitchRoot: typeof import('reka-ui')['SwitchRoot']
     SwitchThumb: typeof import('reka-ui')['SwitchThumb']

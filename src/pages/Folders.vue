@@ -1,298 +1,1258 @@
 <script setup lang="ts">
 defineOptions({ name: "Folders" });
 
+import type {
+  FolderBrowseEntry,
+  FolderBrowsePage,
+  FolderContainerResult,
+  FolderMaterialEntry,
+  FolderPinEntry,
+  FolderRootEntry,
+  FolderSearchResult,
+} from "@shared/types/folderBrowser";
+import type { ScanProgress } from "@shared/types/library";
 import type { Track } from "@shared/types/player";
-import type { FolderNode } from "@/types/folder";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
-import { useLibraryStore } from "@/stores/library";
-import { usePlaylistStore } from "@/stores/playlist";
+import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
+import { folderBrowserClient } from "@/core/folderBrowserClient";
+import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { toast } from "@/composables/useToast";
-import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
-import SongList from "@/components/list/SongList.vue";
+import { formatFileSize } from "@/utils/format";
 import * as player from "@/core/player";
-import IconLucideFolder from "~icons/lucide/folder";
-import IconLucideFolderOpen from "~icons/lucide/folder-open";
-import IconLucideMusic from "~icons/lucide/music";
-import IconLucideChevronRight from "~icons/lucide/chevron-right";
-import IconLucidePlay from "~icons/lucide/play";
-import IconLucideListChecks from "~icons/lucide/list-checks";
-import IconLucideListPlus from "~icons/lucide/list-plus";
-import IconLucideEllipsis from "~icons/lucide/ellipsis";
+import IconFolder from "~icons/lucide/folder";
+import IconFolderOpen from "~icons/lucide/folder-open";
+import IconMusic from "~icons/lucide/music";
+import IconFileAudio from "~icons/lucide/file-audio";
+import IconDisc3 from "~icons/lucide/disc-3";
+import IconFileText from "~icons/lucide/file-text";
+import IconImage from "~icons/lucide/image";
+import IconFile from "~icons/lucide/file";
+import IconPlay from "~icons/lucide/play";
+import IconEllipsis from "~icons/lucide/ellipsis";
+import IconSearch from "~icons/lucide/search";
+import IconPin from "~icons/lucide/pin";
+import IconPinOff from "~icons/lucide/pin-off";
+import IconRefreshCw from "~icons/lucide/refresh-cw";
+import IconListEnd from "~icons/lucide/list-end";
+import IconListMusic from "~icons/lucide/list-music";
+import IconListPlus from "~icons/lucide/list-plus";
+import IconChevronRight from "~icons/lucide/chevron-right";
+import IconChevronLeft from "~icons/lucide/chevron-left";
+import IconSettings2 from "~icons/lucide/settings-2";
+import IconZoomIn from "~icons/lucide/zoom-in";
+import IconZoomOut from "~icons/lucide/zoom-out";
+import IconShuffle from "~icons/lucide/shuffle";
+
+type ViewRow =
+  | { kind: "section"; key: string; label: string; count: number }
+  | { kind: "entry"; key: string; entry: FolderBrowseEntry }
+  | { kind: "container-track"; key: string; track: Track; containerPath: string };
 
 const { t } = useI18n();
-const { isMobile } = useResponsiveLayout();
-const libraryStore = useLibraryStore();
-const playlistStore = usePlaylistStore();
+const route = useRoute();
+const router = useRouter();
 const settingsDialog = useSettingsDialog();
-const { tracks, initialized, folderTree, folderCount } = storeToRefs(libraryStore);
 
-const trackCount = computed(() => tracks.value.filter((tr) => !!tr.path).length);
+const routeText = (value: unknown): string =>
+  typeof value === "string" ? value : Array.isArray(value) ? String(value[0] ?? "") : "";
 
-const expanded = ref<string[]>([]);
-const selectedFolder = shallowRef<FolderNode | null>(null);
-const mobileTreeOpen = ref(false);
-const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
-const createOpen = ref(false);
+const pathWithinRoot = (candidate: string, root: string): boolean => {
+  const normalizedRoot = root.replace(/\/+$/, "") || "/";
+  const normalizedCandidate = candidate.replace(/\/+$/, "") || "/";
+  return (
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(normalizedRoot === "/" ? "/" : normalizedRoot + "/")
+  );
+};
 
-watch(selectedFolder, () => {
-  if (isMobile.value) mobileTreeOpen.value = false;
+const currentPath = computed(() => routeText(route.query.path));
+const requestedContainerPath = computed(() => routeText(route.query.container));
+const requestedFocusId = computed(() => routeText(route.query.focus));
+const requestedFocusPath = computed(() => routeText(route.query.focusPath));
+
+const roots = shallowRef<FolderRootEntry[]>([]);
+const pins = shallowRef<FolderPinEntry[]>([]);
+const page = shallowRef<FolderBrowsePage | null>(null);
+const entries = shallowRef<FolderBrowseEntry[]>([]);
+const previousCursor = ref<string>();
+const nextCursor = ref<string>();
+const container = shallowRef<FolderContainerResult | null>(null);
+const loading = ref(false);
+const loadingMore = ref(false);
+const error = ref("");
+const listRef = shallowRef<SVirtualListExposed | null>(null);
+const loadedPath = ref("");
+const scrollPositions = new Map<string, number>();
+const highlightKey = ref("");
+let highlightTimer: number | null = null;
+
+const scanProgress = shallowRef<ScanProgress | null>(null);
+const scanning = computed(() => scanProgress.value?.phase === "scanning");
+const scanCoversCurrent = computed(() => {
+  if (!scanning.value || !currentPath.value) return false;
+  return (
+    scanProgress.value?.scopeDirs?.some((scope) => {
+      if (scope === currentPath.value) return true;
+      const prefix = scope.endsWith("/") ? scope : scope + "/";
+      return currentPath.value.startsWith(prefix);
+    }) ?? false
+  );
 });
 
-/** 更多操作菜单 */
-const moreMenuItems = computed<DropdownMenuItem[]>(() => [
+const searchQuery = ref("");
+const searchLoading = ref(false);
+const searchResults = shallowRef<FolderSearchResult[]>([]);
+const searchCursor = ref<string>();
+let searchGeneration = 0;
+let searchAbortController: AbortController | null = null;
+
+const createOpen = ref(false);
+const createRecursive = ref(true);
+const createTargetPath = ref("");
+
+const viewerOpen = ref(false);
+const viewerMaterial = shallowRef<FolderMaterialEntry | null>(null);
+const viewerText = ref("");
+const viewerTextTruncated = ref(false);
+const viewerLoading = ref(false);
+const textViewerRef = ref<HTMLElement | null>(null);
+const pdfPage = ref(1);
+const pdfZoom = ref(100);
+const viewerStates = new Map<string, { page: number; zoom: number; textScroll: number }>();
+
+const imageMaterials = computed(() =>
+  entries.value.filter(
+    (entry): entry is FolderMaterialEntry =>
+      entry.kind === "material" && entry.materialType === "image",
+  ),
+);
+const viewerImageIndex = computed(() => {
+  const material = viewerMaterial.value;
+  if (!material || material.materialType !== "image") return -1;
+  return imageMaterials.value.findIndex((item) => item.path === material.path);
+});
+
+const currentPinned = computed(
+  () => !!currentPath.value && pins.value.some((item) => item.path === currentPath.value),
+);
+
+const breadcrumb = computed(() => {
+  if (!page.value) return [];
+  const root = page.value.root;
+  const relative = page.value.path.slice(root.length).replace(/^[/\\]+/, "");
+  const segments = relative ? relative.split(/[/\\]+/).filter(Boolean) : [];
+  const rows = [{ name: root.split(/[/\\]/).filter(Boolean).pop() || root, path: root }];
+  let cursor = root;
+  for (const segment of segments) {
+    cursor = cursor.endsWith("/") ? cursor + segment : cursor + "/" + segment;
+    rows.push({ name: segment, path: cursor });
+  }
+  return rows;
+});
+
+const viewRows = computed<ViewRow[]>(() => {
+  const directories = entries.value.filter((entry) => entry.kind === "directory");
+  const materials = entries.value.filter((entry) => entry.kind === "material");
+  const media = entries.value.filter(
+    (entry) => entry.kind !== "directory" && entry.kind !== "material",
+  );
+  const rows: ViewRow[] = [];
+  const append = (key: string, label: string, group: FolderBrowseEntry[], count: number) => {
+    if (group.length === 0) return;
+    rows.push({ kind: "section", key: "section:" + key, label, count });
+    for (const entry of group) {
+      rows.push({ kind: "entry", key: "entry:" + entry.path, entry });
+      if (
+        container.value &&
+        entry.path === container.value.path &&
+        (entry.kind === "cue" || entry.kind === "sacd")
+      ) {
+        for (const track of container.value.tracks) {
+          rows.push({
+            kind: "container-track",
+            key: "container-track:" + track.id,
+            track,
+            containerPath: entry.path,
+          });
+        }
+      }
+    }
+  };
+  append(
+    "folders",
+    t("folder.subfolders"),
+    directories,
+    page.value?.counts.directories ?? directories.length,
+  );
+  append("tracks", t("folder.tracks"), media, page.value?.counts.media ?? media.length);
+  append(
+    "materials",
+    t("folder.materials"),
+    materials,
+    page.value?.counts.materials ?? materials.length,
+  );
+  return rows;
+});
+
+const pdfUrl = computed(() => {
+  if (!viewerMaterial.value || viewerMaterial.value.materialType !== "pdf") return "";
+  return (
+    folderBrowserClient.materialUrl(viewerMaterial.value.path) +
+    "#page=" +
+    pdfPage.value +
+    "&zoom=" +
+    pdfZoom.value
+  );
+});
+
+const materialHasThumbnail = (material: FolderMaterialEntry): boolean =>
+  material.materialType === "image" && !material.path.toLowerCase().endsWith(".gif");
+
+const saveCurrentScroll = (): void => {
+  if (!loadedPath.value || !listRef.value) return;
+  scrollPositions.set(loadedPath.value, listRef.value.getScrollTop());
+};
+
+const restoreScroll = async (path: string): Promise<void> => {
+  const top = scrollPositions.get(path);
+  if (top == null || top <= 0) return;
+  await nextTick();
+  listRef.value?.scrollTo(top);
+};
+
+const loadRoots = async (): Promise<void> => {
+  const data = await folderBrowserClient.getRoots();
+  roots.value = data.roots;
+  pins.value = data.pins;
+};
+
+const focusRequestedEntry = async (): Promise<void> => {
+  const id = requestedFocusId.value;
+  const focusPath = requestedFocusPath.value;
+  if (!id && !focusPath) return;
+  await nextTick();
+  const index = viewRows.value.findIndex((row) => {
+    if (row.kind === "container-track") return !!id && row.track.id === id;
+    if (row.kind !== "entry") return false;
+    if (focusPath && row.entry.path === focusPath) return true;
+    return row.entry.kind === "track" && !!id && row.entry.track.id === id;
+  });
+  if (index < 0) return;
+  listRef.value?.scrollToIndex(index, "smooth");
+  highlightKey.value = viewRows.value[index]?.key ?? "";
+  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
+  highlightTimer = window.setTimeout(() => {
+    highlightKey.value = "";
+    highlightTimer = null;
+  }, 2500);
+};
+
+const loadContainer = async (): Promise<void> => {
+  const target = requestedContainerPath.value;
+  if (!target || !currentPath.value) {
+    container.value = null;
+    await focusRequestedEntry();
+    return;
+  }
+  try {
+    container.value = await folderBrowserClient.openContainer(target);
+    await focusRequestedEntry();
+  } catch {
+    container.value = null;
+    toast.error(t("folder.containerLoadFailed"));
+  }
+};
+
+const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true): Promise<void> => {
+  saveCurrentScroll();
+  const target = currentPath.value;
+  loadedPath.value = target;
+  error.value = "";
+  entries.value = [];
+  previousCursor.value = undefined;
+  nextCursor.value = undefined;
+  page.value = null;
+  container.value = null;
+  if (!target) {
+    loading.value = true;
+    try {
+      await loadRoots();
+    } catch (value) {
+      error.value = value instanceof Error ? value.message : String(value);
+    } finally {
+      loading.value = false;
+    }
+    return;
+  }
+  loading.value = true;
+  try {
+    const result = await folderBrowserClient.browse(
+      target,
+      undefined,
+      200,
+      focusOverride || requestedContainerPath.value || requestedFocusPath.value || undefined,
+    );
+    page.value = result;
+    entries.value = result.entries;
+    previousCursor.value = result.previousCursor;
+    nextCursor.value = result.nextCursor;
+    if (restoreSavedPosition) await restoreScroll(target);
+    await loadContainer();
+  } catch (value) {
+    error.value = value instanceof Error ? value.message : String(value);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const refreshCurrent = async (): Promise<void> => {
+  const rowsBefore = viewRows.value;
+  const startIndex = Math.max(0, listRef.value?.actualStartIndex ?? 0);
+  let anchorIndex = startIndex;
+  while (anchorIndex < rowsBefore.length && rowsBefore[anchorIndex]?.kind === "section") {
+    anchorIndex++;
+  }
+  const anchor = rowsBefore[anchorIndex];
+  const anchorKey = anchor?.key;
+  const anchorPath =
+    anchor?.kind === "entry"
+      ? anchor.entry.path
+      : anchor?.kind === "container-track"
+        ? anchor.containerPath
+        : undefined;
+  const top = listRef.value?.getScrollTop() ?? 0;
+  const relative = anchorKey && listRef.value ? top - listRef.value.getItemTop(anchorIndex) : 0;
+  await loadCurrent(anchorPath, false);
+  await nextTick();
+  if (anchorKey && listRef.value) {
+    const nextIndex = viewRows.value.findIndex((row) => row.key === anchorKey);
+    if (nextIndex >= 0) {
+      listRef.value.scrollTo(listRef.value.getItemTop(nextIndex) + relative);
+      return;
+    }
+  }
+  if (top > 0) listRef.value?.scrollTo(top);
+};
+
+const loadMore = async (): Promise<void> => {
+  if (!currentPath.value || !nextCursor.value || loadingMore.value) return;
+  loadingMore.value = true;
+  try {
+    const result = await folderBrowserClient.browse(currentPath.value, nextCursor.value);
+    page.value = result;
+    entries.value = [...entries.value, ...result.entries];
+    nextCursor.value = result.nextCursor;
+  } catch (value) {
+    if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
+      await refreshCurrent();
+    } else {
+      toast.error(value instanceof Error ? value.message : String(value));
+    }
+  } finally {
+    loadingMore.value = false;
+  }
+};
+
+const loadPrevious = async (): Promise<void> => {
+  if (!currentPath.value || !previousCursor.value || loadingMore.value) return;
+  loadingMore.value = true;
+  const rowsBefore = viewRows.value;
+  const anchorIndex = Math.max(0, listRef.value?.actualStartIndex ?? 0);
+  const anchorKey = rowsBefore[anchorIndex]?.key;
+  const scrollTop = listRef.value?.getScrollTop() ?? 0;
+  const anchorOffset =
+    anchorKey && listRef.value ? scrollTop - listRef.value.getItemTop(anchorIndex) : 0;
+  try {
+    const result = await folderBrowserClient.browse(currentPath.value, previousCursor.value);
+    entries.value = [...result.entries, ...entries.value];
+    previousCursor.value = result.previousCursor;
+    await nextTick();
+    if (anchorKey && listRef.value) {
+      const nextIndex = viewRows.value.findIndex((row) => row.key === anchorKey);
+      if (nextIndex >= 0) {
+        listRef.value.scrollTo(listRef.value.getItemTop(nextIndex) + anchorOffset);
+      }
+    }
+  } catch (value) {
+    if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
+      await refreshCurrent();
+    } else {
+      toast.error(value instanceof Error ? value.message : String(value));
+    }
+  } finally {
+    loadingMore.value = false;
+  }
+};
+
+const goFolder = async (path: string): Promise<void> => {
+  await router.push({ name: "folders", query: { path } });
+};
+
+const goHome = async (): Promise<void> => {
+  await router.push({ name: "folders" });
+};
+
+const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
+  if (entry.kind !== "cue" && entry.kind !== "sacd") return;
+  const same = requestedContainerPath.value === entry.path;
+  await router.push({
+    name: "folders",
+    query: {
+      path: currentPath.value,
+      ...(!same ? { container: entry.path } : {}),
+    },
+  });
+};
+
+const runAction = async (
+  path: string,
+  mode: "play" | "shuffle" | "play-next" | "queue",
+  recursive = true,
+): Promise<void> => {
+  try {
+    const result = await folderBrowserClient.play(path, mode, recursive);
+    if (result.failed.length > 0) toast.warning(result.failed[0]);
+    if (mode === "queue" && result.count > 0) toast.success(t("songList.toast.addedToQueue"));
+    if (mode === "play-next" && result.count > 0) toast.success(t("songList.toast.addedToNext"));
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  }
+};
+
+const playContainerTrack = (track: Track, mode: "play" | "play-next" | "queue"): void => {
+  if (mode === "play") void player.playNow(track);
+  else if (mode === "play-next") {
+    void player.insertToQueue(track);
+    toast.success(t("songList.toast.addedToNext"));
+  } else {
+    player.insertManyToQueue([track], "end");
+    toast.success(t("songList.toast.addedToQueue"));
+  }
+};
+
+const handleScan = async (incremental: boolean): Promise<void> => {
+  if (!currentPath.value || scanning.value) return;
+  try {
+    await folderBrowserClient.scan(currentPath.value, incremental);
+    toast.success(t("folder.scanStarted"));
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  }
+};
+
+const togglePin = async (): Promise<void> => {
+  if (!currentPath.value) return;
+  try {
+    pins.value = currentPinned.value
+      ? await folderBrowserClient.unpin(currentPath.value)
+      : await folderBrowserClient.pin(currentPath.value);
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  }
+};
+
+const openCreatePlaylist = (targetPath: string, recursive: boolean): void => {
+  createTargetPath.value = targetPath;
+  createRecursive.value = recursive;
+  createOpen.value = true;
+};
+
+const handleCreated = async (playlistId: string): Promise<void> => {
+  if (!createTargetPath.value) return;
+  try {
+    const result = await folderBrowserClient.addToPlaylist(
+      playlistId,
+      createTargetPath.value,
+      createRecursive.value,
+    );
+    toast.success(t("collection.tracksAdded", { count: result.added }));
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  }
+};
+
+const folderMenuItems = computed<DropdownMenuItem[]>(() => [
   {
-    key: "createPlaylist",
-    label: t("collection.create", { type: t("collection.playlist") }),
-    icon: IconLucideListPlus,
+    key: "shuffle",
+    label: t("folder.shuffle"),
+    icon: IconShuffle,
   },
-  { key: "batchManage", label: t("songList.batch.manage"), icon: IconLucideListChecks },
+  {
+    key: "playCurrent",
+    label: t("folder.playCurrentOnly"),
+    icon: IconPlay,
+  },
+  {
+    key: "playNext",
+    label: t("folder.playNext"),
+    icon: IconListEnd,
+  },
+  {
+    key: "playNextCurrent",
+    label: t("folder.playNextCurrentOnly"),
+    icon: IconListEnd,
+  },
+  {
+    key: "queue",
+    label: t("folder.queue"),
+    icon: IconListMusic,
+  },
+  {
+    key: "queueCurrent",
+    label: t("folder.queueCurrentOnly"),
+    icon: IconListMusic,
+  },
+  {
+    key: "playlist",
+    label: t("collection.create", { type: t("collection.playlist") }),
+    icon: IconListPlus,
+  },
+  {
+    key: "playlistCurrent",
+    label: t("folder.playlistCurrentOnly"),
+    icon: IconListPlus,
+  },
+  {
+    key: "rescan",
+    label: t("folder.rescan"),
+    icon: IconRefreshCw,
+  },
+  {
+    key: currentPinned.value ? "unpin" : "pin",
+    label: currentPinned.value ? t("folder.unpin") : t("folder.pin"),
+    icon: currentPinned.value ? IconPinOff : IconPin,
+  },
 ]);
 
-/** 处理更多操作 */
-const handleMore = (key: string): void => {
-  if (key === "createPlaylist") createOpen.value = true;
-  else if (key === "batchManage") songListRef.value?.enterBatch();
+const handleFolderMenu = (key: string): void => {
+  if (key === "playCurrent") void runAction(currentPath.value, "play", false);
+  else if (key === "playNext") void runAction(currentPath.value, "play-next", true);
+  else if (key === "playNextCurrent") void runAction(currentPath.value, "play-next", false);
+  else if (key === "queue") void runAction(currentPath.value, "queue", true);
+  else if (key === "queueCurrent") void runAction(currentPath.value, "queue", false);
+  else if (key === "shuffle") void runAction(currentPath.value, "shuffle", true);
+  else if (key === "playlist") openCreatePlaylist(currentPath.value, true);
+  else if (key === "playlistCurrent") openCreatePlaylist(currentPath.value, false);
+  else if (key === "rescan") void handleScan(false);
+  else if (key === "pin" || key === "unpin") void togglePin();
 };
 
-// 默认展开/选中只在首次拿到非空树时执行一次，之后用户的折叠/选择不再被覆盖
-let defaultsApplied = false;
+const entryMenu = (entry: FolderBrowseEntry): DropdownMenuItem[] => {
+  if (entry.kind === "material") return [];
+  const directory = entry.kind === "directory";
+  const pinned = directory && pins.value.some((item) => item.path === entry.path);
+  return [
+    { key: "play", label: t("common.play"), icon: IconPlay },
+    ...(directory ? [{ key: "shuffle", label: t("folder.shuffle"), icon: IconShuffle }] : []),
+    { key: "playNext", label: t("folder.playNext"), icon: IconListEnd },
+    { key: "queue", label: t("folder.queue"), icon: IconListMusic },
+    {
+      key: "playlist",
+      label: t("collection.create", { type: t("collection.playlist") }),
+      icon: IconListPlus,
+    },
+    ...(directory
+      ? [
+          {
+            key: "playCurrent",
+            label: t("folder.playCurrentOnly"),
+            icon: IconPlay,
+          },
+          {
+            key: "playNextCurrent",
+            label: t("folder.playNextCurrentOnly"),
+            icon: IconListEnd,
+          },
+          {
+            key: "queueCurrent",
+            label: t("folder.queueCurrentOnly"),
+            icon: IconListMusic,
+          },
+          {
+            key: "playlistCurrent",
+            label: t("folder.playlistCurrentOnly"),
+            icon: IconListPlus,
+          },
+          {
+            key: pinned ? "unpin" : "pin",
+            label: pinned ? t("folder.unpin") : t("folder.pin"),
+            icon: pinned ? IconPinOff : IconPin,
+          },
+        ]
+      : []),
+  ];
+};
 
-const findFolder = (nodes: FolderNode[], path: string): FolderNode | null => {
-  for (const node of nodes) {
-    if (node.path === path) return node;
-    const hit = findFolder(node.children, path);
-    if (hit) return hit;
+const handleEntryMenu = (entry: FolderBrowseEntry, key: string): void => {
+  if (key === "play") void runAction(entry.path, "play", true);
+  else if (key === "playCurrent") void runAction(entry.path, "play", false);
+  else if (key === "shuffle") void runAction(entry.path, "shuffle", true);
+  else if (key === "playNext") void runAction(entry.path, "play-next", true);
+  else if (key === "playNextCurrent") void runAction(entry.path, "play-next", false);
+  else if (key === "queue") void runAction(entry.path, "queue", true);
+  else if (key === "queueCurrent") void runAction(entry.path, "queue", false);
+  else if (key === "playlist") openCreatePlaylist(entry.path, true);
+  else if (key === "playlistCurrent") openCreatePlaylist(entry.path, false);
+  else if (key === "pin" || key === "unpin") {
+    const request =
+      key === "pin" ? folderBrowserClient.pin(entry.path) : folderBrowserClient.unpin(entry.path);
+    void request
+      .then((value) => (pins.value = value))
+      .catch((value) => toast.error(value instanceof Error ? value.message : String(value)));
   }
-  return null;
 };
+
+const activateEntry = async (entry: FolderBrowseEntry): Promise<void> => {
+  if (entry.kind === "directory") await goFolder(entry.path);
+  else if (entry.kind === "cue" || entry.kind === "sacd") await toggleContainer(entry);
+  else if (entry.kind === "material") await openMaterial(entry);
+  else await runAction(entry.path, "play", false);
+};
+
+const openSearchResult = async (result: FolderSearchResult): Promise<void> => {
+  if (result.kind === "directory") {
+    await goFolder(result.path);
+    searchQuery.value = "";
+    return;
+  }
+  searchQuery.value = "";
+  await router.push({
+    name: "folders",
+    query: { path: result.parent, focusPath: result.path },
+  });
+};
+
+const performSearch = useDebounceFn(async (query: string) => {
+  const generation = ++searchGeneration;
+  searchAbortController?.abort();
+  searchAbortController = null;
+  const value = query.trim();
+  searchResults.value = [];
+  searchCursor.value = undefined;
+  if (!value) {
+    searchLoading.value = false;
+    return;
+  }
+  const controller = new AbortController();
+  searchAbortController = controller;
+  searchLoading.value = true;
+  try {
+    const result = await folderBrowserClient.search(value, undefined, 100, controller.signal);
+    if (generation !== searchGeneration) return;
+    searchResults.value = result.data;
+    searchCursor.value = result.nextCursor;
+  } catch (error) {
+    if (generation === searchGeneration && !controller.signal.aborted)
+      toast.error(error instanceof Error ? error.message : String(error));
+  } finally {
+    if (generation === searchGeneration) {
+      searchLoading.value = false;
+      if (searchAbortController === controller) searchAbortController = null;
+    }
+  }
+}, 250);
+
+const loadMoreSearch = async (): Promise<void> => {
+  if (!searchCursor.value || searchLoading.value || !searchQuery.value.trim()) return;
+  const generation = searchGeneration;
+  const query = searchQuery.value.trim();
+  const controller = new AbortController();
+  searchAbortController?.abort();
+  searchAbortController = controller;
+  searchLoading.value = true;
+  try {
+    const result = await folderBrowserClient.search(
+      query,
+      searchCursor.value,
+      100,
+      controller.signal,
+    );
+    if (generation !== searchGeneration || controller.signal.aborted) return;
+    searchResults.value = [...searchResults.value, ...result.data];
+    searchCursor.value = result.nextCursor;
+  } catch (value) {
+    if (generation === searchGeneration && !controller.signal.aborted) {
+      toast.error(value instanceof Error ? value.message : String(value));
+    }
+  } finally {
+    if (generation === searchGeneration) {
+      searchLoading.value = false;
+      if (searchAbortController === controller) searchAbortController = null;
+    }
+  }
+};
+
+watch(searchQuery, (value) => void performSearch(value));
+
+const saveViewerState = (): void => {
+  const material = viewerMaterial.value;
+  if (!material) return;
+  viewerStates.set(material.path, {
+    page: pdfPage.value,
+    zoom: pdfZoom.value,
+    textScroll: textViewerRef.value?.scrollTop ?? 0,
+  });
+};
+
+const openMaterial = async (material: FolderMaterialEntry): Promise<void> => {
+  saveViewerState();
+  viewerMaterial.value = material;
+  const state = viewerStates.get(material.path);
+  pdfPage.value = state?.page ?? 1;
+  pdfZoom.value = state?.zoom ?? 100;
+  viewerText.value = "";
+  viewerTextTruncated.value = false;
+  viewerOpen.value = true;
+  if (material.materialType !== "text") return;
+  viewerLoading.value = true;
+  try {
+    const result = await folderBrowserClient.readText(material.path);
+    viewerText.value = result.text;
+    viewerTextTruncated.value = result.truncated;
+    await nextTick();
+    if (state?.textScroll) textViewerRef.value?.scrollTo({ top: state.textScroll });
+  } catch {
+    toast.error(t("folder.materialLoadFailed"));
+  } finally {
+    viewerLoading.value = false;
+  }
+};
+
+const stepViewerImage = (delta: number): void => {
+  const index = viewerImageIndex.value;
+  if (index < 0 || imageMaterials.value.length <= 1) return;
+  const next = (index + delta + imageMaterials.value.length) % imageMaterials.value.length;
+  const material = imageMaterials.value[next];
+  if (material) viewerMaterial.value = material;
+};
+
+watch(viewerOpen, (open) => {
+  if (!open) saveViewerState();
+});
 
 watch(
-  [folderTree, initialized],
-  ([current, init]) => {
-    if (current.length === 0) {
-      selectedFolder.value = null;
-      defaultsApplied = false;
-      return;
-    }
-    if (!defaultsApplied && init) {
-      expanded.value = current.map((root) => root.path);
-      selectedFolder.value = current[0];
-      defaultsApplied = true;
-      return;
-    }
-    /** 树结构变了，按 path 重新定位选中项 */
-    if (selectedFolder.value) {
-      const same = findFolder(current, selectedFolder.value.path);
-      if (!same) selectedFolder.value = current[0];
-      else if (same !== selectedFolder.value) selectedFolder.value = same;
-    } else if (init) {
-      selectedFolder.value = current[0];
-    }
+  currentPath,
+  () => {
+    void loadCurrent();
   },
   { immediate: true },
 );
 
-const selectedTracks = computed<Track[]>(() => {
-  const folder = selectedFolder.value;
-  return folder ? toRaw(folder.tracks) : [];
+watch(requestedContainerPath, () => {
+  if (currentPath.value === loadedPath.value && !loading.value) void loadContainer();
 });
 
-const handlePlayAll = (): void => {
-  if (selectedTracks.value.length === 0) return;
-  player.playFrom(selectedTracks.value, 0);
-};
-
-/** 文件夹创建为本地歌单 */
-const handleCreated = async (playlistId: string): Promise<void> => {
-  const count = await playlistStore.addTracks(playlistId, selectedTracks.value);
-  toast.success(t("collection.tracksAdded", { count }));
-};
-
-const getKey = (node: FolderNode): string => node.path;
-const getChildren = (node: FolderNode): FolderNode[] | undefined =>
-  node.children.length > 0 ? node.children : undefined;
+let unsubscribeScan: (() => void) | null = null;
+let unsubscribeRevision: (() => void) | null = null;
+let unsubscribePins: (() => void) | null = null;
+let unsubscribeRoots: (() => void) | null = null;
+const refreshOnRevision = useDebounceFn(() => {
+  if (currentPath.value && !loading.value) void refreshCurrent();
+}, 250);
 
 onMounted(async () => {
-  if (!initialized.value) await libraryStore.load();
+  try {
+    scanProgress.value = await folderBrowserClient.scanProgress();
+  } catch {
+    scanProgress.value = null;
+  }
+  unsubscribeScan = subscribeCoreControlEvent("libraryScanProgress", (progress) => {
+    scanProgress.value = progress;
+  });
+  unsubscribeRevision = subscribeCoreControlEvent("libraryChanged", refreshOnRevision);
+  unsubscribePins = subscribeCoreControlEvent("folderPinsChanged", () => {
+    void loadRoots();
+  });
+  unsubscribeRoots = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
+    void loadRoots();
+    if (!currentPath.value) return;
+    if (!data.paths.some((root) => pathWithinRoot(currentPath.value, root))) {
+      void router.replace({ name: "folders" });
+      return;
+    }
+    if (!loading.value) void refreshCurrent();
+  });
+});
+
+onBeforeUnmount(() => {
+  searchAbortController?.abort();
+  searchAbortController = null;
+  saveCurrentScroll();
+  saveViewerState();
+  unsubscribeScan?.();
+  unsubscribeRevision?.();
+  unsubscribePins?.();
+  unsubscribeRoots?.();
+  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
 });
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
-    <div class="shrink-0 px-5 pb-2">
-      <div class="flex items-baseline gap-4 mt-2 mb-4">
-        <h1 class="text-3xl font-bold text-on-surface text-balance">{{ t("folder.label") }}</h1>
-        <div
-          v-if="trackCount > 0"
-          class="flex items-center gap-3 text-sm text-on-surface-variant/50"
+  <div class="flex h-full min-h-0 flex-col">
+    <div class="shrink-0 px-5 pb-3">
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <h1 class="text-3xl font-bold text-on-surface">{{ t("folder.label") }}</h1>
+        <SInput
+          v-model="searchQuery"
+          :placeholder="t('folder.searchPlaceholder')"
+          clearable
+          round
+          class="ml-auto w-full sm:w-72"
         >
-          <span class="flex items-center gap-1">
-            <IconLucideFolder class="size-3.5" />
-            {{ t("folder.totalFolders", { count: folderCount }) }}
-          </span>
-          <span class="flex items-center gap-1">
-            <IconLucideMusic class="size-3.5" />
-            {{ t("common.totalSongs", { count: trackCount }) }}
-          </span>
+          <template #prefix><IconSearch class="size-4 opacity-50" /></template>
+        </SInput>
+      </div>
+
+      <div v-if="currentPath && !searchQuery.trim()" class="mt-3 flex min-w-0 items-center gap-1">
+        <SButton variant="text" size="small" @click="goHome">
+          <template #icon><IconFolder class="size-4" /></template>
+          {{ t("folder.label") }}
+        </SButton>
+        <template v-for="item in breadcrumb" :key="item.path">
+          <IconChevronRight class="size-3.5 shrink-0 opacity-35" />
+          <button
+            class="min-w-0 max-w-64 truncate rounded-md px-2 py-1 text-sm text-on-surface-variant hover:bg-primary/8"
+            :title="item.path"
+            @click="goFolder(item.path)"
+          >
+            {{ item.name }}
+          </button>
+        </template>
+      </div>
+
+      <div
+        v-if="currentPath && !searchQuery.trim()"
+        class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-solid border-primary/12 bg-surface-panel px-3 py-2"
+      >
+        <SButton
+          type="primary"
+          variant="secondary"
+          size="small"
+          round
+          @click="runAction(currentPath, 'play', true)"
+        >
+          <template #icon><IconPlay /></template>
+          {{ t("common.playAll") }}
+        </SButton>
+        <SButton
+          variant="secondary"
+          size="small"
+          round
+          :disabled="scanning"
+          @click="handleScan(true)"
+        >
+          <template #icon>
+            <IconRefreshCw :class="scanCoversCurrent ? 'animate-spin' : ''" />
+          </template>
+          {{ t("folder.scan") }}
+        </SButton>
+        <SDropdownMenu :items="folderMenuItems" align="start" @select="handleFolderMenu">
+          <template #trigger>
+            <SButton variant="secondary" circle size="small">
+              <template #icon><IconEllipsis /></template>
+            </SButton>
+          </template>
+        </SDropdownMenu>
+        <div class="min-w-0 flex-1 sm:pl-2">
+          <div class="line-clamp-2 break-words text-sm font-medium">
+            {{ currentPath.split(/[/\\]/).filter(Boolean).pop() || currentPath }}
+          </div>
+          <div class="truncate text-xs text-on-surface-variant/50" :title="currentPath">
+            {{ currentPath }}
+          </div>
+        </div>
+        <div
+          v-if="scanCoversCurrent && scanProgress"
+          class="text-xs tabular-nums text-on-surface-variant/60"
+        >
+          {{ scanProgress.scanned }}/{{ scanProgress.total || "—" }}
         </div>
       </div>
     </div>
-    <div v-if="folderTree.length > 0" class="flex-1 min-h-0 flex">
-      <!-- 桌面端文件夹树 -->
-      <div
-        v-if="!isMobile"
-        class="w-64 shrink-0 bg-surface-panel border border-solid border-primary/12 rounded-xl ml-3 mb-3 overflow-hidden"
-      >
-        <STree
-          v-model="selectedFolder"
-          v-model:expanded="expanded"
-          :items="folderTree"
-          :get-key="getKey"
-          :get-children="getChildren"
-          :indent="16"
-        >
-          <template #node="{ node, isExpanded, hasChildren }">
-            <IconLucideChevronRight
-              v-if="hasChildren"
-              class="size-4 shrink-0 text-on-surface-variant/70 transition-transform duration-200"
-              :class="isExpanded ? 'rotate-90' : ''"
-            />
-            <span v-else class="size-4 shrink-0" />
-            <component
-              :is="isExpanded && hasChildren ? IconLucideFolderOpen : IconLucideFolder"
-              class="size-4 shrink-0"
-            />
-            <span class="flex-1 min-w-0 truncate text-sm">{{ node.name }}</span>
-            <span class="shrink-0 text-xs text-on-surface-variant/50 tabular-nums">
-              {{ node.tracks.length }}
-            </span>
-          </template>
-        </STree>
-      </div>
-      <!-- 移动端文件夹抽屉 -->
-      <SDrawer
-        v-if="isMobile"
-        v-model:open="mobileTreeOpen"
-        side="left"
-        :title="t('folder.label')"
-        class="w-72"
-      >
-        <div class="h-full overflow-y-auto p-2">
-          <STree
-            v-model="selectedFolder"
-            v-model:expanded="expanded"
-            :items="folderTree"
-            :get-key="getKey"
-            :get-children="getChildren"
-            :indent="16"
-          >
-            <template #node="{ node, isExpanded, hasChildren }">
-              <IconLucideChevronRight
-                v-if="hasChildren"
-                class="size-4 shrink-0 text-on-surface-variant/70 transition-transform duration-200"
-                :class="isExpanded ? 'rotate-90' : ''"
-              />
-              <span v-else class="size-4 shrink-0" />
-              <component
-                :is="isExpanded && hasChildren ? IconLucideFolderOpen : IconLucideFolder"
-                class="size-4 shrink-0"
-              />
-              <span class="flex-1 min-w-0 truncate text-sm">{{ node.name }}</span>
-              <span class="shrink-0 text-xs text-on-surface-variant/50 tabular-nums">
-                {{ node.tracks.length }}
-              </span>
-            </template>
-          </STree>
+
+    <div class="min-h-0 flex-1">
+      <div v-if="searchQuery.trim()" class="h-full min-h-0 overflow-y-auto px-5 pb-5">
+        <div class="mb-3 text-sm font-medium text-on-surface-variant">
+          {{ t("folder.searchResults") }}
         </div>
-      </SDrawer>
-      <!-- 歌曲列表 -->
-      <div class="flex-1 min-w-0">
-        <SongList
-          v-if="selectedFolder && selectedTracks.length > 0"
-          ref="songListRef"
-          :items="selectedTracks"
-          show-album
-          show-duration
-          enable-sort
+        <div
+          v-for="result in searchResults"
+          :key="result.path"
+          class="mb-1 flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 hover:bg-primary/8"
+          @click="openSearchResult(result)"
         >
-          <template #topInfo>
-            <div
-              class="mx-3 mb-2 flex flex-wrap items-center gap-2 pl-3 pr-4 py-2 sm:py-3 bg-surface-panel border-2 border-solid border-primary/12 rounded-xl"
-            >
-              <SButton
-                v-if="isMobile"
-                variant="secondary"
-                size="small"
-                round
-                @click="mobileTreeOpen = true"
-              >
-                <template #icon><IconLucideFolderOpen /></template>
-                <span>{{ t("folder.label") }}</span>
-              </SButton>
-              <SButton
-                type="primary"
-                variant="secondary"
-                size="small"
-                round
-                :disabled="selectedTracks.length === 0"
-                @click="handlePlayAll"
-              >
-                <template #icon><IconLucidePlay /></template>
-                {{ t("common.playAll") }}
-              </SButton>
-              <SDropdownMenu :items="moreMenuItems" align="start" @select="handleMore">
-                <template #trigger>
-                  <SButton
-                    variant="secondary"
-                    circle
-                    size="small"
-                    :disabled="selectedTracks.length === 0"
-                  >
-                    <template #icon><IconLucideEllipsis /></template>
-                  </SButton>
-                </template>
-              </SDropdownMenu>
-              <SDivider vertical class="h-6 mx-1 hidden sm:block" />
-              <IconLucideFolderOpen class="size-4 text-primary shrink-0 hidden sm:block" />
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">{{ selectedFolder.name }}</div>
-                <div class="text-xs text-on-surface-variant/60 truncate">
-                  {{ selectedFolder.path }}
-                </div>
-              </div>
-              <span class="shrink-0 flex items-center gap-1 text-xs text-on-surface-variant/60">
-                <IconLucideMusic class="size-3.5" />
-                {{ t("common.totalSongs", { count: selectedTracks.length }) }}
-              </span>
+          <IconFolder v-if="result.kind === 'directory'" class="size-5 shrink-0 text-primary" />
+          <IconFile v-else class="size-5 shrink-0 text-primary" />
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm font-medium">{{ result.name }}</div>
+            <div class="truncate text-xs text-on-surface-variant/50">{{ result.path }}</div>
+          </div>
+          <IconChevronRight class="size-4 shrink-0 opacity-30" />
+        </div>
+        <div
+          v-if="!searchLoading && searchResults.length === 0"
+          class="flex h-48 items-center justify-center text-sm text-on-surface-variant/50"
+        >
+          {{ t("folder.searchEmpty") }}
+        </div>
+        <div class="flex justify-center py-4">
+          <SLoading v-if="searchLoading" />
+          <SButton v-else-if="searchCursor" variant="secondary" @click="loadMoreSearch">
+            {{ t("folder.loadMore") }}
+          </SButton>
+        </div>
+      </div>
+
+      <div v-else-if="loading" class="flex h-full items-center justify-center">
+        <SLoading class="text-3xl text-primary/70" />
+      </div>
+
+      <div v-else-if="error" class="flex h-full items-center justify-center px-6">
+        <div class="max-w-lg text-center">
+          <div class="mb-4 break-all text-sm text-red-500/80">{{ error }}</div>
+          <SButton variant="secondary" @click="loadCurrent">{{ t("common.retry") }}</SButton>
+        </div>
+      </div>
+
+      <div v-else-if="!currentPath" class="h-full overflow-y-auto px-5 pb-6">
+        <section v-if="pins.length > 0" class="mb-7">
+          <h2 class="mb-2 text-sm font-semibold text-on-surface-variant">
+            {{ t("folder.pinned") }}
+          </h2>
+          <button
+            v-for="item in pins"
+            :key="item.path"
+            class="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-primary/8"
+            @click="goFolder(item.path)"
+          >
+            <IconPin class="size-5 shrink-0 text-primary" />
+            <div class="min-w-0 flex-1">
+              <div class="line-clamp-2 break-words text-sm font-medium">{{ item.name }}</div>
+              <div class="truncate text-xs text-on-surface-variant/50">{{ item.path }}</div>
             </div>
-          </template>
-        </SongList>
-        <div v-else class="h-full flex items-center justify-center">
+            <span v-if="!item.available" class="text-xs text-amber-500">
+              {{ t("folder.unavailable") }}
+            </span>
+            <IconChevronRight class="size-4 shrink-0 opacity-30" />
+          </button>
+        </section>
+
+        <section v-if="roots.length > 0">
+          <h2 class="mb-2 text-sm font-semibold text-on-surface-variant">
+            {{ t("folder.roots") }}
+          </h2>
+          <button
+            v-for="item in roots"
+            :key="item.path"
+            class="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-primary/8"
+            @click="goFolder(item.path)"
+          >
+            <IconFolderOpen class="size-5 shrink-0 text-primary" />
+            <div class="min-w-0 flex-1">
+              <div class="line-clamp-2 break-words text-sm font-medium">{{ item.name }}</div>
+              <div class="truncate text-xs text-on-surface-variant/50">{{ item.path }}</div>
+            </div>
+            <span v-if="!item.available" class="text-xs text-amber-500">
+              {{ t("folder.unavailable") }}
+            </span>
+            <IconChevronRight class="size-4 shrink-0 opacity-30" />
+          </button>
+        </section>
+
+        <div v-else class="flex h-full items-center justify-center">
           <div class="text-center text-on-surface-variant/50">
-            <IconLucideMusic class="size-10 mx-auto mb-2 opacity-30" />
-            <div class="text-sm">{{ t("common.noData") }}</div>
+            <IconFolder class="mx-auto mb-3 size-12 opacity-30" />
+            <div class="mb-1 text-sm">{{ t("library.noLocalSongs") }}</div>
+            <div class="mb-4 text-xs opacity-70">{{ t("library.configureHint") }}</div>
+            <SButton
+              type="primary"
+              variant="secondary"
+              @click="settingsDialog.show('localLibrary')"
+            >
+              <template #icon><IconSettings2 /></template>
+              {{ t("library.openSettings") }}
+            </SButton>
           </div>
         </div>
       </div>
-    </div>
-    <!-- 空状态 -->
-    <div v-else class="flex-1 flex items-center justify-center">
-      <div class="text-center text-on-surface-variant/50">
-        <IconLucideFolder class="size-12 mx-auto mb-3 opacity-30" />
-        <div class="text-sm mb-1">{{ t("library.noLocalSongs") }}</div>
-        <div class="text-xs mb-4 opacity-70">{{ t("library.configureHint") }}</div>
-        <SButton type="primary" variant="secondary" @click="settingsDialog.show('localLibrary')">
-          <template #icon><IconLucideSettings2 /></template>
-          {{ t("library.openSettings") }}
-        </SButton>
+
+      <div v-else-if="page?.unavailable" class="flex h-full items-center justify-center px-6">
+        <div class="text-center text-on-surface-variant/60">
+          <IconFolder class="mx-auto mb-3 size-12 opacity-30" />
+          <div class="mb-2 text-sm">{{ t("folder.unavailable") }}</div>
+          <div class="mb-4 max-w-lg break-all text-xs opacity-70">{{ currentPath }}</div>
+          <SButton variant="secondary" @click="refreshCurrent">{{ t("common.retry") }}</SButton>
+        </div>
       </div>
+
+      <SVirtualList
+        v-else
+        ref="listRef"
+        :items="viewRows"
+        :item-height="64"
+        :get-item-key="(row: ViewRow) => row.key"
+        :padding-bottom="24"
+        @reach-bottom="loadMore"
+      >
+        <template #header>
+          <div v-if="previousCursor" class="flex justify-center pb-2">
+            <SButton variant="secondary" size="small" :disabled="loadingMore" @click="loadPrevious">
+              {{ t("folder.loadPrevious") }}
+            </SButton>
+          </div>
+        </template>
+        <template #default="{ item }">
+          <div
+            v-if="item.kind === 'section'"
+            class="flex h-10 items-end justify-between px-5 pb-1 text-xs font-semibold text-on-surface-variant/65"
+          >
+            <span>{{ item.label }}</span>
+            <span class="tabular-nums font-normal opacity-60">{{ item.count }}</span>
+          </div>
+
+          <div
+            v-else-if="item.kind === 'container-track'"
+            class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors"
+            :class="highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6'"
+          >
+            <IconMusic class="size-4 shrink-0 text-primary/70" />
+            <button
+              class="min-w-0 flex-1 text-left"
+              @dblclick="playContainerTrack(item.track, 'play')"
+            >
+              <div class="truncate text-sm font-medium">{{ item.track.title }}</div>
+              <div class="truncate text-xs text-on-surface-variant/50">
+                {{ item.track.artists.map((artist) => artist.name).join(" / ") }}
+              </div>
+            </button>
+            <SButton
+              variant="text"
+              circle
+              size="small"
+              @click="playContainerTrack(item.track, 'play')"
+            >
+              <template #icon><IconPlay /></template>
+            </SButton>
+            <SDropdownMenu
+              :items="[
+                { key: 'playNext', label: t('folder.playNext'), icon: IconListEnd },
+                { key: 'queue', label: t('folder.queue'), icon: IconListMusic },
+              ]"
+              align="end"
+              @select="
+                (key: string) =>
+                  playContainerTrack(item.track, key === 'playNext' ? 'play-next' : 'queue')
+              "
+            >
+              <template #trigger>
+                <SButton variant="text" circle size="small">
+                  <template #icon><IconEllipsis /></template>
+                </SButton>
+              </template>
+            </SDropdownMenu>
+          </div>
+
+          <div
+            v-else
+            class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors"
+            :class="highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6'"
+          >
+            <template v-if="item.entry.kind === 'material' && materialHasThumbnail(item.entry)">
+              <img
+                :src="folderBrowserClient.thumbnailUrl(item.entry.path)"
+                class="size-11 shrink-0 rounded-lg object-cover bg-primary/5"
+                loading="lazy"
+              />
+            </template>
+            <IconFolder
+              v-else-if="item.entry.kind === 'directory'"
+              class="size-6 shrink-0 text-primary"
+            />
+            <IconDisc3
+              v-else-if="item.entry.kind === 'cue' || item.entry.kind === 'sacd'"
+              class="size-6 shrink-0 text-primary"
+            />
+            <IconImage
+              v-else-if="item.entry.kind === 'material' && item.entry.materialType === 'image'"
+              class="size-6 shrink-0 text-primary"
+            />
+            <IconFileText
+              v-else-if="item.entry.kind === 'material'"
+              class="size-6 shrink-0 text-primary"
+            />
+            <IconFileAudio v-else class="size-6 shrink-0 text-primary" />
+
+            <button class="min-w-0 flex-1 text-left" @click="activateEntry(item.entry)">
+              <div class="line-clamp-2 break-words text-sm font-medium">
+                {{ item.entry.kind === "track" ? item.entry.track.title : item.entry.name }}
+              </div>
+              <div class="mt-0.5 truncate text-xs text-on-surface-variant/50">
+                <template v-if="item.entry.kind === 'track'">
+                  {{ item.entry.track.artists.map((artist) => artist.name).join(" / ") }}
+                  <span v-if="item.entry.track.album?.name">
+                    · {{ item.entry.track.album.name }}
+                  </span>
+                </template>
+                <template v-else-if="item.entry.kind === 'file'">
+                  {{ formatFileSize(item.entry.size) }}
+                </template>
+                <template v-else-if="item.entry.kind === 'cue' || item.entry.kind === 'sacd'">
+                  {{
+                    item.entry.trackCount
+                      ? t("common.totalSongs", { count: item.entry.trackCount })
+                      : item.entry.path
+                  }}
+                </template>
+                <template v-else-if="item.entry.kind === 'material'">
+                  {{ formatFileSize(item.entry.size) }}
+                </template>
+                <template v-else>{{ item.entry.path }}</template>
+              </div>
+            </button>
+
+            <IconChevronRight
+              v-if="item.entry.kind === 'directory'"
+              class="size-4 shrink-0 opacity-30"
+            />
+            <SButton
+              v-else-if="item.entry.kind !== 'material'"
+              variant="text"
+              circle
+              size="small"
+              @click="runAction(item.entry.path, 'play', false)"
+            >
+              <template #icon><IconPlay /></template>
+            </SButton>
+            <SDropdownMenu
+              v-if="entryMenu(item.entry).length"
+              :items="entryMenu(item.entry)"
+              align="end"
+              @select="(key: string) => handleEntryMenu(item.entry, key)"
+            >
+              <template #trigger>
+                <SButton variant="text" circle size="small">
+                  <template #icon><IconEllipsis /></template>
+                </SButton>
+              </template>
+            </SDropdownMenu>
+          </div>
+        </template>
+
+        <template #empty>
+          <div class="text-center text-on-surface-variant/50">
+            <IconMusic class="mx-auto mb-3 size-10 opacity-30" />
+            <div class="text-sm">{{ t("folder.empty") }}</div>
+          </div>
+        </template>
+
+        <template #footer>
+          <div class="flex justify-center py-4">
+            <SLoading v-if="loadingMore" />
+            <SButton v-else-if="nextCursor" variant="secondary" @click="loadMore">
+              {{ t("folder.loadMore") }}
+            </SButton>
+          </div>
+        </template>
+      </SVirtualList>
     </div>
+
     <PlaylistCreateDialog
       v-model:open="createOpen"
       mode="local"
-      :initial-name="selectedFolder?.name"
+      :initial-name="createTargetPath.split(/[/\\]/).filter(Boolean).pop()"
       @created="handleCreated"
     />
+
+    <SDialog
+      v-model:open="viewerOpen"
+      :title="viewerMaterial?.name || t('folder.materials')"
+      width="min(1000px, calc(100vw - 32px))"
+    >
+      <div v-if="viewerMaterial" class="h-[min(72vh,760px)] min-h-72">
+        <div
+          v-if="viewerMaterial.materialType === 'image'"
+          class="relative flex h-full items-center justify-center overflow-auto bg-black/5"
+        >
+          <SButton
+            v-if="imageMaterials.length > 1"
+            variant="secondary"
+            circle
+            class="absolute left-3 z-10"
+            @click="stepViewerImage(-1)"
+          >
+            <template #icon><IconChevronLeft /></template>
+          </SButton>
+          <img
+            :src="folderBrowserClient.materialUrl(viewerMaterial.path)"
+            class="max-h-full max-w-full object-contain"
+          />
+          <div
+            v-if="imageMaterials.length > 1"
+            class="absolute bottom-3 rounded-full bg-black/45 px-2.5 py-1 text-xs text-white"
+          >
+            {{ viewerImageIndex + 1 }} / {{ imageMaterials.length }}
+          </div>
+          <SButton
+            v-if="imageMaterials.length > 1"
+            variant="secondary"
+            circle
+            class="absolute right-3 z-10"
+            @click="stepViewerImage(1)"
+          >
+            <template #icon><IconChevronRight /></template>
+          </SButton>
+        </div>
+        <div v-else-if="viewerMaterial.materialType === 'pdf'" class="flex h-full flex-col">
+          <div class="mb-2 flex items-center justify-end gap-2">
+            <SButton
+              variant="secondary"
+              circle
+              size="small"
+              :disabled="pdfPage <= 1"
+              @click="pdfPage--"
+            >
+              <template #icon><IconChevronLeft /></template>
+            </SButton>
+            <span class="min-w-12 text-center text-xs tabular-nums">{{ pdfPage }}</span>
+            <SButton variant="secondary" circle size="small" @click="pdfPage++">
+              <template #icon><IconChevronRight /></template>
+            </SButton>
+            <SDivider vertical class="mx-1 h-5" />
+            <SButton
+              variant="secondary"
+              circle
+              size="small"
+              :disabled="pdfZoom <= 50"
+              @click="pdfZoom = Math.max(50, pdfZoom - 10)"
+            >
+              <template #icon><IconZoomOut /></template>
+            </SButton>
+            <span class="min-w-12 text-center text-xs tabular-nums">{{ pdfZoom }}%</span>
+            <SButton
+              variant="secondary"
+              circle
+              size="small"
+              :disabled="pdfZoom >= 200"
+              @click="pdfZoom = Math.min(200, pdfZoom + 10)"
+            >
+              <template #icon><IconZoomIn /></template>
+            </SButton>
+          </div>
+          <iframe :key="pdfUrl" :src="pdfUrl" class="min-h-0 flex-1 border-0 rounded-lg" />
+        </div>
+        <div v-else class="flex h-full flex-col">
+          <div v-if="viewerTextTruncated" class="mb-2 text-xs text-amber-600">
+            {{ t("folder.textTruncated", { size: formatFileSize(viewerMaterial.size) }) }}
+          </div>
+          <div ref="textViewerRef" class="min-h-0 flex-1 overflow-auto rounded-lg bg-primary/5 p-4">
+            <SLoading v-if="viewerLoading" class="mx-auto mt-16" />
+            <pre v-else class="m-0 whitespace-pre-wrap break-words font-mono text-xs leading-5">{{
+              viewerText
+            }}</pre>
+          </div>
+        </div>
+      </div>
+    </SDialog>
   </div>
 </template>

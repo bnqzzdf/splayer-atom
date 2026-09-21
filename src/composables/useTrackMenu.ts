@@ -15,6 +15,7 @@ import { buildDownloadQualityItems } from "@/composables/useDownload";
 import { getTrackShareUrl } from "@/utils/format/shareUrl";
 import { openExternal } from "@/utils/url";
 import { pluginClient } from "@/core/pluginClient";
+import { folderBrowserClient } from "@/core/folderBrowserClient";
 import IconPlay from "~icons/lucide/play";
 import IconListEnd from "~icons/lucide/list-end";
 import IconListMusic from "~icons/lucide/list-music";
@@ -29,6 +30,7 @@ import IconSearch from "~icons/lucide/search";
 import IconMessageCircle from "~icons/lucide/message-circle";
 import IconMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconPuzzle from "~icons/lucide/puzzle";
+import IconFolderOpen from "~icons/lucide/folder-open";
 
 export interface TrackMenuOptions {
   /** 集合类型 */
@@ -122,6 +124,12 @@ export const useTrackMenu = (
         icon: markRaw(IconCopy),
         visible: isLocal,
         separator: true,
+      }),
+      action({
+        id: "openContainingFolder",
+        label: t("folder.openContaining"),
+        icon: markRaw(IconFolderOpen),
+        visible: isLocal && !!(track.value?.path || track.value?.cuePath),
       }),
       action({
         id: "editTags",
@@ -275,6 +283,23 @@ export const useTrackMenu = (
         if (current.cueAudioPath ?? current.path)
           await copy((current.cueAudioPath ?? current.path)!);
         break;
+      case "openContainingFolder": {
+        try {
+          const target = await folderBrowserClient.location(current);
+          await router.push({
+            name: "folders",
+            query: {
+              path: target.path,
+              ...(target.containerPath ? { container: target.containerPath } : {}),
+              ...(target.focusTrackId ? { focus: target.focusTrackId } : {}),
+              ...(target.focusPath ? { focusPath: target.focusPath } : {}),
+            },
+          });
+        } catch {
+          toast.error(t("folder.openContainingFailed"));
+        }
+        break;
+      }
       case "removeFromCollection":
         options.onRemove?.(current);
         break;

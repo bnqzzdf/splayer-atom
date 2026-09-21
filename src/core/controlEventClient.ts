@@ -48,6 +48,9 @@ export const isCoreControlEvent = (event: ControlEvent): event is CoreControlEve
   (event.data !== undefined &&
     (event.type === "providerSessions" ||
       event.type === "libraryScanProgress" ||
+      event.type === "libraryChanged" ||
+      event.type === "libraryRootsChanged" ||
+      event.type === "folderPinsChanged" ||
       event.type === "downloadState" ||
       event.type === "downloadProgress" ||
       event.type === "streamingLibraryUpdated" ||

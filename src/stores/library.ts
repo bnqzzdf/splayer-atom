@@ -3,7 +3,6 @@ import type { Track, Artist } from "@shared/types/player";
 import type { AlbumSummary, ArtistSummary, ScanProgress } from "@shared/types/library";
 import type { Collection } from "@/types/collection";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
-import { buildFolderTree, countFolders } from "@/utils/folderTree";
 import { libraryClient } from "@/core/libraryClient";
 import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 
@@ -226,32 +225,53 @@ export const useLibraryStore = defineStore("library", () => {
   };
 
   let unsubscribe: (() => void) | null = null;
+  let unsubscribeLibraryChanged: (() => void) | null = null;
+  let unsubscribeLibraryRootsChanged: (() => void) | null = null;
+
+  const refreshTracksProjection = (): void => {
+    libraryClient.getTracks().then((res) => {
+      if (!res.success || !res.data) return;
+      tracks.value = res.data;
+      cacheTracks(res.data);
+      loadArtistAvatars();
+    });
+  };
 
   /** 监听扫描进度 */
   const subscribeScanProgress = (): void => {
     unsubscribe?.();
+    unsubscribeLibraryChanged?.();
+    unsubscribeLibraryRootsChanged?.();
     unsubscribe = subscribeCoreControlEvent("libraryScanProgress", (data) => {
       scanProgress.value = data;
-      if (data.phase === "done") {
+      if (data.phase === "scanning") {
+        scanning.value = true;
+      } else if (data.phase === "done") {
         scanning.value = false;
         scanProgress.value = null;
-        libraryClient.getTracks().then((res) => {
-          if (res.success && res.data) {
-            tracks.value = res.data;
-            cacheTracks(res.data);
-            loadArtistAvatars();
-          }
-        });
+        refreshTracksProjection();
       } else if (data.phase === "error") {
         scanning.value = false;
         scanProgress.value = null;
       }
+    });
+    unsubscribeLibraryChanged = subscribeCoreControlEvent("libraryChanged", () => {
+      // 扫描过程由 done 时统一拉取全量曲库，避免每个 20-track batch 重取大 JSON。
+      // 定向 canonicalization / 标签写入等非扫描 mutation 则立即刷新全局曲库投影。
+      if (!scanning.value) refreshTracksProjection();
+    });
+    unsubscribeLibraryRootsChanged = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
+      scanDirs.value = [...data.paths];
     });
   };
 
   const unsubscribeScanProgress = (): void => {
     unsubscribe?.();
     unsubscribe = null;
+    unsubscribeLibraryChanged?.();
+    unsubscribeLibraryChanged = null;
+    unsubscribeLibraryRootsChanged?.();
+    unsubscribeLibraryRootsChanged = null;
   };
 
   /** 删除曲目文件并刷新列表 */
@@ -290,12 +310,6 @@ export const useLibraryStore = defineStore("library", () => {
     tracks.value = tracks.value.map((item) => byId.get(item.id) ?? item);
     cacheTracks(tracks.value);
   };
-
-  /** 文件夹树：按磁盘路径聚合，详见 utils/folderTree */
-  const folderTree = computed(() => buildFolderTree(tracks.value, scanDirs.value));
-
-  /** 文件夹总数（递归） */
-  const folderCount = computed(() => countFolders(folderTree.value));
 
   /** 专辑聚合列表 */
   const getAlbumList = async (): Promise<AlbumSummary[]> => {
@@ -401,7 +415,5 @@ export const useLibraryStore = defineStore("library", () => {
     getAlbumList,
     getAlbumCollection,
     getArtistProfile,
-    folderTree,
-    folderCount,
   };
 });
