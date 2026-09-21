@@ -116,9 +116,13 @@ are in the [development guide](./atom-development.md).
       album materials (images, PDF, and supported text/log files) must be browsable without turning
       Folder view into a file manager; pinned folders, physical folder/file-name search, explicit
       current-folder-only actions, navigation/viewer position restoration, and paginated/cursor
-      browsing must be included; offline roots, symlinks, long names, large directories, scan-time
-      enrichment, and route restoration must meet the documented acceptance criteria; remove the
-      old full-tree projection after migration.
+      browsing must be included; UX convergence must unify 播放 / 接下来播放 / 添加到队列 /
+      添加到歌单…, simplify the Folder header/action menu, provide current-directory filtering
+      distinct from recursive Folder Search, support list/cover-grid presentation, and expose
+      Core-resolved “open containing folder” through the shared local Track action model in player,
+      queue, SongList, playlist/album/artist, collection and history surfaces; offline roots,
+      symlinks, long names, large directories, scan-time enrichment, and route restoration must
+      meet the documented acceptance criteria; remove the old full-tree projection after migration.
 - [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
 - [ ] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.

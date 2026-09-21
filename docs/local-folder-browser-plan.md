@@ -40,6 +40,7 @@ atomic commits for review and rollback, but the old tree model is removed when t
   route state.
 - Pin frequently used folders to the Folder home without changing their filesystem location.
 - Search configured Folder roots by physical directory/file name independently from metadata search.
+- Filter the **current directory only** without recursively searching descendants.
 - Display supported audio files immediately, including files that have not been scanned yet.
 - Use canonical scanned metadata when it exists and refresh the current view as scanning enriches
   the library.
@@ -57,6 +58,8 @@ atomic commits for review and rollback, but the old tree model is removed when t
   booklets, rip logs, release notes, and similar supported text documents.
 - Handle multiple roots, temporarily unavailable roots, symlinks, long names, very large
   directories, and deterministic recursive ordering.
+- Offer both list and cover/grid presentation for the same route-driven Folder model without
+  reintroducing a tree hierarchy.
 
 ### Permanently out of scope for Folder view
 
@@ -93,7 +96,8 @@ Web owns only presentation and navigation state. It requests one directory at a 
 high-level actions such as “play this directory” or “add this container to the queue”. Web does not
 walk directories, parse CUE/SACD, construct recursive queues, or rebuild a global folder tree.
 Per-client transient presentation state such as scroll position and an open booklet's page/zoom
-remains Web-owned.
+remains Web-owned. Current-directory filter text and list/grid presentation choice are also
+Web-owned presentation state; they never become Core music-domain state.
 
 ## 4. Browse semantics
 
@@ -151,10 +155,48 @@ Folder Search must be bounded and cancellable. It should stream/page results or 
 result limit so a broad query over a very large library cannot create an unbounded response. It
 follows the same unavailable-root and symlink/path authorization rules as normal Folder browsing.
 
+### Current-directory filter
+
+Folder Search and Folder Filter solve different user problems and must remain visibly distinct:
+
+```text
+Folder Filter
+  "I am already in the correct directory; reduce what I see here."
+
+Folder Search
+  "I do not know where the folder/file is; search configured roots recursively."
+```
+
+The current-directory filter:
+
+- matches **direct children of the current directory only**;
+- never traverses a child directory;
+- applies to direct child directory names, physical media/container filenames, supplementary
+  material filenames, and canonical display fields already available for direct Tracks where
+  practical;
+- clears immediately back to the unfiltered current directory;
+- does not change the Folder route or create a separate search-results page;
+- is restored with the current history/session navigation state when the user enters a child and
+  comes back.
+
+The filter cannot be implemented as a Web-only filter over currently loaded rows because normal
+browse is paginated. If a 12,000-item directory has a matching entry outside the current page, Web
+must still return the correct result. Core therefore applies the current-directory filter before
+pagination:
+
+```text
+browse(path, filter?, cursor?, limit?, focus?)
+```
+
+The filter scope is still one physical directory, so it must not inherit the recursive traversal
+cost of Folder Search.
+
 ### UI layout
 
 - Remove the fixed desktop tree column and the mobile tree drawer.
 - Use the main content width for directory and media rows.
+- The breadcrumb is the authoritative current-location display. Do not repeat the current folder
+  name plus full physical path as a second permanent header block.
 - Long current-directory names may wrap to two lines; they must not be truncated merely because of
   a narrow navigation column.
 - Breadcrumb may collapse middle ancestors when space is limited, while keeping the current
@@ -167,6 +209,41 @@ follows the same unavailable-root and symlink/path authorization rules as normal
 - Empty, unavailable, loading, scan-enrichment, and container-error states are explicit.
 - Navigating into a child directory and then back restores the previous directory's scroll position
   instead of jumping to the top.
+- Entering a normal directory shows a lightweight current-directory filter control. Folder home
+  keeps the recursive Folder Search entry instead.
+
+The primary Folder header should be intentionally small:
+
+```text
+Folder > root > ... > current
+
+[ Play all ] [ Scan ] [...]                    [ Filter current folder... ] [ List/Grid ]
+```
+
+The full physical path remains available through breadcrumb title/tooltip or other secondary
+diagnostic affordance, but is not permanently repeated under the breadcrumb.
+
+`Scan` means recursive incremental scan of the current subtree. Force-rescan remains a lower
+frequency action under the overflow menu rather than occupying another primary button.
+
+### List and cover/grid presentation
+
+List remains the default and most information-dense mode. It is preferred for long filenames,
+classical-music structures, CUE/SACD, and directories with many direct media files.
+
+Folder Browser also provides a cover/grid mode for album-like child directories:
+
+- the route and Core browse semantics do not change;
+- the grid primarily changes the **direct child directory** presentation;
+- direct Tracks/containers may remain in the normal compact list even while child directories use
+  a grid;
+- child directory artwork prefers a suitable local cover/front/folder image, then a reliable
+  canonical album cover association, then a normal Folder placeholder;
+- supplementary materials retain their dedicated material presentation;
+- switching list/grid never creates a second hierarchy or reintroduces a tree view.
+
+The presentation choice is Web UI state. It may be remembered per Web Control, but it is not
+persisted as canonical Core library state.
 
 The mixed directory/media view should use a dedicated Folder Browser list rather than forcing
 unscanned filesystem entries into the existing `SongList` contract.
@@ -406,13 +483,46 @@ index in the library database.
 
 ## 9. Playback and queue operations
 
+### Unified action terminology
+
+Track, Folder, Album, Playlist, Queue, and other multi-Track surfaces should use one consistent
+language:
+
+```text
+Play
+  replace the active queue and start playback
+
+Play next / 下一首播放
+  DO NOT use this wording in product UI
+
+Play next group / 接下来播放
+  insert one Track or an ordered group immediately after the current playback position
+
+Add to queue
+  append one Track or an ordered group to the end of the current queue
+
+Add to playlist...
+  add durable Tracks to an existing local playlist, with "create playlist" available inside that
+  chooser rather than replacing the add-to-existing action
+```
+
+Chinese product copy should use **播放 / 接下来播放 / 添加到队列 / 添加到歌单…**. “下一首播放” is
+too narrow for Folder/Album/Playlist operations because the inserted object may contain many
+Tracks. Internal route/function names such as `play-next` may remain implementation details; the
+user-facing action is “接下来播放”.
+
+Queue and Playlist are separate concepts: queue actions alter the transient playback sequence;
+playlist actions alter durable playlist membership. Folder UI must not use “新建歌单” as a substitute
+for “添加到歌单…”.
+
 Folder-level actions are Core commands. Web never expands a directory into a Track array itself.
 
 Required actions:
 
 - Play now / replace queue from a file, container, or directory; directory actions are recursive by
   default.
-- Play next from a file, container, or directory; directory actions are recursive by default.
+- Play next group / **接下来播放** from a file, container, or directory; directory actions are
+  recursive by default.
 - Add to queue from a file, container, or directory; directory actions are recursive by default.
 - Shuffle-play a directory using the existing player shuffle semantics rather than a second Folder
   shuffle state.
@@ -421,8 +531,30 @@ Required actions:
   rather than a second playback path.
 
 Recursive remains the primary/default behavior because common music layouts place playable content
-under child directories such as `CD1` / `CD2`. The current-folder-only variants are explicit menu
-actions, not a hidden global preference.
+under child directories such as `CD1` / `CD2`. The current-folder-only variants are explicit
+secondary actions, not a hidden global preference.
+
+The Folder overflow menu should expose the common recursive actions directly and move the
+less-common non-recursive variants under one submenu:
+
+```text
+Shuffle
+Play next / 接下来播放
+Add to queue
+Add to playlist...
+----------------
+Current folder only >
+  Play
+  Play next / 接下来播放
+  Add to queue
+  Add to playlist...
+----------------
+Rescan
+Pin to Folder home / Unpin
+```
+
+`Play all` and incremental `Scan` already exist as primary buttons and should not be redundantly
+repeated in the same overflow menu.
 
 Directory actions recursively enumerate supported media only when the user requests the action.
 They must:
@@ -444,8 +576,8 @@ Recursive folder playback has one deterministic order:
 4. entries without canonical ordering metadata fall back to natural filename order;
 5. virtual CUE/SACD tracks retain their container track order.
 
-The same ordering helper is used by Play, Play Next, Add to Queue, and playlist creation so the same
-folder never produces different sequences depending on the action.
+The same ordering helper is used by Play, Play next group, Add to Queue, and Add to Playlist so the
+same folder never produces different sequences depending on the action.
 
 With `recursive: false`, the same ordering rules apply to playable entries directly in the selected
 directory, while child directories are not traversed.
@@ -475,12 +607,15 @@ This avoids inventing a second playlist representation containing raw filesystem
 canonicalization also emits the normal library-content revision so Album/Artist/Folder projections
 can refresh consistently.
 
+The normal Folder Track/container/folder action is **Add to playlist...**, not “Create playlist”.
+The chooser lists existing local playlists and offers “Create playlist” as an option inside that
+flow. Creating a playlist remains available, but it is not the only durable-playlist action.
+
 ## 11. Open containing folder
 
 “Open containing folder” is a general local-Track action, not a playlist-only feature. It should be
-available through the shared local Track action model used by Song lists, local playlists,
-favorites/collections, album views, and the current-player menu whenever Core can resolve the Track
-to a configured Folder Browser root.
+available through one shared local Track action model whenever Core can resolve the Track to a
+configured Folder Browser root.
 
 Web must not derive CUE/SACD filesystem identity itself. Core resolves a local Track to a Folder
 navigation target containing the information needed to restore context:
@@ -510,6 +645,36 @@ If the configured NAS/USB root is currently unavailable, the action still naviga
 location and shows the normal unavailable-root state. It must not silently fall back to an
 unrestricted filesystem browser.
 
+### Track-action surface coverage
+
+The action must not depend on which page happens to implement its own menu. At minimum, resolvable
+local Tracks expose “Open containing folder” from:
+
+- the bottom PlayerBar current-track menu;
+- Full Player current-track actions;
+- QueuePopover rows;
+- Full Player QueuePanel rows;
+- local Playlist SongList rows;
+- local Album SongList rows;
+- Artist local-Track rows;
+- local favorites/collections;
+- History rows for local Tracks.
+
+Queue/Playlist-specific operations such as “Remove from queue” or “Remove from playlist” are
+contextual additions to the shared Track action model, not reasons to maintain a second independent
+common-action menu.
+
+The user-facing invariant is:
+
+```text
+see a resolvable local Track
+  -> open its Track menu
+  -> "Open containing folder" is available
+```
+
+Folder itself may omit this action for the row already being displayed in its own containing
+location.
+
 ## 12. Multiple roots, offline storage, and symlinks
 
 Each configured scan directory is an independent browse root. Roots with the same basename remain
@@ -536,7 +701,7 @@ the equivalent of:
 
 ```text
 GET  /library/folders/roots
-GET  /library/folders/browse?path=...&cursor=...&limit=...
+GET  /library/folders/browse?path=...&filter=...&cursor=...&limit=...
 GET  /library/folders/container?path=...
 GET  /library/folders/material?path=...
 GET  /library/folders/search?q=...&cursor=...&limit=...
@@ -559,11 +724,12 @@ navigation target for a local Track and must hide CUE/SACD physical-path parsing
 implementation may use a separate thumbnail/content route or reference form where that fits the
 existing asset-serving architecture better.
 
-`browse` is paginated/cursor-based from the start. A directory containing thousands of direct
-entries must not require one giant JSON response even though Web also virtualizes rendering. The
-cursor belongs to the current directory snapshot/order and responses include enough information for
-Web to know whether more entries are available. Directory/media/material grouping and deterministic
-ordering must remain stable across pages.
+`browse` is paginated/cursor-based from the start. Its optional `filter` is applied to the current
+directory's direct children **before** pagination and never descends into child directories. A
+directory containing thousands of direct entries must not require one giant JSON response even
+though Web also virtualizes rendering. The cursor belongs to the current directory snapshot/order
+and responses include enough information for Web to know whether more entries are available.
+Directory/media/material grouping and deterministic ordering must remain stable across pages.
 
 `search` performs bounded physical directory/file-name search across configured roots without
 turning the database library search into a filesystem search. `pins` stores only validated Folder
@@ -600,8 +766,12 @@ It should:
 - load roots or one current directory through the Folder Browser client;
 - keep path/container state in the route;
 - show Core-persisted pinned folders on Folder home and support pin/unpin actions;
-- provide a dedicated Folder name/path search that navigates into normal Folder routes;
+- provide recursive Folder name/path search on Folder home / its dedicated entry;
+- provide an independent current-directory filter that does not recurse and is applied before
+  pagination;
 - render direct directories and mixed media entries;
+- support list/grid presentation of the same current-directory data without changing Core
+  hierarchy semantics;
 - render current-directory supplementary materials in a separate read-only section and open them in
   bounded image/PDF/text viewers;
 - refresh the current view on the Core library-content revision event;
@@ -615,8 +785,19 @@ It should:
 - delegate all recursive/media-resolution actions to Core;
 - preserve existing player/queue feedback patterns.
 
-The shared local Track menu should expose “Open containing folder” rather than special-casing only
-the Playlist page. Non-local Tracks do not show the action.
+The shared local Track menu should expose the unified common actions:
+
+```text
+Play
+Play next / 接下来播放
+Add to queue
+Add to playlist...
+Open containing folder     (resolvable local Track only)
+```
+
+SongList, PlayerBar, Full Player, QueuePopover, QueuePanel, local playlists/albums/artists,
+collections, and History should consume this shared Track action model instead of independently
+reimplementing the common subset. Non-local Tracks do not show “Open containing folder”.
 
 The following current tree projection is removed once the replacement is complete:
 
@@ -644,6 +825,7 @@ The implementation must distinguish:
 - local Track no longer resolves under a configured Folder root;
 - pinned folder target no longer exists or its root is unavailable;
 - Folder search is cancelled, times out, or encounters an unavailable root;
+- current-directory filter returns no direct matches;
 - browse/search cursor becomes stale after filesystem mutation;
 - material disappeared after listing;
 - material type/content no longer matches the supported allowlist;
@@ -666,6 +848,8 @@ Specifically:
 - no global recursive directory walk on page load or normal navigation;
 - direct-directory browse responses are paginated/cursor-based; virtualization is not treated as a
   substitute for transport pagination;
+- current-directory filter is applied Core-side before pagination and remains proportional to the
+  current directory rather than recursively traversing descendants;
 - Folder Search is bounded/cancellable and never materializes the complete hierarchy in Web;
 - no eager metadata probe of every unscanned file in the current directory;
 - no eager original-image/PDF/text-content load during directory listing;
@@ -689,7 +873,7 @@ The replacement is complete only when all of the following pass:
 
 1. Adding a valid library root makes it visible and navigable immediately without waiting for a
    scan.
-2. Unscanned ordinary audio can be played, played next, and queued.
+2. Unscanned ordinary audio can be played, inserted as “接下来播放”, and queued.
 3. “Scan this folder” incrementally scans only the current subtree, recursively, and enriches the
    open Folder view without scanning unrelated configured roots.
 4. “Rescan this folder” forces metadata refresh only for the current subtree.
@@ -702,8 +886,8 @@ The replacement is complete only when all of the following pass:
    while malformed CUE does not hide otherwise playable audio.
 9. SACD ISO can be opened and played before a full scan and uses the same virtual-track semantics as
    the canonical scanner result.
-10. Recursive Play / Play Next / Queue / Playlist produce the same deterministic ordering and do not
-    duplicate CUE/SACD backing files.
+10. Recursive Play / 接下来播放 / Queue / Playlist produce the same deterministic ordering and do
+    not duplicate CUE/SACD backing files.
 11. Creating a playlist from unscanned content canonicalizes the required Tracks and persists valid
     playlist membership.
 12. “Open containing folder” is available as a shared action for resolvable local Tracks rather than
@@ -726,7 +910,7 @@ The replacement is complete only when all of the following pass:
     as unavailable rather than being silently deleted.
 21. Folder Search finds matching physical directory/supported filenames without requiring library
     indexing, disambiguates duplicate names by path, and does not become a metadata-search alias.
-22. Recursive Folder Play / Play Next / Queue / Playlist remain the primary actions, while explicit
+22. Recursive Folder Play / 接下来播放 / Queue / Playlist remain the primary actions, while explicit
     current-folder-only variants use the same Core action path with child traversal disabled.
 23. Returning from a child folder restores the previous directory scroll position; current-session
     image/PDF/text viewer state can restore useful position such as PDF page/zoom without becoming
@@ -749,6 +933,31 @@ The replacement is complete only when all of the following pass:
     SACD playback, Albums/Artists, and playlist persistence continue to pass their relevant tests.
 34. The old Folder tree projection and any now-unused tree-only code are removed rather than kept as
     a fallback implementation.
+35. Product UI consistently uses 播放 / 接下来播放 / 添加到队列 / 添加到歌单… for Track and
+    multi-Track operations; “下一首播放” is not used for group insertion.
+36. Folder Track rows offer “添加到歌单…” for existing playlists, with playlist creation available
+    inside that flow rather than as the only playlist action; raw translation keys such as
+    `common.play` never appear in the rendered menu.
+37. The normal Folder header does not repeat the current folder name/full path beneath the
+    breadcrumb; its primary actions remain limited to Play all, incremental Scan, overflow, current
+    filter, and presentation switch.
+38. The Folder overflow menu exposes common recursive actions directly and groups all
+    non-recursive variants under one “Current folder only” submenu instead of repeating four long
+    top-level labels.
+39. Current-directory Filter matches only direct children, never descends into subdirectories, and
+    returns correct results even when matching entries fall outside the currently loaded browse
+    page.
+40. Folder Filter and recursive Folder Search remain separate interactions: filtering does not
+    replace the route with a search-results view, while search may return descendants across
+    configured roots.
+41. Returning from a child folder restores the parent folder's filter and useful scroll position.
+42. Folder supports both list and cover/grid presentation without reintroducing a tree; switching
+    presentation does not alter route, ordering, queue semantics, or canonical library state.
+43. “Open containing folder” is available from the shared local Track action model in PlayerBar,
+    Full Player, QueuePopover, QueuePanel, local SongList/Playlist/Album/Artist, collections, and
+    History where the Track is resolvable.
+44. Context-specific Track actions such as queue/playlist removal are additions to the shared
+    common Track actions, not independent replacements that hide “Open containing folder”.
 
 ## 18. Verification
 
@@ -765,9 +974,18 @@ At minimum, implementation should add proportional automated coverage for:
 - local Track containing-folder resolution, including CUE/SACD focus targets;
 - pinned-folder persistence, unavailable-target behavior, and cross-Web-Control visibility;
 - bounded Folder hierarchy search and duplicate-name path disambiguation;
+- Core-side current-directory filtering before pagination, including matches beyond the first page;
+- proof that Folder Filter never descends into child directories and remains separate from
+  recursive Folder Search;
 - recursive versus current-folder-only actions using one Core action implementation;
 - paginated/cursor browse stability across large direct directories;
 - Folder scroll restoration and session-only material-viewer position restoration;
+- current-directory filter restoration when navigating into a child folder and back;
+- list/grid presentation equivalence for navigation and actions;
+- shared Track-action coverage across PlayerBar, Full Player, QueuePopover, QueuePanel, SongList,
+  local Playlist/Album/Artist, collections, and History;
+- unified “接下来播放” queue insertion semantics for one-Track and multi-Track objects;
+- add-to-existing-playlist flow from Folder Track/container/folder actions;
 - supplementary-material allowlist and root authorization;
 - image thumbnail/original lazy loading;
 - PDF range/bounded serving;
@@ -781,3 +999,8 @@ Real-library acceptance should include a large mixed-format hierarchy with PCM, 
 SACD ISO, cover/back/scan images, PDF booklets, UTF-8 and legacy-encoded rip logs/release notes,
 multiple roots, one temporarily unavailable root, long folder names, one oversized text/PDF
 material, and a large single-directory case.
+
+Real UX acceptance should additionally include the existing PhilipsDUO-style case with hundreds of
+direct child folders: filter the current 200+ item list without descending, switch list/grid,
+enter one result and return with filter/scroll preserved, then compare that flow against recursive
+Folder Search to verify the two interactions remain clearly distinct.
