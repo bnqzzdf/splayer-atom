@@ -7,6 +7,10 @@ const controlSource = readFileSync(
   new URL("../../src/core/player/index.ts", import.meta.url),
   "utf8",
 );
+const nativeBindingSource = readFileSync(
+  new URL("../../native/audio-engine/src/bindings/player.rs", import.meta.url),
+  "utf8",
+);
 
 const outputSwitch = sessionSource.split("export const setOutputDevice = async (")[1] ?? "";
 const nativeOutputSwitch = outputSwitch.split("const state = player.getStatus().state;")[1] ?? "";
@@ -53,17 +57,26 @@ test("Core output switching ignores an unavailable previous UPnP renderer", () =
   const upnpSourceSwitch = outputSwitch.split("if (isUpnpOutput(previousPreference))")[1] ?? "";
   assert.match(
     upnpSourceSwitch,
-    /await stopUpnpOutputForSwitch\(\);\s*await player\.setOutputDevice[\s\S]*store\.set\("player\.outputDevice", deviceId\);\s*await releaseUpnpOutput\(\)/,
+    /await stopUpnpOutputForSwitch\(\);[\s\S]*syncNativeAlsaModeForTarget\(player, deviceId\);\s*await player\.setOutputDevice[\s\S]*store\.set\("player\.outputDevice", deviceId\);\s*await releaseUpnpOutput\(\)/,
   );
 });
 
 test("Core applies pause-on-device-switch policy when restoring playback on the new output", () => {
   assert.match(outputSwitch, /store\.get\("player\.pauseOnDeviceSwitch"\) !== true/);
+  assert.match(outputSwitch, /!isLocalDirectOutput\(deviceId\)/);
   assert.match(
     outputSwitch,
     /resolvedOverride: targetResolved,\s*preserveListenBrainzSession: true/,
   );
   assert.match(outputSwitch, /if \(shouldResumePlaying\) await play\(\)/);
+});
+
+test("native output selection never owns source reload or resume", () => {
+  const nativeSwitch =
+    nativeBindingSource.split("pub async fn set_output_device")[1]?.split("/// 获取当前选择的输出设备")[0] ??
+    "";
+  assert.match(nativeSwitch, /player\.set_output_device\(device_id\)\.into_napi\(\)/);
+  assert.doesNotMatch(nativeSwitch, /self\.load\(|self\.seek\(|self\.play\(|pause_immediately/);
 });
 
 test("Web Control only sends the output id and never prepares or reloads a source", () => {

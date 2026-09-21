@@ -31,6 +31,7 @@ mod real {
         right: Vec<f32>,
         write_pos: usize,
         len: usize,
+        sample_rate: u32,
     }
 
     struct FftWorkBuffers {
@@ -57,6 +58,7 @@ mod real {
                     right: vec![0.0; MAX_BUFFER_SIZE],
                     write_pos: 0,
                     len: 0,
+                    sample_rate: FFT_SAMPLE_RATE,
                 }),
                 enabled: AtomicBool::new(false),
                 fft_plan,
@@ -71,7 +73,23 @@ mod real {
         }
 
         pub fn push_interleaved_samples(&self, interleaved: &[f32]) {
+            self.push_interleaved_samples_at_rate(interleaved, FFT_SAMPLE_RATE);
+        }
+
+        /// 写入 stereo 分析样本，并记录其真实采样率。
+        ///
+        /// Direct PCM 不经过播放 resampler，因此频率坐标必须使用实际 source/HW rate；
+        /// rate 改变时丢弃旧窗口，避免一个 FFT 窗口混合两种时间尺度。
+        pub fn push_interleaved_samples_at_rate(&self, interleaved: &[f32], sample_rate: u32) {
+            if sample_rate == 0 {
+                return;
+            }
             let mut buffer = self.sample_buffer.lock();
+            if buffer.sample_rate != sample_rate {
+                buffer.write_pos = 0;
+                buffer.len = 0;
+                buffer.sample_rate = sample_rate;
+            }
             for pair in interleaved.chunks_exact(2) {
                 let write_pos = buffer.write_pos;
                 buffer.left[write_pos] = pair[0];
@@ -109,6 +127,7 @@ mod real {
             if buffer.len < FFT_SIZE {
                 return (vec![0.0; OUTPUT_BINS], vec![0.0; OUTPUT_BINS]);
             }
+            let sample_rate = buffer.sample_rate;
             let start = (buffer.write_pos + MAX_BUFFER_SIZE - FFT_SIZE) % MAX_BUFFER_SIZE;
             let mut work = self.work.lock();
             self.apply_window(&buffer.left, start, &mut work.windowed_l);
@@ -116,7 +135,7 @@ mod real {
             drop(buffer);
             self.fft_plan.process(&mut work.windowed_l);
             self.fft_plan.process(&mut work.windowed_r);
-            let freq_per_bin = FFT_SAMPLE_RATE as f32 / FFT_SIZE as f32;
+            let freq_per_bin = sample_rate as f32 / FFT_SIZE as f32;
             let min_bin = (MIN_FREQ / freq_per_bin).floor() as usize;
             let max_bin = ((MAX_FREQ / freq_per_bin).ceil() as usize).min(FFT_SIZE / 2);
             if min_bin >= max_bin {
@@ -216,6 +235,36 @@ mod real {
             );
             assert_eq!(left, right);
         }
+
+        #[test]
+        fn direct_rate_maps_tone_without_resampling() {
+            let analyzer = FftAnalyzer::new();
+            let sample_rate = 96_000_u32;
+            let frequency = 1_000.0_f32;
+            let samples: Vec<f32> = (0..FFT_SIZE)
+                .flat_map(|i| {
+                    let phase =
+                        2.0 * std::f32::consts::PI * frequency * i as f32 / sample_rate as f32;
+                    let sample = phase.sin();
+                    [sample, sample]
+                })
+                .collect();
+            analyzer.push_interleaved_samples_at_rate(&samples, sample_rate);
+            let (left, right) = analyzer.analyze();
+            let peak = left
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map(|(index, _)| index)
+                .unwrap();
+            let expected = ((frequency.ln() - MIN_FREQ.ln()) / (MAX_FREQ.ln() - MIN_FREQ.ln())
+                * OUTPUT_BINS as f32) as usize;
+            assert!(
+                peak.abs_diff(expected) <= 1,
+                "peak={peak}, expected={expected}"
+            );
+            assert_eq!(left, right);
+        }
     }
 }
 
@@ -238,6 +287,9 @@ impl FftAnalyzer {
 
     #[inline(always)]
     pub fn push_interleaved_samples(&self, _interleaved: &[f32]) {}
+
+    #[inline(always)]
+    pub fn push_interleaved_samples_at_rate(&self, _interleaved: &[f32], _sample_rate: u32) {}
 
     #[inline(always)]
     pub fn set_enabled(&self, _enabled: bool) {}

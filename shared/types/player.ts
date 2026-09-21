@@ -220,6 +220,24 @@ export interface PlaybackSessionSnapshot {
 }
 
 /** 播放器状态快照 */
+export type PlayerOutputPath =
+  | "exact-pcm"
+  | "native-dsd"
+  | "decoded-pcm"
+  | "processed-pcm"
+  | null;
+
+export interface PlayerOutputStatus {
+  /** Core 当前实际选择的 canonical output id。 */
+  deviceId: string | null;
+  /** native 当前真正运行的数据路径；空闲/远端输出时为空。 */
+  path: PlayerOutputPath;
+  /** Core 从实际 path、输出身份与唯一 ALSA 偏好纯派生的样本处理能力。 */
+  sampleProcessingAvailable: boolean;
+  /** 当前 runtime 是否能提供只读 PCM FFT；不是样本处理开关。 */
+  fftAvailable: boolean;
+}
+
 export interface PlayerStatus {
   state: PlayerState;
   position: number;
@@ -227,14 +245,16 @@ export interface PlayerStatus {
   volume: number;
   speed: number;
   isFinished: boolean;
+  output: PlayerOutputStatus;
 }
 
 /** 音频输出设备 */
 export interface AudioDevice {
-  /** 稳定设备 ID（cpal `DeviceId`，形如 `wasapi:{0.0.0...}`），持久化与选中判断都用它 */
+  /** 稳定输出 ID；本地 ALSA 使用 `alsa:hw:CARD=<id>,DEV=<n>`。 */
   id: string;
   /** 显示名，可能重复、可被用户改名，仅用于展示 */
   name: string;
+  /** Headless 本地 ALSA 不维护桌面默认设备；保留字段仅兼容统一输出展示模型。 */
   isDefault: boolean;
 }
 
@@ -256,6 +276,7 @@ export type PlayerEvent =
   | { type: "seek"; data: { position: number } }
   | { type: "ended" }
   | { type: "directTrackBoundary"; data: { duration: number; generation: number } }
+  | { type: "processedTrackBoundary"; data: { duration: number; generation: number } }
   | { type: "sourceError" }
   | { type: "play" }
   | { type: "pause" }
@@ -419,11 +440,9 @@ export interface PlayerApi {
   getOutputDevices: () => Promise<IpcResponse<AudioDevice[]>>;
   /** 异步扫描 Diretta Target */
   scanDirettaDevices: () => Promise<IpcResponse<AudioDevice[]>>;
-  /** 获取系统默认输出设备名称 */
-  getDefaultDeviceName: () => Promise<IpcResponse<string | null>>;
-  /** 切换输出设备（传设备 ID，null 使用系统默认） */
+  /** 切换输出设备（null 表示取消选择） */
   setOutputDevice: (deviceId: string | null) => Promise<IpcResponse>;
-  /** 获取当前选择的输出设备 ID（None = 跟随系统默认） */
+  /** 获取当前选择的输出设备 ID（null = 尚未选择） */
   getSelectedDeviceName: () => Promise<IpcResponse<string | null>>;
   /** 广播播放控制事件 */
   dispatch: (type: string) => void;

@@ -80,8 +80,9 @@ test("distributed player helpers use Core Protocol without host event facades", 
   assert.match(playerCoverSource, /playerClient\.getCoverRaw\(\)/);
   assert.match(lyricPosterSource, /playerClient\.getCoverRaw\(\)/);
   assert.match(lyricLoaderSource, /playerClient\.readLyricFile\(ext\.path\)/);
-  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(true\)/);
-  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(false\)/);
+  assert.match(fftCaptureSource, /status\.output\.fftAvailable/);
+  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(enabled\)/);
+  assert.match(fftCaptureSource, /setBackendEnabled\(false\)/);
 
   const migratedIpc = /window\.api\.player\.(getCoverRaw|readLyricFile|setFftEnabled|getFftData)/;
   for (const source of [

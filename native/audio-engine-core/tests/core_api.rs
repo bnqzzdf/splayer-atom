@@ -16,6 +16,7 @@ fn shared_round_trips_chunks_and_tracks_position() {
         player_samples: vec![0.1, -0.1],
         fft_samples: vec![0.2, -0.2],
         source_sample_count: 1,
+        track_boundary: None,
     });
     let decoded = shared
         .pop_decoded()
@@ -27,6 +28,7 @@ fn shared_round_trips_chunks_and_tracks_position() {
         player_samples: vec![0.3, -0.3],
         fft_samples: vec![0.4, -0.4],
         source_sample_count: 1,
+        track_boundary: None,
     });
     assert!(!shared.is_buffer_empty());
     assert!(matches!(shared.try_pop(), PopResult::Chunk(_)));

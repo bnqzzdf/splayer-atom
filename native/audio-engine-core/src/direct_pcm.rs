@@ -12,16 +12,26 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ffmpeg_audio::sys;
 
+const AV_CODEC_PROP_LOSSLESS_BIT: i32 = 1 << 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectPcmSampleFormat {
     Signed16,
     Signed32,
+    Float32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DirectPcmMemoryPath {
     ZeroCopyPacked,
     BitPerfectRepack,
+    RepresentationRepack,
+}
+
+impl DirectPcmMemoryPath {
+    const fn needs_repack(self) -> bool {
+        matches!(self, Self::BitPerfectRepack | Self::RepresentationRepack)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +48,7 @@ enum DirectPcmRepackBuffer {
     None,
     Signed16(Box<[i16]>),
     Signed32(Box<[i32]>),
+    Float32(Box<[f32]>),
 }
 
 pub struct DirectPcmFrame {
@@ -84,11 +95,16 @@ impl DirectPcmFrame {
                     .context("Source Direct packed seek offset 溢出")?;
                 Ok(unsafe { ptr.add(offset) }.cast_const())
             }
-            DirectPcmMemoryPath::BitPerfectRepack => match &self.repack {
-                DirectPcmRepackBuffer::Signed16(buffer) => Ok(buffer.as_ptr().cast()),
-                DirectPcmRepackBuffer::Signed32(buffer) => Ok(buffer.as_ptr().cast()),
-                DirectPcmRepackBuffer::None => bail!("Source Direct planar PCM 缺少 repack buffer"),
-            },
+            DirectPcmMemoryPath::BitPerfectRepack | DirectPcmMemoryPath::RepresentationRepack => {
+                match &self.repack {
+                    DirectPcmRepackBuffer::Signed16(buffer) => Ok(buffer.as_ptr().cast()),
+                    DirectPcmRepackBuffer::Signed32(buffer) => Ok(buffer.as_ptr().cast()),
+                    DirectPcmRepackBuffer::Float32(buffer) => Ok(buffer.as_ptr().cast()),
+                    DirectPcmRepackBuffer::None => {
+                        bail!("Source Direct planar PCM 缺少 repack buffer")
+                    }
+                }
+            }
         }
     }
 
@@ -113,6 +129,9 @@ impl DirectPcmFrame {
             (DirectPcmRepackBuffer::Signed32(buffer), DirectPcmSampleFormat::Signed32) => {
                 buffer.len() < samples
             }
+            (DirectPcmRepackBuffer::Float32(buffer), DirectPcmSampleFormat::Float32) => {
+                buffer.len() < samples
+            }
             _ => bail!("Source Direct planar PCM sample format 在播放中发生变化"),
         };
         if needs_replacement {
@@ -122,6 +141,9 @@ impl DirectPcmFrame {
                 }
                 DirectPcmSampleFormat::Signed32 => {
                     DirectPcmRepackBuffer::Signed32(vec![0_i32; samples].into_boxed_slice())
+                }
+                DirectPcmSampleFormat::Float32 => {
+                    DirectPcmRepackBuffer::Float32(vec![0_f32; samples].into_boxed_slice())
                 }
             };
         }
@@ -171,6 +193,15 @@ impl DirectPcmFrame {
                     output,
                 )?;
             },
+            (DirectPcmRepackBuffer::Float32(output), DirectPcmSampleFormat::Float32) => unsafe {
+                interleave_planar::<f32>(
+                    frame.extended_data,
+                    channels,
+                    start_sample,
+                    samples,
+                    output,
+                )?;
+            },
             _ => bail!("Source Direct planar repack buffer 类型不匹配"),
         }
         Ok(())
@@ -202,7 +233,15 @@ impl DirectPcmFrame {
                 DirectPcmSampleFormat::Signed32,
                 DirectPcmMemoryPath::BitPerfectRepack,
             ),
-            other => bail!("Source Direct strict mode 不支持 FFmpeg sample format {other}"),
+            sys::AVSampleFormat_AV_SAMPLE_FMT_FLT => (
+                DirectPcmSampleFormat::Float32,
+                DirectPcmMemoryPath::ZeroCopyPacked,
+            ),
+            sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP => (
+                DirectPcmSampleFormat::Float32,
+                DirectPcmMemoryPath::RepresentationRepack,
+            ),
+            other => bail!("Direct PCM reader 不支持 FFmpeg sample format {other}"),
         };
 
         ensure!(frame.sample_rate > 0, "Source Direct frame 采样率无效");
@@ -218,11 +257,12 @@ impl DirectPcmFrame {
         let storage_bits = match sample_format {
             DirectPcmSampleFormat::Signed16 => 16,
             DirectPcmSampleFormat::Signed32 => 32,
+            DirectPcmSampleFormat::Float32 => 32,
         };
-        let valid_bits = if valid_bits_hint > 0 && valid_bits_hint <= storage_bits {
-            valid_bits_hint
-        } else {
-            storage_bits
+        let valid_bits = match sample_format {
+            DirectPcmSampleFormat::Float32 => 32,
+            _ if valid_bits_hint > 0 && valid_bits_hint <= storage_bits => valid_bits_hint,
+            _ => storage_bits,
         };
         let bytes_per_sample = usize::from(storage_bits / 8);
         let samples_per_channel =
@@ -244,7 +284,7 @@ impl DirectPcmFrame {
                     "Source Direct PCM payload 超过 FFmpeg frame buffer"
                 );
             }
-            DirectPcmMemoryPath::BitPerfectRepack => {
+            DirectPcmMemoryPath::BitPerfectRepack | DirectPcmMemoryPath::RepresentationRepack => {
                 ensure!(
                     frame.linesize[0] >= 0,
                     "Source Direct planar PCM linesize 无效"
@@ -284,7 +324,7 @@ impl DirectPcmFrame {
             .checked_mul(usize::from(format.channels))
             .and_then(|samples| samples.checked_mul(bytes_per_sample))
             .context("Source Direct seek payload 长度溢出")?;
-        if format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+        if format.memory_path.needs_repack() {
             self.repack_planar(format.sample_format, offset)?;
         }
         Ok(())
@@ -452,6 +492,7 @@ pub struct DirectPcmDecoder {
     time_base: sys::AVRational,
     timeline_origin_pts: i64,
     valid_bits_hint: u8,
+    lossless_codec: bool,
     seek_packet_timeline: Option<VecDeque<DirectPcmPacketTimeline>>,
     active_seek_packet_timeline: Option<DirectPcmActivePacketTimeline>,
     last_frame_packet_timestamp: Option<i64>,
@@ -529,6 +570,9 @@ impl DirectPcmDecoder {
         let coded_bits = unsafe { (*codec_parameters).bits_per_coded_sample };
         let valid_bits_hint =
             u8::try_from(if raw_bits > 0 { raw_bits } else { coded_bits }).unwrap_or(0);
+        let descriptor = unsafe { sys::avcodec_descriptor_get((*codec_parameters).codec_id) };
+        let lossless_codec = !descriptor.is_null()
+            && unsafe { ((*descriptor).props & AV_CODEC_PROP_LOSSLESS_BIT) != 0 };
 
         let codec_context = unsafe { sys::avcodec_alloc_context3(codec) };
         let codec_context = match NonNull::new(codec_context) {
@@ -584,6 +628,7 @@ impl DirectPcmDecoder {
             time_base,
             timeline_origin_pts,
             valid_bits_hint,
+            lossless_codec,
             seek_packet_timeline: None,
             active_seek_packet_timeline: None,
             last_frame_packet_timestamp: None,
@@ -594,6 +639,10 @@ impl DirectPcmDecoder {
 
     fn frame_samples_hint(&self) -> usize {
         unsafe { self.codec_context.as_ref().frame_size.max(0) as usize }
+    }
+
+    fn lossless_codec(&self) -> bool {
+        self.lossless_codec
     }
 
     pub(crate) fn sample_rate(&self) -> Result<u32> {
@@ -934,6 +983,7 @@ enum DirectPcmCommand {
     },
     ReplaceLocal {
         path: PathBuf,
+        require_exact_integer: bool,
         response: mpsc::SyncSender<Result<DirectPcmFormat>>,
     },
 }
@@ -957,6 +1007,81 @@ pub struct DirectPcmBlock {
     pub len: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirectPcmBoundary {
+    pub duration_micros: u64,
+    pub generation: u64,
+}
+
+pub struct DirectPcmLease {
+    ring: Arc<DirectPcmRing>,
+    index: usize,
+    data: *const u8,
+    len: usize,
+    sample_frames: usize,
+    boundary: Option<DirectPcmBoundary>,
+}
+
+impl DirectPcmLease {
+    pub fn data(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.data, self.len) }
+    }
+
+    pub fn sample_frames(&self) -> usize {
+        self.sample_frames
+    }
+
+    pub fn boundary(&self) -> Option<DirectPcmBoundary> {
+        self.boundary
+    }
+}
+
+impl Drop for DirectPcmLease {
+    fn drop(&mut self) {
+        self.ring.release_index(self.index);
+    }
+}
+
+pub enum DirectPcmPoll {
+    Block(DirectPcmLease),
+    Pending,
+    Finished,
+    Failed,
+    Stopped,
+}
+
+#[derive(Clone)]
+pub struct DirectPcmConsumer {
+    ring: Arc<DirectPcmRing>,
+}
+
+impl DirectPcmConsumer {
+    pub fn poll(&self) -> DirectPcmPoll {
+        if self.ring.failed.load(Ordering::Acquire) {
+            return DirectPcmPoll::Failed;
+        }
+        if self.ring.stopped.load(Ordering::Acquire) {
+            return DirectPcmPoll::Stopped;
+        }
+        if let Some((index, block, sample_frames, boundary)) = self.ring.acquire_block(false) {
+            return DirectPcmPoll::Block(DirectPcmLease {
+                ring: Arc::clone(&self.ring),
+                index,
+                data: block.data,
+                len: block.len,
+                sample_frames,
+                boundary,
+            });
+        }
+        if self.ring.finished.load(Ordering::Acquire)
+            && self.ring.in_flight.load(Ordering::Acquire) == NO_SLOT
+        {
+            return DirectPcmPoll::Finished;
+        }
+        DirectPcmPoll::Pending
+    }
+}
+
 impl DirectPcmRing {
     fn new() -> Result<Self> {
         let mut slots = Vec::with_capacity(DIRECT_RING_DEPTH);
@@ -977,9 +1102,14 @@ impl DirectPcmRing {
         })
     }
 
-    fn next_block(&self) -> Option<DirectPcmBlock> {
-        self.release_in_flight();
+    fn acquire_block(
+        &self,
+        commit_direct_boundary: bool,
+    ) -> Option<(usize, DirectPcmBlock, usize, Option<DirectPcmBoundary>)> {
         if self.failed.load(Ordering::Acquire) {
+            return None;
+        }
+        if self.in_flight.load(Ordering::Acquire) != NO_SLOT {
             return None;
         }
 
@@ -1006,22 +1136,33 @@ impl DirectPcmRing {
             return None;
         }
 
-        if slot.boundary.swap(false, Ordering::AcqRel) {
-            self.consumed_frames.store(0, Ordering::Release);
-            self.duration_micros.store(
-                slot.boundary_duration_micros.load(Ordering::Relaxed),
-                Ordering::Release,
-            );
-            self.boundary_generation.store(
-                slot.boundary_generation.load(Ordering::Relaxed),
-                Ordering::Release,
-            );
-            self.transition_count.fetch_add(1, Ordering::AcqRel);
+        let boundary = slot
+            .boundary
+            .load(Ordering::Acquire)
+            .then(|| DirectPcmBoundary {
+                duration_micros: slot.boundary_duration_micros.load(Ordering::Relaxed),
+                generation: slot.boundary_generation.load(Ordering::Relaxed),
+            });
+        if commit_direct_boundary {
+            if let Some(boundary) = boundary {
+                self.consumed_frames.store(0, Ordering::Release);
+                self.duration_micros
+                    .store(boundary.duration_micros, Ordering::Release);
+                self.boundary_generation
+                    .store(boundary.generation, Ordering::Release);
+                self.transition_count.fetch_add(1, Ordering::AcqRel);
+            }
         }
+        let sample_frames = slot.sample_frames.load(Ordering::Relaxed);
         self.in_flight.store(index, Ordering::Release);
         self.consumer_index
             .store((index + 1) % self.slots.len(), Ordering::Relaxed);
-        Some(DirectPcmBlock { data, len })
+        Some((index, DirectPcmBlock { data, len }, sample_frames, boundary))
+    }
+
+    fn next_block(&self) -> Option<DirectPcmBlock> {
+        self.release_in_flight();
+        self.acquire_block(true).map(|(_, block, _, _)| block)
     }
 
     fn release_in_flight(&self) {
@@ -1029,10 +1170,27 @@ impl DirectPcmRing {
         if index == NO_SLOT {
             return;
         }
+        self.finish_release(index);
+    }
+
+    fn release_index(&self, index: usize) {
+        if self
+            .in_flight
+            .compare_exchange(index, NO_SLOT, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.finish_release(index);
+        }
+    }
+
+    fn finish_release(&self, index: usize) {
         let slot = &self.slots[index];
         let frames = slot.sample_frames.swap(0, Ordering::Relaxed);
         self.consumed_frames
             .fetch_add(frames as u64, Ordering::Relaxed);
+        slot.boundary.store(false, Ordering::Relaxed);
+        slot.boundary_duration_micros.store(0, Ordering::Relaxed);
+        slot.boundary_generation.store(0, Ordering::Relaxed);
         slot.state.store(SLOT_FREE, Ordering::Release);
     }
 
@@ -1072,7 +1230,7 @@ fn seek_pcm_ring(
         format == expected_format,
         "Source Direct PCM seek 后音频格式发生变化"
     );
-    if format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+    if format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
             .frame_samples_hint()
             .max(first_frame.samples_per_channel());
@@ -1105,6 +1263,14 @@ fn same_pcm_transport(left: DirectPcmFormat, right: DirectPcmFormat) -> bool {
         && left.valid_bits == right.valid_bits
         && left.storage_bits == right.storage_bits
         && left.sample_format == right.sample_format
+}
+
+fn exact_integer_source(decoder: &DirectPcmDecoder, format: DirectPcmFormat) -> bool {
+    decoder.lossless_codec()
+        && matches!(
+            format.sample_format,
+            DirectPcmSampleFormat::Signed16 | DirectPcmSampleFormat::Signed32
+        )
 }
 
 fn cue_frame75_to_pcm_sample(frame75: u64, sample_rate: u32) -> Result<u64> {
@@ -1214,7 +1380,7 @@ fn seek_pcm_segment_ring(
     );
     let mut remaining_frames = end_sample.map(|end| end - target_sample);
     limit_pcm_frame_to_remaining(first_frame, &mut remaining_frames)?;
-    if expected_format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+    if expected_format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
             .frame_samples_hint()
             .max(first_frame.samples_per_channel());
@@ -1274,6 +1440,7 @@ impl DirectPcmStaging {
         &self,
         path: &Path,
         current_format: DirectPcmFormat,
+        require_exact_integer: bool,
         duration_micros: u64,
         generation: u64,
         start_frame75: Option<u64>,
@@ -1289,6 +1456,10 @@ impl DirectPcmStaging {
             start_frame75,
             end_frame75,
         )?;
+        ensure!(
+            !require_exact_integer || exact_integer_source(&candidate.decoder, candidate.format),
+            "Diretta strict Source Direct 只接受 lossless integer PCM"
+        );
         if self.epoch.load(Ordering::Acquire) != epoch {
             return Ok(false);
         }
@@ -1378,7 +1549,7 @@ fn prepare_staged_pcm_source(
         same_pcm_transport(current_format, format),
         "[Direct] staged PCM wire format 与当前 Diretta connection 不一致"
     );
-    if format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+    if format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
             .frame_samples_hint()
             .max(first_frame.samples_per_channel());
@@ -1428,6 +1599,7 @@ fn replace_pcm_ring(
     path: &Path,
     ring: &DirectPcmRing,
     current_format: DirectPcmFormat,
+    require_exact_integer: bool,
 ) -> Result<(DirectPcmDecoder, DirectPcmFormat)> {
     let mut decoder = DirectPcmDecoder::open_local(path)?;
     let mut prepared = DirectPcmFrame::new()?;
@@ -1440,8 +1612,12 @@ fn replace_pcm_ring(
         same_pcm_transport(current_format, new_format),
         "[Direct] 新音源 PCM wire format 与当前 Diretta connection 不一致"
     );
+    ensure!(
+        !require_exact_integer || exact_integer_source(&decoder, new_format),
+        "Diretta strict Source Direct 只接受 lossless integer PCM"
+    );
 
-    if new_format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+    if new_format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
             .frame_samples_hint()
             .max(prepared.samples_per_channel());
@@ -1457,7 +1633,7 @@ fn replace_pcm_ring(
     first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
     let first_frame = unsafe { &mut *first_slot.frame.get() };
     std::mem::swap(first_frame, &mut prepared);
-    if new_format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+    if new_format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
             .frame_samples_hint()
             .max(first_frame.samples_per_channel());
@@ -1524,6 +1700,7 @@ impl DirectPcmMonitor {
 pub struct DirectPcmStageHandle {
     staging: Arc<DirectPcmStaging>,
     format: DirectPcmFormat,
+    require_exact_integer: bool,
 }
 
 impl DirectPcmStageHandle {
@@ -1545,6 +1722,7 @@ impl DirectPcmStageHandle {
         self.staging.stage(
             path,
             self.format,
+            self.require_exact_integer,
             duration_micros,
             generation,
             start_frame75,
@@ -1560,6 +1738,7 @@ impl DirectPcmStageHandle {
 pub struct DirectPcmSource {
     ring: Arc<DirectPcmRing>,
     format: DirectPcmFormat,
+    exact_integer: Arc<AtomicBool>,
     control_tx: mpsc::Sender<DirectPcmCommand>,
     staging: Arc<DirectPcmStaging>,
     producer: Option<JoinHandle<()>>,
@@ -1613,7 +1792,8 @@ impl DirectPcmSource {
             (0.0, None)
         };
         let format = first_frame.format()?;
-        if format.memory_path == DirectPcmMemoryPath::BitPerfectRepack {
+        let exact_integer = Arc::new(AtomicBool::new(exact_integer_source(&decoder, format)));
+        if format.memory_path.needs_repack() {
             let max_samples_per_channel = decoder
                 .frame_samples_hint()
                 .max(first_frame.samples_per_channel());
@@ -1642,8 +1822,9 @@ impl DirectPcmSource {
         let staging = Arc::new(DirectPcmStaging::new());
         let producer_ring = Arc::clone(&ring);
         let producer_staging = Arc::clone(&staging);
+        let producer_exact_integer = Arc::clone(&exact_integer);
         let producer = thread::Builder::new()
-            .name("diretta-direct-decode".into())
+            .name("direct-pcm-decode".into())
             .spawn(move || {
                 let mut active_format = format;
                 let mut remaining_frames = initial_remaining_frames;
@@ -1696,10 +1877,23 @@ impl DirectPcmSource {
                             next_slot = 1 % producer_ring.slots.len();
                             continue;
                         }
-                        Ok(DirectPcmCommand::ReplaceLocal { path, response }) => {
-                            let result = replace_pcm_ring(&path, &producer_ring, active_format);
+                        Ok(DirectPcmCommand::ReplaceLocal {
+                            path,
+                            require_exact_integer,
+                            response,
+                        }) => {
+                            let result = replace_pcm_ring(
+                                &path,
+                                &producer_ring,
+                                active_format,
+                                require_exact_integer,
+                            );
                             match result {
                                 Ok((new_decoder, new_format)) => {
+                                    producer_exact_integer.store(
+                                        exact_integer_source(&new_decoder, new_format),
+                                        Ordering::Release,
+                                    );
                                     decoder = new_decoder;
                                     active_format = new_format;
                                     remaining_frames = None;
@@ -1742,6 +1936,10 @@ impl DirectPcmSource {
                         }
                         match install_staged_pcm_slot(entry.1, slot) {
                             Ok((new_decoder, new_format, new_remaining)) => {
+                                producer_exact_integer.store(
+                                    exact_integer_source(&new_decoder, new_format),
+                                    Ordering::Release,
+                                );
                                 decoder = new_decoder;
                                 active_format = new_format;
                                 remaining_frames = new_remaining;
@@ -1775,6 +1973,10 @@ impl DirectPcmSource {
                         if let Some(entry) = producer_staging.take_current() {
                             match install_staged_pcm_slot(entry.1, slot) {
                                 Ok((new_decoder, new_format, new_remaining)) => {
+                                    producer_exact_integer.store(
+                                        exact_integer_source(&new_decoder, new_format),
+                                        Ordering::Release,
+                                    );
                                     decoder = new_decoder;
                                     active_format = new_format;
                                     remaining_frames = new_remaining;
@@ -1831,6 +2033,10 @@ impl DirectPcmSource {
                             if let Some(entry) = producer_staging.take_current() {
                                 match install_staged_pcm_slot(entry.1, slot) {
                                     Ok((new_decoder, new_format, new_remaining)) => {
+                                        producer_exact_integer.store(
+                                            exact_integer_source(&new_decoder, new_format),
+                                            Ordering::Release,
+                                        );
                                         decoder = new_decoder;
                                         active_format = new_format;
                                         remaining_frames = new_remaining;
@@ -1860,6 +2066,7 @@ impl DirectPcmSource {
             Self {
                 ring,
                 format,
+                exact_integer,
                 control_tx,
                 staging,
                 producer: Some(producer),
@@ -1870,6 +2077,10 @@ impl DirectPcmSource {
 
     pub fn format(&self) -> DirectPcmFormat {
         self.format
+    }
+
+    pub fn exact_integer_source(&self) -> bool {
+        self.exact_integer.load(Ordering::Acquire)
     }
 
     pub fn monitor(&self) -> DirectPcmMonitor {
@@ -1883,6 +2094,21 @@ impl DirectPcmSource {
         DirectPcmStageHandle {
             staging: Arc::clone(&self.staging),
             format: self.format,
+            require_exact_integer: false,
+        }
+    }
+
+    pub fn strict_stage_handle(&self) -> DirectPcmStageHandle {
+        DirectPcmStageHandle {
+            staging: Arc::clone(&self.staging),
+            format: self.format,
+            require_exact_integer: true,
+        }
+    }
+
+    pub fn consumer(&self) -> DirectPcmConsumer {
+        DirectPcmConsumer {
+            ring: Arc::clone(&self.ring),
         }
     }
 
@@ -1942,11 +2168,16 @@ impl DirectPcmSource {
             .context("等待 Source Direct PCM CUE seek 结果失败")?
     }
 
-    pub fn replace_local_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
+    fn replace_local_with_policy(
+        &mut self,
+        path: &Path,
+        require_exact_integer: bool,
+    ) -> Result<DirectPcmFormat> {
         let (response_tx, response_rx) = mpsc::sync_channel(0);
         self.control_tx
             .send(DirectPcmCommand::ReplaceLocal {
                 path: path.to_owned(),
+                require_exact_integer,
                 response: response_tx,
             })
             .context("提交 Source Direct PCM handoff 失败")?;
@@ -1955,6 +2186,14 @@ impl DirectPcmSource {
             .context("等待 Source Direct PCM handoff 结果失败")??;
         self.format = format;
         Ok(format)
+    }
+
+    pub fn replace_local_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
+        self.replace_local_with_policy(path, false)
+    }
+
+    pub fn replace_local_strict_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
+        self.replace_local_with_policy(path, true)
     }
 }
 
@@ -2088,7 +2327,6 @@ mod tests {
             "Equalizer",
             "StretchProcessor",
             "LoudnessAnalyzer",
-            "f32",
         ] {
             assert!(
                 !implementation.contains(forbidden),
@@ -2808,15 +3046,143 @@ mod tests {
     }
 
     #[test]
-    fn strict_direct_rejects_float_pcm() {
+    fn rust_consumer_lease_keeps_slot_in_flight_until_drop() {
+        let ring = Arc::new(DirectPcmRing::new().unwrap());
+        let payload = [1_u8, 2, 3, 4, 5, 6, 7, 8];
+        let slot = &ring.slots[0];
+        slot.payload_ptr
+            .store(payload.as_ptr().cast_mut(), Ordering::Relaxed);
+        slot.payload_len.store(payload.len(), Ordering::Relaxed);
+        slot.sample_frames.store(2, Ordering::Relaxed);
+        slot.state.store(SLOT_READY, Ordering::Release);
+        let consumer = DirectPcmConsumer {
+            ring: Arc::clone(&ring),
+        };
+
+        let lease = match consumer.poll() {
+            DirectPcmPoll::Block(value) => value,
+            _ => panic!("首个 READY slot 应返回 lease"),
+        };
+        assert_eq!(lease.data(), payload);
+        assert_eq!(lease.sample_frames(), 2);
+        assert!(matches!(consumer.poll(), DirectPcmPoll::Pending));
+        assert_eq!(slot.state.load(Ordering::Acquire), SLOT_IN_FLIGHT);
+
+        drop(lease);
+        assert_eq!(slot.state.load(Ordering::Acquire), SLOT_FREE);
+        assert_eq!(ring.consumed_frames.load(Ordering::Acquire), 2);
+    }
+
+    #[test]
+    fn rust_consumer_exposes_boundary_without_committing_diretta_transition() {
+        let ring = Arc::new(DirectPcmRing::new().unwrap());
+        let payload = [0x12_u8, 0x34];
+        let slot = &ring.slots[0];
+        slot.payload_ptr
+            .store(payload.as_ptr().cast_mut(), Ordering::Relaxed);
+        slot.payload_len.store(payload.len(), Ordering::Relaxed);
+        slot.sample_frames.store(1, Ordering::Relaxed);
+        slot.boundary_duration_micros
+            .store(2_500_000, Ordering::Relaxed);
+        slot.boundary_generation.store(9, Ordering::Relaxed);
+        slot.boundary.store(true, Ordering::Relaxed);
+        slot.state.store(SLOT_READY, Ordering::Release);
+        let consumer = DirectPcmConsumer {
+            ring: Arc::clone(&ring),
+        };
+
+        let lease = match consumer.poll() {
+            DirectPcmPoll::Block(value) => value,
+            _ => panic!("READY boundary slot 应返回 lease"),
+        };
+        assert_eq!(
+            lease.boundary(),
+            Some(DirectPcmBoundary {
+                duration_micros: 2_500_000,
+                generation: 9,
+            })
+        );
+        assert_eq!(ring.transition_count.load(Ordering::Acquire), 0);
+        assert_eq!(ring.boundary_generation.load(Ordering::Acquire), 0);
+        drop(lease);
+        assert!(!slot.boundary.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn rust_consumer_distinguishes_terminal_states() {
+        let ring = Arc::new(DirectPcmRing::new().unwrap());
+        let consumer = DirectPcmConsumer {
+            ring: Arc::clone(&ring),
+        };
+        assert!(matches!(consumer.poll(), DirectPcmPoll::Pending));
+        ring.finished.store(true, Ordering::Release);
+        assert!(matches!(consumer.poll(), DirectPcmPoll::Finished));
+        ring.failed.store(true, Ordering::Release);
+        assert!(matches!(consumer.poll(), DirectPcmPoll::Failed));
+        ring.failed.store(false, Ordering::Release);
+        ring.stopped.store(true, Ordering::Release);
+        assert!(matches!(consumer.poll(), DirectPcmPoll::Stopped));
+    }
+
+    #[test]
+    fn direct_reader_accepts_packed_float32_without_changing_samples() {
         let mut frame = DirectPcmFrame::new().unwrap();
+        let mut samples = vec![0.25_f32, -0.5, 0.75, -1.0];
         let raw = unsafe { frame.raw.as_mut() };
         raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLT as i32;
         raw.sample_rate = 44_100;
-        raw.nb_samples = 32;
+        raw.nb_samples = 2;
         raw.ch_layout.nb_channels = 2;
+        raw.data[0] = samples.as_mut_ptr().cast::<u8>();
+        raw.linesize[0] = i32::try_from(samples.len() * size_of::<f32>()).unwrap();
 
-        let error = frame.accept_decoded_frame(32).unwrap_err();
-        assert!(error.to_string().contains("不支持 FFmpeg sample format"));
+        frame.accept_decoded_frame(0).unwrap();
+        assert_eq!(
+            frame.format().unwrap(),
+            DirectPcmFormat {
+                sample_rate: 44_100,
+                channels: 2,
+                valid_bits: 32,
+                storage_bits: 32,
+                sample_format: DirectPcmSampleFormat::Float32,
+                memory_path: DirectPcmMemoryPath::ZeroCopyPacked,
+            }
+        );
+        let decoded: Vec<f32> = frame
+            .payload_bytes()
+            .unwrap()
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .collect();
+        assert_eq!(decoded, samples);
+    }
+
+    #[test]
+    fn direct_reader_interleaves_planar_float32_without_dsp() {
+        let mut frame = DirectPcmFrame::new().unwrap();
+        let mut left = vec![0.25_f32, 0.75];
+        let mut right = vec![-0.5_f32, -1.0];
+        let raw = unsafe { frame.raw.as_mut() };
+        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP as i32;
+        raw.sample_rate = 48_000;
+        raw.nb_samples = 2;
+        raw.ch_layout.nb_channels = 2;
+        raw.data[0] = left.as_mut_ptr().cast::<u8>();
+        raw.data[1] = right.as_mut_ptr().cast::<u8>();
+        raw.extended_data = raw.data.as_mut_ptr();
+        raw.linesize[0] = i32::try_from(left.len() * size_of::<f32>()).unwrap();
+
+        frame.accept_decoded_frame(0).unwrap();
+        assert_eq!(
+            frame.format().unwrap().memory_path,
+            DirectPcmMemoryPath::RepresentationRepack
+        );
+        let decoded: Vec<f32> = frame
+            .payload_bytes()
+            .unwrap()
+            .chunks_exact(4)
+            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .collect();
+        assert_eq!(decoded, vec![0.25, -0.5, 0.75, -1.0]);
     }
 }

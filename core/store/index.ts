@@ -64,6 +64,7 @@ const flush = (config: SystemConfig): void => {
 const init = (): SystemConfig => {
   const raw = readFile();
   const data = deepMerge(defaultSystemConfig, raw);
+  const freshInstall = Object.keys(raw).length === 0;
 
   const rawVersion = raw[META_KEY] ?? 0;
   if (!Number.isInteger(rawVersion) || Number(rawVersion) < 0) {
@@ -76,12 +77,17 @@ const init = (): SystemConfig => {
     );
   }
 
-  const pending = migrations
-    .filter((m) => m.version > currentVersion)
-    .sort((a, b) => a.version - b.version);
-  for (const m of pending) {
-    m.migrate(data);
-    currentVersion = m.version;
+  if (freshInstall) {
+    // 新安装直接采用当前默认值；migration 只用于已有 durable state。
+    currentVersion = CONFIG_SCHEMA_VERSION;
+  } else {
+    const pending = migrations
+      .filter((m) => m.version > currentVersion)
+      .sort((a, b) => a.version - b.version);
+    for (const m of pending) {
+      m.migrate(data);
+      currentVersion = m.version;
+    }
   }
   if (currentVersion < CONFIG_SCHEMA_VERSION) currentVersion = CONFIG_SCHEMA_VERSION;
   (data as unknown as Record<string, unknown>)[META_KEY] = currentVersion;

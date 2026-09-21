@@ -6,7 +6,6 @@ import * as nowPlaying from "@main/services/nowPlaying";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";
 import { onCorePlayerEnded, onCorePlayerState } from "@main/services/headlessPlayStats";
-import { requestReinit } from "@main/services/device";
 import { wsBroadcast } from "@main/server/broadcast";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { toDisplayDurationMs, toDisplayPositionMs } from "@main/services/playerTimeline";
@@ -26,14 +25,12 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         nowPlaying.onPlayStateChange(state);
         neteaseScrobble.onState(state === "playing");
         listenbrainz.onState(state === "playing");
+        const status = playbackSession.getPlaybackStatus();
         publishCoreControlEvent({
           type: "status",
           data: {
+            ...status,
             state,
-            position: toDisplayPositionMs(toMs(player.getPosition())),
-            duration: toDisplayDurationMs(toMs(player.getDuration())),
-            volume: player.getVolume(),
-            speed: player.getSpeed(),
             isFinished: false,
           },
         });
@@ -55,6 +52,20 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         const consumedBySession = playbackSession.onNativeDirectTrackBoundary(generation, duration);
         if (!consumedBySession) {
           wsBroadcast({ type: "directTrackBoundary", data: { duration, generation } });
+        }
+        break;
+      }
+      case "processedTrackBoundary": {
+        const duration = toMs(event.duration ?? 0);
+        const generation = event.generation ?? 0;
+        neteaseScrobble.onEnded();
+        listenbrainz.onEnded();
+        const consumedBySession = playbackSession.onNativeProcessedTrackBoundary(
+          generation,
+          duration,
+        );
+        if (!consumedBySession) {
+          wsBroadcast({ type: "processedTrackBoundary", data: { duration, generation } });
         }
         break;
       }
@@ -86,8 +97,8 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
       }
       case "outputFailed":
       case "outputStalled": {
-        playerLog.warn(`[core] native ${event.type}, rebuilding output`);
-        requestReinit(player);
+        playerLog.warn(`[core] native ${event.type}, playback paused for explicit recovery`);
+        player.markOutputUnavailable();
         break;
       }
       case "fftData":

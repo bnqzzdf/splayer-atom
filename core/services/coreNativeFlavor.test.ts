@@ -13,10 +13,6 @@ const coreCargoSource = readFileSync(
   new URL("../../native/audio-engine-core/Cargo.toml", import.meta.url),
   "utf8",
 );
-const watcherSource = readFileSync(
-  new URL("../../native/audio-engine-core/src/device_watcher/mod.rs", import.meta.url),
-  "utf8",
-);
 const nativePlayerBindingSource = readFileSync(
   new URL("../../native/audio-engine/src/bindings/player.rs", import.meta.url),
   "utf8",
@@ -41,27 +37,34 @@ const nativeLoaderSource = readFileSync(
 
 test("audio-engine exposes only the Linux Core Cargo flavor", () => {
   assert.match(shimCargoSource, /default = \["core-audio"\]/);
-  assert.match(
-    shimCargoSource,
-    /core-audio = \["audio-engine-core\/fft", "audio-engine-core\/midi"\]/,
-  );
+  assert.match(shimCargoSource, /core-audio = \["audio-engine-core\/fft"\]/);
+  assert.doesNotMatch(shimCargoSource, /audio-engine-core\/midi/);
   assert.match(
     shimCargoSource,
     /audio-engine-core = \{ path = "\.\.\/audio-engine-core", default-features = false/,
   );
-  assert.match(coreCargoSource, /default = \["fft", "midi"\]/);
+  assert.match(coreCargoSource, /default = \["fft"\]/);
+  assert.doesNotMatch(coreCargoSource, /rustysynth|midi\s*=/);
   assert.doesNotMatch(
     coreCargoSource,
     /desktop-audio|pipewire|pulseaudio|target_os = "windows"|target_os = "macos"/,
   );
   assert.match(coreCargoSource, /diretta = \["dep:diretta-sys"\]/);
   assert.match(shimCargoSource, /diretta = \["audio-engine-core\/diretta"\]/);
-  assert.match(coreCargoSource, /cpal = \{ version = "0\.18\.2", default-features = false \}/);
+  assert.match(coreCargoSource, /alsa = "0\.11\.0"/);
+  assert.match(coreCargoSource, /alsa-sys = "0\.4\.0"/);
+  assert.doesNotMatch(coreCargoSource, /cpal\s*=/);
 });
 
 test("Linux Core does not expose a host device watcher", () => {
-  assert.match(watcherSource, /pub fn is_supported\(\) -> bool \{\s*false\s*\}/);
-  assert.doesNotMatch(watcherSource, /pipewire|windows|macos|desktop-audio/);
+  assert.doesNotMatch(
+    nativePlayerBindingSource,
+    /supports_device_watcher|on_device_change|stop_device_watcher|DeviceWatcher/,
+  );
+});
+
+test("native audio engine does not own output reinit source reload", () => {
+  assert.doesNotMatch(nativePlayerBindingSource, /pub async fn reinit_output|ReinitOutcome/);
 });
 
 test("Core native builder emits only the required audio and streaming addons", () => {
@@ -112,11 +115,11 @@ test("Diretta full reconnect keeps one bounded Target stabilization window", () 
   );
   assert.match(
     nativePlayerBindingSource,
-    /let replacing_direct_playback = old_threads\.direct_playback\.is_some\(\)/,
+    /let replacing_diretta_playback = target\.is_diretta\(\)[\s\S]*is_some_and\(DirectPlayback::is_diretta\)/,
   );
   assert.match(
     nativePlayerBindingSource,
-    /if replacing_direct_playback \{\s*std::thread::sleep\(DIRECT_FULL_RECONNECT_STABILIZATION\)/,
+    /if replacing_diretta_playback \{\s*std::thread::sleep\(DIRECT_FULL_RECONNECT_STABILIZATION\)/,
   );
 });
 

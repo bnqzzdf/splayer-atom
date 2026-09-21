@@ -7,7 +7,6 @@ import {
 import { ErrorCode } from "@shared/types/errors";
 import type { LyricFormat } from "@shared/types/lyrics";
 import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player";
-import { cancelPendingReinit } from "@main/services/device";
 import { getPlayer } from "@main/services/engine";
 import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
@@ -24,6 +23,9 @@ import { playerLog } from "@main/utils/logger";
 import { parseAlbum, parseArtists } from "@main/utils/metadata";
 import { toCacheUrl } from "@main/atom/cacheUrl";
 import { toMs } from "@main/utils/time";
+import { isLocalDirectOutputWithMode } from "@main/services/alsaPlaybackMode";
+import type { AlsaPlaybackMode } from "@shared/types/settings";
+import { projectNativeEffectiveControls } from "@main/services/playerOutputStatus";
 
 /** 每次音源加载自增，用于丢弃过期远端封面。 */
 let loadSeq = 0;
@@ -72,7 +74,6 @@ export const loadPlayerSource = async (
   options: LoadOptions = {},
   runtime: PlayerLoadRuntimeOptions = {},
 ): Promise<IpcResponse<LoadResult>> => {
-  cancelPendingReinit();
   const autoPlay = options.autoPlay ?? true;
   const authoritative = options.meta ?? null;
   const isRemote = authoritative != null && authoritative.source !== "local";
@@ -80,7 +81,11 @@ export const loadPlayerSource = async (
   let loadSource = source;
   try {
     const inst = getPlayer();
-    const directOutput = inst.getSelectedDeviceName()?.startsWith("diretta:") === true;
+    const directOutput = isLocalDirectOutputWithMode(
+      inst.getSelectedDeviceName(),
+      inst.getAlsaPlaybackMode() as AlsaPlaybackMode,
+    );
+    const controls = projectNativeEffectiveControls(inst);
     const directCueSegment = directOutput ? directCueSegmentFromTrack(authoritative) : null;
     const cueRange = setActiveCueTrack(authoritative, directCueSegment != null);
     const loadingEvent = {
@@ -89,18 +94,16 @@ export const loadPlayerSource = async (
         state: "loading" as const,
         position: 0,
         duration: 0,
-        volume: inst.getVolume(),
-        speed: inst.getSpeed(),
+        volume: controls.volume,
+        speed: controls.speed,
         isFinished: false,
+        output: controls.output,
       },
     };
     publishCoreControlEvent(loadingEvent);
 
-    if (
-      inst.getSelectedDeviceName()?.startsWith("diretta:") === true &&
-      /^https?:\/\//i.test(source)
-    ) {
-      // Diretta Source Direct 只接收本地 seekable 输入；远端字节在 main 原样落盘后再交给 native。
+    if (directOutput && /^https?:\/\//i.test(source)) {
+      // Native Direct 只接收本地 seekable 输入；远端字节由 Core 原样落盘后再交给 native。
       loadSource = await materializeDirectInput(source);
     }
 

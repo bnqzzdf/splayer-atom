@@ -23,6 +23,12 @@ const status = ref<PlayerStatus>({
   volume: 1,
   speed: 1,
   isFinished: false,
+  output: {
+    deviceId: null,
+    path: null,
+    sampleProcessingAvailable: false,
+    fftAvailable: false,
+  },
 });
 const outputs = ref<AudioDevice[]>([]);
 const selectedOutput = ref("");

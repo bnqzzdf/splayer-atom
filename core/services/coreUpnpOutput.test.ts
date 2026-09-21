@@ -29,7 +29,8 @@ test("UPnP remains an Atom-owned early branch without a generic output framework
 });
 
 test("UPnP rejects local sample-processing commands instead of exposing fake controls", () => {
-  assert.match(routes, /isSampleProcessingUnavailableOutput\(getSelectedOutputDevice\(\)\)/);
+  assert.match(routes, /!getPlaybackStatus\(\)\.output\.sampleProcessingAvailable/);
+  assert.match(routes, /getPlaybackStatus\(\)\.volume/);
   assert.match(routes, /output_processing_unavailable/);
   for (const route of [
     "/volume",
@@ -137,14 +138,14 @@ test("UPnP next-media preparation stays Core-side and does not touch Renderer tr
   assert.match(preloader, /upnpMedia\?: PreparedUpnpMedia/);
   assert.match(
     preloader,
-    /prepareDirectSource[\s\S]*startsWith\("diretta:"\) !== true\) return null/,
+    /prepareDirectSource[\s\S]*!isLocalDirectOutput\(store\.get\("player\.outputDevice"\)\)\) return null/,
   );
   assert.doesNotMatch(preloader, /setAvTransportUri|playUpnpOutput|registerMediaFile/);
   assert.doesNotMatch(upnpMedia, /setAvTransportUri|playAvTransport|scanUpnpDevices/);
   assert.doesNotMatch(upnpOutput, /SetNextAVTransportURI|setNextAvTransportUri/);
   assert.match(
     preloader,
-    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*startsWith\("diretta:"\) === true/,
+    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*isLocalDirectOutput\(store\.get\("player\.outputDevice"\)\)/,
   );
   assert.match(preloader, /store\.get\("player\.outputDevice"\) \?\? ""/);
   assert.match(

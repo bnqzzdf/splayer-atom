@@ -64,6 +64,13 @@ export const setNormalizationEnabled = (enabled: boolean): void => {
   }
 };
 
+/** 同步 Processed PCM 最终削波保护到已创建的播放器。 */
+export const setClippingProtectionEnabled = (enabled: boolean): void => {
+  if (playerInstance) {
+    playerInstance.setClippingProtectionEnabled(enabled);
+  }
+};
+
 /** 同步均衡器开关到播放器 */
 export const setEqualizerEnabled = (enabled: boolean): void => {
   if (playerInstance) {

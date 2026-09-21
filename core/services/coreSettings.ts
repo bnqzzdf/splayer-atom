@@ -4,23 +4,35 @@ import {
   setEqualizerBands,
   setEqualizerEnabled,
   setFadeDuration,
+  setClippingProtectionEnabled,
   setNormalizationEnabled,
   setPreampGain,
 } from "@main/services/engine";
-import { refreshPlaybackPreload } from "@main/services/playbackSession";
+import {
+  assertSampleProcessingAvailable,
+  refreshPlaybackPreload,
+} from "@main/services/playbackSession";
 import { applyListenBrainzSettingChange } from "@main/services/listenbrainz";
 import { isCoreSettingPath, type CoreSettingsSnapshot } from "@shared/types/settings";
 
-/** 应用 Core-owned setting 的运行时副作用。 */
-const applyCoreSettingChange = (keyPath: string, value: unknown): void => {
+const SAMPLE_PROCESSING_SETTING_PATHS = new Set([
+  "player.loudnessNormalization",
+  "player.clippingProtection",
+  "player.equalizer.enabled",
+  "player.equalizer.bands",
+  "player.equalizer.preamp",
+  "player.fadeEnabled",
+  "player.fadeDuration",
+]);
+
+/** 样本处理设置先提交给 native；失败时绝不能先污染 durable setting。 */
+const applySampleProcessingChange = (keyPath: string, value: unknown): void => {
   switch (keyPath) {
-    case "player.songLevel":
-    case "player.allowTrialPlay":
-    case "player.preloadNextTrack":
-      refreshPlaybackPreload();
-      break;
     case "player.loudnessNormalization":
       setNormalizationEnabled(value as boolean);
+      break;
+    case "player.clippingProtection":
+      setClippingProtectionEnabled(value as boolean);
       break;
     case "player.equalizer.enabled":
       setEqualizerEnabled(value as boolean);
@@ -32,8 +44,21 @@ const applyCoreSettingChange = (keyPath: string, value: unknown): void => {
       setPreampGain(value as number);
       break;
     case "player.fadeEnabled":
+      setFadeDuration(value === true ? store.get("player.fadeDuration") : 0);
+      break;
     case "player.fadeDuration":
-      setFadeDuration(store.get("player.fadeEnabled") ? store.get("player.fadeDuration") : 0);
+      setFadeDuration(store.get("player.fadeEnabled") ? Number(value) : 0);
+      break;
+  }
+};
+
+/** 应用 Core-owned setting 的运行时副作用。 */
+const applyCoreSettingChange = (keyPath: string): void => {
+  switch (keyPath) {
+    case "player.songLevel":
+    case "player.allowTrialPlay":
+    case "player.preloadNextTrack":
+      refreshPlaybackPreload();
       break;
     case "listenbrainz.enabled":
     case "listenbrainz.sendNowPlaying":
@@ -69,6 +94,12 @@ export const setCoreSetting = (keyPath: string, value: unknown): void => {
   if (!isCoreSettingPath(keyPath)) {
     throw new Error(`非 Core Settings 路径: ${keyPath}`);
   }
+  if (SAMPLE_PROCESSING_SETTING_PATHS.has(keyPath)) {
+    assertSampleProcessingAvailable();
+    applySampleProcessingChange(keyPath, value);
+    store.set(keyPath as ConfigPath, value);
+    return;
+  }
   store.set(keyPath as ConfigPath, value);
-  applyCoreSettingChange(keyPath, value);
+  applyCoreSettingChange(keyPath);
 };

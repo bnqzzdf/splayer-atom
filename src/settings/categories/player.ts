@@ -1,7 +1,11 @@
 import type { SettingCategory } from "@/types/settings-schema";
 import DeviceSelector from "@/components/settings/custom/DeviceSelector.vue";
+import AlsaPlaybackModeSelector from "@/components/settings/custom/AlsaPlaybackModeSelector.vue";
 import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue";
-import { isSampleProcessingUnavailableSelected } from "@/core/player/directMode";
+import {
+  isAlsaHardwareOutputSelected,
+  isSampleProcessingUnavailableSelected,
+} from "@/core/player/directMode";
 import IconLucidePlay from "~icons/lucide/play";
 
 const playerCategory: SettingCategory = {
@@ -58,6 +62,13 @@ const playerCategory: SettingCategory = {
           defaultValue: false,
           disabled: isSampleProcessingUnavailableSelected,
           tag: { text: "Beta" },
+        },
+        {
+          key: "clippingProtection",
+          type: "switch",
+          binding: { store: "settings", path: "system.player.clippingProtection" },
+          defaultValue: true,
+          disabled: isSampleProcessingUnavailableSelected,
         },
       ],
     },
@@ -153,6 +164,12 @@ const playerCategory: SettingCategory = {
           key: "outputDevice",
           type: "custom",
           component: DeviceSelector,
+        },
+        {
+          key: "alsaPlaybackMode",
+          type: "custom",
+          component: AlsaPlaybackModeSelector,
+          visible: isAlsaHardwareOutputSelected,
         },
         {
           key: "pauseOnDeviceSwitch",

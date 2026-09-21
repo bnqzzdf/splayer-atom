@@ -1,6 +1,6 @@
 use audio_engine_core::direct_dsd::{DirectDsdBitOrder, DirectDsdReader};
 use audio_engine_core::sacd::{AreaType, SacdDsfStream, SacdTrackReader, SACD_SECTOR_SIZE};
-use audio_engine_core::{decoder, HttpCancelHandle};
+use audio_engine_core::{media_probe, HttpCancelHandle};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
@@ -356,7 +356,7 @@ fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
     }
 
     let source = format!("{}|Track01|0.027|0|2", path.display());
-    let metadata = decoder::probe_metadata(&source, None, HttpCancelHandle::new()).unwrap();
+    let metadata = media_probe::probe_metadata(&source, None, HttpCancelHandle::new()).unwrap();
     assert_eq!(metadata.channels, 2);
     assert!(metadata.duration_secs > 0.02 && metadata.duration_secs < 0.04);
 

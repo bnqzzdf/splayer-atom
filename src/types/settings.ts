@@ -223,7 +223,7 @@ export interface PlayerSettings {
   followCoverColor: boolean;
   /** 全屏播放器自动进入沉浸模式（隐藏顶/底栏与鼠标） */
   autoImmersive: boolean;
-  /** 输出设备 ID（cpal DeviceId），null 表示跟随系统默认 */
+  /** 输出设备 ID；null 表示尚未选择，不跟随桌面默认。 */
   outputDevice: string | null;
   /** 是否启用音乐频谱可视化 */
   enableSpectrum: boolean;

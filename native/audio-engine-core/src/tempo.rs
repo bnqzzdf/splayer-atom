@@ -1,6 +1,6 @@
 //! 变速 / 变调（Signalsmith Stretch 算法）
 //!
-//! 接入位置：`source.rs` 的 `DecoderSource::next()`，紧挨现有均衡器。
+//! 接入位置：decoder 后台 DSP pipeline；最终输出由 ALSA processed writer 消费。
 //! 输入/输出都是交错 f32 多声道样本。
 //!
 //! 参数：

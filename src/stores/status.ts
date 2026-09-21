@@ -4,6 +4,7 @@ import type {
   RepeatMode,
   ShuffleMode,
   Track,
+  PlayerOutputStatus,
 } from "@shared/types/player";
 import type { Platform } from "@shared/types/platform";
 import type { ContentScope } from "@/types/collection";
@@ -23,6 +24,13 @@ export const useStatusStore = defineStore(
     const duration = ref(0);
     /** 音量 */
     const volume = ref(1);
+    /** Core 权威输出运行态；直通保证只由实际 path 判断。 */
+    const output = ref<PlayerOutputStatus>({
+      deviceId: null,
+      path: null,
+      sampleProcessingAvailable: false,
+      fftAvailable: false,
+    });
     /** 当前音源 */
     const currentSource = ref<string | null>(null);
     /** 输出设备 */
@@ -122,6 +130,7 @@ export const useStatusStore = defineStore(
       position,
       duration,
       volume,
+      output,
       currentSource,
       isPlaying,
       isPaused,

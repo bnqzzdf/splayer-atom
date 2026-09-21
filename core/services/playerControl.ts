@@ -38,9 +38,44 @@ export const playerControl = {
     playbackSession.insertQueue(items, Math.min(session.index + 1, session.queue.length));
   },
   seek,
-  setVolume: (volume: number): void => getPlayer().setVolume(volume),
-  /** 重建当前 Core 音频输出。 */
-  reinitOutput: (): Promise<void> => getPlayer().reinitOutput(),
+  setVolume: (volume: number): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setVolume(volume);
+  },
+  setSpeed: (speed: number): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setSpeed(speed);
+  },
+  setPitch: (semitones: number): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setPitch(semitones);
+  },
+  setPitchSync: (enabled: boolean): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setPitchSync(enabled);
+  },
+  setNormalizationEnabled: (enabled: boolean): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setNormalizationEnabled(enabled);
+  },
+  setEqualizerBands: (bands: number[]): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setEqualizerBands(bands);
+  },
+  setPreampGain: (preamp: number): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setPreampGain(preamp);
+  },
+  setEqualizerEnabled: (enabled: boolean): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setEqualizerEnabled(enabled);
+  },
+  setFadeDuration: (durationMs: number): void => {
+    playbackSession.assertSampleProcessingAvailable();
+    getPlayer().setFadeDuration(durationMs);
+  },
+  /** 通过 Core authoritative session 重建当前本地输出。 */
+  reinitOutput: (): Promise<void> => playbackSession.reinitOutput(),
   /** 当前播放进度（毫秒） */
   getPosition: (): number => toMs(getPlayer().getPosition()),
 };

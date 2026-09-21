@@ -10,20 +10,10 @@ export declare class AudioPlayer {
    * 恢复为全成全败：新输出创建失败时不启动解码、不提交状态，保留当前曲目与位置，
    * 播放器进入暂停态并返回设备错误；在线音源不会因设备错误触发 URL 重取或 sourceError。
    */
-  reinitOutput(): Promise<void>
   /** 设置封面缓存目录（在 load 前调用一次即可） */
   setCoverCacheDir(dir: string): void
   /** 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用 */
   onEvent(callback: (event: JsPlayerEvent) => void): void
-  /** 当前平台是否支持原生音频设备监听 */
-  supportsDeviceWatcher(): boolean
-  /**
-   * 注册系统音频设备变化回调，不支持的平台由主进程轮询
-   * 回调参数为 true 表示默认输出设备切换，false 表示设备列表变化
-   */
-  onDeviceChange(callback: (defaultChanged: boolean) => void): void
-  /** 停止系统音频设备变化监听 */
-  stopDeviceWatcher(): void
   /**
    * 加载音频源，返回完整元信息（含封面路径和歌词）
    * @param auto_play - 是否自动播放，false 时加载后立即暂停
@@ -39,6 +29,8 @@ export declare class AudioPlayer {
   play(): Promise<void>
   /** 暂停播放 */
   pause(): void
+  /** 输出故障后释放失效 runtime 并进入可恢复暂停态，不自动重建输出。 */
+  markOutputUnavailable(): void
   /** 立即暂停播放，用于输出设备切换前阻止短暂串音 */
   pauseImmediately(): void
   /** 停止播放并释放资源 */
@@ -65,6 +57,12 @@ export declare class AudioPlayer {
   stageDirectNext(source: string, durationSecs: number, generation: number, cueStartFrame75?: number, cueEndFrame75?: number): Promise<boolean>
   /** 作废尚未进入音频 ring 的 Direct staged 下一音源。 */
   cancelDirectNext(): void
+  /** 为当前 processed PCM runtime 预备下一音源；无可用 runtime 或结果已作废时返回 null。 */
+  stageProcessedNext(source: string, generation: number): Promise<JsMusicMetadata | null>
+  /** 作废当前 processed next-track staging。 */
+  cancelProcessedNext(): void
+  /** Core 在 processedTrackBoundary 后确认 authoritative source 已推进。 */
+  commitProcessedGaplessBoundary(source: string, durationSecs: number): void
   /** renderer 在 directTrackBoundary 后确认其 queue/media 已推进到实际正在播放的下一首。 */
   commitDirectGaplessBoundary(source: string, durationSecs: number, cueStartFrame75?: number, cueEndFrame75?: number): void
   /** 设置音量（0.0 ~ 1.0） */
@@ -89,6 +87,10 @@ export declare class AudioPlayer {
   setNormalizationEnabled(enabled: boolean): void
   /** 获取音量归一化开关状态 */
   getNormalizationEnabled(): boolean
+  /** 启用/禁用 Processed PCM 最终削波保护。 */
+  setClippingProtectionEnabled(enabled: boolean): void
+  /** 获取 Processed PCM 最终削波保护开关。 */
+  getClippingProtectionEnabled(): boolean
   /** 启用/禁用 10 频段均衡器 */
   setEqualizerEnabled(enabled: boolean): void
   /** 获取均衡器开关状态 */
@@ -110,20 +112,16 @@ export declare class AudioPlayer {
   getCoverRaw(): Buffer | null
   /** 获取所有音频输出设备列表 */
   getOutputDevices(): Array<JsAudioDevice>
-  /** 异步扫描 Diretta Target，避免网络发现阻塞同步 CPAL 枚举或 Node 主线程。 */
+  /** 异步扫描 Diretta Target，避免网络发现阻塞 ALSA 枚举或 Node 主线程。 */
   scanDirettaDevices(): Promise<Array<JsAudioDevice>>
-  /** 获取系统默认输出设备名称 */
-  getDefaultDeviceName(): string | null
-  /** 获取系统默认输出设备稳定 ID */
-  getDefaultDeviceId(): string | null
-  /** 切换输出设备（传设备 ID，None/undefined 使用系统默认） */
+  /** 切换输出设备；None/undefined 表示取消选择，不会跟随桌面默认设备。 */
   setOutputDevice(deviceId?: string | undefined | null): Promise<void>
-  /**
-   * 获取当前选择的输出设备 ID（None = 跟随系统默认）
-   *
-   * 旧配置存的是显示名，此处原样返回，由 `open_device` 回退解析
-   */
+  /** 获取当前选择的输出设备 ID；None 表示尚未选择。 */
   getSelectedDeviceName(): string | null
+  /** 设置 ALSA 后端模式偏好。活动 runtime 必须由 Core 先释放，禁止热路径翻转模式。 */
+  setAlsaPlaybackMode(mode: string): void
+  /** 获取 ALSA 后端当前已提交的模式偏好。 */
+  getAlsaPlaybackMode(): string
   /** 设置播放速度（自动 clamp 到 [0.5, 2.0]） */
   setSpeed(speed: number): void
   /** 设置音调偏移（半音，自动 clamp 到 [-12, 12]） */
@@ -163,11 +161,11 @@ export declare function initLogger(logDir: string, isDev: boolean): void
 
 /** 音频输出设备信息 */
 export interface JsAudioDevice {
-  /** 稳定设备 ID（cpal `DeviceId` 的字符串形式） */
+  /** 稳定输出 ID；本地 ALSA 使用 `alsa:hw:CARD=<id>,DEV=<n>`。 */
   id: string
   /** 显示名 */
   name: string
-  /** 是否为系统默认设备 */
+  /** Headless ALSA 不维护系统默认；本地端点恒为 false。 */
   isDefault: boolean
 }
 
@@ -266,6 +264,10 @@ export interface JsPlayerStatus {
   volume: number
   /** 是否已播放完毕 */
   isFinished: boolean
+  /** 实际 native 路径；空闲时无值。 */
+  outputPath?: string
+  /** 当前 runtime 是否提供只读 PCM FFT。 */
+  fftAvailable: boolean
 }
 
 /** 扫描事件回调数据 */

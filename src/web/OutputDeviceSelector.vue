@@ -3,6 +3,7 @@ import type { AudioDevice } from "@shared/types/player";
 import { refreshDevices, switchDevice } from "@/core/player";
 import { getOutputDisplayName, getOutputKind, type OutputKind } from "@/core/outputDevices";
 import { useStatusStore } from "@/stores/status";
+import AlsaPlaybackModeSelector from "@/components/settings/custom/AlsaPlaybackModeSelector.vue";
 import IconLucideCheck from "~icons/lucide/check";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 
@@ -118,6 +119,17 @@ onMounted(() => {
       </div>
       <div v-else class="px-2.5 py-1.5 text-xs text-on-surface-variant/65">
         {{ t("settings.outputDevice.noneInGroup") }}
+      </div>
+      <div
+        v-if="group.kind === 'alsa' && status.selectedOutputDevice?.startsWith('alsa:hw:')"
+        class="mt-1.5 flex items-center gap-2 px-2.5 py-1"
+      >
+        <span class="shrink-0 text-xs text-on-surface-variant">
+          {{ t("settings.alsaPlaybackMode.shortLabel") }}
+        </span>
+        <div class="min-w-0 flex-1">
+          <AlsaPlaybackModeSelector />
+        </div>
       </div>
     </section>
   </div>

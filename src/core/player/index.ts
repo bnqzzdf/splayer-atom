@@ -6,6 +6,7 @@ import type {
   Track,
 } from "@shared/types/player";
 import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
+import type { AlsaPlaybackMode } from "@shared/types/settings";
 import type { PersonalFmOptions } from "@/types/netease";
 import { handleEvent } from "./events";
 import type { RepeatMode, ShuffleMode } from "@/stores/status";
@@ -16,11 +17,7 @@ import { usePluginsStore } from "@/stores/plugins";
 import { useHistoryStore } from "@/stores/history";
 import { useLibraryStore } from "@/stores/library";
 import * as queue from "@/stores/queue";
-import {
-  getCurrentDirectEntryBlockers,
-  isDirettaOutput,
-  isSampleProcessingUnavailableSelected,
-} from "./directMode";
+import { isAlsaDirectOutput, isDirettaOutput, isSampleProcessingUnavailableSelected } from "./directMode";
 import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as autoClose from "@/services/autoClose";
@@ -289,19 +286,33 @@ export const refreshDevices = async (): Promise<void> => {
   const settings = useSettingsStore();
   await settings.syncSystem();
   settings.player.outputDevice = result.data.selected;
+  settings.system.player.alsaPlaybackMode = result.data.alsaPlaybackMode;
+};
+
+/** 切换 ALSA 的显式 direct / processed 模式；实际事务由 Core 完成。 */
+export const switchAlsaPlaybackMode = async (mode: AlsaPlaybackMode): Promise<void> => {
+  const settings = useSettingsStore();
+  if (settings.system.player.alsaPlaybackMode === mode) return;
+  const result = await playerClient.setAlsaPlaybackMode(mode);
+  if (!result.success) {
+    if (result.error) handleError(result.error);
+    return;
+  }
+  settings.system.player.alsaPlaybackMode = mode;
 };
 
 /**
  * 切换音频输出设备
- * @param deviceId - 设备 ID，传 null 跟随系统默认
+ * @param deviceId - 设备 ID，传 null 表示取消选择
  */
 export const switchDevice = async (deviceId: string | null): Promise<void> => {
-  if (isDirettaOutput(deviceId) && getCurrentDirectEntryBlockers().length > 0) {
-    toast.error(i18n.global.t("directMode.entryBlocked"));
-    return;
-  }
   const track = useMediaStore().track;
-  const preparingDirect = isDirettaOutput(deviceId) && track !== null && track.source !== "local";
+  const settings = useSettingsStore();
+  const preparingDirect =
+    (isDirettaOutput(deviceId) ||
+      isAlsaDirectOutput(deviceId, settings.system.player.alsaPlaybackMode)) &&
+    track !== null &&
+    track.source !== "local";
   const preparingToast = preparingDirect
     ? toast.loading(i18n.global.t("directMode.preparingSource"), { duration: 0 })
     : null;
@@ -311,7 +322,6 @@ export const switchDevice = async (deviceId: string | null): Promise<void> => {
       if (result.error) handleError(result.error);
       return;
     }
-    const settings = useSettingsStore();
     settings.system.player.outputDevice = deviceId;
     settings.player.outputDevice = deviceId;
     const status = useStatusStore();

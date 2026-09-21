@@ -1,16 +1,14 @@
-//! DSD (Direct Stream Digital) Native and Decimation Decoder Module
+//! DSD (Direct Stream Digital) Native reader utilities.
 //!
 //! 移植并增强自 tinyLMS-old 的高保真 DSD 解码算法：
 //! 1. DSF (Sony): 逐块 Planar 解析与 4 字节 L/R 高速交错交织 + 比特翻转 (LSB -> MSB)。
 //! 2. DFF (Philips DSDIFF): 块结构与逐点交错比特流解析。
-//! 3. Diretta 零拷贝 Native DSD 直通与通用 PCM 抽取降采样 (DSD-to-PCM)。
+//! 3. 为 ALSA / Diretta Native DSD transport 提供共享的逻辑位序列读取工具。
 
 pub mod dff;
-pub mod dsd2pcm;
 pub mod dsf;
 
 pub use dff::DffReader;
-pub use dsd2pcm::Dsd2PcmDecimator;
 pub use dsf::DsfReader;
 
 /// DSD 采样率与规格

@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["core-audio"]
-core-audio = ["audio-engine-core/fft", "audio-engine-core/midi"]
+core-audio = ["audio-engine-core/fft"]
 diretta = ["audio-engine-core/diretta"]
 
 [dependencies]

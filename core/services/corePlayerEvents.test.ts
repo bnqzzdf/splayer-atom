@@ -5,6 +5,10 @@ import test from "node:test";
 
 const coreEntryPath = resolve(process.cwd(), "core/core-node/index.ts");
 const coreEventsPath = resolve(process.cwd(), "core/services/corePlayerEvents.ts");
+const nativeBackgroundPath = resolve(
+  process.cwd(),
+  "native/audio-engine-core/src/player/background.rs",
+);
 
 test("Node Core registers native player events before the playback session creates the player", () => {
   const source = readFileSync(coreEntryPath, "utf8");
@@ -26,5 +30,20 @@ test("Core native player event router stays Electron-free and owns session lifec
   assert.match(source, /playbackSession\.onNativePosition\(enginePositionMs\)/);
   assert.match(source, /playbackSession\.onNativeEnded\(\)/);
   assert.match(source, /playbackSession\.onNativeSourceError\(\)/);
-  assert.match(source, /requestReinit\(player\)/);
+  assert.match(source, /player\.markOutputUnavailable\(\)/);
+  assert.doesNotMatch(source, /requestReinit|reinitOutput/);
+});
+
+test("output failure is never routed into source recovery or automatic rebuild", () => {
+  const source = readFileSync(coreEventsPath, "utf8");
+  const outputFailure = source.split('case "outputFailed":')[1]?.split('case "fftData":')[0] ?? "";
+  assert.match(outputFailure, /markOutputUnavailable/);
+  assert.doesNotMatch(outputFailure, /onNativeSourceError|requestReinit|reinitOutput/);
+});
+
+test("Direct monitor routes source and output failures through different events", () => {
+  const source = readFileSync(nativeBackgroundPath, "utf8");
+  const directTimer = source.split("if let Some((monitor, seek_base")[1]?.split("let shared =")[0] ?? "";
+  assert.match(directTimer, /DirectFailureKind::Source => cb\(PlayerEvent::SourceError\)/);
+  assert.match(directTimer, /DirectFailureKind::Output => cb\(PlayerEvent::OutputFailed\)/);
 });

@@ -8,6 +8,7 @@ const session = read("core/services/playbackSession.ts");
 const preloader = read("core/services/playbackPreloader.ts");
 const sacdInput = read("core/atom/sacdInput.ts");
 const decoder = read("native/audio-engine-core/src/decoder.rs");
+const mediaProbe = read("native/audio-engine-core/src/media_probe.rs");
 const directDsd = read("native/audio-engine-core/src/direct_dsd.rs");
 const directRuntime = read("native/audio-engine-core/src/direct_runtime.rs");
 const virtualDsf = read("native/audio-engine-core/src/sacd/virtual_dsf.rs");
@@ -28,7 +29,8 @@ test("ALSA streams SACD virtual tracks through a lazy seekable DSF view", () => 
     /toNativeSacdPlaybackSource\(resolved\.source, track\.track, track\.duration\)/,
   );
   assert.match(session, /loadPlayerSource\(\s*nativeSource/);
-  assert.match(decoder, /SacdDsfStream::open_virtual_path\(source\)/);
+  assert.match(mediaProbe, /SacdDsfStream::open_virtual_path\(source\)/);
+  assert.doesNotMatch(decoder, /SacdDsfStream::open_virtual_path\(source\)/);
   assert.match(virtualDsf, /impl Read for SacdDsfStream/);
   assert.match(virtualDsf, /impl Seek for SacdDsfStream/);
 });

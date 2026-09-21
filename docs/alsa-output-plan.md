@@ -78,7 +78,7 @@ direct 模式的软件保证止于向已协商的 ALSA HW 接口提交的数据�
 | 播放 resampler                                            | 迁移为 processed 专属 PCM rate 适配            | 不在 direct 的整数/DSD 路径初始化，也不偷偷 remix                                  |
 | `fft.rs`                                                  | 保留，只读分析旁路                             | direct 分析样本副本，processed 分析处理结果；不回写音频                            |
 | `device_watcher/`                                         | 删除占位后端与 watcher 接口                    | 当前固定返回不支持；显式刷新和输出错误承担实际职责                                 |
-| `core/services/device.ts`                                 | 精简为固定端点恢复协调                         | 保留有界恢复与取消，重建时携带模式和处理参数                                       |
+| `core/services/device.ts`                                 | 精简为旧设置兼容入口                           | 不拥有自动恢复/reinit；主动切换与显式重建统一由 Core playback session 协调          |
 | `metadata/`、`scanner.rs`、`cue/`、`sacd/`、`dsd/` reader | 保留                                           | 扫描、标签、封面、歌词、分轨、DST/DSD 仍有真实消费者                               |
 | `media_extract.rs`                                        | 保留，与处理模式隔离                           | UPnP strict extraction 不得经过 DSP/量化                                           |
 | `dsd/dsd2pcm.rs`                                          | 删除转换器及专属测试                           | 两种模式都不接受 DSD-to-PCM，不删除整个 `dsd/`                                     |
@@ -229,10 +229,11 @@ ALSA 有损支持不扩展 Diretta 的接受范围：Diretta 继续既有 strict
 
 ### 4.4 声道
 
-保留当前产品已可解码的 mono/stereo/multichannel PCM；目标硬件必须支持同样声道数和
-可确定的声道映射。只允许为已知布局做保持声道语义的排列，不复制 mono、不下混、不补
-额外声道。多声道布局未知或无法确认设备映射时失败；不能仅凭 `channels == channels`
-就视为布局一致。SACD 继续当前已支持的 stereo area，不借此扩大 SACD 多声道范围。
+Direct 保留当前可精确表达的 mono/stereo/multichannel PCM；目标硬件必须支持同样声道数和
+可确定的声道映射，不复制 mono、不下混、不补额外声道。processed 当前只开放 mono/stereo：
+`ffmpeg_audio 0.3.1` 不能通过公开 API 显式传递任意源 `AVChannelLayout`，因此 `channels > 2`
+在处理路径中明确拒绝，不能仅凭 `channels == channels` 就宣称布局一致。SACD 继续当前已支持
+的 stereo area，不借此扩大 SACD 多声道范围。
 
 ### 4.5 Native DSD
 
@@ -281,6 +282,12 @@ Core/player 锁。切歌、seek 和重开重置所属效果历史，EOF 正确�
 processed 不支持 Native DSD。播放 DSD 或尝试把正在播放的 DSD 切到 processed 时，
 Core 在破坏旧 runtime 之前拒绝并给出“Native DSD 需要精确直通模式”；不自动转 PCM、
 换模式、忽略 DSP 继续播放，或在 PCM 处理标签下发送 Native DSD。
+
+当前 `ffmpeg_audio 0.3.1` 的公开 resampler 配置只暴露目标声道数，内部会为目标端生成
+default channel layout。mono/stereo 因此可直接验收；任意 multichannel 在没有显式保留
+源 `AVChannelLayout` 前不能仅凭声道数宣称语义保持。实现不得用“channels 相等”掩盖这一
+限制。当前实现对 processed `channels > 2` 明确拒绝；Direct 仍可按精确 transport 能力
+协商多声道。以后只有补齐显式 layout API/处理后，才能放开 processed multichannel。
 
 ## 5. 设备身份、打开与缓冲
 
@@ -340,9 +347,10 @@ processed 还须通过每个输出块的源 frame 范围、变速段与处理延
 同时包含 seek base 和曲目起点，seek/重开/模式切换建立新时间 epoch。
 
 staging 带入的 track generation 与边界记录在输出时间线上。只有已播放位置越过边界时
-才发布 `directTrackBoundary` 给 Core，不能在读到下一首或写入内核时提前切歌词/统计。
-很短曲目可能在一个轮询周期内跨越多个边界，必须逐一消费有界边界记录，不重复使用
-“最后一个 generation”。Core 仍决定下一首，native 只接受 Core 已准备的 staging。
+才发布 `directTrackBoundary` / `processedTrackBoundary` 给 Core，不能在读到下一首、decoder
+完成 handoff 或写入内核时提前切歌词/统计。很短曲目可能在一个轮询周期内跨越多个边界，
+必须逐一消费有界边界记录，不重复使用“最后一个 generation”。Core 仍决定下一首，native
+只接受 Core 已准备的 staging；旧 generation 晚到只能丢弃，不能复活已取消的下一首。
 
 解码 EOF、ring 空和设备 drain 完成是三个不同阶段。只有真实 EOF 且所有有效样本完成
 排空后发送一次 `Ended`。截断/解码失败即使发生在曲尾 3 秒内，也不能套用旧链路的
@@ -361,7 +369,7 @@ processed 在其间还有 tempo/resampler 的有效尾部排空阶段；结束�
 | pause/resume   | 先执行模式允许的启停包络；硬件 pause 保留队列，否则停止新写入并排空后暂停，保留未写块供 resume；direct 不做 fade |
 | seek           | 停止引用旧块、drop 旧缓冲、flush 解码并精确定位；预缓冲后恢复原播放意图；返回实际位置                            |
 | stop           | 立即取消 producer/staging、drop 设备缓冲；可唤醒阻塞等待，不等待整曲 drain                                       |
-| 同格式 gapless | 共用 PCM handle；检查 transport、mode 和处理配置兼容性，使用所属模式的时间/边界映射                              |
+| 同格式 gapless | 共用 PCM handle；Direct 要求 wire-format 兼容；processed 复用同一 decoder/DSP/writer runtime，按当前输出格式预建下一 decoder，并使用 DAC-side 时间/边界映射 |
 | 异格式切歌     | 排空所属路径的有效尾部并重新协商；direct 不重采样，processed 只按明示策略适配；均不自动换模式                    |
 | 输出切换       | 目标准备尽可能先完成，提交切换时先停旧输出再打开新输出；始终只有一个活动输出                                     |
 | 切换失败       | 明确报告所选目标不可用并保持停止/暂停；不无声地恢复旧设备或换默认设备                                            |
@@ -376,6 +384,13 @@ processed 在其间还有 tempo/resampler 的有效尾部排空阶段；结束�
 
 有损 gapless 必须正确处理解码器 encoder delay/padding/skip-samples 元数据，并保证只
 裁剪一次；seek 回放定位采用同一时间基准。没有相关元数据的源不承诺消除编码自身间隙。
+
+第一版 processed gapless 只在通用 next-track preload 已启用、当前 tempo/pitch 为 bypass、
+且下一首是普通 mono/stereo PCM 解码源时启用。CUE、SACD/Native DSD 和声道数变化不做
+staged handoff，继续走现有 `Ended -> load`；源采样率变化可由 processed 的既有输出 rate
+适配承担，因此不要求两首原始 rate 相同。预载期间若 speed/pitch 变为非 bypass，必须立即
+取消已 staged 下一首，不能让 stretch 内部窗口跨越曲目边界。staging 失败、迟到或被取消
+都只是失去 gapless 优化，不得阻塞用户显式 load/seek/stop，也不得改变 canonical queue。
 
 ### 6.4 CUE、SACD 与精确定位
 
@@ -392,22 +407,29 @@ FFmpeg seek 只把解码器定位到可恢复的包/帧；继续解码并精确�
 ## 7. 错误与恢复策略
 
 在现有 native 错误分类和 Core `ErrorCode` 中增加必要的稳定 reason，不靠字符串关键词
-判断。沿用当前错误事件/响应 envelope，携带 output generation 与安全的格式信息。
+判断。沿用当前错误事件/响应 envelope，只向 Core/Web 暴露稳定 reason 与安全的格式信息；
+用于淘汰旧 callback 的 output generation 仅留在 native/Core 内部，不成为协议状态。
 
-| 情况                             | 行为                                                              |
-| -------------------------------- | ----------------------------------------------------------------- |
-| `EAGAIN`、可重试 `EINTR`、短写   | writer poll/继续未写部分；不丢块、不重复写、不生成静音            |
-| rate/channel/format/sbits 不匹配 | `unsupported_output_format`，停止该次 load，展示源与设备不匹配项  |
-| 设备不存在/被占用/权限不足       | 设备类错误，停止；不当作 URL 失效或无限跳曲                       |
-| XRUN、suspend、运行中设备失效    | 中断该次连续播放，上报设备类原因；不调用 recover 后假装全程无中断 |
-| 坏源/解码失败                    | 音源类错误；Core 复用现有有界重新解析/跳过策略                    |
-| 网络物化失败                     | Core 按网络/音源原因处理，不创建 ALSA stream 掩盖下载失败         |
-| 新 load/seek/stop 覆盖旧任务     | 正常取消；旧任务不再提交状态、错误或结束事件                      |
+| 情况                             | 行为                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `EAGAIN`、可重试 `EINTR`、短写   | writer poll/继续未写部分；不丢块、不重复写、不生成静音                  |
+| rate/channel/format/sbits 不匹配 | `unsupported_output_format`，停止该次 load，展示源与设备不匹配项        |
+| 设备不存在/被占用/权限不足       | 设备类错误，停止；不当作 URL 失效或无限跳曲                             |
+| XRUN                             | direct 立即判定本次连续直通失效；processed 最多做一次有界 recover，明确记录 discontinuity，失败再上报设备错误 |
+| suspend、运行中设备失效          | 停止当前 runtime 并上报设备类原因                                       |
+| 坏源/解码失败                    | 音源类错误；Core 复用现有有界重新解析/跳过策略                          |
+| 网络物化失败                     | Core 按网络/音源原因处理，不创建 ALSA stream 掩盖下载失败               |
+| 新 load/seek/stop 覆盖旧任务     | 正常取消；旧任务不再提交状态、错误或结束事件                            |
 
 设备格式/位深不支持默认停止并提示，不自动以另一曲目绕过用户刚选择的播放失败。
-`outputFailed`/`outputStalled` 不再一律进入当前 `requestReinit()`；按 reason 决定是否允许
-一次 Core-owned 恢复，确定性格式失败、XRUN 与热拔插默认等待用户重试。若以后允许自动
-恢复，也必须发布中断并建立新播放 epoch，不能保留“本次连续流完整”的诊断结论。
+`outputFailed`/`outputStalled` 不再进入自动 `requestReinit()`；确定性格式失败、Direct
+XRUN、设备消失/被占用等由 Core 投影为可显式恢复的暂停状态，等待用户操作。native 不再
+拥有 `reinitOutput()` 的 source reload 状态机；显式 `/player/reinit` 也由 Core playback
+session 使用 authoritative Track、位置与播放意图执行正常 load/seek/play 生命周期。
+
+processed writer 允许一次本地、同步、有界的 ALSA recover：成功后开启新的硬件时间 epoch，
+把中断记录为 discontinuity，不宣称无缝连续；同一次写入再次失败或 recover 失败立即上报
+`outputFailed`。direct 不做透明 recover，因为一旦 XRUN，连续 bitstream 保证已经失效。
 
 无隐藏的 native 重试/跳过循环；Core、native 各自只处理所属层，避免二者同时重建。
 
@@ -416,11 +438,16 @@ FFmpeg seek 只把解码器定位到可恢复的包/帧；继续解码并精确�
 继续使用 `playbackSourceResolver.ts`、`playerLoad.ts`、`playbackPreloader.ts`、
 `directGapless.ts`、现有 provider/DASH 物化与 `exactInput.ts`，不新建 ALSA 下载器。
 
-本方案采用现有 Direct 的完整本地 seekable 输入契约：在线有限曲目先完成原字节物化或
+本轮实现采用现有 Direct 的完整本地 seekable 输入契约：在线有限曲目先完成原字节物化或
 命中完整缓存，再 native load；下一首由 Core 预备。FM 仍是 Core 提供的有限 Track 队列。
-这是明确的首播延迟取舍，界面显示正在准备音源，取消必须及时生效。无限直播/渐进式
-HTTP reader 不属于本次契约，不使用永远等待 EOF 的方式假装支持；未来扩展也不得复活
-CPAL 输出和旧线程编排。未知 Content-Length 本身不等于直播，应结合源能力及超时/体积约束处理。
+这是为了减少 ALSA 生命周期重构变量而接受的首播延迟取舍，不是 ALSA transport 或 direct
+完整性的永久前提。界面显示正在准备音源，取消必须及时生效。
+
+无限直播/渐进式 HTTP reader 不属于本轮输入契约，不使用永远等待 EOF 的方式假装支持。
+未来若实现 Core-owned seekable streaming，只要能提供精确原字节、明确 EOF、可取消读取、
+有界缓存和满足解码器的 seek/range 语义，就可以替换“完整物化后 load”这一输入实现；
+不需要修改 ALSA direct/processed 模式边界，也不得因此复活 CPAL 输出或旧线程编排。
+未知 Content-Length 本身不等于直播，应结合源能力及超时/体积约束处理。
 
 复用的同时必须补齐以下资源约束：
 
@@ -439,8 +466,8 @@ CPAL 输出和旧线程编排。未知 Content-Length 本身不等于直播，�
 - Core 只 stage 已选中的下一首；取消/改队列使旧 staging generation 失效。
   同格式候选准备失败不能打断当前曲目，边界后由 Core 按现有策略处理。
 
-不要为了保持首播流式体验，把所有精确解码回退到旧 HTTP→f32 路径。接受本方案的本地输入
-契约，也不代表删除其他非播放功能仍需要的 HTTP/FFmpeg 依赖。
+不要为了保持首播流式体验，把所有精确解码回退到旧 HTTP→f32 路径。本轮采用本地完整
+输入也不代表未来必须永久物化，更不代表删除其他非播放功能仍需要的 HTTP/FFmpeg 依赖。
 
 ## 9. 模式、控制协议、Web 与配置迁移
 
@@ -459,75 +486,74 @@ native 只接收当前模式可用的执行配置，仍做严格校验；这不�
 
 Core 通过现有 HTTP/WS 命令通道提供明确的模式切换命令（例如 `POST /player/alsa-mode`），
 不使用通用 settings 写入直接改 mode。通用设置入口必须路由到同一切换事务。模式切换、
-输出切换、load/seek 共享既有串行协调与 generation 机制；DSP 参数命令也经过同一权限
-和版本校验。Web 不能先写 Pinia 再指望 native 随后追上。
+输出切换、load/seek 继续复用既有串行协调、load token 与 output generation；这些标识完全
+留在 Core/native 内部，只负责淘汰旧异步结果和旧事件，不进入 HTTP/WS 状态或普通控制
+请求。DSP 参数命令在执行时检查当前实际输出路径即可；Web 不能先写 Pinia 再指望 native
+随后追上。
 
 ### 9.2 运行态、控件能力与标识
 
 在现有 `PlayerStatus` 中增加统一的 `output` 运行态投影，并用于 HTTP snapshot 与 WS
-status。结构在 `shared/types/` 定义；native 类型直接从 `@splayer/audio-engine` 导入：
+status。运行态只保存控制面真正需要的当前事实；ALSA 持久化偏好继续只存在
+`PlayerSettings.alsaPlaybackMode` 中，不在 output status 再复制 mode。当前结构保持最小：
 
 ```text
-deviceId / backend
-configuredAlsaMode: direct | processed
-requestedAlsaMode: direct | processed | null
-activeMode: direct | processed | null
-phase: idle | preparing | ready | failed
-revision / generation
+deviceId: string | null
 path: exact-pcm | native-dsd | decoded-pcm | processed-pcm | null
-source: codec / sampleRate 或 dsdBitRate / channels / validBits（适用时）
-device: format / frameRate / channels / significantBits（适用时）
-adaptation: none | lossless-pack | quantized | resampled
-processing: 实际生效的音量/静音、EQ/preamp、归一化、fade、速度/音调、保护与 rate 适配
-controls: canSelectAlsaMode / canConfigureDsp / canSetVolume / canSetTempo / canUseFft
-integrity: exact-pcm | native-dsd | not-exact | unknown
-clipped: boolean
+sampleProcessingAvailable: boolean
+fftAvailable: boolean
 ```
 
-`configuredAlsaMode` 是成功提交的偏好，`requestedAlsaMode` 只在切换中存在；`activeMode`
-是实际已打开的 runtime，停止释放后为 null。Diretta/UPnP 不把保存的 ALSA 偏好当作其
-activeMode。未开始播放仅在模式选择器反映已保存选择，不显示当前曲目的直通保证。
+`path` 是当前播放链路的唯一运行事实：`exact-pcm`、`native-dsd`、`decoded-pcm` 属于 direct
+路径，`processed-pcm` 属于 processed 路径；没有已提交 runtime 时为 null。ALSA 下一次应
+使用哪种路径只读取 `PlayerSettings.alsaPlaybackMode`，Diretta/UPnP 不读取它作为自身状态。
+模式切换目标只是正在执行的命令参数，不进入长期 status。
 
-`processing` 是当前执行事实，不是保存配置的副本；direct 全部处理关闭。`adaptation`
-实现时用可组合的值表示，以便同时表达重采样和量化，不要求互斥。不能把未知位深或设备
-参数填成假定值。分析副本上的 FFT 转换不计入播放 processing。
+`sampleProcessingAvailable` 每次 snapshot 从实际 `path`、当前 native ALSA mode 和输出身份
+纯派生，不保存第二份 controls/mode 状态。活动 `processed-pcm` 为 true；无 runtime 时，
+只有当前明确选择的 ALSA HW 且 native 已提交 mode=processed 才为 true；Direct、Diretta、
+UPnP 均为 false。模式切换的 `stop()` 与 native mode 提交位于同一同步段，因此不需要额外
+`preparing` 状态来封锁 DSP 命令；外部命令在 Core 执行时再次读取该能力即可。
 
-Core 为当前输出和 phase 计算 `controls`。direct、Diretta、UPnP、切换中、状态未知时
-DSP/音量/变速不可操作；稳定选中 processed 且无活动源的 idle 状态可允许编辑下一次播放
-的 processed 配置。未知旧 Core 不返回能力时按不可操作/保证未知处理，不猜测是普通 ALSA。
+`fftAvailable` 也是当前 runtime 的只读能力事实：processed PCM 与 ALSA Direct mono/stereo
+PCM 可用，Native DSD、Diretta、UPnP 和无 runtime 不可用。它不表示 DSP 已开启，也不保存
+Web 的频谱订阅状态。
+
+source/device format、量化/重采样、clipping、XRUN/discontinuity 等属于诊断或实机验收信息，
+不为了“状态完整”常驻 PlayerStatus。需要时从 native 诊断、日志或专门测试读取；不能再增加
+一套 `source/device/adaptation/processing/clipped/integrity` canonical state。
 
 模式选择器用于操作，实际路径信息留在按需打开的输出详情。播放主界面默认不新增状态
 文字或徽标；如保留小图标，其语义以实际 path 为准，不拿模式偏好充当当前音频保证。
 
-若采用直通图标，它只在 Core 的当前 generation/实际 path 与 integrity 同时表明 exact-pcm 或
-native-dsd 时显示，并要求 ALSA activeMode=direct（Diretta 使用其独立 strict 事实）。
-processed 的 integrity 永远是 not-exact，即使 EQ 全零、音量 100%、rate 相同；仅选择
-`direct`、无损文件标签、设备为 `hw`、暂停前遗留状态，都不是充分条件。暂停且 runtime
-仍有效可保留路径标识；stop、失败、释放、切换到其他输出或未知状态时清除旧曲标识。
+如以后增加直通图标，只允许直接从实际 `path` 判断：`exact-pcm`/`native-dsd` 可以表达当前
+直通路径，`processed-pcm` 绝不能显示；仅选择 `direct`、无损文件标签、设备为 `hw` 都不是
+充分条件。当前 UI 不要求额外保存 `integrity` 字段。
 
-Core 在同一份带 revision 的 snapshot 中提交模式、路径、保证与能力，Web 统一投影到所有
-组件，不能逐字段拼出“直通徽标 + 可操作 DSP”的中间态。客户端丢弃旧 revision 事件；
-断线重连先锁定控件并清空保证，取得完整 snapshot 后恢复。请求结果只能确认提交，不能
-覆盖更新的 WS 状态。
+Core 在同一份 snapshot 中提交最小运行事实与派生能力，Web 统一投影到所有组件，不能逐字段
+维护第二份 authority。HTTP/WS 命令返回只表示命令接受或失败，不携带额外状态版本让 Web
+反向覆盖 snapshot。旧 native 结果由 Core/native 内部 token/generation 淘汰。
 
 ### 9.3 模式切换事务
 
-1. 用户在 ALSA 模式选择器明确选择目标；Web 显示“正在切换”，立即锁定样本处理入口，
-   暂停使用原直通徽标。Core 发布同样的 preparing 状态，使其他客户端同步锁定。
-2. Core 校验请求 revision、目标输出与源类型，保存源媒体位置、播放意图、processed 参数，
-   作废旧 staging。DSD→processed 等确定性不支持在释放旧 runtime 前拒绝；拒绝后发布
-   未变的实际路径和可操作性，不能保留待切换模式的假标识。
+1. 用户在 ALSA 模式选择器明确选择目标；目标 mode 只作为当前命令参数，不提前写入
+   PlayerStatus，也不增加全局 `preparing` 状态。
+2. Core 在串行播放协调中检查当前目标输出与源类型，保存源媒体位置、播放意图、processed
+   参数并作废旧 staging。DSD→processed 等确定性不支持在释放旧 runtime 前拒绝；拒绝后
+   发布未变的实际路径和可操作性，不能保留待切换模式的假标识。
 3. 准备新路径，停止旧 producer/writer，丢弃旧模式的设备缓冲，使用同一个 ALSA 后端重建。
    处理模式切到 direct 时先确认旧 DSP 输出不再滞留在 ALSA 缓冲；不能只翻 UI 开关。
-4. 新 runtime 校验、预缓冲和 commit 均通过后，原子更新偏好与完整状态，递增 revision。
-   旧 load/参数/事件不能在此后复活。失败不提交目标偏好；若旧输出已经释放则保持停止并
-   清空 activeMode/path/integrity，不自动回到旧模式或默认设备。
+4. 新 runtime 校验、预缓冲和 commit 均通过后，才更新 ALSA 偏好；后续 status snapshot
+   直接反映新的 path/capability。
+   Core/native 内部已有的 load token/output generation 保证旧 load/事件不能在此后复活。
+   失败不提交目标偏好；若旧输出已经释放则保持停止并清空 path，不自动回到旧模式
+   或默认设备。
 5. direct→processed 使用已保存参数，按原播放意图恢复；processed→direct 为避免从
    软件衰减/静音直接变成满幅，统一在切换后保持暂停。选择器提前显示“切换后暂停，
    音量由外部设备调节”；用户正常点击 Play 继续，不需要另一套确认向导。
 
-没有已加载源时只提交 Core 模式偏好并发布 idle 能力，不为了切换模式打开硬件或伪造
-activeMode/直通徽标；下次 load 按该偏好实例化。processed 的 idle 参数修改只更新
+没有已加载源时只提交 Core/native 模式偏好，不为了切换模式打开硬件或伪造当前 path；
+下次 load 按该偏好实例化。processed 的 idle 参数修改只更新
 Core 已保存配置，不创建一个无人消费的后台 DSP 线程。
 
 同一设备上的模式切换也必须走此事务。进入 Diretta 等软件 gain 从衰减变 unity 的输出
@@ -581,17 +607,20 @@ Core 已保存配置，不创建一个无人消费的后台 DSP 线程。
 ### 9.5 命令防护与保存行为
 
 保留 DSP/软件音量的现有 HTTP/WS、插件及 N-API 能力，迁移到 processed producer。
-任何样本处理修改都先检查当前输出、模式、phase 和 revision；direct 下无论用户把音量
-设为 1 还是 0，命令都明确返回 `processing_unavailable`，不改保存参数、不偷偷切模式。
+任何样本处理修改都在 Core 执行时检查同一份 `sampleProcessingAvailable` 派生能力，native
+继续作为 Direct 的最后一道防线；direct path 下
+无论用户把音量设为 1 还是 0，命令都明确返回 `processing_unavailable`，不改保存参数、
+不偷偷切模式。没有活动 runtime 时，仅当 ALSA 偏好为 processed 才允许编辑休眠参数。
 直通下也不允许通过通用 settings API、重置 EQ 或键盘快捷键绕过约束。
 
-新版前端的修改请求携带所观察的 output revision；过期请求返回冲突并回读 snapshot。
-插件 host 为命令绑定接收时的输出 revision，在实际执行时再次检查。HTTP/WS 旧客户端
-缺少必要 revision 时给出明确升级/刷新错误，不静默执行无法判定所属模式的样本修改。
-Core/native 最后一道校验独立于 Web；不能仅依赖按钮 disabled。
+不为音量、EQ、tempo 等普通参数命令增加状态版本或 CAS。多客户端同时操作时，以 Core
+实际执行顺序为准；如果前一条命令已经切换输出或路径，后一条命令就在执行时因当前能力
+不允许而失败。插件与通用 settings 入口同样走这道实时检查。Core/native 最后一道校验
+独立于 Web；不能仅依赖按钮 disabled。
 
-在 processed 中，参数先由 Core/native 接受并形成版本化快照，再提交配置/状态；失败
-不能只把勾选留在 UI。直通/远端状态的 `volume=1`、`speed=1` 表示本地无增益/变速，
+在 processed 中，参数由 Core/native 接受后形成处理图内部的完整参数快照，并在块边界
+原子替换；这里的参数版本只用于音频线程内部一致性，不进入控制协议。失败不能只把勾选
+留在 UI。直通/远端状态的 `volume=1`、`speed=1` 表示本地无增益/变速，
 不覆盖保存的 processed 参数，也不代表 DAC 实际音量。processed 状态返回实际生效值。
 
 删除的仅为默认设备/watcher 和旧输出专属 N-API 接口；保留 DSP setter/getter 并修改实现。
@@ -613,13 +642,16 @@ direct 导致软件音量失效。已有 Diretta/UPnP 选择不改变，只初�
 
 ### 9.7 FFT
 
-保留 PCM 频谱为只读旁路：direct 分析解码样本副本，processed 分析软件音量/效果处理
-后的 PCM。独立线程进行分析用 float 转换、降采样和 FFT；分析队列满则丢分析帧，不阻塞
-输出，不回写样本。时间戳对应实际播放位置，处理时延和变速也需映射，不能提前显示预载。
+保留 PCM 频谱为只读旁路：ALSA Direct mono/stereo 从已提交的 HW PCM 表示复制分析块，
+按实际 PCM sample rate 做 float 转换和 FFT，不额外重采样；processed 分析软件音量/效果
+处理后的 PCM。独立线程进行分析；分析队列满则丢分析帧，不阻塞输出、不回写样本。时间戳
+对应实际播放位置，处理时延和变速也需映射，不能提前显示预载。
 
 只在可见 Web Control 请求时运行，所有客户端隐藏/断开时停止；一个客户端关闭不影响
-其他可见订阅。DSD 不为频谱增加 DSD-to-PCM，Diretta 保持当前频谱不可用行为。
-FFT 入口不受样本 DSP 锁误禁，是否可用由 Core `canUseFft` 决定。
+其他可见订阅。Direct multichannel 在 channel-layout 保真完成前不猜 L/R；DSD 不为频谱
+增加 DSD-to-PCM，Diretta 保持当前频谱不可用行为。
+FFT 入口不受样本 DSP 锁误禁，是否可用由 Core `output.fftAvailable` 决定；开启请求在
+capability=false 时拒绝，关闭请求始终允许。
 
 ## 10. 文件级实施工作与依赖
 
@@ -655,7 +687,8 @@ FFT 入口不受样本 DSP 锁误禁，是否可用由 Core `canUseFft` 决定�
 - Native DSD 用每声道不同的非对称位图，覆盖 DSF/DFF/SACD/DST、位序、字节序、U8/U16/U32、
   分组尾部、seek 和 CUE；统一为逻辑位序列逐位比较。
 - fake writer 注入连续短写、EAGAIN/EINTR、XRUN、suspend、设备掉线、drain 卡住与取消；
-  验证 frame 无重复/遗漏、EOF 只报一次、不会发送人为静音、停止能唤醒线程。
+  验证 frame 无重复/遗漏、EOF 只报一次、不会发送人为静音、停止能唤醒线程；direct XRUN
+  必须失败，processed 只允许一次有界 recover 并留下 discontinuity，不能循环恢复或伪装无缝。
 - direct 精确源不支持时不会进入有损 adapter 或 processed；有损音源不会触发整数精确标记；Diretta 和
   UPnP strict reader 不受 ALSA 有损支持影响。
 - 验证 pause fallback、多个极短曲目边界、变格式、快速 load/seek/stop、过期 callback、
@@ -664,13 +697,16 @@ FFT 入口不受样本 DSP 锁误禁，是否可用由 Core `canUseFft` 决定�
 ### 11.2 双模式与 UI 验收
 
 - 同一 HW 上测试 direct↔processed、快速重复切换、切换中 stop/seek、失败与重连；只有
-  一个活动 PCM handle，旧模式样本不进入新模式，旧 revision 不覆盖新状态。
+  一个活动 PCM handle，旧模式样本不进入新模式，内部 token/generation 淘汰过期 native 结果。
 - direct 整数 PCM/DSD 满足精确样本测试；direct 有损不显示直通图标；processed
   无论是否启用效果均不显示直通，Native DSD 在 processed 下明确拒绝。
 - 分别验证 EQ、归一化/ReplayGain、软件音量/静音、fade、变速/变调、削波保护的实际
   输出效果和参数版本；确认没有双重增益、漏做保护或无法旁路的隐藏 limiter。
 - 验证 processed 设备 rate 适配、DSP 延迟、tempo 尾部、变速过程中 seek/媒体时间、
   gapless 曲目边界和统计；direct 不能调用处理 resampler。
+- processed gapless 还要验证：stale async stage 不复活、full load 不等待旧网络 stage、
+  DAC-side 越过 boundary 前 Core queue/统计不推进、tempo/pitch 离开 bypass 会取消 staging，
+  CUE/SACD/声道变化明确退回普通切歌而不是隐式 remix 或创建第二个 ALSA runtime。
 - 将第 9.4 节矩阵变为组件/集成测试：直通时所有入口不可操作，已打开弹窗/拖动/防抖
   请求失效；处理时功能可用且没有直通徽标。processed 播放 Hi-Res FLAC 且效果全关是
   必测场景，防止用源质量或参数全零推断 bit-perfect。
@@ -678,9 +714,10 @@ FFT 入口不受样本 DSP 锁误禁，是否可用由 Core `canUseFft` 决定�
   展示。如采用图标，检查简短 tooltip、无障碍名称、触屏详情入口和状态语义，不能每曲
   自动弹出链路说明或仅靠颜色区分保证。
 - 使用 HTTP、WS、插件、通用 settings 直接修改验证 Core/native 拒绝能力，而非只测
-  disabled 属性；过期 revision、缺字段、旧客户端和错误响应均不得更改休眠参数。
-- 两个 Web Control 同时打开不同弹窗，一端切模式，另一端锁定并丢弃旧提交；验证隐藏、
-  断线、重新连接、HTTP/WS 乱序、全屏与移动端，不出现“可用 DSP + 精确直通”组合。
+  disabled 属性；切模式或输出后到达的旧能力命令、旧客户端和错误响应均不得更改休眠参数。
+- 两个 Web Control 同时打开不同弹窗，一端切模式；即使另一端仍持有旧 snapshot，旧参数命令
+  随后到达 Core 也必须按执行时实际 mode/path 派生能力拒绝。验证隐藏、断线、重新连接、全屏
+  与移动端，不出现“可用 DSP + 精确直通”组合。
 - 配置迁移保留旧音量/EQ/音效并选 processed；direct↔processed 保存与恢复值正确，
   切到直通保持暂停，重启不会错误恢复另一模式的音量或标识。
 

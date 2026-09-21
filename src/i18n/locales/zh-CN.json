@@ -121,8 +121,9 @@
   },
   "directMode": {
     "title": "Source Direct",
-    "entryBlocked": "进入 Diretta Source Direct 前，请将软件音量恢复为 100%，关闭音量均衡和 EQ，并恢复 1.0x 原速、0 半音。现有设置不会被自动修改。",
+    "alsaTitle": "ALSA 精确直通",
     "processingUnavailable": "Diretta Source Direct 会保持原始音频数据。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调控制在 Direct 模式下不可用；普通输出的原设置会保留。",
+    "alsaProcessingUnavailable": "ALSA 当前使用精确直通模式。软件音量、音量均衡、EQ/前级、淡入淡出、播放速度和音调不会进入音频路径；PCM 处理模式的原设置会保留。",
     "preparingSource": "正在准备 Source Direct 在线音源…"
   },
   "remoteOutput": {
@@ -849,6 +850,10 @@
       "label": "音量均衡",
       "description": "自动调节不同歌曲之间的音量差异"
     },
+    "clippingProtection": {
+      "label": "削波保护",
+      "description": "PCM 处理模式下在最终输出前抑制超出安全幅度的峰值；关闭后只保留格式转换必需的饱和处理"
+    },
     "songLevel": {
       "label": "在线歌曲音质",
       "description": "在线歌曲的音质偏好，取决于账号实际可用级别",
@@ -883,6 +888,13 @@
         "diretta": "Diretta",
         "upnp": "UPnP"
       }
+    },
+    "alsaPlaybackMode": {
+      "label": "ALSA 播放模式",
+      "shortLabel": "模式",
+      "description": "精确直通不进行软件音量、DSP、重采样或声道重混；PCM 处理保留这些功能。",
+      "direct": "精确直通",
+      "processed": "PCM 处理"
     },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",

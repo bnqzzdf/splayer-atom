@@ -70,6 +70,34 @@ test("Direct input pruning keeps only the source that completed player load", as
   }
 });
 
+test("Direct input pruning never deletes materialization started after the prune snapshot", async () => {
+  const server = http.createServer((request, response) => {
+    const payload = Buffer.from(`fLaC-${request.url}`);
+    response.writeHead(200, { "Content-Length": String(payload.length) });
+    response.end(payload);
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const base = `http://127.0.0.1:${address.port}`;
+    const current = await materializeDirectInput(`${base}/current.flac`);
+    const old = await materializeDirectInput(`${base}/old.flac`);
+
+    const pruning = pruneDirectInputs(current);
+    const staged = await materializeDirectInput(`${base}/staged.flac`);
+    await pruning;
+
+    await assert.rejects(() => readFile(old), /ENOENT/);
+    assert.deepEqual(await readFile(staged), Buffer.from("fLaC-/staged.flac"));
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("Direct input discard removes only managed temporary files", async () => {
   const payload = Buffer.from("fLaC-discard");
   const server = http.createServer((_request, response) => {

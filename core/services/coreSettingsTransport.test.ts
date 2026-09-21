@@ -17,6 +17,7 @@ const settingsClientSource = readFileSync(
 test("Core Settings ownership excludes Host and dedicated domain paths", () => {
   assert.equal(isCoreSettingPath("player.songLevel"), true);
   assert.equal(isCoreSettingPath("player.equalizer.enabled"), true);
+  assert.equal(isCoreSettingPath("player.clippingProtection"), true);
   assert.equal(isCoreSettingPath("system.networkProxy.protocol"), true);
   assert.equal(isCoreSettingPath("download.quality"), true);
   assert.equal(isCoreSettingPath("cache.songCache.enabled"), true);
@@ -80,8 +81,15 @@ test("Core Settings service owns its snapshot and runtime mutation side effects"
   assert.match(serviceSource, /store\.set\(keyPath as ConfigPath, value\)/);
   assert.match(serviceSource, /refreshPlaybackPreload\(\)/);
   assert.match(serviceSource, /setNormalizationEnabled\(value as boolean\)/);
+  assert.match(serviceSource, /setClippingProtectionEnabled\(value as boolean\)/);
   assert.match(serviceSource, /setEqualizerEnabled\(value as boolean\)/);
   assert.match(serviceSource, /setEqualizerBands\(value as number\[\]\)/);
   assert.match(serviceSource, /setPreampGain\(value as number\)/);
   assert.match(serviceSource, /setFadeDuration\(/);
+  assert.match(serviceSource, /SAMPLE_PROCESSING_SETTING_PATHS/);
+  assert.match(serviceSource, /assertSampleProcessingAvailable\(\)/);
+  assert.ok(
+    serviceSource.indexOf("applySampleProcessingChange(keyPath, value)") <
+      serviceSource.indexOf("store.set(keyPath as ConfigPath, value);\n    return;"),
+  );
 });

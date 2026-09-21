@@ -4,13 +4,11 @@ use std::thread::JoinHandle;
 
 use crate::audio_output::AudioOutput;
 use crate::decoder;
-#[cfg(any(feature = "diretta", test))]
 use crate::direct_runtime::DirectPlayback;
 use crate::equalizer::Equalizer;
 use crate::metadata::AudioMetadata;
 use crate::playback::PlaybackHandle;
 use crate::shared::Shared;
-use crate::source::DecoderSource;
 use crate::tempo::StretchProcessor;
 use anyhow::Result;
 use ffmpeg_audio::HttpCancelHandle;
@@ -26,7 +24,6 @@ pub struct OldThreads {
     #[cfg(feature = "fft")]
     pub fft_timer: Option<JoinHandle<()>>,
     pub fade_handle: Option<JoinHandle<()>>,
-    #[cfg(any(feature = "diretta", test))]
     pub direct_playback: Option<DirectPlayback>,
 }
 
@@ -34,7 +31,6 @@ impl OldThreads {
     /// 在工作线程上 join 所有旧 timer/fade，返回旧解码线程 handle 供调用方继续使用
     /// 忽略 join 错误：辅助线程 panic 不阻止新加载，主播放路径不依赖它们
     pub fn join_aux(self) -> Option<JoinHandle<decoder::DecoderData>> {
-        #[cfg(any(feature = "diretta", test))]
         drop(self.direct_playback);
         #[cfg(feature = "fft")]
         let aux = [self.position_timer, self.fft_timer, self.fade_handle];
@@ -48,7 +44,6 @@ impl OldThreads {
 }
 
 /// async seek 阶段 1 的输出：带到工作线程做 join + ffmpeg seek + 重启解码
-#[cfg(any(feature = "diretta", test))]
 pub struct DirectSeekTake {
     pub playback: DirectPlayback,
     pub token: u64,
@@ -82,6 +77,7 @@ pub struct SeekTake {
 pub struct LoadedPlayback {
     pub metadata: AudioMetadata,
     pub decode_handle: JoinHandle<decoder::DecoderData>,
+    pub processed_stage: decoder::ProcessedStageHandle,
     pub shared: Arc<Shared>,
     pub output: AudioOutput,
     pub cancel: Option<HttpCancelHandle>,
@@ -96,6 +92,9 @@ impl InnerPlayer {
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
         if let Some(previous) = self.pending_load_handle.replace(handle) {
             previous.cancel();
+        }
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
         }
 
         // 发停止信号（原子写，纳秒级）
@@ -133,7 +132,6 @@ impl InnerPlayer {
             #[cfg(feature = "fft")]
             fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
-            #[cfg(any(feature = "diretta", test))]
             direct_playback: self.direct_playback.take(),
         };
         (old_threads, token)
@@ -166,7 +164,6 @@ impl InnerPlayer {
         }
     }
 
-    #[cfg(any(feature = "diretta", test))]
     pub fn take_for_async_direct_seek(&mut self) -> Result<Option<DirectSeekTake>> {
         if self.direct_playback.is_none() {
             return Ok(None);
@@ -178,6 +175,10 @@ impl InnerPlayer {
         }
         self.stop_position_timer();
         self.stop_fft_timer();
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
+        self.fft.reset();
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
         let playback = self
             .direct_playback
@@ -197,6 +198,9 @@ impl InnerPlayer {
         // 与 load 共用同一 token 序列：commit_seeked 时比对，防止 seek 期间发生的
         // load/stop 完成后被本次 seek 的 commit 覆盖（旧曲复活 + 新解码线程泄漏）
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
 
         if let Some(flag) = self.fade_cancel.take() {
             flag.store(true, Ordering::Relaxed);
@@ -222,7 +226,6 @@ impl InnerPlayer {
             #[cfg(feature = "fft")]
             fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
-            #[cfg(any(feature = "diretta", test))]
             direct_playback: None,
         };
 
@@ -254,7 +257,7 @@ impl InnerPlayer {
 
     /// seek 三段式的最后一段：主线程持锁，attach 新 sink + 新解码线程
     ///
-    /// `output` 为输出重建（`reinit_output`）时新建的输出，seek 本身传 `None` 沿用现有输出。
+    /// `output` 预留给需要原子替换 processed 输出的内部事务；普通 seek 传 `None` 沿用现有输出。
     /// 返回 false 表示本次 seek 已被更新的 load/seek/stop 取代，结果被丢弃
     pub fn commit_seeked(
         &mut self,
@@ -262,6 +265,7 @@ impl InnerPlayer {
         position_secs: f64,
         shared: Arc<Shared>,
         handle: JoinHandle<decoder::DecoderData>,
+        processed_stage: decoder::ProcessedStageHandle,
         output: Option<AudioOutput>,
     ) -> Result<bool> {
         // 抢占检查：与 commit_loaded 同款，不一致则丢弃本次 seek 结果
@@ -275,23 +279,29 @@ impl InnerPlayer {
         if let Some(out) = output {
             self.output = Some(out);
         }
-        #[cfg(feature = "fft")]
-        let reader = DecoderSource::new(Arc::clone(&shared), Arc::clone(&self.fft));
-        #[cfg(not(feature = "fft"))]
-        let reader = DecoderSource::new(
-            Arc::clone(&shared),
-            Arc::new(crate::fft::FftAnalyzer::new()),
-        );
         let was_paused = self.state == PlayerState::Paused;
         let volume = self.target_volume;
+        let clipping_protection = self.clipping_protection_enabled;
+        #[cfg(feature = "fft")]
+        let fft = Arc::clone(&self.fft);
+        #[cfg(not(feature = "fft"))]
+        let fft = Arc::new(crate::fft::FftAnalyzer::new());
         let playback = {
-            let output = self.ensure_output(None)?;
-            Arc::new(PlaybackHandle::attach(output, reader, volume, was_paused)?)
+            let output = self.ensure_output()?;
+            Arc::new(PlaybackHandle::attach(
+                output,
+                Arc::clone(&shared),
+                fft,
+                volume,
+                clipping_protection,
+                was_paused,
+            )?)
         };
 
         self.playback = Some(playback);
         self.shared = Some(shared);
         self.decoder_thread = Some(handle);
+        self.processed_stage = Some(processed_stage);
         self.seek_base = position_secs;
 
         if was_paused {
@@ -327,6 +337,7 @@ impl InnerPlayer {
         let LoadedPlayback {
             mut metadata,
             decode_handle,
+            processed_stage,
             shared,
             output,
             cancel,
@@ -347,22 +358,28 @@ impl InnerPlayer {
         self.pending_load_handle = cancel;
         self.output = Some(output);
 
-        #[cfg(feature = "fft")]
-        let reader = DecoderSource::new(Arc::clone(&shared), Arc::clone(&self.fft));
-        #[cfg(not(feature = "fft"))]
-        let reader = DecoderSource::new(
-            Arc::clone(&shared),
-            Arc::new(crate::fft::FftAnalyzer::new()),
-        );
         let volume = self.target_volume;
+        let clipping_protection = self.clipping_protection_enabled;
+        #[cfg(feature = "fft")]
+        let fft = Arc::clone(&self.fft);
+        #[cfg(not(feature = "fft"))]
+        let fft = Arc::new(crate::fft::FftAnalyzer::new());
         let playback = {
-            let output = self.ensure_output(None)?;
-            Arc::new(PlaybackHandle::attach(output, reader, volume, !auto_play)?)
+            let output = self.ensure_output()?;
+            Arc::new(PlaybackHandle::attach(
+                output,
+                Arc::clone(&shared),
+                fft,
+                volume,
+                clipping_protection,
+                !auto_play,
+            )?)
         };
 
         self.playback = Some(playback);
         self.shared = Some(shared);
         self.decoder_thread = Some(decode_handle);
+        self.processed_stage = Some(processed_stage);
         self.seek_base = 0.0;
         self.current_source = Some(source.to_string());
 
@@ -388,7 +405,6 @@ impl InnerPlayer {
         Ok(Some(metadata))
     }
 
-    #[cfg(any(feature = "diretta", test))]
     pub fn commit_direct_seeked(
         &mut self,
         token: u64,
@@ -402,6 +418,9 @@ impl InnerPlayer {
         self.playback = None;
         self.shared = None;
         self.decoder_thread = None;
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
         self.seek_base = playback.seek_base();
         let should_play = self.state == PlayerState::Playing;
         if should_play {
@@ -410,11 +429,11 @@ impl InnerPlayer {
         self.direct_playback = Some(playback);
         if should_play {
             self.start_position_timer();
+            self.start_fft_timer();
         }
         Ok(true)
     }
 
-    #[cfg(any(feature = "diretta", test))]
     pub fn commit_direct_loaded(
         &mut self,
         token: u64,
@@ -433,6 +452,9 @@ impl InnerPlayer {
         self.playback = None;
         self.shared = None;
         self.decoder_thread = None;
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
         self.direct_playback = Some(playback);
         self.seek_base = 0.0;
         self.current_source = Some(source.to_owned());
@@ -446,6 +468,7 @@ impl InnerPlayer {
                 state: PlayerState::Playing,
             });
             self.start_position_timer();
+            self.start_fft_timer();
         } else {
             self.state = PlayerState::Paused;
             self.emit(PlayerEvent::StateChanged {

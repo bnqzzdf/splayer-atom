@@ -95,6 +95,7 @@ import {
   seek,
   selectIndex,
   setOutputDevice,
+  setAlsaPlaybackMode,
   setRepeat,
   setShuffle,
   setAutoClose,
@@ -116,7 +117,7 @@ import {
   insertFavoriteEvent,
 } from "@main/database/playStats";
 import type { FavoriteEventInput } from "@shared/types/stats";
-import { isSampleProcessingUnavailableOutput } from "@shared/utils/outputDevice";
+import { getAlsaPlaybackMode } from "@main/services/alsaPlaybackMode";
 import { testNetworkProxy } from "@main/utils/proxy";
 import { getDownloadDir } from "@main/utils/config";
 import { listCoreDirectories, resolveCoreDirectory } from "@main/services/coreFilesystem";
@@ -126,7 +127,7 @@ const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 const commandError = (c: Context, error: unknown) => c.json({ error: errorText(error) }, 400);
 const sampleProcessingUnavailable = (): boolean =>
-  isSampleProcessingUnavailableOutput(getSelectedOutputDevice());
+  !getPlaybackStatus().output.sampleProcessingAvailable;
 const sampleProcessingUnavailableResponse = (c: Context) =>
   c.json({ error: "output_processing_unavailable" }, 409);
 const CACHE_CATEGORIES = new Set<CacheCategory>([
@@ -498,7 +499,8 @@ export const buildHeadlessRoutes = (): Hono => {
     }
     return c.json(await loadPlayerSource(body.source, body.options ?? {}));
   });
-  api.get("/volume", (c) => c.json({ volume: getPlayer().getVolume() }));
+  // 运行时 getter 返回实际生效值；Direct/UPnP 的保存音量仍只存在 Settings 中。
+  api.get("/volume", (c) => c.json({ volume: getPlaybackStatus().volume }));
   api.post("/volume", async (c) => {
     if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { volume?: number } | null;
@@ -507,7 +509,7 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ error: "volume (number, 0..1) required" }, 400);
     }
     try {
-      getPlayer().setVolume(volume);
+      playerControl.setVolume(volume);
       store.set("player.volume", volume);
       return c.json({ ok: true });
     } catch (error) {
@@ -530,7 +532,7 @@ export const buildHeadlessRoutes = (): Hono => {
     const speed = Number(body?.speed);
     if (!Number.isFinite(speed)) return c.json({ error: "speed_required" }, 400);
     try {
-      getPlayer().setSpeed(speed);
+      playerControl.setSpeed(speed);
       nowPlaying.onSpeedChange(speed);
       return c.json({ ok: true });
     } catch (error) {
@@ -542,7 +544,7 @@ export const buildHeadlessRoutes = (): Hono => {
     if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { semitones?: number } | null;
     try {
-      getPlayer().setPitch(Number(body?.semitones ?? 0));
+      playerControl.setPitch(Number(body?.semitones ?? 0));
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -553,7 +555,7 @@ export const buildHeadlessRoutes = (): Hono => {
     if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
     try {
-      getPlayer().setPitchSync(body?.enabled === true);
+      playerControl.setPitchSync(body?.enabled === true);
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -564,7 +566,7 @@ export const buildHeadlessRoutes = (): Hono => {
     if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
     try {
-      getPlayer().setNormalizationEnabled(body?.enabled === true);
+      playerControl.setNormalizationEnabled(body?.enabled === true);
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -579,9 +581,9 @@ export const buildHeadlessRoutes = (): Hono => {
       preamp?: number;
     } | null;
     try {
-      if (Array.isArray(body?.bands)) getPlayer().setEqualizerBands(body.bands);
-      if (typeof body?.preamp === "number") getPlayer().setPreampGain(body.preamp);
-      if (typeof body?.enabled === "boolean") getPlayer().setEqualizerEnabled(body.enabled);
+      if (Array.isArray(body?.bands)) playerControl.setEqualizerBands(body.bands);
+      if (typeof body?.preamp === "number") playerControl.setPreampGain(body.preamp);
+      if (typeof body?.enabled === "boolean") playerControl.setEqualizerEnabled(body.enabled);
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -592,7 +594,7 @@ export const buildHeadlessRoutes = (): Hono => {
     if (sampleProcessingUnavailable()) return sampleProcessingUnavailableResponse(c);
     const body = (await c.req.json().catch(() => null)) as { durationMs?: number } | null;
     try {
-      getPlayer().setFadeDuration(Math.max(0, Number(body?.durationMs ?? 0)));
+      playerControl.setFadeDuration(Math.max(0, Number(body?.durationMs ?? 0)));
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -602,8 +604,12 @@ export const buildHeadlessRoutes = (): Hono => {
 
   api.post("/player/fft", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
+    const enabled = body?.enabled === true;
+    if (enabled && !getPlaybackStatus().output.fftAvailable) {
+      return c.json({ error: "fft_unavailable" }, 409);
+    }
     try {
-      getPlayer().setFftEnabled(body?.enabled === true);
+      getPlayer().setFftEnabled(enabled);
       return c.json({ ok: true });
     } catch (error) {
       return commandError(c, error);
@@ -1067,7 +1073,11 @@ export const buildHeadlessRoutes = (): Hono => {
         scanUpnpOutputDevices(),
         Promise.resolve(getOutputDevices()),
       ]);
-      return c.json({ selected: getSelectedOutputDevice(), data: [...local, ...diretta, ...upnp] });
+      return c.json({
+        selected: getSelectedOutputDevice(),
+        alsaPlaybackMode: getAlsaPlaybackMode(),
+        data: [...local, ...diretta, ...upnp],
+      });
     } catch (error) {
       return c.json({ error: errorText(error) }, 500);
     }
@@ -1080,6 +1090,19 @@ export const buildHeadlessRoutes = (): Hono => {
       return c.json({ ok: true, selected: body.deviceId ?? null });
     } catch (error) {
       return c.json({ error: errorText(error) }, 500);
+    }
+  });
+  api.get("/player/alsa-mode", (c) => c.json({ mode: getAlsaPlaybackMode() }));
+  api.post("/player/alsa-mode", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { mode?: unknown } | null;
+    try {
+      if (body?.mode !== "direct" && body?.mode !== "processed") {
+        return c.json({ error: "mode must be direct or processed" }, 400);
+      }
+      await setAlsaPlaybackMode(body.mode);
+      return c.json({ ok: true, mode: getAlsaPlaybackMode() });
+    } catch (error) {
+      return commandError(c, error);
     }
   });
 

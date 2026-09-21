@@ -1,68 +1,53 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
-use cpal::traits::StreamTrait;
+use anyhow::Result;
 use tracing::warn;
 
-use crate::audio_output::{AudioOutput, PlaybackStream};
-use crate::error::{AudioErrorKind, AudioResultExt};
-use crate::source::DecoderSource;
+use crate::alsa::processed_pcm::AlsaProcessedPcmStream;
+use crate::audio_output::AudioOutput;
+use crate::fft::FftAnalyzer;
+use crate::shared::Shared;
 
-/// 平台统一的播放控制句柄：持有一条独立的输出流。
-/// 每次加载/seek 由 `attach` 创建，播放期间音量与停止通过原子标志与实时回调通信。
+/// Processed PCM 播放控制句柄；底层 ALSA handle 始终由独立 writer 线程单独持有。
 pub struct PlaybackHandle {
-    stream: PlaybackStream,
-    volume: Arc<AtomicU32>,
-    stopped: Arc<AtomicBool>,
+    stream: AlsaProcessedPcmStream,
 }
 
 impl PlaybackHandle {
-    /// 按 `output` 的配置创建输出流并接入 `source`。
-    /// 传入 `volume` 为初始音量，`paused` 为 true 时保持停止（恢复时由 `play` 启动）。
     pub fn attach(
         output: &AudioOutput,
-        source: DecoderSource,
+        shared: Arc<Shared>,
+        fft: Arc<FftAnalyzer>,
         volume: f32,
+        clipping_protection: bool,
         paused: bool,
     ) -> Result<Self> {
-        let volume = Arc::new(AtomicU32::new(volume.to_bits()));
-        let stopped = Arc::new(AtomicBool::new(false));
-        let stream = output.build_stream(source, Arc::clone(&volume), Arc::clone(&stopped))?;
-        let PlaybackStream::Cpal(stream_ref) = &stream;
-        if !paused {
-            stream_ref
-                .play()
-                .context("启动音频输出失败")
-                .with_audio_kind(AudioErrorKind::Device)?;
-        }
         Ok(Self {
-            stream,
-            volume,
-            stopped,
+            stream: output.build_stream(shared, fft, volume, clipping_protection, paused)?,
         })
     }
 
     pub fn play(&self) {
-        let PlaybackStream::Cpal(stream) = &self.stream;
-        if let Err(error) = stream.play() {
-            warn!(%error, "恢复音频输出失败");
+        if let Err(error) = self.stream.play() {
+            warn!(%error, "恢复 ALSA processed 输出失败");
         }
     }
 
     pub fn pause(&self) {
-        let PlaybackStream::Cpal(stream) = &self.stream;
-        if let Err(error) = stream.pause() {
-            warn!(%error, "暂停音频输出失败");
+        if let Err(error) = self.stream.pause() {
+            warn!(%error, "暂停 ALSA processed 输出失败");
         }
     }
 
-    /// 停止播放：实时回调转入静音填充，随句柄销毁释放输出流
     pub fn stop(&self) {
-        self.stopped.store(true, Ordering::Release);
+        self.stream.stop();
     }
 
     pub fn set_volume(&self, volume: f32) {
-        self.volume.store(volume.to_bits(), Ordering::Relaxed);
+        self.stream.set_volume(volume);
+    }
+
+    pub fn set_clipping_protection(&self, enabled: bool) {
+        self.stream.set_clipping_protection(enabled);
     }
 }

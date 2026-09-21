@@ -58,7 +58,10 @@ test("Personal FM natural lifecycle ignores stale repeat-one and keeps provider 
 
   const direct = sessionSource.split("export const onNativeDirectTrackBoundary = (")[1];
   assert.ok(direct);
-  assert.match(direct, /alignPersonalFmPool\(prepared\.queueIndex\)/);
+  assert.match(direct, /commitGaplessSessionProjection\(/);
+  const sharedBoundaryCommit = sessionSource.split("const commitGaplessSessionProjection = (")[1];
+  assert.ok(sharedBoundaryCommit);
+  assert.match(sharedBoundaryCommit, /alignPersonalFmPool\(queueIndex\)/);
 });
 
 test("No-repeat playback stops at the final queue item", () => {

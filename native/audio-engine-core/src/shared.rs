@@ -5,6 +5,12 @@ use std::sync::Arc;
 use ffmpeg_audio::HttpCancelHandle;
 use parking_lot::{Condvar, Mutex};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProcessedTrackBoundary {
+    pub generation: u64,
+    pub duration_micros: u64,
+}
+
 /// 解码后的 PCM 音频数据块
 pub struct AudioChunk {
     /// 交错排列的 f32 播放样本（L R L R ...）
@@ -13,6 +19,8 @@ pub struct AudioChunk {
     pub fft_samples: Vec<f32>,
     /// tempo 处理前的源样本数，用于保持变速时播放位置准确
     pub source_sample_count: u64,
+    /// processed gapless 下一首的首个有效输出块标记；只由 writer 在 DAC-side 提交。
+    pub track_boundary: Option<ProcessedTrackBoundary>,
 }
 
 /// 非阻塞弹出缓冲区的结果
@@ -35,12 +43,18 @@ pub struct Shared {
     is_stopping: AtomicBool,
     /// 已被输出回调消费的交错采样数（包含所有声道）
     samples_consumed: AtomicU64,
+    /// 当前曲目在累计 source sample 时间线中的起点（交错样本数）。
+    track_base_samples: AtomicU64,
+    /// 当前曲目时长，由 load 或 DAC-side gapless boundary 更新。
+    track_duration_micros: AtomicU64,
+    /// DAC-side 已提交的 processed gapless 边界代次。
+    track_transition_count: AtomicU64,
+    track_boundary_generation: AtomicU64,
     /// 输出采样率（创建时确定，不可变）
     sample_rate: u32,
     /// 输出声道数（创建时确定，不可变）
     channels: u16,
-    /// 所有数据已被消费完毕（DecoderSource 返回 None 时设置）
-    /// 比 is_done() 更准确：is_done 只表示缓冲区空，all_consumed 表示输出回调已消费完
+    /// 所有数据已被 ALSA writer 真正 drain 完毕
     all_consumed: AtomicBool,
     /// 解码线程因读取失败（网络中断 / URL 失效）中止，区别于正常 EOF
     decode_failed: AtomicBool,
@@ -80,6 +94,10 @@ impl Shared {
             output_eof: AtomicBool::new(false),
             is_stopping: AtomicBool::new(false),
             samples_consumed: AtomicU64::new(0),
+            track_base_samples: AtomicU64::new(0),
+            track_duration_micros: AtomicU64::new(0),
+            track_transition_count: AtomicU64::new(0),
+            track_boundary_generation: AtomicU64::new(0),
             sample_rate,
             channels,
             all_consumed: AtomicBool::new(false),
@@ -154,9 +172,26 @@ impl Shared {
         }
     }
 
-    /// 批量累加已消费的采样数（由 DecoderSource 按 chunk 调用）
+    /// 兼容旧测试/辅助路径的增量消费计数；正式 ALSA processed writer 使用 `set_consumed_samples`。
     pub fn advance_consumed(&self, count: u64) {
         self.samples_consumed.fetch_add(count, Ordering::Relaxed);
+    }
+
+    /// ALSA processed writer 以 DAC 侧 `submitted - delay` 回推源时间后更新播放位置。
+    /// 与旧 callback 的“取块即消费”不同，这里允许直接设置单调累计值。
+    pub fn set_consumed_samples(&self, count: u64) {
+        let mut current = self.samples_consumed.load(Ordering::Relaxed);
+        while count > current {
+            match self.samples_consumed.compare_exchange_weak(
+                current,
+                count,
+                Ordering::Release,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => current = actual,
+            }
+        }
     }
 
     /// 已消费采样的原始计数（用于停滞检测，不做单位换算）
@@ -164,12 +199,41 @@ impl Shared {
         self.samples_consumed.load(Ordering::Relaxed)
     }
 
+    pub fn set_track_duration(&self, duration_secs: f64) {
+        let micros = (duration_secs.max(0.0) * 1_000_000.0)
+            .round()
+            .clamp(0.0, u64::MAX as f64) as u64;
+        self.track_duration_micros.store(micros, Ordering::Release);
+    }
+
+    pub fn track_duration(&self) -> f64 {
+        self.track_duration_micros.load(Ordering::Acquire) as f64 / 1_000_000.0
+    }
+
+    pub fn track_transition_count(&self) -> u64 {
+        self.track_transition_count.load(Ordering::Acquire)
+    }
+
+    pub fn track_boundary_generation(&self) -> u64 {
+        self.track_boundary_generation.load(Ordering::Acquire)
+    }
+
+    pub fn commit_track_boundary(&self, source_sample_base: u64, boundary: ProcessedTrackBoundary) {
+        self.track_base_samples
+            .store(source_sample_base, Ordering::Release);
+        self.track_duration_micros
+            .store(boundary.duration_micros, Ordering::Release);
+        self.track_boundary_generation
+            .store(boundary.generation, Ordering::Release);
+        self.track_transition_count.fetch_add(1, Ordering::AcqRel);
+    }
+
     /// 缓冲区是否为空（true 表示解码 underrun，sink 不消费可能是正常等待数据）
     pub fn is_buffer_empty(&self) -> bool {
         self.output_buffer.lock().is_empty()
     }
 
-    /// 标记所有数据已被消费完毕（DecoderSource 迭代结束时调用）
+    /// 标记所有数据已被真正播放/drain 完毕
     /// stop 引发的迭代结束不算播放完成，否则 position timer 在停止窗口期
     /// 会把切歌/停止误报成 Ended，导致前端队列跳两首
     pub fn mark_all_consumed(&self) {
@@ -202,7 +266,8 @@ impl Shared {
     /// 基于实际消费采样数的精确播放位置（秒）
     pub fn consumed_position(&self) -> f64 {
         let samples = self.samples_consumed.load(Ordering::Relaxed);
-        samples as f64 / self.sample_rate as f64 / self.channels as f64
+        let base = self.track_base_samples.load(Ordering::Acquire);
+        samples.saturating_sub(base) as f64 / self.sample_rate as f64 / self.channels as f64
     }
 
     /// 阻塞等待缓冲区有空间或收到停止信号，返回 false 表示应停止
@@ -333,5 +398,26 @@ mod tests {
 
         assert_eq!(shared.player_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
         assert_eq!(shared.fft_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
+    }
+
+    #[test]
+    fn processed_track_boundary_resets_visible_position_without_rewinding_total_consumed() {
+        let shared = Shared::new(48_000, 2);
+        shared.set_track_duration(5.0);
+        shared.set_consumed_samples(96_000);
+        assert!((shared.consumed_position() - 1.0).abs() < f64::EPSILON);
+
+        shared.commit_track_boundary(
+            96_000,
+            ProcessedTrackBoundary {
+                generation: 7,
+                duration_micros: 3_000_000,
+            },
+        );
+        assert_eq!(shared.samples_consumed_count(), 96_000);
+        assert_eq!(shared.consumed_position(), 0.0);
+        assert_eq!(shared.track_transition_count(), 1);
+        assert_eq!(shared.track_boundary_generation(), 7);
+        assert_eq!(shared.track_duration(), 3.0);
     }
 }

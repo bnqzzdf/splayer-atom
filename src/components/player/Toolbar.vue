@@ -100,8 +100,18 @@ const abLoopOpen = ref(false);
 const fmModeOpen = ref(false);
 
 const moreMenuItems = computed<DropdownMenuItem[]>(() => [
-  { key: "equalizer", label: t("equalizer.title"), icon: IconLucideSliders },
-  { key: "speed", label: t("speed.title"), icon: IconLucideGauge },
+  {
+    key: "equalizer",
+    label: t("equalizer.title"),
+    icon: IconLucideSliders,
+    disabled: processingLocked.value,
+  },
+  {
+    key: "speed",
+    label: t("speed.title"),
+    icon: IconLucideGauge,
+    disabled: processingLocked.value,
+  },
   { key: "abLoop", label: t("abLoop.title"), icon: IconLucideRepeat2 },
   { key: "autoClose", label: t("autoClose.title"), icon: IconLucideClock },
 ]);

@@ -186,6 +186,10 @@ mod imp {
                 .ok_or_else(|| anyhow!("invalid Diretta output selector"))?;
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
             let format = source.format();
+            anyhow::ensure!(
+                source.exact_integer_source(),
+                "Diretta strict Source Direct 只接受 lossless integer PCM"
+            );
             let raw = unsafe {
                 atom_diretta_open_direct(
                     target.as_ptr(),
@@ -240,7 +244,7 @@ mod imp {
             &mut self,
             path: &Path,
         ) -> Result<DirectPcmFormat> {
-            self.source.replace_local_while_paused(path)
+            self.source.replace_local_strict_while_paused(path)
         }
 
         pub fn monitor(&self) -> DirectPcmMonitor {
@@ -248,7 +252,7 @@ mod imp {
         }
 
         pub fn stage_handle(&self) -> DirectPcmStageHandle {
-            self.source.stage_handle()
+            self.source.strict_stage_handle()
         }
 
         pub fn set_duration(&self, duration_secs: f64) {

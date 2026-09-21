@@ -1,12 +1,11 @@
-use std::fs::File;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use ffmpeg_audio::{
-    sys, AudioError, AudioReader, HttpAudioSource, HttpCancelHandle, ResampleOptions, Resampler,
-    SeekMode,
+    sys, AudioError, AudioReader, HttpCancelHandle, ResampleOptions, Resampler, SeekMode,
 };
 use parking_lot::Mutex;
 use tracing::debug;
@@ -15,9 +14,10 @@ use crate::cue::CueVirtualInfo;
 use crate::equalizer::Equalizer;
 use crate::error::{AudioErrorKind, AudioResultExt};
 use crate::loudness::LoudnessAnalyzer;
+use crate::media_probe::{self, PreparedMedia};
 use crate::metadata::{self, AudioMetadata};
 use crate::priority;
-use crate::shared::{AudioChunk, Shared};
+use crate::shared::{AudioChunk, ProcessedTrackBoundary, Shared};
 use crate::tempo::StretchProcessor;
 
 /// 无输出设备信息时初始化 DSP 使用的默认声道数
@@ -35,43 +35,6 @@ const FFT_CHANNELS: u16 = 2;
 /// 自定义 File IO 读取失败时，ffmpeg_audio 的 read 回调可能映射为此错误码
 const AVERROR_EIO: i32 = sys::averror(libc::EIO);
 
-const OUTPUT_CEILING: f32 = 0.98;
-const LIMITER_RELEASE: f32 = 0.0005;
-
-struct OutputLimiter {
-    gain: f32,
-}
-
-impl OutputLimiter {
-    fn new() -> Self {
-        Self { gain: 1.0 }
-    }
-
-    fn process(&mut self, samples: &mut [f32], channels: u16) {
-        let channels = usize::from(channels);
-        debug_assert!(channels > 0 && samples.len().is_multiple_of(channels));
-        for frame in samples.chunks_exact_mut(channels) {
-            let peak = frame
-                .iter()
-                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
-            let target_gain = if peak > OUTPUT_CEILING {
-                OUTPUT_CEILING / peak
-            } else {
-                1.0
-            };
-            if peak * self.gain >= OUTPUT_CEILING {
-                self.gain = target_gain;
-            } else {
-                self.gain += (1.0 - self.gain) * LIMITER_RELEASE;
-            }
-            for sample in frame {
-                *sample *= self.gain;
-                *sample = sample.clamp(-OUTPUT_CEILING, OUTPUT_CEILING);
-            }
-        }
-    }
-}
-
 /// 解码会话所需的资源（跨 seek 复用，避免重建 ffmpeg_audio 上下文）
 ///
 /// 此处必须进行 1-to-N 分发，因为需要两个可能存在采样率差异的音源
@@ -88,24 +51,91 @@ pub struct DecoderData {
     cue_position_secs: f64,
 }
 
-/// 已打开且完成元数据读取的音源，等待按实际输出流采样率创建重采样器
-pub struct PreparedDecoder {
-    reader: AudioReader,
+pub type PreparedDecoder = PreparedMedia;
+
+pub struct StagedProcessedDecoder {
+    data: DecoderData,
     metadata: AudioMetadata,
-    replay_gain_db: Option<f32>,
-    cancel_handle: Option<HttpCancelHandle>,
-    cue_info: Option<CueVirtualInfo>,
+    normalization_gain: f32,
+    generation: u64,
 }
 
-impl PreparedDecoder {
-    /// 音源原始采样率，用于输出流采样率协商（设备支持时按精确采样率打开）
-    pub fn original_sample_rate(&self) -> u32 {
-        self.metadata.original_sample_rate
+impl StagedProcessedDecoder {
+    pub fn metadata(&self) -> AudioMetadata {
+        self.metadata.clone()
     }
 
-    /// 仅消费元数据探测结果，不启动播放器重采样/DSP 解码链。
-    pub fn into_metadata(self) -> AudioMetadata {
-        self.metadata
+    fn cancel(&self) {
+        if let Some(handle) = self.data.cancel_handle() {
+            handle.cancel();
+        }
+    }
+}
+
+struct ProcessedStageState {
+    slot: Mutex<Option<StagedProcessedDecoder>>,
+    closed: AtomicBool,
+    epoch: std::sync::atomic::AtomicU64,
+}
+
+#[derive(Clone)]
+pub struct ProcessedStageHandle {
+    state: Arc<ProcessedStageState>,
+}
+
+impl ProcessedStageHandle {
+    fn new() -> Self {
+        Self {
+            state: Arc::new(ProcessedStageState {
+                slot: Mutex::new(None),
+                closed: AtomicBool::new(false),
+                epoch: std::sync::atomic::AtomicU64::new(0),
+            }),
+        }
+    }
+
+    /// 为一次异步 prepare 预留代次；晚到结果只有代次仍匹配时才能安装。
+    pub fn begin_stage(&self) -> u64 {
+        let epoch = self.state.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Some(previous) = self.state.slot.lock().take() {
+            previous.cancel();
+        }
+        epoch
+    }
+
+    pub fn stage_if_current(&self, epoch: u64, staged: StagedProcessedDecoder) -> bool {
+        if self.state.closed.load(Ordering::Acquire) {
+            staged.cancel();
+            return false;
+        }
+        let mut slot = self.state.slot.lock();
+        if self.state.closed.load(Ordering::Acquire)
+            || self.state.epoch.load(Ordering::Acquire) != epoch
+        {
+            drop(slot);
+            staged.cancel();
+            return false;
+        }
+        if let Some(previous) = slot.replace(staged) {
+            previous.cancel();
+        }
+        true
+    }
+
+    pub fn cancel(&self) {
+        self.state.epoch.fetch_add(1, Ordering::AcqRel);
+        if let Some(staged) = self.state.slot.lock().take() {
+            staged.cancel();
+        }
+    }
+
+    fn take(&self) -> Option<StagedProcessedDecoder> {
+        self.state.slot.lock().take()
+    }
+
+    fn close(&self) {
+        self.state.closed.store(true, Ordering::Release);
+        self.cancel();
     }
 }
 
@@ -177,7 +207,7 @@ pub fn probe_metadata(
     cover_cache_dir: Option<&str>,
     cancel_handle: HttpCancelHandle,
 ) -> Result<AudioMetadata> {
-    Ok(prepare_decode(source, cover_cache_dir, cancel_handle)?.into_metadata())
+    media_probe::probe_metadata(source, cover_cache_dir, cancel_handle)
 }
 
 pub fn prepare_decode(
@@ -185,57 +215,60 @@ pub fn prepare_decode(
     cover_cache_dir: Option<&str>,
     cancel_handle: HttpCancelHandle,
 ) -> Result<PreparedDecoder> {
-    let (reader, cancel_handle) = open_source(source, cancel_handle)?;
+    media_probe::prepare_media(source, cover_cache_dir, cancel_handle)
+}
 
-    let info = reader.source_info();
-    let cue_info = crate::cue::parse_cue_virtual_path(source);
-    let mut duration_secs = reader.duration().map(|d| d.as_secs_f64()).unwrap_or(0.0);
-    if let Some(cue) = &cue_info {
-        if cue.duration > 0.0 {
-            duration_secs = cue.duration;
-        } else if duration_secs > cue.start_time {
-            duration_secs -= cue.start_time;
-        }
-    }
-    let stream_info = metadata::extract_stream_info(info);
-    ensure!(stream_info.channels > 0, "源音频没有有效声道");
-    let source_channels = u16::try_from(stream_info.channels).context("源音频声道数超出范围")?;
-    let codec = info.codec_name.clone().unwrap_or_default();
-
-    let raw_metadata = reader.metadata();
-    let tags =
-        metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), source);
-    let cover =
-        cover_cache_dir.and_then(|dir| metadata::extract_cover_thumbnail(&reader, source, dir));
-    let cover_raw = metadata::read_attached_pic(&reader);
-    let embedded_lyric = metadata::extract_embedded_lyric(&raw_metadata);
-    let external_lyrics = metadata::find_all_external_lyrics(source);
-    let replay_gain_db = metadata::extract_replay_gain(&raw_metadata);
-
-    let metadata = AudioMetadata {
-        title: tags.title,
-        artist: tags.artist,
-        album: tags.album,
-        comment: tags.comment,
-        duration_secs,
-        sample_rate: stream_info.sample_rate,
-        channels: source_channels,
-        original_sample_rate: stream_info.sample_rate,
-        bits_per_sample: stream_info.bits_per_sample,
-        bit_rate: stream_info.bit_rate,
-        codec,
-        embedded_lyric,
-        external_lyrics,
-        cover,
-        cover_raw,
-    };
-
-    Ok(PreparedDecoder {
+fn build_decoder_data(
+    prepared: PreparedDecoder,
+    target_rate: u32,
+    target_channels: u16,
+) -> Result<(AudioMetadata, DecoderData, Option<HttpCancelHandle>, f32)> {
+    let PreparedMedia {
         reader,
-        metadata,
+        mut metadata,
         replay_gain_db,
         cancel_handle,
         cue_info,
+    } = prepared;
+    let (player_resampler, fft_resampler) =
+        build_resamplers(&reader, target_rate, target_channels)?;
+    metadata.sample_rate = target_rate;
+    let normalization_gain = replay_gain_db.map(metadata::db_to_linear).unwrap_or(1.0);
+    let data = DecoderData {
+        reader,
+        player_resampler,
+        fft_resampler,
+        cancel_handle: cancel_handle.clone(),
+        cue_info,
+        cue_position_secs: 0.0,
+    };
+    Ok((metadata, data, cancel_handle, normalization_gain))
+}
+
+pub fn prepare_processed_stage(
+    source: &str,
+    cover_cache_dir: Option<&str>,
+    cancel_handle: HttpCancelHandle,
+    target_rate: u32,
+    target_channels: u16,
+    generation: u64,
+) -> Result<StagedProcessedDecoder> {
+    let prepared = prepare_decode(source, cover_cache_dir, cancel_handle)?;
+    anyhow::ensure!(
+        prepared.original_channels() == target_channels,
+        "processed gapless 下一音源声道数变化需要重新协商输出"
+    );
+    let (metadata, data, _cancel, normalization_gain) =
+        build_decoder_data(prepared, target_rate, target_channels)?;
+    anyhow::ensure!(
+        metadata.bits_per_sample != 1,
+        "processed gapless 不接受 Native DSD"
+    );
+    Ok(StagedProcessedDecoder {
+        data,
+        metadata,
+        normalization_gain,
+        generation,
     })
 }
 
@@ -249,62 +282,26 @@ pub fn start_prepared_decode(
     AudioMetadata,
     JoinHandle<DecoderData>,
     Option<HttpCancelHandle>,
+    ProcessedStageHandle,
 )> {
-    let PreparedDecoder {
-        reader,
-        mut metadata,
-        replay_gain_db,
-        cancel_handle,
-        cue_info,
-    } = prepared;
     let target_rate = shared.sample_rate();
-    let (player_resampler, fft_resampler) =
-        build_resamplers(&reader, target_rate, shared.channels())?;
-    metadata.sample_rate = target_rate;
-
-    if let Some(db) = replay_gain_db {
-        shared.set_normalization_gain(metadata::db_to_linear(db));
-    }
+    let (metadata, data, cancel_handle, normalization_gain) =
+        build_decoder_data(prepared, target_rate, shared.channels())?;
+    shared.set_normalization_gain(normalization_gain);
+    shared.set_track_duration(metadata.duration_secs);
     if let Some(handle) = &cancel_handle {
         shared.bind_cancel_handle(handle.clone());
     }
+    let stage_handle = ProcessedStageHandle::new();
+    let handle = spawn_decode_chain(
+        data,
+        Arc::clone(&shared),
+        equalizer,
+        tempo,
+        stage_handle.clone(),
+    )?;
 
-    let data = DecoderData {
-        reader,
-        player_resampler,
-        fft_resampler,
-        cancel_handle: cancel_handle.clone(),
-        cue_info,
-        cue_position_secs: 0.0,
-    };
-
-    let handle = thread::Builder::new()
-        .name("audio-decoder".to_string())
-        .spawn(move || {
-            priority::boost_current_audio_thread("audio-decoder");
-            let mut data = data;
-            let dsp_shared = Arc::clone(&shared);
-            let dsp_handle = thread::Builder::new()
-                .name("audio-dsp".to_string())
-                .spawn(move || run_dsp_safely(dsp_shared, equalizer, tempo));
-            let Ok(dsp_handle) = dsp_handle else {
-                shared.mark_decode_failed();
-                shared.mark_output_eof();
-                return data;
-            };
-            run_decode_safely(&shared, || {
-                run_decoding_loop(&mut data, &shared);
-            });
-            if dsp_handle.join().is_err() {
-                shared.mark_decode_failed();
-                shared.mark_output_eof();
-            }
-            data
-        })
-        .context("启动解码线程失败")
-        .with_audio_kind(AudioErrorKind::DecodeFailed)?;
-
-    Ok((metadata, handle, cancel_handle))
+    Ok((metadata, handle, cancel_handle, stage_handle))
 }
 
 /// 用已有的 DecoderData 继续解码（seek 后复用）
@@ -313,10 +310,22 @@ pub fn resume_decode(
     shared: Arc<Shared>,
     equalizer: Arc<Mutex<Equalizer>>,
     tempo: Arc<Mutex<StretchProcessor>>,
-) -> Result<JoinHandle<DecoderData>> {
+) -> Result<(JoinHandle<DecoderData>, ProcessedStageHandle)> {
     if let Some(handle) = data.cancel_handle() {
         shared.bind_cancel_handle(handle);
     }
+    let stage_handle = ProcessedStageHandle::new();
+    let handle = spawn_decode_chain(data, shared, equalizer, tempo, stage_handle.clone())?;
+    Ok((handle, stage_handle))
+}
+
+fn spawn_decode_chain(
+    data: DecoderData,
+    shared: Arc<Shared>,
+    equalizer: Arc<Mutex<Equalizer>>,
+    tempo: Arc<Mutex<StretchProcessor>>,
+    stage_handle: ProcessedStageHandle,
+) -> Result<JoinHandle<DecoderData>> {
     thread::Builder::new()
         .name("audio-decoder".to_string())
         .spawn(move || {
@@ -331,9 +340,35 @@ pub fn resume_decode(
                 shared.mark_output_eof();
                 return data;
             };
-            run_decode_safely(&shared, || {
-                run_decoding_loop(&mut data, &shared);
-            });
+            let mut next_boundary = None;
+            loop {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_decoding_loop(&mut data, &shared, next_boundary.take());
+                }));
+                if result.is_err() {
+                    shared.mark_decode_failed();
+                    break;
+                }
+                if shared.is_stopping() || shared.is_decode_failed() {
+                    break;
+                }
+                let Some(staged) = stage_handle.take() else {
+                    break;
+                };
+                if let Some(handle) = staged.data.cancel_handle() {
+                    shared.bind_cancel_handle(handle);
+                }
+                shared.set_normalization_gain(staged.normalization_gain);
+                next_boundary = Some(ProcessedTrackBoundary {
+                    generation: staged.generation,
+                    duration_micros: (staged.metadata.duration_secs.max(0.0) * 1_000_000.0)
+                        .round()
+                        .clamp(0.0, u64::MAX as f64) as u64,
+                });
+                data = staged.data;
+            }
+            stage_handle.close();
+            finish_decode_thread(&shared, false);
             if dsp_handle.join().is_err() {
                 shared.mark_decode_failed();
                 shared.mark_output_eof();
@@ -348,9 +383,7 @@ fn process_audio_chunk(
     mut chunk: AudioChunk,
     equalizer: &Mutex<Equalizer>,
     tempo: &Mutex<StretchProcessor>,
-    limiter: &mut OutputLimiter,
     tempo_scratch: &mut Vec<f32>,
-    channels: u16,
 ) -> AudioChunk {
     if chunk.player_samples.is_empty() {
         return chunk;
@@ -360,29 +393,19 @@ fn process_audio_chunk(
         .lock()
         .process_interleaved(&mut chunk.player_samples);
     if tempo.lock().is_bypass() {
-        limiter.process(&mut chunk.player_samples, channels);
         return chunk;
     }
 
     tempo_scratch.clear();
     tempo.lock().process(&chunk.player_samples, tempo_scratch);
-    limiter.process(tempo_scratch, channels);
     std::mem::swap(&mut chunk.player_samples, tempo_scratch);
     chunk
 }
 
 fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<StretchProcessor>) {
-    let mut limiter = OutputLimiter::new();
     let mut tempo_scratch = shared.take_player_buffer();
     while let Some(chunk) = shared.pop_decoded() {
-        let chunk = process_audio_chunk(
-            chunk,
-            equalizer,
-            tempo,
-            &mut limiter,
-            &mut tempo_scratch,
-            shared.channels(),
-        );
+        let chunk = process_audio_chunk(chunk, equalizer, tempo, &mut tempo_scratch);
         shared.push_output(chunk);
         if shared.is_stopping() {
             break;
@@ -403,46 +426,6 @@ fn run_dsp_safely(
         shared.mark_decode_failed();
     }
     shared.mark_output_eof();
-}
-
-/// 根据 source 协议打开音频：http(s) 走延迟 Range 源，其他走本地 File
-fn open_source(
-    source: &str,
-    cancel_handle: HttpCancelHandle,
-) -> Result<(AudioReader, Option<HttpCancelHandle>)> {
-    if crate::sacd::parse_sacd_virtual_path(source).is_some() {
-        let stream = crate::sacd::SacdDsfStream::open_virtual_path(source)
-            .with_context(|| format!("打开 SACD 虚拟分轨失败: {source}"))?;
-        let reader = AudioReader::new(stream)
-            .with_context(|| format!("打开 SACD 虚拟 DSF 流失败: {source}"))?;
-        return Ok((reader, None));
-    }
-
-    if let Some(cue_info) = crate::cue::parse_cue_virtual_path(source) {
-        let file = File::open(&cue_info.physical_path)
-            .with_context(|| format!("打开 CUE 关联母版音频失败: {}", cue_info.physical_path))?;
-        let mut reader = AudioReader::new(file)
-            .with_context(|| format!("打开 CUE 关联音频流失败: {}", cue_info.physical_path))?;
-        if cue_info.start_time > 0.0 {
-            let target = Duration::from_secs_f64(cue_info.start_time);
-            let _ = reader.seek(target, SeekMode::Accurate);
-        }
-        return Ok((reader, None));
-    }
-
-    let (reader, cancel) = if source.starts_with("http://") || source.starts_with("https://") {
-        let http = HttpAudioSource::new_with_cancel_handle(source, &cancel_handle)?;
-        let reader =
-            AudioReader::new(http).with_context(|| format!("打开网络音频失败: {source}"))?;
-        (reader, Some(cancel_handle))
-    } else {
-        let file = File::open(source).with_context(|| format!("打开本地文件失败: {source}"))?;
-        let reader =
-            AudioReader::new(file).with_context(|| format!("打开本地音频失败: {source}"))?;
-        (reader, None)
-    };
-
-    Ok((reader, cancel))
 }
 
 fn build_player_resampler(
@@ -514,7 +497,11 @@ fn apply_cue_sample_limit(
 }
 
 /// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放与 FFT 重采样器
-fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
+fn run_decoding_loop(
+    data: &mut DecoderData,
+    shared: &Shared,
+    mut track_boundary: Option<ProcessedTrackBoundary>,
+) {
     // 响度归一化：有 ReplayGain 标签时用固定增益，否则用实时分析
     let has_replay_gain = (shared.normalization_gain() - 1.0).abs() > f32::EPSILON;
     let mut loudness = LoudnessAnalyzer::new(shared.sample_rate(), shared.channels());
@@ -588,6 +575,7 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                     source_sample_count: player_samples.len() as u64,
                     player_samples,
                     fft_samples,
+                    track_boundary: track_boundary.take(),
                 });
                 if reached_cue_limit {
                     debug!("CUE 分轨播放达到精确边界，结束当前音轨解码");
@@ -615,6 +603,7 @@ fn run_decoding_loop(data: &mut DecoderData, shared: &Shared) {
                         source_sample_count: player_samples.len() as u64,
                         player_samples,
                         fft_samples,
+                        track_boundary: track_boundary.take(),
                     });
                 } else {
                     shared.recycle_player_buffer(player_samples);
@@ -676,6 +665,45 @@ mod tests {
         bytes
     }
 
+    fn staged_decoder_for_test(generation: u64) -> StagedProcessedDecoder {
+        let reader = AudioReader::new(Cursor::new(mono_wav())).unwrap();
+        let (player_resampler, fft_resampler) = build_resamplers(&reader, 48_000, 1).unwrap();
+        StagedProcessedDecoder {
+            data: DecoderData {
+                reader,
+                player_resampler,
+                fft_resampler,
+                cancel_handle: None,
+                cue_info: None,
+                cue_position_secs: 0.0,
+            },
+            metadata: AudioMetadata {
+                duration_secs: 1.0,
+                sample_rate: 48_000,
+                original_sample_rate: 48_000,
+                channels: 1,
+                ..Default::default()
+            },
+            normalization_gain: 1.0,
+            generation,
+        }
+    }
+
+    #[test]
+    fn processed_stage_epoch_rejects_late_prepare_and_cancel_invalidates_slot() {
+        let handle = ProcessedStageHandle::new();
+        let first = handle.begin_stage();
+        let second = handle.begin_stage();
+        assert!(!handle.stage_if_current(first, staged_decoder_for_test(1)));
+        assert!(handle.stage_if_current(second, staged_decoder_for_test(2)));
+        assert_eq!(handle.take().unwrap().generation, 2);
+
+        let third = handle.begin_stage();
+        handle.cancel();
+        assert!(!handle.stage_if_current(third, staged_decoder_for_test(3)));
+        assert!(handle.take().is_none());
+    }
+
     #[test]
     fn panic_marks_decode_failed_and_finishes_source() {
         let shared = Shared::new(48_000, DEFAULT_OUTPUT_CHANNELS);
@@ -701,12 +729,11 @@ mod tests {
     }
 
     #[test]
-    fn dsp_applies_equalizer_and_limiter_before_output() {
+    fn dsp_keeps_eq_gain_for_final_processed_output_stage() {
         let equalizer = Mutex::new(Equalizer::new(48_000, 2));
         equalizer.lock().set_enabled(true);
         equalizer.lock().set_preamp_db(12.0);
         let tempo = Mutex::new(StretchProcessor::new(2, 48_000));
-        let mut limiter = OutputLimiter::new();
         let mut scratch = Vec::new();
 
         let processed = process_audio_chunk(
@@ -714,18 +741,17 @@ mod tests {
                 player_samples: vec![0.8, -0.8],
                 fft_samples: Vec::new(),
                 source_sample_count: 2,
+                track_boundary: None,
             },
             &equalizer,
             &tempo,
-            &mut limiter,
             &mut scratch,
-            2,
         );
 
         assert!(processed
             .player_samples
             .iter()
-            .all(|sample| sample.abs() <= OUTPUT_CEILING + 1e-6));
+            .any(|sample| sample.abs() > 1.0));
     }
 
     #[test]
@@ -733,7 +759,6 @@ mod tests {
         let equalizer = Mutex::new(Equalizer::new(48_000, 2));
         let tempo = Mutex::new(StretchProcessor::new(2, 48_000));
         tempo.lock().set_speed(2.0);
-        let mut limiter = OutputLimiter::new();
         let mut scratch = Vec::new();
         let input = vec![0.1; 4096];
 
@@ -742,31 +767,15 @@ mod tests {
                 source_sample_count: input.len() as u64,
                 player_samples: input,
                 fft_samples: Vec::new(),
+                track_boundary: None,
             },
             &equalizer,
             &tempo,
-            &mut limiter,
             &mut scratch,
-            2,
         );
 
         assert_eq!(processed.source_sample_count, 4096);
         assert_eq!(processed.player_samples.len(), 2048);
-    }
-
-    #[test]
-    fn limiter_uses_one_gain_for_the_whole_multichannel_frame() {
-        let mut limiter = OutputLimiter::new();
-        let original = [2.0_f32, 1.0, 0.5, -0.5, -1.0, -2.0];
-        let mut samples = original;
-
-        limiter.process(&mut samples, 6);
-
-        let gain = samples[0] / original[0];
-        for (actual, input) in samples.iter().zip(original) {
-            assert!((actual / input - gain).abs() < 1e-6);
-        }
-        assert!(samples.iter().all(|sample| sample.abs() <= OUTPUT_CEILING));
     }
 
     #[test]

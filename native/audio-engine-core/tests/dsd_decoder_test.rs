@@ -1,4 +1,4 @@
-use audio_engine_core::dsd::{is_dsd_path, reverse_byte, Dsd2PcmDecimator, DsdRate, DsfReader};
+use audio_engine_core::dsd::{is_dsd_path, reverse_byte, DsdRate, DsfReader};
 use std::io::Write;
 
 #[test]
@@ -91,29 +91,5 @@ fn test_dsf_reader_synthetic() {
     for chunk in out_buf.chunks_exact(8) {
         assert_eq!(&chunk[0..4], &[0x01, 0x01, 0x01, 0x01]);
         assert_eq!(&chunk[4..8], &[0x80, 0x80, 0x80, 0x80]);
-    }
-}
-
-#[test]
-fn test_dsd2pcm_decimator() {
-    let mut decimator = Dsd2PcmDecimator::new(2_822_400);
-    assert_eq!(decimator.target_sample_rate, 88_200);
-
-    // 构造 64 字节交错 DSD 数据 (8 个 8-byte 周期)
-    let mut dsd_bytes = Vec::new();
-    for _ in 0..8 {
-        // L=0x69 (标准静音), R=0x96 (标准静音)
-        dsd_bytes.extend_from_slice(&[0x69, 0x69, 0x69, 0x69, 0x96, 0x96, 0x96, 0x96]);
-    }
-
-    let mut pcm_samples = Vec::new();
-    decimator.convert(&dsd_bytes, &mut pcm_samples);
-
-    // 64 字节 DSD (每 4 字节=32 bit 抽取为 2 个样本) -> 输出 16 个 stereo 样本 (32 floats)
-    assert_eq!(pcm_samples.len(), 32);
-
-    // 验证所有 PCM 样本均处于正常音频范围内 [-1.0, 1.0]
-    for sample in pcm_samples {
-        assert!(sample >= -1.0 && sample <= 1.0);
     }
 }

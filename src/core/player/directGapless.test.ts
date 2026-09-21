@@ -59,8 +59,9 @@ test("Direct staging respects Core playback semantics before handing audio to na
   );
   assert.match(
     corePreloaderSource,
-    /store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\)/,
+    /isLocalDirectOutput\(store\.get\("player\.outputDevice"\)\)/,
   );
+  assert.match(corePreloaderSource, /store\.get\("player\.alsaPlaybackMode"\)/);
   assert.doesNotMatch(corePreloaderSource, /getSelectedDeviceName\(\)/);
   assert.match(corePreloaderSource, /directCueSegmentFromTrack\(track\)/);
   assert.match(

@@ -105,9 +105,6 @@ impl AudioEngineError {
         if let Some(error) = source.downcast_ref::<AudioError>() {
             return Some(Self::classify_audio_error(error));
         }
-        if source.downcast_ref::<cpal::Error>().is_some() {
-            return Some(AudioErrorKind::Device);
-        }
         None
     }
 
@@ -203,16 +200,6 @@ mod tests {
         assert!(matches!(
             AudioEngineError::classify(&transport),
             AudioEngineError::NetworkUnreachable(_)
-        ));
-    }
-
-    #[test]
-    fn cpal_errors_are_device_errors() {
-        let error = anyhow::Error::new(cpal::Error::from(cpal::ErrorKind::DeviceBusy));
-
-        assert!(matches!(
-            AudioEngineError::classify(&error),
-            AudioEngineError::Device(_)
         ));
     }
 }

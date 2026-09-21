@@ -51,13 +51,14 @@ test("canonical source resolution is owned by Core before native load", () => {
   assert.match(loadFlow, /loadPlayerSource\(\s*nativeSource/);
 });
 
-test("main player load materializes every remote source before Diretta native load", () => {
+test("main player load materializes every remote source before native Direct load", () => {
   const loadFlow = between(
     mainPlayerLoadSource,
     "export const loadPlayerSource = async (",
     "playerLog.debug(`加载成功: ${displayTitle}`)",
   );
-  assert.match(loadFlow, /getSelectedDeviceName\(\)\?\.startsWith\("diretta:"\)/);
+  assert.match(loadFlow, /isLocalDirectOutputWithMode\(/);
+  assert.match(loadFlow, /inst\.getAlsaPlaybackMode\(\)/);
   assert.match(loadFlow, /\^https\?:\\\/\\\//i);
   assert.match(loadFlow, /loadSource = await materializeDirectInput\(source\)/);
   assert.match(loadFlow, /inst\.load\(\s*loadSource,/);

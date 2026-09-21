@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use super::events::playback_completion_event;
 use super::{InnerPlayer, PlayerEvent, PlayerState};
+use crate::direct_runtime::DirectFailureKind;
 use crate::playback::PlaybackHandle;
 
 /// 渐变步数
@@ -94,7 +95,6 @@ impl InnerPlayer {
         let stop_flag = Arc::new(AtomicBool::new(false));
         self.position_timer_stop = Some(Arc::clone(&stop_flag));
 
-        #[cfg(any(feature = "diretta", test))]
         if let Some((monitor, seek_base, initial_transition_count)) = self.direct_monitor() {
             let cb = match &self.event_callback {
                 Some(cb) => Arc::clone(cb),
@@ -120,11 +120,11 @@ impl InnerPlayer {
                     };
                     let duration = monitor.duration();
                     cb(PlayerEvent::Position { position, duration });
-                    if monitor.failed() {
-                        cb(PlayerEvent::SourceError);
-                        cb(PlayerEvent::StateChanged {
-                            state: PlayerState::Stopped,
-                        });
+                    if let Some(failure) = monitor.failure_kind() {
+                        match failure {
+                            DirectFailureKind::Source => cb(PlayerEvent::SourceError),
+                            DirectFailureKind::Output => cb(PlayerEvent::OutputFailed),
+                        }
                         break;
                     }
                     if monitor.finished() {
@@ -150,7 +150,8 @@ impl InnerPlayer {
             None => return,
         };
         let seek_base = self.seek_base;
-        let duration = self.duration();
+        let initial_duration = self.duration();
+        let initial_transition_count = shared.track_transition_count();
         let playback = self.playback.as_ref().map(Arc::clone);
 
         let handle = thread::spawn(move || {
@@ -158,10 +159,33 @@ impl InnerPlayer {
             const STALL_THRESHOLD_TICKS: u32 = 6; // 6 * 200ms = 1.2s
             let mut last_consumed = shared.samples_consumed_count();
             let mut stall_ticks: u32 = 0;
+            let mut last_transition_count = initial_transition_count;
 
             while !stop_flag.load(Ordering::Relaxed) {
+                let transition_count = shared.track_transition_count();
+                if transition_count != last_transition_count {
+                    for _ in last_transition_count..transition_count {
+                        cb(PlayerEvent::ProcessedTrackBoundary {
+                            duration: shared.track_duration(),
+                            generation: shared.track_boundary_generation(),
+                        });
+                    }
+                    last_transition_count = transition_count;
+                }
                 let consumed = shared.samples_consumed_count();
-                let position = seek_base + shared.consumed_position();
+                let position = if transition_count == initial_transition_count {
+                    seek_base + shared.consumed_position()
+                } else {
+                    shared.consumed_position()
+                };
+                let duration = {
+                    let current = shared.track_duration();
+                    if current > 0.0 {
+                        current
+                    } else {
+                        initial_duration
+                    }
+                };
                 cb(PlayerEvent::Position { position, duration });
 
                 // 检测播放结束：all_consumed 表示输出回调已消费完所有数据
@@ -214,7 +238,7 @@ impl InnerPlayer {
     #[cfg(feature = "fft")]
     pub(super) fn start_fft_timer(&mut self) {
         self.stop_fft_timer();
-        if self.direct_active() {
+        if self.direct_active() && !self.direct_fft_supported() {
             return;
         }
         if !self.fft_enabled() {

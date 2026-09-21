@@ -30,12 +30,14 @@ import {
 } from "@main/services/playbackSourcePolicy";
 import {
   consumeDirectPlaybackBoundary,
+  consumeProcessedPlaybackBoundary,
   consumePlaybackPreload,
   invalidatePlaybackPreload,
   schedulePlaybackPreload,
   waitForPlaybackPreloadIdle,
 } from "@main/services/playbackPreloader";
 import { commitDirectPlaybackBoundary } from "@main/services/directGapless";
+import { commitProcessedPlaybackBoundary } from "@main/services/processedGapless";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import { parseSacdPlaybackSource, toNativeSacdPlaybackSource } from "@main/atom/sacdInput";
 import {
@@ -51,7 +53,18 @@ import { playerLog } from "@main/utils/logger";
 import { toMs } from "@main/utils/time";
 import { ErrorCode } from "@shared/types/errors";
 import { shouldSkipDjTrack } from "@shared/utils/djMode";
-import { isUpnpOutput, selectInitialHeadlessOutput } from "@shared/utils/outputDevice";
+import {
+  isDirectAlsaHardwareOutput,
+  isUpnpOutput,
+  selectInitialHeadlessOutput,
+} from "@shared/utils/outputDevice";
+import type { AlsaPlaybackMode } from "@shared/types/settings";
+import {
+  getAlsaPlaybackMode,
+  isLocalDirectOutput,
+  parseAlsaPlaybackMode,
+} from "@main/services/alsaPlaybackMode";
+import { projectNativeEffectiveControls } from "@main/services/playerOutputStatus";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type { PlayerStatus } from "@shared/types/player";
 import {
@@ -101,6 +114,7 @@ let initialized = false;
 let loadGeneration = 0;
 let cueBoundaryGeneration = -1;
 let lastNativeDirectBoundaryGeneration: number | null = null;
+let lastNativeProcessedBoundaryGeneration: number | null = null;
 let sourceRecoveryAttempts = 0;
 let autoClose = {
   enabled: false,
@@ -260,7 +274,6 @@ const publishTrackLoaded = (
 };
 
 const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatus()): void => {
-  const player = getPlayer();
   const playing = remote.state === "playing";
   onCorePlayerState(remote.state);
   nowPlaying.onPlayStateChange(remote.state);
@@ -274,9 +287,15 @@ const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatu
       state: remote.state,
       position: remote.position,
       duration: remote.duration,
-      volume: player.getVolume(),
-      speed: player.getSpeed(),
+      volume: 1,
+      speed: 1,
       isFinished: remote.isFinished,
+      output: {
+        deviceId: getSelectedOutputDevice(),
+        path: null,
+        sampleProcessingAvailable: false,
+        fftAvailable: false,
+      },
     },
   });
   publishCoreControlEvent({
@@ -633,9 +652,11 @@ export const initPlaybackSession = async (): Promise<void> => {
     active = queue.length > 0;
   }
   const player = getPlayer();
+  player.setAlsaPlaybackMode(store.get("player.alsaPlaybackMode"));
   // Core 启动时恢复持久化样本域设置。
   player.setVolume(store.get("player.volume"));
   player.setNormalizationEnabled(store.get("player.loudnessNormalization"));
+  player.setClippingProtectionEnabled(store.get("player.clippingProtection"));
   player.setEqualizerEnabled(store.get("player.equalizer.enabled"));
   player.setEqualizerBands(store.get("player.equalizer.bands"));
   player.setPreampGain(store.get("player.equalizer.preamp"));
@@ -898,6 +919,30 @@ export const reloadCurrent = async (forcePlay?: boolean): Promise<boolean> => {
   }
 };
 
+/**
+ * 用户显式重建当前本地输出。
+ * 生命周期仍由 Core authoritative session 驱动：重新解析当前 Track、重载、恢复位置与原播放意图。
+ */
+export const reinitOutput = async (): Promise<void> => {
+  if (isUpnpSelected() || !ownsPlayback() || index < 0 || index >= queue.length) return;
+  const currentStatus = getPlaybackStatus();
+  const shouldPlay = currentStatus.state === "playing";
+  const resumePositionMs = currentStatus.position;
+  invalidatePlaybackPreload();
+  try {
+    await loadIndex(index, false, { preserveListenBrainzSession: true });
+    if (resumePositionMs > 0) await seek(resumePositionMs);
+    if (shouldPlay) await play();
+  } catch (error) {
+    const code = error instanceof CorePlaybackLoadError ? error.code : ErrorCode.UNKNOWN;
+    publishPlaybackError(code);
+    playerLog.warn(`[session] explicit output reinit failed code=${code}: ${String(error)}`);
+    throw error;
+  } finally {
+    scheduleNextPlaybackPreload();
+  }
+};
+
 export const startPersonalFm = async (
   options?: PersonalFmOptions,
   autoPlay = true,
@@ -1151,28 +1196,100 @@ export const onNativeDirectTrackBoundary = (
     const track = prepared.item.track;
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
     commitDirectPlaybackBoundary(prepared.directSource, duration, track, prepared.item.context);
-    if (mode === "personalFm") {
-      queue = alignPersonalFmPool(prepared.queueIndex).map((fmTrack) => ({ track: fmTrack }));
-      originalQueue = null;
-      index = queue.length > 0 ? 0 : -1;
-    } else {
-      index = prepared.queueIndex;
-    }
-    active = index >= 0;
-    sourceRecoveryAttempts = 0;
-    nowPlaying.update({ ...track, duration }, [], null);
-    nowPlaying.onPosition(0, true);
-    nowPlaying.onPlayStateChange("playing");
-    publish();
-    publishTrackLoaded(prepared.item, prepared.directSource, true, prepared.directDetail, {
+    commitGaplessSessionProjection(
+      prepared.queueIndex,
+      prepared.item,
+      prepared.directSource,
       duration,
-      quality: prepared.directDetail?.quality,
-    });
-    scheduleNextPlaybackPreload();
+      prepared.directDetail,
+    );
   } catch (error) {
     playerLog.error(`[session] Direct boundary commit failed: ${String(error)}`);
     void recoverAuthoritativeQueue().catch((recoveryError) =>
       playerLog.error("[session] Direct boundary recovery failed", recoveryError),
+    );
+  }
+  return true;
+};
+
+const commitGaplessSessionProjection = (
+  queueIndex: number,
+  item: PlaybackQueueItem,
+  source: string,
+  duration: number,
+  detail?: TrackDetail,
+): void => {
+  const track = item.track;
+  if (mode === "personalFm") {
+    queue = alignPersonalFmPool(queueIndex).map((fmTrack) => ({ track: fmTrack }));
+    originalQueue = null;
+    index = queue.length > 0 ? 0 : -1;
+  } else {
+    index = queueIndex;
+  }
+  active = index >= 0;
+  sourceRecoveryAttempts = 0;
+  nowPlaying.update({ ...track, duration }, [], null);
+  nowPlaying.onPosition(0, true);
+  nowPlaying.onPlayStateChange("playing");
+  publish();
+  publishTrackLoaded(item, source, true, detail, {
+    duration,
+    quality: detail?.quality,
+  });
+  scheduleNextPlaybackPreload();
+};
+
+/** processed staged decoder 已在 DAC-side 越过边界后提交 authoritative queue。 */
+export const onNativeProcessedTrackBoundary = (
+  generation: number,
+  eventDurationMs: number,
+): boolean => {
+  if (!ownsPlayback()) return false;
+  if (lastNativeProcessedBoundaryGeneration === generation) return true;
+  lastNativeProcessedBoundaryGeneration = generation;
+
+  const recoverAuthoritativeQueue = async (): Promise<void> => {
+    getPlayer().stop();
+    if (!ownsPlayback()) return;
+    if (mode !== "personalFm" && repeat === "one") {
+      await selectIndex(index, true, true);
+      return;
+    }
+    await next();
+  };
+
+  const prepared = consumeProcessedPlaybackBoundary(generation, queue);
+  if (!prepared) {
+    playerLog.warn(
+      `[session] stale processed boundary generation=${generation}, restoring queue authority`,
+    );
+    void recoverAuthoritativeQueue().catch((error) =>
+      playerLog.error("[session] processed boundary recovery failed", error),
+    );
+    return true;
+  }
+
+  try {
+    const track = prepared.item.track;
+    const duration = Math.max(track.duration || 0, eventDurationMs || 0);
+    commitProcessedPlaybackBoundary(
+      prepared.processedSource,
+      duration,
+      track,
+      prepared.item.context,
+    );
+    commitGaplessSessionProjection(
+      prepared.queueIndex,
+      prepared.item,
+      prepared.processedSource,
+      duration,
+      prepared.processedDetail,
+    );
+  } catch (error) {
+    playerLog.error(`[session] processed boundary commit failed: ${String(error)}`);
+    void recoverAuthoritativeQueue().catch((recoveryError) =>
+      playerLog.error("[session] processed boundary recovery failed", recoveryError),
     );
   }
   return true;
@@ -1283,6 +1400,26 @@ const stopUpnpOutputForSwitch = async (): Promise<void> => {
   }
 };
 
+const syncNativeAlsaModeForTarget = (
+  player: ReturnType<typeof getPlayer>,
+  deviceId: string | null | undefined,
+): void => {
+  if (!deviceId || !isDirectAlsaHardwareOutput(deviceId)) return;
+  player.setAlsaPlaybackMode(getAlsaPlaybackMode());
+};
+
+const isNativeDsdPlaybackSource = (track: Track, source: string): boolean => {
+  if (parseSacdPlaybackSource(source)) return true;
+  if (/\.(?:dsf|dff|dsdiff)(?:$|[?#])/i.test(source)) return true;
+  if (track.quality?.bitsPerSample === 1) return true;
+  return /(?:^|[^a-z])(?:dsd|dst|dsf|dff)(?:[^a-z]|$)/i.test(track.quality?.codec ?? "");
+};
+
+const isAlsaProcessedTarget = (deviceId: string | null | undefined): boolean =>
+  deviceId != null &&
+  isDirectAlsaHardwareOutput(deviceId) &&
+  getAlsaPlaybackMode() === "processed";
+
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertCoreDirettaPrivilege(deviceId);
   invalidatePlaybackPreload();
@@ -1311,7 +1448,9 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
         : toDisplayPositionMs(toMs(player.getPosition()))
       : 0;
     const shouldResumePlaying =
-      state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+      state === "playing" &&
+      store.get("player.pauseOnDeviceSwitch") !== true &&
+      !isLocalDirectOutput(deviceId);
     const playbackGeneration = loadGeneration;
     const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
     let previousResolved: ResolvedPlaybackSource | null = null;
@@ -1332,7 +1471,7 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       store.set("player.outputDevice", deviceId);
       publishCoreControlEvent({
         type: "deviceChanged",
-        data: { defaultDevice: player.getDefaultDeviceName() ?? null },
+        data: { defaultDevice: null },
       });
 
       if (shouldReloadCurrent && previousResolved) {
@@ -1381,7 +1520,9 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       (state === "playing" || state === "paused");
     const resumePositionMs = shouldReloadCurrent ? remote.position : 0;
     const shouldResumePlaying =
-      state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+      state === "playing" &&
+      store.get("player.pauseOnDeviceSwitch") !== true &&
+      !isLocalDirectOutput(deviceId);
     const playbackGeneration = loadGeneration;
     const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
     let previousResolved: ResolvedPlaybackSource | null = null;
@@ -1389,12 +1530,16 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
     let managedDirectInput: string | null = null;
 
     if (shouldReloadCurrent) {
-      previousResolved = await resolvePlaybackSource(queue[index].track);
+      const item = queue[index];
+      previousResolved = await resolvePlaybackSource(item.track);
       targetResolved = previousResolved;
-      if (
-        deviceId?.startsWith("diretta:") === true &&
-        /^https?:\/\//i.test(previousResolved.source)
-      ) {
+      const nativeSource =
+        toNativeSacdPlaybackSource(previousResolved.source, item.track.track, item.track.duration) ??
+        previousResolved.source;
+      if (isAlsaProcessedTarget(deviceId) && isNativeDsdPlaybackSource(item.track, nativeSource)) {
+        throw new Error("Native DSD requires ALSA direct mode");
+      }
+      if (isLocalDirectOutput(deviceId) && /^https?:\/\//i.test(previousResolved.source)) {
         const cached = previousResolved.cacheAfterLoad
           ? await previousResolved.cacheAfterLoad()
           : null;
@@ -1415,12 +1560,13 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
 
     try {
       await stopUpnpOutputForSwitch();
+      syncNativeAlsaModeForTarget(player, deviceId);
       await player.setOutputDevice(deviceId ?? undefined);
       store.set("player.outputDevice", deviceId);
       await releaseUpnpOutput();
       publishCoreControlEvent({
         type: "deviceChanged",
-        data: { defaultDevice: player.getDefaultDeviceName() ?? null },
+        data: { defaultDevice: null },
       });
       if (shouldReloadCurrent && targetResolved) {
         await loadIndex(index, false, {
@@ -1465,7 +1611,9 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
   const playbackGeneration = loadGeneration;
   const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
   const shouldResumePlaying =
-    state === "playing" && store.get("player.pauseOnDeviceSwitch") !== true;
+    state === "playing" &&
+    store.get("player.pauseOnDeviceSwitch") !== true &&
+    !isLocalDirectOutput(deviceId);
 
   let previousResolved: ResolvedPlaybackSource | null = null;
   let targetResolved: ResolvedPlaybackSource | null = null;
@@ -1476,10 +1624,13 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       const item = queue[index];
       previousResolved = await resolvePlaybackSource(item.track);
       targetResolved = previousResolved;
-      if (
-        deviceId?.startsWith("diretta:") === true &&
-        /^https?:\/\//i.test(previousResolved.source)
-      ) {
+      const nativeSource =
+        toNativeSacdPlaybackSource(previousResolved.source, item.track.track, item.track.duration) ??
+        previousResolved.source;
+      if (isAlsaProcessedTarget(deviceId) && isNativeDsdPlaybackSource(item.track, nativeSource)) {
+        throw new Error("Native DSD requires ALSA direct mode");
+      }
+      if (isLocalDirectOutput(deviceId) && /^https?:\/\//i.test(previousResolved.source)) {
         const cached = previousResolved.cacheAfterLoad
           ? await previousResolved.cacheAfterLoad()
           : null;
@@ -1496,10 +1647,12 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
         if (managedDirectInput) void discardDirectInput(managedDirectInput);
         throw new Error("playback changed while preparing output switch");
       }
-      player.stop();
     }
 
     try {
+      // output selection 本身不拥有 reload；Core 统一先释放旧 runtime。
+      player.stop();
+      syncNativeAlsaModeForTarget(player, deviceId);
       await player.setOutputDevice(deviceId ?? undefined);
     } catch (switchError) {
       if (managedDirectInput) void discardDirectInput(managedDirectInput);
@@ -1522,7 +1675,7 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
     store.set("player.outputDevice", deviceId);
     publishCoreControlEvent({
       type: "deviceChanged",
-      data: { defaultDevice: player.getDefaultDeviceName() ?? null },
+      data: { defaultDevice: null },
     });
 
     if (shouldReloadCurrent && targetResolved) {
@@ -1543,6 +1696,110 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
   }
 };
 
+/**
+ * 切换 ALSA 的显式播放模式。
+ *
+ * 模式不是 writer 热路径上的开关：Core 先准备当前源，再释放旧 runtime，提交 native mode，
+ * 最后按同一 Track/位置重建。失败不提交持久化偏好，也不自动恢复旧播放。
+ */
+export const setAlsaPlaybackMode = async (requested: AlsaPlaybackMode): Promise<void> => {
+  const targetMode = parseAlsaPlaybackMode(requested);
+  const previousMode = store.get("player.alsaPlaybackMode");
+  if (targetMode === previousMode) return;
+
+  invalidatePlaybackPreload();
+  const player = getPlayer();
+  const selected = store.get("player.outputDevice");
+
+  // Diretta / UPnP / 未选择输出时只保存 ALSA 偏好；不打断当前非 ALSA runtime。
+  if (!selected || !isDirectAlsaHardwareOutput(selected)) {
+    store.set("player.alsaPlaybackMode", targetMode);
+    scheduleNextPlaybackPreload();
+    return;
+  }
+
+  const state = player.getStatus().state as PlayerStatus["state"];
+  const shouldReloadCurrent =
+    ownsPlayback() &&
+    index >= 0 &&
+    index < queue.length &&
+    (state === "playing" || state === "paused");
+  const resumePositionMs = shouldReloadCurrent
+    ? toDisplayPositionMs(toMs(player.getPosition()))
+    : 0;
+  const shouldResumePlaying = targetMode === "processed" && state === "playing";
+  const playbackGeneration = loadGeneration;
+  const currentTrackId = shouldReloadCurrent ? (queue[index]?.track.id ?? null) : null;
+
+  let targetResolved: ResolvedPlaybackSource | null = null;
+  let managedDirectInput: string | null = null;
+
+  if (shouldReloadCurrent) {
+    const item = queue[index];
+    const resolved = await resolvePlaybackSource(item.track);
+    const nativeSource =
+      toNativeSacdPlaybackSource(resolved.source, item.track.track, item.track.duration) ??
+      resolved.source;
+
+    // Native DSD 在 processed 中没有合法路径；必须在旧 direct runtime 仍完整时拒绝。
+    if (targetMode === "processed" && isNativeDsdPlaybackSource(item.track, nativeSource)) {
+      scheduleNextPlaybackPreload();
+      throw new Error("Native DSD requires ALSA direct mode");
+    }
+
+    targetResolved = resolved;
+    if (targetMode === "direct" && /^https?:\/\//i.test(resolved.source)) {
+      const cached = resolved.cacheAfterLoad ? await resolved.cacheAfterLoad() : null;
+      const source = cached ?? (await materializeDirectInput(resolved.source));
+      if (!cached) managedDirectInput = source;
+      targetResolved = {
+        ...resolved,
+        source,
+        provider: cached ? "cache" : resolved.provider,
+        cacheAfterLoad: undefined,
+      };
+    }
+
+    if (loadGeneration !== playbackGeneration || queue[index]?.track.id !== currentTrackId) {
+      if (managedDirectInput) void discardDirectInput(managedDirectInput);
+      scheduleNextPlaybackPreload();
+      throw new Error("playback changed while preparing ALSA mode switch");
+    }
+  }
+
+  try {
+    // 模式切换和设备切换遵循同一条规则：先释放旧 runtime，再提交新选择。
+    player.stop();
+    player.setAlsaPlaybackMode(targetMode);
+
+    if (shouldReloadCurrent && targetResolved) {
+      await loadIndex(index, false, {
+        resolvedOverride: targetResolved,
+        preserveListenBrainzSession: true,
+      });
+      if (resumePositionMs > 0) await seek(resumePositionMs);
+      // processed 恢复原播放意图；processed→direct 明确保持暂停，避免软件衰减突然变满幅。
+      if (shouldResumePlaying) await play();
+    }
+
+    store.set("player.alsaPlaybackMode", targetMode);
+    // loadIndex 结束时可能按旧持久化 mode 启动过一次 preload；提交后立即淘汰并按新 mode 重建。
+    invalidatePlaybackPreload();
+  } catch (switchError) {
+    if (managedDirectInput) void discardDirectInput(managedDirectInput);
+    try {
+      // 不恢复旧播放，只恢复未提交的 mode 偏好，使 native 与 durable state 保持一致。
+      player.stop();
+      player.setAlsaPlaybackMode(previousMode);
+    } catch (rollbackError) {
+      playerLog.error(`[session] ALSA mode rollback failed: ${String(rollbackError)}`);
+    }
+    throw switchError;
+  } finally {
+    scheduleNextPlaybackPreload();
+  }
+};
+
 /** 当前 Native 实际选择的输出设备，而不是仅返回持久化偏好。 */
 export const getSelectedOutputDevice = (): string | null =>
   isUpnpOutput(store.get("player.outputDevice"))
@@ -1554,22 +1811,42 @@ export const getPlaybackStatus = (): PlayerStatus => {
   const player = getPlayer();
   if (isUpnpSelected()) {
     const remote = getUpnpOutputStatus();
+    const deviceId = getSelectedOutputDevice();
     return {
       state: remote.state,
       position: remote.position,
       duration: remote.duration,
-      volume: player.getVolume(),
-      speed: player.getSpeed(),
+      volume: 1,
+      speed: 1,
       isFinished: remote.isFinished,
+      output: {
+        deviceId,
+        path: null,
+        sampleProcessingAvailable: false,
+        fftAvailable: false,
+      },
     };
   }
   const raw = player.getStatus();
+  const controls = projectNativeEffectiveControls(player);
   return {
     state: raw.state as PlayerStatus["state"],
     position: toDisplayPositionMs(toMs(raw.position)),
     duration: toDisplayDurationMs(toMs(raw.duration)),
-    volume: raw.volume,
-    speed: player.getSpeed(),
+    volume: controls.volume,
+    speed: controls.speed,
     isFinished: raw.isFinished,
+    output: controls.output,
   };
+};
+
+/** 当前输出是否允许本地样本处理。唯一依据是 authoritative PlayerStatus output 投影。 */
+export const isSampleProcessingAvailable = (): boolean =>
+  getPlaybackStatus().output.sampleProcessingAvailable;
+
+/** Core 侧样本处理最终门禁；HTTP/WS/plugin/settings 共用。 */
+export const assertSampleProcessingAvailable = (): void => {
+  if (!isSampleProcessingAvailable()) {
+    throw new Error("processing_unavailable");
+  }
 };

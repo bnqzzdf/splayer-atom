@@ -53,7 +53,8 @@ test("Player projections are published only by Core and consumed by Web Control"
   assert.match(playerLoadSource, /publishCoreControlEvent\(loadingEvent\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(\{ type: "session", data \}\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(event\)/);
-  assert.match(deviceSource, /publishCoreControlEvent\(\{\s*type: "deviceChanged"/s);
+  assert.doesNotMatch(deviceSource, /defaultDevice|publishCoreControlEvent/);
+  assert.doesNotMatch(deviceSource, /requestReinit|REINIT_DELAY_MS|reinitOutput/);
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "position"/s);
   assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["fftData", "position"\]\)/);
   assert.match(playerControlSource, /subscribeCorePlayerProjection\(handleEvent\)/);

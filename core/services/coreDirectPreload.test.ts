@@ -14,19 +14,20 @@ const directPcm = read("native/audio-engine-core/src/direct_pcm.rs");
 const directDsd = read("native/audio-engine-core/src/direct_dsd.rs");
 const nativeBinding = read("native/audio-engine/src/bindings/player.rs");
 
-test("Core preload prepares Diretta input and stages through the shared main service", () => {
+test("Core preload prepares Direct input and stages through the shared main service", () => {
   assert.match(preloader, /stageDirectPlaybackNext/);
   assert.match(preloader, /materializeDirectInput/);
   assert.match(preloader, /resolved\.cacheAfterLoad \? await resolved\.cacheAfterLoad\(\) : null/);
-  assert.match(preloader, /store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\)/);
+  assert.match(preloader, /isLocalDirectOutput\(store\.get\("player\.outputDevice"\)\)/);
+  assert.match(preloader, /store\.get\("player\.alsaPlaybackMode"\)/);
   assert.doesNotMatch(preloader, /getSelectedDeviceName\(\)/);
   assert.doesNotMatch(preloader, /window\.api/);
 });
 
-test("Diretta staging remains active when generic next-track preload is disabled", () => {
+test("Direct staging remains active when generic next-track preload is disabled", () => {
   assert.match(
     preloader,
-    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*store\.get\("player\.outputDevice"\)\?\.startsWith\("diretta:"\) === true/,
+    /store\.get\("player\.preloadNextTrack"\) === true \|\|[\s\S]*isLocalDirectOutput\(store\.get\("player\.outputDevice"\)\)/,
   );
   assert.equal(preloader.match(/if \(!shouldPrepareNextInput\(\)\)/g)?.length, 2);
 });
@@ -43,10 +44,10 @@ test("preload invalidation cancels native staging immediately without touching t
 
 test("queue edits never run next-source preparation on the active Direct producer", () => {
   const pcmProducer = directPcm
-    .split('.name("diretta-direct-decode".into())')[1]
+    .split('.name("direct-pcm-decode".into())')[1]
     ?.split('.context("启动 Source Direct decoder producer 失败")')[0];
   const dsdProducer = directDsd
-    .split('.name("diretta-direct-dsd".into())')[1]
+    .split('.name("direct-dsd-read".into())')[1]
     ?.split('.context("启动 Native DSD producer 失败")')[0];
   assert.ok(pcmProducer, "PCM Direct producer should exist");
   assert.ok(dsdProducer, "DSD Direct producer should exist");
@@ -75,7 +76,7 @@ test("Node Core consumes Direct boundary into the authoritative session", () => 
 test("Direct gapless boundary invalidates the previous raw cover", () => {
   const boundary = nativePlayer
     .split("pub fn commit_direct_gapless_boundary")[1]
-    ?.split("pub fn validate_direct_entry")[0];
+    ?.split("fn reject_direct_sample_change")[0];
   assert.ok(boundary, "Direct gapless boundary implementation should exist");
   assert.match(
     boundary,

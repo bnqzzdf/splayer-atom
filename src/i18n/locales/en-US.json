@@ -133,8 +133,9 @@
   },
   "directMode": {
     "title": "Source Direct",
-    "entryBlocked": "Before entering Diretta Source Direct, restore software volume to 100%, turn off volume normalization and EQ, and return to 1.0x speed with 0 semitone pitch. Existing settings will not be changed automatically.",
+    "alsaTitle": "ALSA Direct",
     "processingUnavailable": "Diretta Source Direct preserves the original audio data. Software volume, volume normalization, EQ/preamp, fade, speed, and pitch controls are unavailable in Direct mode; your normal-output settings are preserved.",
+    "alsaProcessingUnavailable": "ALSA is using Direct mode. Software volume, normalization, EQ/preamp, fades, speed, and pitch are outside the audio path; your PCM Processing settings are preserved.",
     "preparingSource": "Preparing the online source for Source Direct…"
   },
   "remoteOutput": {
@@ -861,6 +862,10 @@
       "label": "Loudness Normalization",
       "description": "Automatically balance volume levels between tracks"
     },
+    "clippingProtection": {
+      "label": "Clipping Protection",
+      "description": "Reduce unsafe peaks before final output in PCM Processing mode. When disabled, only saturation required by sample conversion remains."
+    },
     "songLevel": {
       "label": "Online Audio Quality",
       "description": "Preferred quality for online tracks; the actual level depends on what your account supports",
@@ -895,6 +900,13 @@
         "diretta": "Diretta",
         "upnp": "UPnP"
       }
+    },
+    "alsaPlaybackMode": {
+      "label": "ALSA Playback Mode",
+      "shortLabel": "Mode",
+      "description": "Direct bypasses software volume, DSP, resampling, and remixing. PCM Processing keeps those features available.",
+      "direct": "Direct",
+      "processed": "PCM Processing"
     },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",

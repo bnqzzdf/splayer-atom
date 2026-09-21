@@ -7,6 +7,7 @@ import type {
 } from "@shared/types/player";
 import { coreCommand, coreResult } from "./controlClient";
 import { projectOutputDevices } from "./outputDevices";
+import type { AlsaPlaybackMode } from "@shared/types/settings";
 
 type PlayerControlApi = Pick<
   PlayerApi,
@@ -28,10 +29,13 @@ type PlayerControlApi = Pick<
   | "setOutputDevice"
 > & {
   getOutputSnapshot(): Promise<IpcResponse<OutputSnapshot>>;
+  getAlsaPlaybackMode(): Promise<IpcResponse<AlsaPlaybackMode>>;
+  setAlsaPlaybackMode(mode: AlsaPlaybackMode): Promise<IpcResponse>;
 };
 
 interface OutputSnapshot {
   selected: string | null;
+  alsaPlaybackMode: AlsaPlaybackMode;
   data: AudioDevice[];
 }
 
@@ -45,6 +49,7 @@ const mapOutputSnapshot = async (
     success: true,
     data: {
       selected: resolved.data.selected,
+      alsaPlaybackMode: resolved.data.alsaPlaybackMode,
       data: projectOutputDevices(resolved.data.data, resolved.data.selected),
     },
   };
@@ -88,6 +93,13 @@ export const playerClient: PlayerControlApi = {
       : { success: false, error: result.error ?? "CORE_RESPONSE_MISSING_DATA" };
   },
   getOutputSnapshot: () => mapOutputSnapshot(coreResult<OutputSnapshot>("/output/devices")),
+  getAlsaPlaybackMode: async () => {
+    const result = await coreResult<{ mode: AlsaPlaybackMode }>("/player/alsa-mode");
+    return result.success && result.data
+      ? { success: true, data: result.data.mode }
+      : { success: false, error: result.error ?? "CORE_RESPONSE_MISSING_DATA" };
+  },
+  setAlsaPlaybackMode: (mode) => coreCommand("/player/alsa-mode", { mode }),
   getOutputDevices: async () => {
     const result = await mapOutputSnapshot(coreResult<OutputSnapshot>("/output/devices"));
     return result.success && result.data

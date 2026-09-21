@@ -9,24 +9,15 @@ const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
 
-// 系统默认
-const SYSTEM_DEFAULT = "system-default";
-
-const current = computed(() => settings.player.outputDevice ?? SYSTEM_DEFAULT);
+const current = computed(() => settings.player.outputDevice ?? "");
 
 const options = computed(() => {
-  const defaultName = status.outputDevices.find((device) => device.isDefault)?.name;
-  const defaultLabel = defaultName
-    ? `${t("settings.outputDevice.default")}（${defaultName}）`
-    : t("settings.outputDevice.default");
-  return [
-    { value: SYSTEM_DEFAULT, label: defaultLabel },
-    ...status.outputDevices.map((device) => ({ value: device.id, label: device.name })),
-  ];
+  return status.outputDevices.map((device) => ({ value: device.id, label: device.name }));
 });
 
 const onChange = (value: string | number | boolean) => {
-  switchDevice(value === SYSTEM_DEFAULT ? null : String(value));
+  const deviceId = String(value);
+  if (deviceId) void switchDevice(deviceId);
 };
 
 onMounted(() => {
@@ -38,7 +29,7 @@ onMounted(() => {
   <SSelect
     :model-value="current"
     :options="options"
-    :placeholder="t('settings.outputDevice.default')"
+    :placeholder="t('settings.outputDevice.required')"
     @update:model-value="onChange"
   />
 </template>

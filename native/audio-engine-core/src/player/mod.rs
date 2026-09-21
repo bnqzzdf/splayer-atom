@@ -9,12 +9,9 @@ use tracing::{debug, info};
 
 use crate::audio_output::{AudioOutput, OutputFailureCallback};
 use crate::decoder;
-#[cfg(feature = "diretta")]
 use crate::direct_runtime::DirectStageHandle;
-#[cfg(any(feature = "diretta", test))]
 use crate::direct_runtime::{DirectMonitor, DirectPlayback};
 use crate::equalizer::{Equalizer, EQ_BAND_COUNT};
-#[cfg(feature = "fft")]
 use crate::fft::FftAnalyzer;
 use crate::playback::PlaybackHandle;
 use crate::shared::Shared;
@@ -29,6 +26,29 @@ use events::playback_completion_event;
 pub use events::{EventEmitter, PlayerEvent, PlayerState};
 pub use transition::{LoadedPlayback, SeekTake};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlsaPlaybackMode {
+    Direct,
+    Processed,
+}
+
+impl AlsaPlaybackMode {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "direct" => Ok(Self::Direct),
+            "processed" => Ok(Self::Processed),
+            other => anyhow::bail!("未知 ALSA playback mode: {other}"),
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Direct => "direct",
+            Self::Processed => "processed",
+        }
+    }
+}
+
 /// 内部播放器，管理音频输出、解码和状态
 pub struct InnerPlayer {
     /// 输出设备与配置句柄（不持有流），保证 InnerPlayer 整体是 Send 的
@@ -38,10 +58,10 @@ pub struct InnerPlayer {
     shared: Option<Arc<Shared>>,
     /// 解码线程句柄，join 后可回收 DecoderData 复用于 seek
     decoder_thread: Option<JoinHandle<decoder::DecoderData>>,
-    /// Diretta Source Direct 运行时与 normal playback 互斥；仅在 HiFi Direct 分支存在。
-    #[cfg(any(feature = "diretta", test))]
+    /// 当前 processed runtime 的单槽 next-track staging；load/seek/stop 都会作废旧句柄。
+    processed_stage: Option<decoder::ProcessedStageHandle>,
+    /// Direct runtime 与 normal playback 互斥；可承载 ALSA direct 或 Diretta transport。
     direct_playback: Option<DirectPlayback>,
-    #[cfg(feature = "fft")]
     fft: Arc<FftAnalyzer>,
     /// 当前音频的时长（秒）
     audio_duration: f64,
@@ -76,8 +96,12 @@ pub struct InnerPlayer {
     fft_timer_handle: Option<JoinHandle<()>>,
     /// 用户选择的输出设备（设备 ID，None = 跟随系统默认）
     selected_device: Option<String>,
+    /// ALSA 输出的显式播放模式偏好；Diretta/UPnP 不读取此字段。
+    alsa_playback_mode: AlsaPlaybackMode,
     /// 音量归一化开关
     normalization_enabled: bool,
+    /// Processed PCM 最终削波保护；Direct runtime 不读取此字段。
+    clipping_protection_enabled: bool,
     /// 跨曲目共享的均衡器（load/seek 时交给 DSP 线程）
     equalizer: Arc<Mutex<Equalizer>>,
     /// 跨曲目共享的变速变调处理器（load/seek 时交给 DSP 线程，
@@ -95,30 +119,18 @@ pub struct InnerPlayer {
     pending_load_handle: Option<HttpCancelHandle>,
 }
 
-/// 编译期保证 `InnerPlayer: Send`：cpal::Stream 由 `PlaybackHandle` 持有且各后端均为 Send，
-/// 此处不再需要 `unsafe impl Send`。如果未来有人加了 !Send 字段，这条断言会编译失败提醒。
+/// 编译期保证 `InnerPlayer: Send`；ALSA handle 只存在于 writer 线程拥有的 PlaybackHandle 内。
 const _: fn() = || {
     fn assert_send<T: Send>() {}
     assert_send::<InnerPlayer>();
 };
 
 impl InnerPlayer {
-    /// 未初始化时通过 `AudioOutput::new` 懒构造音频输出。
-    /// 设备失效时的重建由 `reinit_output` 显式处理，不在此函数内自动恢复
-    fn ensure_output(&mut self, requested_sample_rate: Option<u32>) -> Result<&AudioOutput> {
-        if self.output.is_none() {
-            let generation = self.reserve_output_generation();
-            let on_failure = self.make_failure_callback(generation);
-            self.output = Some(AudioOutput::new(
-                self.selected_device.as_deref(),
-                requested_sample_rate,
-                generation,
-                on_failure,
-            )?);
-        }
+    /// load/reinit 阶段必须先完成 ALSA processed 协商；commit 阶段不再隐式打开默认设备。
+    fn ensure_output(&self) -> Result<&AudioOutput> {
         self.output
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ensure_output 后置条件违反"))
+            .ok_or_else(|| anyhow::anyhow!("processed playback 缺少已协商 ALSA 输出"))
     }
 
     /// 构造输出失败回调：只发送轻量 `PlayerEvent::OutputFailed`，
@@ -156,6 +168,18 @@ impl InnerPlayer {
             .unwrap_or(decoder::DEFAULT_OUTPUT_CHANNELS)
     }
 
+    pub fn processed_stage_handle(&self) -> Option<decoder::ProcessedStageHandle> {
+        self.processed_stage.clone()
+    }
+
+    /// 第一版 processed gapless 只在 tempo/pitch 不改变时间轴时启用。
+    pub fn processed_gapless_staging_allowed(&self) -> bool {
+        self.playback.is_some()
+            && self.shared.is_some()
+            && self.direct_playback.is_none()
+            && self.tempo.lock().is_bypass()
+    }
+
     pub fn new() -> Result<Self> {
         // 延迟初始化：构造时不要求有音频设备，load 时再打开
         let output = None;
@@ -167,9 +191,8 @@ impl InnerPlayer {
             playback: None,
             shared: None,
             decoder_thread: None,
-            #[cfg(any(feature = "diretta", test))]
+            processed_stage: None,
             direct_playback: None,
-            #[cfg(feature = "fft")]
             fft: Arc::new(FftAnalyzer::new()),
             audio_duration: 0.0,
             cover_raw: None,
@@ -191,7 +214,9 @@ impl InnerPlayer {
             #[cfg(feature = "fft")]
             fft_timer_handle: None,
             selected_device: None,
+            alsa_playback_mode: AlsaPlaybackMode::Processed,
             normalization_enabled: false,
+            clipping_protection_enabled: true,
             equalizer: Arc::new(Mutex::new(Equalizer::new(
                 initial_rate,
                 decoder::DEFAULT_OUTPUT_CHANNELS,
@@ -207,10 +232,14 @@ impl InnerPlayer {
         })
     }
 
-    /// 切换输出设备（下一次重建设备时生效）
-    pub fn set_output_device(&mut self, device_id: Option<String>) {
+    /// 提交输出设备选择。活动 runtime 必须先由 Core 释放，native 不再偷偷 reload。
+    pub fn set_output_device(&mut self, device_id: Option<String>) -> Result<()> {
+        if self.runtime_active() {
+            anyhow::bail!("[Mode] 输出设备只能在旧播放 runtime 已释放后切换");
+        }
         info!(device = ?device_id, "切换输出设备");
         self.selected_device = device_id;
+        Ok(())
     }
 
     /// 获取当前选择的输出设备（None = 跟随系统默认）
@@ -254,23 +283,69 @@ impl InnerPlayer {
     }
 
     fn direct_mode_selected(&self) -> bool {
-        self.selected_device
-            .as_deref()
-            .is_some_and(|device| device.starts_with("diretta:"))
+        self.selected_device.as_deref().is_some_and(|device| {
+            device.starts_with("diretta:")
+                || (self.alsa_playback_mode == AlsaPlaybackMode::Direct
+                    && crate::alsa::device::AlsaHwEndpoint::parse(device).is_ok())
+        })
+    }
+
+    pub fn alsa_direct_selected(&self) -> bool {
+        self.alsa_playback_mode == AlsaPlaybackMode::Direct
+            && self
+                .selected_device
+                .as_deref()
+                .is_some_and(|device| crate::alsa::device::AlsaHwEndpoint::parse(device).is_ok())
+    }
+
+    pub fn alsa_playback_mode(&self) -> AlsaPlaybackMode {
+        self.alsa_playback_mode
+    }
+
+    pub fn set_alsa_playback_mode(&mut self, mode: AlsaPlaybackMode) -> Result<()> {
+        if mode == self.alsa_playback_mode {
+            return Ok(());
+        }
+        if self.runtime_active() {
+            anyhow::bail!("[Mode] ALSA playback mode 只能在旧播放 runtime 已释放后切换");
+        }
+        self.alsa_playback_mode = mode;
+        Ok(())
+    }
+
+    pub fn runtime_active(&self) -> bool {
+        self.direct_playback.is_some()
+            || self.playback.is_some()
+            || self.decoder_thread.is_some()
+            || self.shared.is_some()
     }
 
     pub fn direct_active(&self) -> bool {
-        #[cfg(any(feature = "diretta", test))]
-        {
-            self.direct_playback.is_some()
-        }
-        #[cfg(not(any(feature = "diretta", test)))]
-        {
-            false
-        }
+        self.direct_playback.is_some()
     }
 
-    #[cfg(any(feature = "diretta", test))]
+    pub fn direct_fft_supported(&self) -> bool {
+        self.direct_playback
+            .as_ref()
+            .is_some_and(DirectPlayback::supports_fft_analysis)
+    }
+
+    pub fn fft_available(&self) -> bool {
+        self.playback.is_some() || self.direct_fft_supported()
+    }
+
+    pub fn fft_handle(&self) -> Arc<FftAnalyzer> {
+        Arc::clone(&self.fft)
+    }
+
+    /// 当前真正运行的 native 音频路径；模式偏好本身不等于 exact。
+    pub fn output_path(&self) -> Option<&'static str> {
+        if let Some(playback) = &self.direct_playback {
+            return Some(playback.output_path());
+        }
+        self.playback.as_ref().map(|_| "processed-pcm")
+    }
+
     pub fn direct_monitor(&self) -> Option<(DirectMonitor, f64, u64)> {
         self.direct_playback.as_ref().map(|playback| {
             (
@@ -281,14 +356,12 @@ impl InnerPlayer {
         })
     }
 
-    #[cfg(feature = "diretta")]
     pub fn direct_stage_handle(&self) -> Option<DirectStageHandle> {
         self.direct_playback
             .as_ref()
             .map(DirectPlayback::stage_handle)
     }
 
-    #[cfg(feature = "diretta")]
     pub fn commit_direct_gapless_boundary(
         &mut self,
         source: &str,
@@ -309,29 +382,6 @@ impl InnerPlayer {
         Ok(())
     }
 
-    pub fn validate_direct_entry(&self) -> Result<()> {
-        if (self.target_volume - 1.0).abs() > f32::EPSILON {
-            anyhow::bail!(
-                "[Direct] Source Direct 要求软件音量为 100%；请先恢复 100% 后再进入 Direct 模式"
-            );
-        }
-        if self.normalization_enabled {
-            anyhow::bail!(
-                "[Direct] Source Direct 不允许 ReplayGain/Normalization；请先关闭后再进入 Direct 模式"
-            );
-        }
-        if self.equalizer.lock().enabled() {
-            anyhow::bail!("[Direct] Source Direct 不允许 EQ；请先关闭后再进入 Direct 模式");
-        }
-        let tempo = self.tempo.lock();
-        if (tempo.speed() - 1.0).abs() > f32::EPSILON || tempo.pitch() != 0 {
-            anyhow::bail!(
-                "[Direct] Source Direct 不允许 tempo/pitch 处理；请先恢复原速原调后再进入 Direct 模式"
-            );
-        }
-        Ok(())
-    }
-
     fn reject_direct_sample_change(&self, action: &str) -> Result<()> {
         if self.direct_active() || self.direct_mode_selected() {
             anyhow::bail!(
@@ -349,7 +399,6 @@ impl InnerPlayer {
     /// 恢复播放。Paused 时渐入恢复；Stopped/Idle/已播完时返回 Some(source)，
     /// 由 NAPI 绑定层走 async load 复活——网络源的打开可达数秒，不能在锁内同步执行
     pub fn play(&mut self) -> Result<Option<String>> {
-        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if self.state == PlayerState::Playing && self.is_finished() {
                 self.stop_internal();
@@ -359,16 +408,17 @@ impl InnerPlayer {
             return match self.state {
                 PlayerState::Playing => Ok(None),
                 PlayerState::Paused => {
-                    if let Some(playback) = self.direct_playback.as_mut() {
-                        playback.play()?;
-                    }
+                    let Some(playback) = self.direct_playback.as_mut() else {
+                        // 输出故障恢复态已经释放失效 runtime；交给 NAPI/Core 从保留位置重载。
+                        return Ok(self.current_source.clone());
+                    };
+                    playback.play()?;
                     self.state = PlayerState::Playing;
                     self.emit(PlayerEvent::StateChanged {
                         state: PlayerState::Playing,
                     });
-                    if self.direct_playback.is_some() {
-                        self.start_position_timer();
-                    }
+                    self.start_position_timer();
+                    self.start_fft_timer();
                     Ok(None)
                 }
                 PlayerState::Stopped | PlayerState::Idle => Ok(self.current_source.clone()),
@@ -422,7 +472,6 @@ impl InnerPlayer {
             return Ok(());
         }
 
-        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if let Some(playback) = self.direct_playback.as_mut() {
                 playback.pause()?;
@@ -466,7 +515,6 @@ impl InnerPlayer {
         if self.state != PlayerState::Playing {
             return Ok(());
         }
-        #[cfg(any(feature = "diretta", test))]
         if self.direct_playback.is_some() || self.direct_mode_selected() {
             if let Some(playback) = self.direct_playback.as_mut() {
                 playback.pause()?;
@@ -492,10 +540,38 @@ impl InnerPlayer {
         Ok(())
     }
 
-    /// 恢复失败后保留当前曲目与位置，播放器进入暂停态
+    /// 输出失败后保留当前曲目与最后位置，释放失效 runtime 并进入暂停态。
     ///
-    /// 不转 Stopped（避免 JS 按"播放结束"自动切歌），等待有限重试或用户手动操作。
+    /// 不转 Stopped（避免 Core 按自然结束推进队列）；`output_path` 随 runtime 释放而清空，
+    /// 后续 Play/显式 reinit 从 `current_source + seek_base` 恢复。
     pub fn enter_paused_for_recovery(&mut self) {
+        let recovery_position = self.position();
+        self.cancel_fade();
+        self.stop_position_timer();
+        self.stop_fft_timer();
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
+        if self.direct_playback.take().is_some() {
+            self.output = None;
+        }
+        if let Some(ref shared) = self.shared {
+            shared.stop();
+        }
+        if let Some(playback) = self.playback.take() {
+            playback.stop();
+        }
+        if let Some(handle) = self.decoder_thread.take() {
+            let _ = handle.join();
+        }
+        if let Some(ref shared) = self.shared {
+            shared.drain_buffer();
+        }
+        self.shared = None;
+        self.output = None;
+        self.seek_base = recovery_position;
+        #[cfg(feature = "fft")]
+        self.fft.reset();
         if self.state != PlayerState::Paused {
             self.state = PlayerState::Paused;
             self.emit(PlayerEvent::StateChanged {
@@ -527,7 +603,9 @@ impl InnerPlayer {
         // 2. 停止定时器并等待线程退出（释放 Arc<Shared> 和 Arc<EventEmitter>）
         self.stop_position_timer();
         self.stop_fft_timer();
-        #[cfg(any(feature = "diretta", test))]
+        if let Some(stage) = self.processed_stage.take() {
+            stage.cancel();
+        }
         if self.direct_playback.take().is_some() {
             self.output = None;
         }
@@ -535,7 +613,7 @@ impl InnerPlayer {
         if let Some(ref shared) = self.shared {
             shared.stop();
         }
-        // 4. 释放 Sink（drop DecoderSource，解除迭代器阻塞）
+        // 4. 停止并释放 ALSA writer
         if let Some(playback) = self.playback.take() {
             playback.stop();
         }
@@ -585,11 +663,11 @@ impl InnerPlayer {
 
     /// 获取当前播放位置（秒），基于实际消费的采样数
     pub fn position(&self) -> f64 {
-        #[cfg(any(feature = "diretta", test))]
         if let Some(playback) = &self.direct_playback {
             return playback.position();
         }
         match &self.shared {
+            Some(shared) if shared.track_transition_count() > 0 => shared.consumed_position(),
             Some(shared) => self.seek_base + shared.consumed_position(),
             None => self.seek_base,
         }
@@ -597,7 +675,29 @@ impl InnerPlayer {
 
     /// 获取总时长（秒）
     pub fn duration(&self) -> f64 {
-        self.audio_duration
+        self.shared
+            .as_ref()
+            .map(|shared| shared.track_duration())
+            .filter(|duration| *duration > 0.0)
+            .unwrap_or(self.audio_duration)
+    }
+
+    /// Core 在 processed DAC-side boundary 后提交 canonical source。
+    pub fn commit_processed_gapless_boundary(
+        &mut self,
+        source: &str,
+        duration_secs: f64,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            self.playback.is_some() && self.shared.is_some() && self.direct_playback.is_none(),
+            "processed gapless boundary 没有活动 PCM runtime"
+        );
+        self.current_source = Some(source.to_owned());
+        self.audio_duration = duration_secs.max(0.0);
+        self.seek_base = 0.0;
+        // stage metadata 的原始封面没有跨 NAPI 暴露；宁可清空，也不能继续返回上一首封面。
+        self.cover_raw = None;
+        Ok(())
     }
 
     /// 获取当前播放状态
@@ -618,7 +718,6 @@ impl InnerPlayer {
 
     /// 检查播放是否已结束
     pub fn is_finished(&self) -> bool {
-        #[cfg(any(feature = "diretta", test))]
         if let Some(playback) = &self.direct_playback {
             return playback.finished();
         }
@@ -643,6 +742,22 @@ impl InnerPlayer {
     /// 获取音量归一化开关状态
     pub fn normalization_enabled(&self) -> bool {
         self.normalization_enabled
+    }
+
+    /// 设置 Processed PCM 最终削波保护。
+    pub fn set_clipping_protection_enabled(&mut self, enabled: bool) -> Result<()> {
+        if self.direct_active() && enabled != self.clipping_protection_enabled {
+            self.reject_direct_sample_change("调整削波保护")?;
+        }
+        self.clipping_protection_enabled = enabled;
+        if let Some(ref playback) = self.playback {
+            playback.set_clipping_protection(enabled);
+        }
+        Ok(())
+    }
+
+    pub fn clipping_protection_enabled(&self) -> bool {
+        self.clipping_protection_enabled
     }
 
     /// 设置均衡器开关
@@ -692,7 +807,16 @@ impl InnerPlayer {
         if (speed - 1.0).abs() > f32::EPSILON {
             self.reject_direct_sample_change("调整播放速度")?;
         }
-        self.tempo.lock().set_speed(speed);
+        let bypass = {
+            let mut tempo = self.tempo.lock();
+            tempo.set_speed(speed);
+            tempo.is_bypass()
+        };
+        if !bypass {
+            if let Some(stage) = &self.processed_stage {
+                stage.cancel();
+            }
+        }
         Ok(())
     }
 
@@ -702,7 +826,16 @@ impl InnerPlayer {
         if semitones != 0 {
             self.reject_direct_sample_change("调整音调")?;
         }
-        self.tempo.lock().set_pitch(semitones);
+        let bypass = {
+            let mut tempo = self.tempo.lock();
+            tempo.set_pitch(semitones);
+            tempo.is_bypass()
+        };
+        if !bypass {
+            if let Some(stage) = &self.processed_stage {
+                stage.cancel();
+            }
+        }
         Ok(())
     }
 
@@ -711,7 +844,16 @@ impl InnerPlayer {
         if self.direct_active() && sync != self.tempo.lock().pitch_sync() {
             self.reject_direct_sample_change("调整 tempo/pitch 同步")?;
         }
-        self.tempo.lock().set_pitch_sync(sync);
+        let bypass = {
+            let mut tempo = self.tempo.lock();
+            tempo.set_pitch_sync(sync);
+            tempo.is_bypass()
+        };
+        if !bypass {
+            if let Some(stage) = &self.processed_stage {
+                stage.cancel();
+            }
+        }
         Ok(())
     }
 
@@ -836,6 +978,39 @@ mod tests {
 
     #[cfg(not(feature = "diretta"))]
     #[test]
+    fn output_recovery_pause_keeps_source_position_but_releases_failed_runtime() {
+        let mut player = InnerPlayer::new().unwrap();
+        let (_old, token) = player.take_for_async_load(HttpCancelHandle::new());
+        player
+            .commit_direct_loaded(
+                token,
+                "direct-test.flac",
+                false,
+                crate::metadata::AudioMetadata {
+                    duration_secs: 120.0,
+                    ..Default::default()
+                },
+                DirectPlayback::fake(120.0, false),
+            )
+            .unwrap();
+        let state = player.direct_playback.as_ref().unwrap().fake_state();
+        state.set_position(12.5);
+        player.play().unwrap();
+        assert_eq!(player.state(), PlayerState::Playing);
+
+        player.enter_paused_for_recovery();
+
+        assert_eq!(player.state(), PlayerState::Paused);
+        assert_eq!(player.current_source(), Some("direct-test.flac"));
+        assert!(player.direct_playback.is_none());
+        assert_eq!(player.output_path(), None);
+        assert!((player.position() - 12.5).abs() < 1e-9);
+        assert_eq!(player.play().unwrap().as_deref(), Some("direct-test.flac"));
+        assert_eq!(player.state(), PlayerState::Paused);
+    }
+
+    #[cfg(not(feature = "diretta"))]
+    #[test]
     fn direct_rejects_all_sample_altering_controls_and_keeps_runtime_active() {
         let mut player = InnerPlayer::new().unwrap();
         let (_old, token) = player.take_for_async_load(HttpCancelHandle::new());
@@ -856,6 +1031,7 @@ mod tests {
             player.set_volume(0.5).unwrap_err(),
             player.set_fade_duration(200).unwrap_err(),
             player.set_normalization_enabled(true).unwrap_err(),
+            player.set_clipping_protection_enabled(false).unwrap_err(),
             player.set_equalizer_enabled(true).unwrap_err(),
             player
                 .set_equalizer_bands(&[1.0; EQ_BAND_COUNT])
@@ -874,6 +1050,7 @@ mod tests {
         player.set_volume(1.0).unwrap();
         player.set_fade_duration(0).unwrap();
         player.set_normalization_enabled(false).unwrap();
+        player.set_clipping_protection_enabled(true).unwrap();
         player.set_equalizer_enabled(false).unwrap();
         player.set_equalizer_bands(&[0.0; EQ_BAND_COUNT]).unwrap();
         player.set_preamp_gain(0.0).unwrap();
@@ -886,7 +1063,9 @@ mod tests {
     #[test]
     fn direct_seek_keeps_mode_exclusive_while_runtime_is_in_flight() {
         let mut player = InnerPlayer::new().unwrap();
-        player.set_output_device(Some("diretta:test".into()));
+        player
+            .set_output_device(Some("diretta:test".into()))
+            .unwrap();
         let (_old, token) = player.take_for_async_load(HttpCancelHandle::new());
         let metadata = crate::metadata::AudioMetadata {
             duration_secs: 120.0,
@@ -936,7 +1115,7 @@ mod tests {
         let on_event = bindings
             .split("pub fn on_event")
             .nth(1)
-            .and_then(|tail| tail.split("pub fn supports_device_watcher").next())
+            .and_then(|tail| tail.split("pub async fn load").next())
             .expect("on_event binding should exist");
         assert!(
             on_event.contains(".weak::<true>()"),
@@ -948,9 +1127,7 @@ mod tests {
     fn direct_napi_load_and_seek_never_invoke_the_normal_audio_pipeline() {
         let bindings = include_str!("../../../audio-engine/src/bindings/player.rs");
         let direct_load = bindings
-            .split(
-                "#[cfg(feature = \"diretta\")]\n        if let Some(selector) = direct_selector {",
-            )
+            .split("        if let Some(target) = direct_target {")
             .nth(1)
             .and_then(|tail| {
                 tail.split("        let source_for_decoder = source.clone();")
@@ -974,7 +1151,7 @@ mod tests {
         assert!(direct_load.contains("player.stop();"));
 
         let direct_seek = bindings
-            .split("#[cfg(feature = \"diretta\")]\n        {\n            let direct_take = {")
+            .split("        let direct_take = {")
             .nth(1)
             .and_then(|tail| tail.split("        let take = {").next())
             .expect("Direct seek branch should exist");
@@ -992,16 +1169,87 @@ mod tests {
     }
 
     #[test]
-    fn direct_entry_refuses_preexisting_sample_processing() {
+    fn alsa_mode_is_explicit_and_does_not_turn_hw_output_direct_by_default() {
+        let mut player = InnerPlayer::new().unwrap();
+        player
+            .set_output_device(Some("alsa:hw:CARD=USB_AUDIO,DEV=0".into()))
+            .unwrap();
+        assert_eq!(player.alsa_playback_mode(), AlsaPlaybackMode::Processed);
+        assert!(!player.alsa_direct_selected());
+
+        player
+            .set_alsa_playback_mode(AlsaPlaybackMode::Direct)
+            .unwrap();
+        assert!(player.alsa_direct_selected());
+        assert!(player.direct_mode_selected());
+    }
+
+    #[test]
+    fn alsa_mode_cannot_flip_under_an_active_runtime() {
+        let mut player = InnerPlayer::new().unwrap();
+        let (_old, token) = player.take_for_async_load(HttpCancelHandle::new());
+        player
+            .commit_direct_loaded(
+                token,
+                "direct-test.flac",
+                false,
+                crate::metadata::AudioMetadata {
+                    duration_secs: 120.0,
+                    ..Default::default()
+                },
+                DirectPlayback::fake(120.0, false),
+            )
+            .unwrap();
+
+        assert!(player
+            .set_alsa_playback_mode(AlsaPlaybackMode::Direct)
+            .unwrap_err()
+            .to_string()
+            .contains("旧播放 runtime 已释放后切换"));
+    }
+
+    #[test]
+    fn dormant_processed_settings_do_not_block_direct_mode_selection() {
         let mut player = InnerPlayer::new().unwrap();
         player.set_volume(0.8).unwrap();
-        let error = player.validate_direct_entry().unwrap_err().to_string();
-        assert!(error.contains("软件音量为 100%"));
-
-        player.set_volume(1.0).unwrap();
         player.set_normalization_enabled(true).unwrap();
-        let error = player.validate_direct_entry().unwrap_err().to_string();
-        assert!(error.contains("Normalization"));
+        player.set_equalizer_enabled(true).unwrap();
+        player.set_speed(1.25).unwrap();
+        player
+            .set_output_device(Some("alsa:hw:CARD=USB_AUDIO,DEV=0".into()))
+            .unwrap();
+        player
+            .set_alsa_playback_mode(AlsaPlaybackMode::Direct)
+            .unwrap();
+
+        assert!(player.alsa_direct_selected());
+        assert!((player.volume() - 0.8).abs() < f32::EPSILON);
+        assert!(player.normalization_enabled());
+        assert!(player.equalizer_enabled());
+        assert!((player.speed() - 1.25).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn output_device_cannot_change_under_an_active_runtime() {
+        let mut player = InnerPlayer::new().unwrap();
+        let (_old, token) = player.take_for_async_load(HttpCancelHandle::new());
+        player
+            .commit_direct_loaded(
+                token,
+                "direct-test.flac",
+                false,
+                crate::metadata::AudioMetadata {
+                    duration_secs: 120.0,
+                    ..Default::default()
+                },
+                DirectPlayback::fake(120.0, false),
+            )
+            .unwrap();
+        assert!(player
+            .set_output_device(Some("alsa:hw:CARD=USB_AUDIO,DEV=0".into()))
+            .unwrap_err()
+            .to_string()
+            .contains("旧播放 runtime 已释放后切换"));
     }
 
     #[test]

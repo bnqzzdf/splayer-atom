@@ -1,22 +1,23 @@
-#[cfg(feature = "diretta")]
-use anyhow::bail;
-use anyhow::Result;
-
-use crate::direct_dsd::{DirectDsdFormat, DirectDsdMonitor};
-use crate::direct_pcm::{DirectPcmFormat, DirectPcmMonitor};
-
-#[cfg(feature = "diretta")]
-use crate::direct_dsd::DirectDsdStageHandle;
-#[cfg(feature = "diretta")]
-use crate::direct_pcm::DirectPcmStageHandle;
-
-#[cfg(feature = "diretta")]
 use std::path::Path;
+use std::sync::Arc;
+
+use anyhow::{bail, Result};
+
+use crate::alsa::device::AlsaHwEndpoint;
+use crate::alsa::direct_dsd::{AlsaDirectDsdConnection, AlsaDirectDsdMonitor};
+use crate::alsa::direct_pcm::{AlsaDirectPcmConnection, AlsaDirectPcmMonitor};
+use crate::direct_dsd::{DirectDsdFormat, DirectDsdStageHandle};
+use crate::direct_pcm::{DirectPcmFormat, DirectPcmStageHandle};
+use crate::fft::FftAnalyzer;
+
+#[cfg(feature = "diretta")]
+use crate::direct_dsd::DirectDsdMonitor;
+#[cfg(feature = "diretta")]
+use crate::direct_pcm::DirectPcmMonitor;
 
 #[cfg(feature = "diretta")]
 use crate::diretta::{DirettaDirectConnection, DirettaDirectDsdConnection};
 
-#[cfg(any(feature = "diretta", test))]
 fn direct_segment_duration_secs(
     physical_duration_secs: f64,
     start_frame75: Option<u64>,
@@ -35,10 +36,20 @@ pub enum DirectFormat {
     Dsd(DirectDsdFormat),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirectFailureKind {
+    Source,
+    Output,
+}
+
 #[derive(Clone)]
 pub enum DirectMonitor {
-    Pcm(DirectPcmMonitor),
-    Dsd(DirectDsdMonitor),
+    AlsaPcm(AlsaDirectPcmMonitor),
+    AlsaDsd(AlsaDirectDsdMonitor),
+    #[cfg(feature = "diretta")]
+    DirettaPcm(DirectPcmMonitor),
+    #[cfg(feature = "diretta")]
+    DirettaDsd(DirectDsdMonitor),
     #[cfg(test)]
     Fake(std::sync::Arc<FakeDirectState>),
 }
@@ -46,8 +57,12 @@ pub enum DirectMonitor {
 impl DirectMonitor {
     pub fn consumed_position(&self) -> f64 {
         match self {
-            Self::Pcm(value) => value.consumed_position(),
-            Self::Dsd(value) => value.consumed_position(),
+            Self::AlsaPcm(value) => value.position(),
+            Self::AlsaDsd(value) => value.position(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.consumed_position(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.consumed_position(),
             #[cfg(test)]
             Self::Fake(value) => {
                 value
@@ -58,19 +73,50 @@ impl DirectMonitor {
         }
     }
 
-    pub fn failed(&self) -> bool {
+    pub fn failure_kind(&self) -> Option<DirectFailureKind> {
         match self {
-            Self::Pcm(value) => value.failed(),
-            Self::Dsd(value) => value.failed(),
+            Self::AlsaPcm(value) => {
+                if value.source_failed() {
+                    Some(DirectFailureKind::Source)
+                } else if value.output_failed() {
+                    Some(DirectFailureKind::Output)
+                } else {
+                    None
+                }
+            }
+            Self::AlsaDsd(value) => {
+                if value.source_failed() {
+                    Some(DirectFailureKind::Source)
+                } else if value.output_failed() {
+                    Some(DirectFailureKind::Output)
+                } else {
+                    None
+                }
+            }
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.failed().then_some(DirectFailureKind::Source),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.failed().then_some(DirectFailureKind::Source),
             #[cfg(test)]
-            Self::Fake(value) => value.failed.load(std::sync::atomic::Ordering::Acquire),
+            Self::Fake(value) => value
+                .failed
+                .load(std::sync::atomic::Ordering::Acquire)
+                .then_some(DirectFailureKind::Source),
         }
+    }
+
+    pub fn failed(&self) -> bool {
+        self.failure_kind().is_some()
     }
 
     pub fn finished(&self) -> bool {
         match self {
-            Self::Pcm(value) => value.finished(),
-            Self::Dsd(value) => value.finished(),
+            Self::AlsaPcm(value) => value.finished(),
+            Self::AlsaDsd(value) => value.finished(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.finished(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.finished(),
             #[cfg(test)]
             Self::Fake(value) => value.finished.load(std::sync::atomic::Ordering::Acquire),
         }
@@ -78,8 +124,12 @@ impl DirectMonitor {
 
     pub fn transition_count(&self) -> u64 {
         match self {
-            Self::Pcm(value) => value.transition_count(),
-            Self::Dsd(value) => value.transition_count(),
+            Self::AlsaPcm(value) => value.transition_count(),
+            Self::AlsaDsd(value) => value.transition_count(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.transition_count(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.transition_count(),
             #[cfg(test)]
             Self::Fake(_) => 0,
         }
@@ -87,8 +137,12 @@ impl DirectMonitor {
 
     pub fn duration(&self) -> f64 {
         match self {
-            Self::Pcm(value) => value.duration(),
-            Self::Dsd(value) => value.duration(),
+            Self::AlsaPcm(value) => value.duration(),
+            Self::AlsaDsd(value) => value.duration(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.duration(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.duration(),
             #[cfg(test)]
             Self::Fake(_) => 0.0,
         }
@@ -96,20 +150,24 @@ impl DirectMonitor {
 
     pub fn boundary_generation(&self) -> u64 {
         match self {
-            Self::Pcm(value) => value.boundary_generation(),
-            Self::Dsd(value) => value.boundary_generation(),
+            Self::AlsaPcm(value) => value.boundary_generation(),
+            Self::AlsaDsd(value) => value.boundary_generation(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaPcm(value) => value.boundary_generation(),
+            #[cfg(feature = "diretta")]
+            Self::DirettaDsd(value) => value.boundary_generation(),
             #[cfg(test)]
             Self::Fake(_) => 0,
         }
     }
 }
 
-#[cfg(feature = "diretta")]
-fn is_native_dsd_source(source: &str) -> bool {
+pub fn is_native_dsd_source(source: &str) -> bool {
     if crate::sacd::parse_sacd_virtual_path(source).is_some() {
         return true;
     }
-    let extension = Path::new(source)
+    let path = source.split(['?', '#']).next().unwrap_or(source);
+    let extension = Path::new(path)
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default()
@@ -117,14 +175,12 @@ fn is_native_dsd_source(source: &str) -> bool {
     matches!(extension.as_str(), "dsf" | "dff" | "dsdiff")
 }
 
-#[cfg(feature = "diretta")]
 #[derive(Clone)]
 pub enum DirectStageHandle {
     Pcm(DirectPcmStageHandle),
     Dsd(DirectDsdStageHandle),
 }
 
-#[cfg(feature = "diretta")]
 impl DirectStageHandle {
     pub fn stage_local(
         &self,
@@ -142,13 +198,13 @@ impl DirectStageHandle {
         match self {
             Self::Pcm(value) => {
                 if native_dsd {
-                    bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
+                    bail!("[Direct] PCM → Native DSD 需要重新协商 transport");
                 }
                 value.stage_local(path, duration_secs, generation, start_frame75, end_frame75)
             }
             Self::Dsd(value) => {
                 if !native_dsd {
-                    bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
+                    bail!("[Direct] Native DSD → PCM 需要重新协商 transport");
                 }
                 value.stage_local(path, duration_secs, generation, start_frame75, end_frame75)
             }
@@ -163,10 +219,15 @@ impl DirectStageHandle {
     }
 }
 
-#[cfg(feature = "diretta")]
 enum DirectTransport {
-    Pcm(DirettaDirectConnection),
-    Dsd(DirettaDirectDsdConnection),
+    AlsaPcm(AlsaDirectPcmConnection),
+    AlsaDsd(AlsaDirectDsdConnection),
+    #[cfg(feature = "diretta")]
+    DirettaPcm(DirettaDirectConnection),
+    #[cfg(feature = "diretta")]
+    DirettaDsd(DirettaDirectDsdConnection),
+    #[cfg(test)]
+    Fake(std::sync::Arc<FakeDirectState>),
 }
 
 #[cfg(test)]
@@ -202,28 +263,95 @@ impl FakeDirectState {
     }
 }
 
-#[cfg(test)]
-enum TestTransport {
-    Fake(std::sync::Arc<FakeDirectState>),
-}
-
 pub struct DirectPlayback {
     duration: f64,
     seek_base: f64,
     seek_transition_count: u64,
     cue_start_frame75: Option<u64>,
     cue_end_frame75: Option<u64>,
-    #[cfg(feature = "diretta")]
-    selector: String,
-    #[cfg(feature = "diretta")]
     source: String,
-    #[cfg(feature = "diretta")]
     transport: DirectTransport,
-    #[cfg(all(test, not(feature = "diretta")))]
-    transport: TestTransport,
 }
 
 impl DirectPlayback {
+    pub fn open_alsa_local(
+        selector: &str,
+        source: &str,
+        duration: f64,
+        position_secs: f64,
+        auto_play: bool,
+        cue_start_frame75: Option<u64>,
+        cue_end_frame75: Option<u64>,
+        fft: Arc<FftAnalyzer>,
+    ) -> Result<Self> {
+        if source.starts_with("http://") || source.starts_with("https://") {
+            bail!("[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源");
+        }
+        let endpoint = AlsaHwEndpoint::parse(selector)?;
+        let path = Path::new(source);
+        let native_dsd = is_native_dsd_source(source);
+        let direct_duration =
+            direct_segment_duration_secs(duration, cue_start_frame75, cue_end_frame75);
+
+        let (transport, seek_base) = if native_dsd {
+            let (connection, actual_position) = if let Some(start_frame75) = cue_start_frame75 {
+                AlsaDirectDsdConnection::open_local_segment(
+                    &endpoint,
+                    path,
+                    direct_duration,
+                    start_frame75,
+                    cue_end_frame75,
+                    false,
+                )?
+            } else {
+                AlsaDirectDsdConnection::open_local_at(
+                    &endpoint,
+                    path,
+                    direct_duration,
+                    position_secs,
+                    false,
+                )?
+            };
+            (DirectTransport::AlsaDsd(connection), actual_position)
+        } else {
+            let (connection, actual_position) = if let Some(start_frame75) = cue_start_frame75 {
+                AlsaDirectPcmConnection::open_local_segment(
+                    &endpoint,
+                    path,
+                    direct_duration,
+                    start_frame75,
+                    cue_end_frame75,
+                    false,
+                    Arc::clone(&fft),
+                )?
+            } else {
+                AlsaDirectPcmConnection::open_local_at(
+                    &endpoint,
+                    path,
+                    direct_duration,
+                    position_secs,
+                    false,
+                    Arc::clone(&fft),
+                )?
+            };
+            (DirectTransport::AlsaPcm(connection), actual_position)
+        };
+
+        let mut playback = Self {
+            duration: direct_duration,
+            seek_base,
+            seek_transition_count: 0,
+            cue_start_frame75,
+            cue_end_frame75,
+            source: source.to_owned(),
+            transport,
+        };
+        if auto_play {
+            playback.play()?;
+        }
+        Ok(playback)
+    }
+
     #[cfg(feature = "diretta")]
     pub fn open_local(
         selector: &str,
@@ -254,7 +382,7 @@ impl DirectPlayback {
             } else {
                 DirettaDirectDsdConnection::open_local_at(selector, path, position_secs)?
             };
-            (DirectTransport::Dsd(connection), actual_position)
+            (DirectTransport::DirettaDsd(connection), actual_position)
         } else {
             let (connection, actual_position) = if let Some(start_frame75) = cue_start_frame75 {
                 DirettaDirectConnection::open_local_segment(
@@ -266,15 +394,13 @@ impl DirectPlayback {
             } else {
                 DirettaDirectConnection::open_local_at(selector, path, position_secs)?
             };
-            (DirectTransport::Pcm(connection), actual_position)
+            connection.set_duration(direct_duration);
+            (DirectTransport::DirettaPcm(connection), actual_position)
         };
 
         let duration = match &transport {
-            DirectTransport::Pcm(value) => {
-                value.set_duration(direct_duration);
-                direct_duration
-            }
-            DirectTransport::Dsd(value) => value.monitor().duration(),
+            DirectTransport::DirettaDsd(value) => value.monitor().duration(),
+            _ => direct_duration,
         };
         let mut playback = Self {
             duration,
@@ -282,7 +408,6 @@ impl DirectPlayback {
             seek_transition_count: 0,
             cue_start_frame75,
             cue_end_frame75,
-            selector: selector.to_owned(),
             source: source.to_owned(),
             transport,
         };
@@ -292,7 +417,6 @@ impl DirectPlayback {
         Ok(playback)
     }
 
-    #[cfg(feature = "diretta")]
     pub fn handoff_local_while_paused(
         &mut self,
         source: &str,
@@ -301,7 +425,20 @@ impl DirectPlayback {
         let path = Path::new(source);
         let native_dsd = is_native_dsd_source(source);
         let format = match &mut self.transport {
-            DirectTransport::Pcm(value) => {
+            DirectTransport::AlsaPcm(value) => {
+                if native_dsd {
+                    bail!("[Direct] PCM → Native DSD 需要重新协商 ALSA transport");
+                }
+                DirectFormat::Pcm(value.replace_local_while_paused(path, duration)?)
+            }
+            DirectTransport::AlsaDsd(value) => {
+                if !native_dsd {
+                    bail!("[Direct] Native DSD → PCM 需要重新协商 ALSA transport");
+                }
+                DirectFormat::Dsd(value.replace_local_while_paused(path, duration)?)
+            }
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => {
                 if native_dsd {
                     bail!("[Direct] PCM → Native DSD 需要重新协商 Diretta connection");
                 }
@@ -309,18 +446,26 @@ impl DirectPlayback {
                 value.set_duration(duration);
                 DirectFormat::Pcm(format)
             }
-            DirectTransport::Dsd(value) => {
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => {
                 if !native_dsd {
                     bail!("[Direct] Native DSD → PCM 需要重新协商 Diretta connection");
                 }
-                let format = value.replace_local_source_while_paused(path)?;
-                DirectFormat::Dsd(format)
+                DirectFormat::Dsd(value.replace_local_source_while_paused(path)?)
             }
+            #[cfg(test)]
+            DirectTransport::Fake(_) => self.format(),
         };
         self.source = source.to_owned();
         self.duration = match &self.transport {
-            DirectTransport::Pcm(_) => duration,
-            DirectTransport::Dsd(value) => value.monitor().duration(),
+            DirectTransport::AlsaPcm(value) => value.monitor().duration(),
+            DirectTransport::AlsaDsd(value) => value.monitor().duration(),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(_) => duration,
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => value.monitor().duration(),
+            #[cfg(test)]
+            DirectTransport::Fake(_) => duration,
         };
         self.seek_base = 0.0;
         self.seek_transition_count = self.monitor().transition_count();
@@ -330,132 +475,118 @@ impl DirectPlayback {
     }
 
     pub fn seek_while_paused(&mut self, position_secs: f64) -> Result<f64> {
-        #[cfg(feature = "diretta")]
         let actual_position = match &mut self.transport {
-            DirectTransport::Pcm(value) => match self.cue_start_frame75 {
+            DirectTransport::AlsaPcm(value) => match self.cue_start_frame75 {
+                Some(start) => value.seek_segment_while_paused(
+                    start,
+                    self.cue_end_frame75,
+                    position_secs,
+                    self.duration,
+                )?,
+                None => value.seek_while_paused(position_secs)?,
+            },
+            DirectTransport::AlsaDsd(value) => match self.cue_start_frame75 {
+                Some(start) => value.seek_segment_while_paused(
+                    start,
+                    self.cue_end_frame75,
+                    position_secs,
+                    self.duration,
+                )?,
+                None => value.seek_while_paused(position_secs)?,
+            },
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => match self.cue_start_frame75 {
                 Some(start) => {
                     value.seek_segment_while_paused(start, self.cue_end_frame75, position_secs)?
                 }
                 None => value.seek_while_paused(position_secs)?,
             },
-            DirectTransport::Dsd(value) => match self.cue_start_frame75 {
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => match self.cue_start_frame75 {
                 Some(start) => {
                     value.seek_segment_while_paused(start, self.cue_end_frame75, position_secs)?
                 }
                 None => value.seek_while_paused(position_secs)?,
             },
-        };
-        #[cfg(all(test, not(feature = "diretta")))]
-        let actual_position = {
-            match &self.transport {
-                TestTransport::Fake(value) => {
-                    value
-                        .position_micros
-                        .store(0, std::sync::atomic::Ordering::Release);
-                }
+            #[cfg(test)]
+            DirectTransport::Fake(value) => {
+                value
+                    .position_micros
+                    .store(0, std::sync::atomic::Ordering::Release);
+                position_secs
             }
-            position_secs
         };
-        #[cfg(not(any(feature = "diretta", test)))]
-        let actual_position = position_secs;
-
         self.seek_base = actual_position;
         self.seek_transition_count = self.monitor().transition_count();
         Ok(actual_position)
     }
 
     pub fn play(&mut self) -> Result<()> {
-        #[cfg(feature = "diretta")]
-        {
-            match &mut self.transport {
-                DirectTransport::Pcm(value) => value.play(),
-                DirectTransport::Dsd(value) => value.play(),
+        match &mut self.transport {
+            DirectTransport::AlsaPcm(value) => value.play(),
+            DirectTransport::AlsaDsd(value) => value.play(),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => value.play(),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => value.play(),
+            #[cfg(test)]
+            DirectTransport::Fake(value) => {
+                value
+                    .playing
+                    .store(true, std::sync::atomic::Ordering::Release);
+                Ok(())
             }
-        }
-        #[cfg(all(test, not(feature = "diretta")))]
-        {
-            match &self.transport {
-                TestTransport::Fake(value) => {
-                    value
-                        .playing
-                        .store(true, std::sync::atomic::Ordering::Release);
-                    Ok(())
-                }
-            }
-        }
-        #[cfg(not(any(feature = "diretta", test)))]
-        {
-            unreachable!()
         }
     }
 
     pub fn pause(&mut self) -> Result<()> {
-        #[cfg(feature = "diretta")]
-        {
-            match &mut self.transport {
-                DirectTransport::Pcm(value) => value.pause(),
-                DirectTransport::Dsd(value) => value.pause(),
+        match &mut self.transport {
+            DirectTransport::AlsaPcm(value) => value.pause(),
+            DirectTransport::AlsaDsd(value) => value.pause(),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => value.pause(),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => value.pause(),
+            #[cfg(test)]
+            DirectTransport::Fake(value) => {
+                value
+                    .playing
+                    .store(false, std::sync::atomic::Ordering::Release);
+                Ok(())
             }
-        }
-        #[cfg(all(test, not(feature = "diretta")))]
-        {
-            match &self.transport {
-                TestTransport::Fake(value) => {
-                    value
-                        .playing
-                        .store(false, std::sync::atomic::Ordering::Release);
-                    Ok(())
-                }
-            }
-        }
-        #[cfg(not(any(feature = "diretta", test)))]
-        {
-            unreachable!()
         }
     }
 
     pub fn format(&self) -> DirectFormat {
-        #[cfg(feature = "diretta")]
-        {
-            match &self.transport {
-                DirectTransport::Pcm(value) => DirectFormat::Pcm(value.format()),
-                DirectTransport::Dsd(value) => DirectFormat::Dsd(value.format()),
-            }
-        }
-        #[cfg(all(test, not(feature = "diretta")))]
-        {
-            DirectFormat::Pcm(DirectPcmFormat {
+        match &self.transport {
+            DirectTransport::AlsaPcm(value) => DirectFormat::Pcm(value.format()),
+            DirectTransport::AlsaDsd(value) => DirectFormat::Dsd(value.format()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => DirectFormat::Pcm(value.format()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => DirectFormat::Dsd(value.format()),
+            #[cfg(test)]
+            DirectTransport::Fake(_) => DirectFormat::Pcm(DirectPcmFormat {
                 sample_rate: 44_100,
                 channels: 2,
                 valid_bits: 16,
                 storage_bits: 16,
                 sample_format: crate::direct_pcm::DirectPcmSampleFormat::Signed16,
                 memory_path: crate::direct_pcm::DirectPcmMemoryPath::ZeroCopyPacked,
-            })
-        }
-        #[cfg(not(any(feature = "diretta", test)))]
-        {
-            unreachable!()
+            }),
         }
     }
 
     pub fn monitor(&self) -> DirectMonitor {
-        #[cfg(feature = "diretta")]
-        {
-            match &self.transport {
-                DirectTransport::Pcm(value) => DirectMonitor::Pcm(value.monitor()),
-                DirectTransport::Dsd(value) => DirectMonitor::Dsd(value.monitor()),
-            }
-        }
-        #[cfg(all(test, not(feature = "diretta")))]
-        {
-            match &self.transport {
-                TestTransport::Fake(value) => DirectMonitor::Fake(std::sync::Arc::clone(value)),
-            }
-        }
-        #[cfg(not(any(feature = "diretta", test)))]
-        {
-            unreachable!()
+        match &self.transport {
+            DirectTransport::AlsaPcm(value) => DirectMonitor::AlsaPcm(value.monitor()),
+            DirectTransport::AlsaDsd(value) => DirectMonitor::AlsaDsd(value.monitor()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => DirectMonitor::DirettaPcm(value.monitor()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => DirectMonitor::DirettaDsd(value.monitor()),
+            #[cfg(test)]
+            DirectTransport::Fake(value) => DirectMonitor::Fake(std::sync::Arc::clone(value)),
         }
     }
 
@@ -485,15 +616,50 @@ impl DirectPlayback {
         self.monitor().transition_count()
     }
 
-    #[cfg(feature = "diretta")]
-    pub fn stage_handle(&self) -> DirectStageHandle {
+    pub fn is_diretta(&self) -> bool {
         match &self.transport {
-            DirectTransport::Pcm(value) => DirectStageHandle::Pcm(value.stage_handle()),
-            DirectTransport::Dsd(value) => DirectStageHandle::Dsd(value.stage_handle()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(_) | DirectTransport::DirettaDsd(_) => true,
+            _ => false,
         }
     }
 
-    #[cfg(feature = "diretta")]
+    /// 只允许 ALSA Direct mono/stereo PCM 进入只读 FFT 旁路。
+    /// Native DSD 和 Diretta 继续保持频谱不可用；多声道在 layout 保真完成前不猜测 L/R。
+    pub fn supports_fft_analysis(&self) -> bool {
+        match &self.transport {
+            DirectTransport::AlsaPcm(value) => matches!(value.config().channels, 1 | 2),
+            _ => false,
+        }
+    }
+
+    pub fn output_path(&self) -> &'static str {
+        match &self.transport {
+            DirectTransport::AlsaPcm(value) if value.exact_pcm() => "exact-pcm",
+            DirectTransport::AlsaPcm(_) => "decoded-pcm",
+            DirectTransport::AlsaDsd(_) => "native-dsd",
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(_) => "exact-pcm",
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(_) => "native-dsd",
+            #[cfg(test)]
+            DirectTransport::Fake(_) => "exact-pcm",
+        }
+    }
+
+    pub fn stage_handle(&self) -> DirectStageHandle {
+        match &self.transport {
+            DirectTransport::AlsaPcm(value) => DirectStageHandle::Pcm(value.stage_handle()),
+            DirectTransport::AlsaDsd(value) => DirectStageHandle::Dsd(value.stage_handle()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(value) => DirectStageHandle::Pcm(value.stage_handle()),
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaDsd(value) => DirectStageHandle::Dsd(value.stage_handle()),
+            #[cfg(test)]
+            DirectTransport::Fake(_) => panic!("fake Direct runtime does not support staging"),
+        }
+    }
+
     pub fn commit_gapless_boundary(
         &mut self,
         source: &str,
@@ -510,7 +676,7 @@ impl DirectPlayback {
     }
 
     pub fn failed(&self) -> bool {
-        self.monitor().failed()
+        self.monitor().failure_kind().is_some()
     }
 
     pub fn finished(&self) -> bool {
@@ -529,21 +695,16 @@ impl DirectPlayback {
             seek_transition_count: 0,
             cue_start_frame75: None,
             cue_end_frame75: None,
-            #[cfg(feature = "diretta")]
-            selector: "diretta:test".into(),
-            #[cfg(feature = "diretta")]
             source: "test.wav".into(),
-            #[cfg(feature = "diretta")]
-            transport: panic!("fake DirectPlayback is only used in no-SDK unit tests"),
-            #[cfg(all(test, not(feature = "diretta")))]
-            transport: TestTransport::Fake(state),
+            transport: DirectTransport::Fake(state),
         }
     }
 
-    #[cfg(all(test, not(feature = "diretta")))]
+    #[cfg(test)]
     pub fn fake_state(&self) -> std::sync::Arc<FakeDirectState> {
         match &self.transport {
-            TestTransport::Fake(value) => std::sync::Arc::clone(value),
+            DirectTransport::Fake(value) => std::sync::Arc::clone(value),
+            _ => panic!("not a fake Direct runtime"),
         }
     }
 }

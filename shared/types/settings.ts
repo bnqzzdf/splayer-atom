@@ -35,6 +35,9 @@ export interface EqualizerSettings {
   preamp: number;
 }
 
+/** ALSA 本地输出的显式播放模式。 */
+export type AlsaPlaybackMode = "direct" | "processed";
+
 /** 播放器配置 */
 export interface PlayerSettings {
   /** 加载后自动播放 */
@@ -47,6 +50,8 @@ export interface PlayerSettings {
   fadeDuration: number;
   /** 输出设备名称，null 为系统默认 */
   outputDevice: string | null;
+  /** ALSA 本地输出模式；Diretta/UPnP 不读取此偏好。 */
+  alsaPlaybackMode: AlsaPlaybackMode;
   /** 默认音量（0.0 ~ 1.0） */
   volume: number;
   /** 在线歌曲音质偏好；影响 Core 实际音源解析 */
@@ -61,6 +66,8 @@ export interface PlayerSettings {
   fuckDjMode: boolean;
   /** 音量均衡（响度归一化） */
   loudnessNormalization: boolean;
+  /** Processed PCM 最终削波保护；Direct 不读取。 */
+  clippingProtection: boolean;
   /** 均衡器配置 */
   equalizer: EqualizerSettings;
   /** 按 `{Track.id}|{歌词源}` 记忆的歌词偏移（ms，正值为歌词提前）；为 0 时不写入 */

@@ -24,35 +24,34 @@ const between = (source: string, start: string, end: string): string => {
   return tail.split(end)[0] ?? "";
 };
 
-test("Direct entry preflight mirrors native sample-processing requirements", () => {
+test("saved processed settings stay dormant instead of blocking Direct entry", () => {
   assert.match(directModeSource, /isDirettaOutput/);
   assert.match(outputDeviceSource, /startsWith\("diretta:"\)/);
-  assert.match(directModeSource, /state\.volume - 1/);
-  assert.match(directModeSource, /state\.normalizationEnabled/);
-  assert.match(directModeSource, /state\.equalizerEnabled/);
-  assert.match(directModeSource, /state\.speed - 1/);
-  assert.match(directModeSource, /state\.pitch !== 0/);
-  assert.doesNotMatch(directModeSource, /fadeEnabled|fadeDuration/);
+  assert.doesNotMatch(directModeSource, /DirectEntryBlocker|getCurrentDirectEntryBlockers/);
+  assert.doesNotMatch(playerSource, /getCurrentDirectEntryBlockers|directMode\.entryBlocked/);
 });
 
-test("Diretta output selection validates Control state before the Core command", () => {
+test("Diretta output selection sends one Core command without a dormant-settings preflight", () => {
   const switchFlow = between(
     playerSource,
     "export const switchDevice = async (",
     "/**\n * 设置队列并从指定位置开始播放",
   );
-  const preflight = switchFlow.indexOf("getCurrentDirectEntryBlockers().length > 0");
   const command = switchFlow.indexOf("playerClient.setOutputDevice(deviceId)");
-  assert.ok(preflight >= 0);
-  assert.ok(command > preflight);
-  assert.match(switchFlow, /directMode\.entryBlocked/);
+  assert.ok(command >= 0);
+  assert.doesNotMatch(switchFlow, /getCurrentDirectEntryBlockers|entryBlocked/);
   assert.doesNotMatch(switchFlow, /materializeDirectInput|prepareDirectTrackSource|window\.api/);
 });
 
-test("sample-altering UI is locked for Diretta and UPnP", () => {
-  assert.match(directModeSource, /isSampleProcessingUnavailableOutput/);
+test("sample-altering UI is locked for Direct ALSA, Diretta, and UPnP", () => {
+  assert.match(directModeSource, /isAlsaDirectOutput/);
+  assert.match(directModeSource, /isUpnpOutput/);
+  assert.match(directModeSource, /isDirectOutputSelected/);
+  assert.match(directModeSource, /settings\.system\.player\.alsaPlaybackMode/);
   assert.match(toolbarSource, /sampleControlsUnavailable: processingLocked/);
   assert.match(toolbarSource, /:disabled="processingLocked"/);
+  assert.match(toolbarSource, /key: "equalizer"[\s\S]*disabled: processingLocked\.value/);
+  assert.match(toolbarSource, /key: "speed"[\s\S]*disabled: processingLocked\.value/);
   assert.match(equalizerSource, /<DirectModeNotice \/>/);
   assert.match(equalizerSource, /:disabled="directLocked"/);
   assert.match(speedSource, /<DirectModeNotice \/>/);
@@ -61,6 +60,10 @@ test("sample-altering UI is locked for Diretta and UPnP", () => {
   assert.match(
     playerSettingsSource,
     /key: "loudnessNormalization"[\s\S]*disabled: isSampleProcessingUnavailableSelected/,
+  );
+  assert.match(
+    playerSettingsSource,
+    /key: "clippingProtection"[\s\S]*disabled: isSampleProcessingUnavailableSelected/,
   );
 });
 
@@ -83,7 +86,16 @@ test("Web Control exposes one grouped Core-backed output selector", () => {
   );
   assert.match(outputSelectorSource, /await refreshDevices\(\)/);
   assert.match(outputSelectorSource, /await switchDevice\(deviceId\)/);
+  assert.match(outputSelectorSource, /AlsaPlaybackModeSelector/);
+  assert.match(outputSelectorSource, /selectedOutputDevice\?\.startsWith\('alsa:hw:'\)/);
   assert.doesNotMatch(outputSelectorSource, /services\/client|scanDiretta|window\.api/);
+});
+
+test("ALSA mode is changed only through the Core mode command", () => {
+  assert.match(playerSource, /export const switchAlsaPlaybackMode = async/);
+  assert.match(playerSource, /playerClient\.setAlsaPlaybackMode\(mode\)/);
+  assert.match(playerSource, /settings\.system\.player\.alsaPlaybackMode = mode/);
+  assert.doesNotMatch(playerSource, /setAlsaPlaybackMode\([^)]*window\.api/);
 });
 
 test("Web player bar stays available before a track is loaded", () => {

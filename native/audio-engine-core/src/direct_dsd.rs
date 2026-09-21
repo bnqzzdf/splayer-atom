@@ -137,26 +137,34 @@ impl DirectDsdReader {
     }
 
     pub fn seek_seconds(&mut self, position_secs: f64) -> Result<f64> {
+        self.seek_seconds_grouped(position_secs, 4)
+    }
+
+    pub fn seek_seconds_grouped(&mut self, position_secs: f64, group_bytes: usize) -> Result<f64> {
         ensure!(
             position_secs.is_finite() && position_secs >= 0.0,
             "Native DSD seek 位置无效"
         );
+        validate_dsd_group_bytes(group_bytes)?;
         let bit_rate = u64::from(self.format.bit_rate);
         let channels = usize::from(self.format.channels);
         ensure!(bit_rate > 0 && channels > 0, "Native DSD format 无效");
         let requested_bits = (position_secs * bit_rate as f64)
             .floor()
             .min(u64::MAX as f64) as u64;
-        let aligned_bits = requested_bits / 32 * 32;
+        let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
+        let aligned_bits = requested_bits / group_bits * group_bits;
 
-        let actual_bits = self.seek_bits_per_channel(aligned_bits)?;
+        let actual_bits = self.seek_bits_per_channel(aligned_bits, group_bytes)?;
         Ok(actual_bits as f64 / bit_rate as f64)
     }
 
-    fn seek_bits_per_channel(&mut self, aligned_bits: u64) -> Result<u64> {
+    fn seek_bits_per_channel(&mut self, aligned_bits: u64, group_bytes: usize) -> Result<u64> {
+        validate_dsd_group_bytes(group_bytes)?;
+        let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
         ensure!(
-            aligned_bits % 32 == 0,
-            "Native DSD seek 必须按 DSD_SIZ_32 对齐"
+            aligned_bits % group_bits == 0,
+            "Native DSD seek 未按 transport group 对齐"
         );
         let channels = usize::from(self.format.channels);
         ensure!(channels > 0, "Native DSD format 无效");
@@ -175,7 +183,10 @@ impl DirectDsdReader {
                 let target_bytes = requested_bytes.min(*total_per_channel);
                 let block_index = target_bytes / *block_size;
                 let block_skip = target_bytes % *block_size;
-                ensure!(block_skip % 4 == 0, "DSF seek 未按 DSD_SIZ_32 对齐");
+                ensure!(
+                    block_skip % group_bytes == 0,
+                    "DSF seek 未按 transport group 对齐"
+                );
                 let stored_offset = block_index
                     .checked_mul(*block_size)
                     .and_then(|bytes| bytes.checked_mul(channels))
@@ -200,8 +211,10 @@ impl DirectDsdReader {
                 data_size,
                 remaining,
             } => {
-                let unit = channels.checked_mul(4).context("DFF seek unit 溢出")?;
-                let requested_groups = usize::try_from(aligned_bits / 32)?;
+                let unit = channels
+                    .checked_mul(group_bytes)
+                    .context("DFF seek unit 溢出")?;
+                let requested_groups = usize::try_from(aligned_bits / group_bits)?;
                 let max_groups = *data_size / unit;
                 let groups = requested_groups.min(max_groups);
                 let byte_offset = groups.checked_mul(unit).context("DFF seek offset 溢出")?;
@@ -211,13 +224,14 @@ impl DirectDsdReader {
                         .context("DFF seek file offset 溢出")?,
                 ))?;
                 *remaining = *data_size - byte_offset;
-                u64::try_from(groups)?.saturating_mul(32)
+                u64::try_from(groups)?.saturating_mul(group_bits)
             }
         };
         Ok(actual_bits)
     }
 
-    fn seek_cue_frame75(&mut self, frame75: u64) -> Result<u64> {
+    fn seek_cue_frame75(&mut self, frame75: u64, group_bytes: usize) -> Result<u64> {
+        validate_dsd_group_bytes(group_bytes)?;
         let scaled = frame75
             .checked_mul(u64::from(self.format.bit_rate))
             .context("Native DSD CUE bit 边界溢出")?;
@@ -226,11 +240,12 @@ impl DirectDsdReader {
             "[Direct] CUE 边界无法精确映射到当前 Native DSD bit clock"
         );
         let bits = scaled / 75;
+        let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
         ensure!(
-            bits % 32 == 0,
-            "[Direct] CUE Native DSD 边界无法按 DSD_SIZ_32 精确传输"
+            bits % group_bits == 0,
+            "[Direct] CUE Native DSD 边界无法按 transport group 精确传输"
         );
-        let actual = self.seek_bits_per_channel(bits)?;
+        let actual = self.seek_bits_per_channel(bits, group_bytes)?;
         ensure!(
             actual == bits,
             "Native DSD CUE seek 未落在请求的精确 bit 边界"
@@ -238,10 +253,12 @@ impl DirectDsdReader {
         Ok(actual)
     }
 
-    fn limit_bits_per_channel(&mut self, bits: u64) -> Result<()> {
+    fn limit_bits_per_channel(&mut self, bits: u64, group_bytes: usize) -> Result<()> {
+        validate_dsd_group_bytes(group_bytes)?;
+        let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
         ensure!(
-            bits > 0 && bits % 32 == 0,
-            "Native DSD segment 长度必须按 32 bit 对齐"
+            bits > 0 && bits % group_bits == 0,
+            "Native DSD segment 长度必须按 transport group 对齐"
         );
         let bytes_per_channel = usize::try_from(bits / 8)?;
         match &mut self.layout {
@@ -267,6 +284,15 @@ impl DirectDsdReader {
     }
 
     pub fn read_block(&mut self, output: &mut [u8]) -> Result<Option<usize>> {
+        self.read_block_grouped(output, 4)
+    }
+
+    pub fn read_block_grouped(
+        &mut self,
+        output: &mut [u8],
+        group_bytes: usize,
+    ) -> Result<Option<usize>> {
+        validate_dsd_group_bytes(group_bytes)?;
         match &mut self.layout {
             DirectDsdLayout::Dsf {
                 block_size,
@@ -286,8 +312,8 @@ impl DirectDsdReader {
                 let valid_per_channel =
                     (*remaining_per_channel).min(*block_size - *skip_per_channel);
                 ensure!(
-                    valid_per_channel % 4 == 0,
-                    "DSF 尾部无法无损对齐 Diretta DSD_SIZ_32"
+                    valid_per_channel % group_bytes == 0,
+                    "DSF 尾部无法无损对齐 transport group"
                 );
                 let stored_len = block_size
                     .checked_mul(channels)
@@ -305,13 +331,14 @@ impl DirectDsdReader {
                 self.file
                     .read_exact(&mut self.input[..stored_len])
                     .context("读取 DSF native payload 失败")?;
-                repack_dsf_l4r4(
+                repack_dsf_grouped(
                     &self.input[..stored_len],
                     output,
                     channels,
                     *block_size,
                     *skip_per_channel,
                     valid_per_channel,
+                    group_bytes,
                 )?;
                 *remaining_per_channel -= valid_per_channel;
                 *data_remaining -= stored_len;
@@ -323,21 +350,28 @@ impl DirectDsdReader {
                     return Ok(None);
                 }
                 let channels = usize::from(self.format.channels);
-                let unit = channels.checked_mul(4).context("DFF frame unit 溢出")?;
+                let unit = channels
+                    .checked_mul(group_bytes)
+                    .context("DFF frame unit 溢出")?;
                 let mut read_len = (*remaining).min(self.input.len());
                 if read_len < *remaining {
                     read_len -= read_len % unit;
                 }
                 ensure!(
                     read_len > 0 && read_len % unit == 0,
-                    "DFF payload 无法对齐 DSD_SIZ_32"
+                    "DFF payload 无法对齐 transport group"
                 );
                 ensure!(output.len() >= read_len, "DFF output buffer 太小");
 
                 self.file
                     .read_exact(&mut self.input[..read_len])
                     .context("读取 DFF native payload 失败")?;
-                repack_dff_l4r4(&self.input[..read_len], &mut output[..read_len], channels)?;
+                repack_dff_grouped(
+                    &self.input[..read_len],
+                    &mut output[..read_len],
+                    channels,
+                    group_bytes,
+                )?;
                 *remaining -= read_len;
                 Ok(Some(read_len))
             }
@@ -387,8 +421,8 @@ impl DirectDsdReader {
             "DSF block size 必须为 4 字节倍数"
         );
         ensure!(
-            sample_count % 32 == 0,
-            "DSF sample count 无法无损对齐 Diretta DSD_SIZ_32"
+            sample_count % 8 == 0,
+            "DSF sample count 无法无损对齐完整字节"
         );
         let bytes_per_channel = sample_count / 8;
 
@@ -494,12 +528,10 @@ impl DirectDsdReader {
             "DFF 仅支持未压缩 native DSD，DST/其他压缩显式拒绝"
         );
         let data_offset = data_offset.context("DFF 缺少 DSD data chunk")?;
-        let unit = usize::from(channels)
-            .checked_mul(4)
-            .context("DFF DSD_SIZ_32 unit 溢出")?;
+        let unit = usize::from(channels);
         ensure!(
             data_size > 0 && data_size % unit == 0,
-            "DFF data 无法无损对齐 Diretta DSD_SIZ_32"
+            "DFF data 无法无损对齐完整声道字节"
         );
         file.seek(SeekFrom::Start(u64::try_from(data_offset)?))?;
 
@@ -580,19 +612,21 @@ fn find_dsf_data_chunk(file: &mut DsdInput, file_len: usize) -> Result<(usize, u
     }
 }
 
-fn repack_dsf_l4r4(
+fn repack_dsf_grouped(
     input: &[u8],
     output: &mut [u8],
     channels: usize,
     block_size: usize,
     start_per_channel: usize,
     valid_per_channel: usize,
+    group_bytes: usize,
 ) -> Result<()> {
+    validate_dsd_group_bytes(group_bytes)?;
     ensure!(
         channels > 0
             && start_per_channel < block_size
-            && start_per_channel % 4 == 0
-            && valid_per_channel % 4 == 0,
+            && start_per_channel % group_bytes == 0
+            && valid_per_channel % group_bytes == 0,
         "DSF repack 参数无效"
     );
     ensure!(
@@ -604,23 +638,31 @@ fn repack_dsf_l4r4(
         "DSF repack output 太小"
     );
     let mut dst = 0_usize;
-    for relative_offset in (0..valid_per_channel).step_by(4) {
+    for relative_offset in (0..valid_per_channel).step_by(group_bytes) {
         let byte_offset = start_per_channel + relative_offset;
         for channel in 0..channels {
             let src = channel * block_size + byte_offset;
-            output[dst..dst + 4].copy_from_slice(&input[src..src + 4]);
-            dst += 4;
+            output[dst..dst + group_bytes].copy_from_slice(&input[src..src + group_bytes]);
+            dst += group_bytes;
         }
     }
     Ok(())
 }
 
-fn repack_dff_l4r4(input: &[u8], output: &mut [u8], channels: usize) -> Result<()> {
+fn repack_dff_grouped(
+    input: &[u8],
+    output: &mut [u8],
+    channels: usize,
+    group_bytes: usize,
+) -> Result<()> {
+    validate_dsd_group_bytes(group_bytes)?;
     ensure!(channels > 0, "DFF repack 声道数无效");
-    let unit = channels.checked_mul(4).context("DFF repack unit 溢出")?;
+    let unit = channels
+        .checked_mul(group_bytes)
+        .context("DFF repack unit 溢出")?;
     ensure!(
         input.len() % unit == 0,
-        "DFF repack input 未按 DSD_SIZ_32 对齐"
+        "DFF repack input 未按 transport group 对齐"
     );
     ensure!(output.len() >= input.len(), "DFF repack output 太小");
     let groups = input.len() / unit;
@@ -628,12 +670,20 @@ fn repack_dff_l4r4(input: &[u8], output: &mut [u8], channels: usize) -> Result<(
     for group in 0..groups {
         let base = group * unit;
         for channel in 0..channels {
-            for byte in 0..4 {
+            for byte in 0..group_bytes {
                 output[dst] = input[base + byte * channels + channel];
                 dst += 1;
             }
         }
     }
+    Ok(())
+}
+
+fn validate_dsd_group_bytes(group_bytes: usize) -> Result<()> {
+    ensure!(
+        matches!(group_bytes, 1 | 2 | 4),
+        "Native DSD transport group 仅支持 1/2/4 bytes"
+    );
     Ok(())
 }
 
@@ -651,6 +701,7 @@ fn adapt_dsd_bit_order(
 }
 
 const DIRECT_DSD_RING_DEPTH: usize = 8;
+const DEFAULT_DSD_GROUP_BYTES: usize = 4;
 const SLOT_FREE: u8 = 0;
 const SLOT_FILLING: u8 = 1;
 const SLOT_READY: u8 = 2;
@@ -734,6 +785,81 @@ pub struct DirectDsdBlock {
     pub len: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DirectDsdBoundary {
+    pub duration_micros: u64,
+    pub generation: u64,
+}
+
+pub struct DirectDsdLease {
+    ring: Arc<DirectDsdRing>,
+    index: usize,
+    data: *const u8,
+    len: usize,
+    bits_per_channel: u64,
+    boundary: Option<DirectDsdBoundary>,
+}
+
+impl DirectDsdLease {
+    pub fn data(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.data, self.len) }
+    }
+
+    pub fn bits_per_channel(&self) -> u64 {
+        self.bits_per_channel
+    }
+
+    pub fn boundary(&self) -> Option<DirectDsdBoundary> {
+        self.boundary
+    }
+}
+
+impl Drop for DirectDsdLease {
+    fn drop(&mut self) {
+        self.ring.release_index(self.index);
+    }
+}
+
+pub enum DirectDsdPoll {
+    Block(DirectDsdLease),
+    Pending,
+    Finished,
+    Failed,
+    Stopped,
+}
+
+#[derive(Clone)]
+pub struct DirectDsdConsumer {
+    ring: Arc<DirectDsdRing>,
+}
+
+impl DirectDsdConsumer {
+    pub fn poll(&self) -> DirectDsdPoll {
+        if self.ring.failed.load(Ordering::Acquire) {
+            return DirectDsdPoll::Failed;
+        }
+        if self.ring.stopped.load(Ordering::Acquire) {
+            return DirectDsdPoll::Stopped;
+        }
+        if let Some((index, block, bits_per_channel, boundary)) = self.ring.acquire_block(false) {
+            return DirectDsdPoll::Block(DirectDsdLease {
+                ring: Arc::clone(&self.ring),
+                index,
+                data: block.data,
+                len: block.len,
+                bits_per_channel,
+                boundary,
+            });
+        }
+        if self.ring.finished.load(Ordering::Acquire)
+            && self.ring.in_flight.load(Ordering::Acquire) == NO_SLOT
+        {
+            return DirectDsdPoll::Finished;
+        }
+        DirectDsdPoll::Pending
+    }
+}
+
 impl DirectDsdRing {
     fn new(capacity: usize) -> Self {
         let slots = (0..DIRECT_DSD_RING_DEPTH)
@@ -754,9 +880,14 @@ impl DirectDsdRing {
         }
     }
 
-    fn next_block(&self) -> Option<DirectDsdBlock> {
-        self.release_in_flight();
+    fn acquire_block(
+        &self,
+        commit_direct_boundary: bool,
+    ) -> Option<(usize, DirectDsdBlock, u64, Option<DirectDsdBoundary>)> {
         if self.failed.load(Ordering::Acquire) {
+            return None;
+        }
+        if self.in_flight.load(Ordering::Acquire) != NO_SLOT {
             return None;
         }
         let index = self.consumer_index.load(Ordering::Relaxed);
@@ -780,33 +911,67 @@ impl DirectDsdRing {
             self.failed.store(true, Ordering::Release);
             return None;
         }
-        if slot.boundary.swap(false, Ordering::AcqRel) {
-            self.consumed_bits_per_channel.store(0, Ordering::Release);
-            self.duration_micros.store(
-                slot.boundary_duration_micros.load(Ordering::Relaxed),
-                Ordering::Release,
-            );
-            self.boundary_generation.store(
-                slot.boundary_generation.load(Ordering::Relaxed),
-                Ordering::Release,
-            );
-            self.transition_count.fetch_add(1, Ordering::AcqRel);
+        let boundary = slot
+            .boundary
+            .load(Ordering::Acquire)
+            .then(|| DirectDsdBoundary {
+                duration_micros: slot.boundary_duration_micros.load(Ordering::Relaxed),
+                generation: slot.boundary_generation.load(Ordering::Relaxed),
+            });
+        if commit_direct_boundary {
+            if let Some(boundary) = boundary {
+                self.consumed_bits_per_channel.store(0, Ordering::Release);
+                self.duration_micros
+                    .store(boundary.duration_micros, Ordering::Release);
+                self.boundary_generation
+                    .store(boundary.generation, Ordering::Release);
+                self.transition_count.fetch_add(1, Ordering::AcqRel);
+            }
         }
+        let bits_per_channel = slot.bits_per_channel.load(Ordering::Relaxed);
         self.in_flight.store(index, Ordering::Release);
         self.consumer_index
             .store((index + 1) % self.slots.len(), Ordering::Relaxed);
-        Some(DirectDsdBlock { data, len })
+        Some((
+            index,
+            DirectDsdBlock { data, len },
+            bits_per_channel,
+            boundary,
+        ))
+    }
+
+    fn next_block(&self) -> Option<DirectDsdBlock> {
+        self.release_in_flight();
+        self.acquire_block(true).map(|(_, block, _, _)| block)
     }
 
     fn release_in_flight(&self) {
         let index = self.in_flight.swap(NO_SLOT, Ordering::AcqRel);
-        if index != NO_SLOT {
-            let slot = &self.slots[index];
-            let bits = slot.bits_per_channel.swap(0, Ordering::Relaxed);
-            self.consumed_bits_per_channel
-                .fetch_add(bits, Ordering::Relaxed);
-            slot.state.store(SLOT_FREE, Ordering::Release);
+        if index == NO_SLOT {
+            return;
         }
+        self.finish_release(index);
+    }
+
+    fn release_index(&self, index: usize) {
+        if self
+            .in_flight
+            .compare_exchange(index, NO_SLOT, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.finish_release(index);
+        }
+    }
+
+    fn finish_release(&self, index: usize) {
+        let slot = &self.slots[index];
+        let bits = slot.bits_per_channel.swap(0, Ordering::Relaxed);
+        self.consumed_bits_per_channel
+            .fetch_add(bits, Ordering::Relaxed);
+        slot.boundary.store(false, Ordering::Relaxed);
+        slot.boundary_duration_micros.store(0, Ordering::Relaxed);
+        slot.boundary_generation.store(0, Ordering::Relaxed);
+        slot.state.store(SLOT_FREE, Ordering::Release);
     }
 
     fn reset_for_transition(&self) {
@@ -842,15 +1007,16 @@ fn seek_dsd_ring(
     ring: &DirectDsdRing,
     expected_format: DirectDsdFormat,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
     position_secs: f64,
 ) -> Result<f64> {
     ring.reset_for_transition();
-    let actual_position = reader.seek_seconds(position_secs)?;
+    let actual_position = reader.seek_seconds_grouped(position_secs, wire_group_bytes)?;
     ensure!(
         reader.format() == expected_format,
         "Native DSD seek 后音频格式发生变化"
     );
-    fill_slot(reader, &ring.slots[0], wire_bit_order)?
+    fill_slot(reader, &ring.slots[0], wire_bit_order, wire_group_bytes)?
         .context("Native DSD seek 后没有可播放 payload")?;
     Ok(actual_position)
 }
@@ -860,6 +1026,11 @@ fn same_dsd_transport(left: DirectDsdFormat, right: DirectDsdFormat) -> bool {
 }
 
 fn cue_frame75_to_dsd_bits(frame75: u64, bit_rate: u32) -> Result<u64> {
+    cue_frame75_to_dsd_bits_grouped(frame75, bit_rate, DEFAULT_DSD_GROUP_BYTES)
+}
+
+fn cue_frame75_to_dsd_bits_grouped(frame75: u64, bit_rate: u32, group_bytes: usize) -> Result<u64> {
+    validate_dsd_group_bytes(group_bytes)?;
     let scaled = frame75
         .checked_mul(u64::from(bit_rate))
         .context("Native DSD CUE bit 边界溢出")?;
@@ -868,9 +1039,10 @@ fn cue_frame75_to_dsd_bits(frame75: u64, bit_rate: u32) -> Result<u64> {
         "[Direct] CUE 边界无法精确映射到当前 Native DSD bit clock"
     );
     let bits = scaled / 75;
+    let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
     ensure!(
-        bits % 32 == 0,
-        "[Direct] CUE Native DSD 边界无法按 DSD_SIZ_32 精确传输"
+        bits % group_bits == 0,
+        "[Direct] CUE Native DSD 边界无法按 transport group 精确传输"
     );
     Ok(bits)
 }
@@ -879,15 +1051,18 @@ fn configure_dsd_segment(
     reader: &mut DirectDsdReader,
     start_frame75: u64,
     end_frame75: Option<u64>,
+    wire_group_bytes: usize,
 ) -> Result<Option<u64>> {
-    let start_bits = reader.seek_cue_frame75(start_frame75)?;
+    let start_bits = reader.seek_cue_frame75(start_frame75, wire_group_bytes)?;
     let end_bits = end_frame75
-        .map(|frame75| cue_frame75_to_dsd_bits(frame75, reader.format().bit_rate))
+        .map(|frame75| {
+            cue_frame75_to_dsd_bits_grouped(frame75, reader.format().bit_rate, wire_group_bytes)
+        })
         .transpose()?;
     if let Some(end_bits) = end_bits {
         ensure!(end_bits > start_bits, "Native DSD CUE segment 长度无效");
         let length = end_bits - start_bits;
-        reader.limit_bits_per_channel(length)?;
+        reader.limit_bits_per_channel(length, wire_group_bytes)?;
         return Ok(Some(length));
     }
     Ok(None)
@@ -898,6 +1073,7 @@ fn seek_dsd_segment_ring(
     ring: &DirectDsdRing,
     expected_format: DirectDsdFormat,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
     start_frame75: u64,
     end_frame75: Option<u64>,
     position_secs: f64,
@@ -907,13 +1083,18 @@ fn seek_dsd_segment_ring(
         "Native DSD CUE seek 位置无效"
     );
     let bit_rate = u64::from(expected_format.bit_rate);
-    let start_bits = cue_frame75_to_dsd_bits(start_frame75, expected_format.bit_rate)?;
-    let offset_bits = ((position_secs * bit_rate as f64).floor().max(0.0) as u64) / 32 * 32;
+    let group_bits = u64::try_from(wire_group_bytes)?.saturating_mul(8);
+    let start_bits =
+        cue_frame75_to_dsd_bits_grouped(start_frame75, expected_format.bit_rate, wire_group_bytes)?;
+    let offset_bits =
+        ((position_secs * bit_rate as f64).floor().max(0.0) as u64) / group_bits * group_bits;
     let target_bits = start_bits
         .checked_add(offset_bits)
         .context("Native DSD CUE seek bit 位置溢出")?;
     let end_bits = end_frame75
-        .map(|frame75| cue_frame75_to_dsd_bits(frame75, expected_format.bit_rate))
+        .map(|frame75| {
+            cue_frame75_to_dsd_bits_grouped(frame75, expected_format.bit_rate, wire_group_bytes)
+        })
         .transpose()?;
     if let Some(end_bits) = end_bits {
         ensure!(
@@ -923,19 +1104,19 @@ fn seek_dsd_segment_ring(
     }
 
     ring.reset_for_transition();
-    let actual_bits = reader.seek_bits_per_channel(target_bits)?;
+    let actual_bits = reader.seek_bits_per_channel(target_bits, wire_group_bytes)?;
     ensure!(
         actual_bits == target_bits,
         "Native DSD CUE seek 未落在请求的精确 bit 边界"
     );
     if let Some(end_bits) = end_bits {
-        reader.limit_bits_per_channel(end_bits - target_bits)?;
+        reader.limit_bits_per_channel(end_bits - target_bits, wire_group_bytes)?;
     }
     ensure!(
         reader.format() == expected_format,
         "Native DSD CUE seek 后音频格式发生变化"
     );
-    fill_slot(reader, &ring.slots[0], wire_bit_order)?
+    fill_slot(reader, &ring.slots[0], wire_bit_order, wire_group_bytes)?
         .context("Native DSD CUE seek 后没有可播放 payload")?;
     Ok(offset_bits as f64 / bit_rate as f64)
 }
@@ -971,6 +1152,7 @@ impl DirectDsdStaging {
         generation: u64,
         start_frame75: Option<u64>,
         end_frame75: Option<u64>,
+        wire_group_bytes: usize,
     ) -> Result<bool> {
         let epoch = self.epoch.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
         let candidate = prepare_staged_dsd_source(
@@ -980,6 +1162,7 @@ impl DirectDsdStaging {
             generation,
             start_frame75,
             end_frame75,
+            wire_group_bytes,
         )?;
         if self.epoch.load(Ordering::Acquire) != epoch {
             return Ok(false);
@@ -1045,11 +1228,12 @@ fn prepare_staged_dsd_source(
     generation: u64,
     start_frame75: Option<u64>,
     end_frame75: Option<u64>,
+    wire_group_bytes: usize,
 ) -> Result<StagedDsdSource> {
     let mut reader = DirectDsdReader::open_local(path)?;
     let format = reader.format();
     let exact_bits = if let Some(start_frame75) = start_frame75 {
-        configure_dsd_segment(&mut reader, start_frame75, end_frame75)?
+        configure_dsd_segment(&mut reader, start_frame75, end_frame75, wire_group_bytes)?
     } else {
         None
     };
@@ -1081,13 +1265,14 @@ fn install_staged_dsd_slot(
     mut staged: StagedDsdSource,
     slot: &DirectDsdSlot,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
 ) -> Result<(DirectDsdReader, DirectDsdFormat)> {
     let required = staged.reader.max_output_len();
     let buffer = unsafe { &mut *slot.buffer.get() };
     if buffer.len() < required {
         *buffer = vec![0_u8; required].into_boxed_slice();
     }
-    fill_claimed_slot(&mut staged.reader, slot, wire_bit_order)?
+    fill_claimed_slot(&mut staged.reader, slot, wire_bit_order, wire_group_bytes)?
         .context("Native DSD staged 音源没有可播放 payload")?;
     slot.boundary_duration_micros
         .store(staged.duration_micros, Ordering::Relaxed);
@@ -1102,6 +1287,7 @@ fn replace_dsd_ring(
     ring: &DirectDsdRing,
     current_format: DirectDsdFormat,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
 ) -> Result<(DirectDsdReader, DirectDsdFormat)> {
     let mut reader = DirectDsdReader::open_local(path)?;
     let new_format = reader.format();
@@ -1116,8 +1302,13 @@ fn replace_dsd_ring(
     ring.duration_micros
         .store(duration_micros, Ordering::Release);
     ring.ensure_capacity(reader.max_output_len());
-    fill_slot(&mut reader, &ring.slots[0], wire_bit_order)?
-        .context("Native DSD handoff 后没有可播放 payload")?;
+    fill_slot(
+        &mut reader,
+        &ring.slots[0],
+        wire_bit_order,
+        wire_group_bytes,
+    )?
+    .context("Native DSD handoff 后没有可播放 payload")?;
     Ok((reader, new_format))
 }
 
@@ -1164,6 +1355,7 @@ impl DirectDsdMonitor {
 pub struct DirectDsdStageHandle {
     staging: Arc<DirectDsdStaging>,
     format: DirectDsdFormat,
+    wire_group_bytes: usize,
 }
 
 impl DirectDsdStageHandle {
@@ -1186,6 +1378,7 @@ impl DirectDsdStageHandle {
             generation,
             start_frame75,
             end_frame75,
+            self.wire_group_bytes,
         )
     }
 
@@ -1197,6 +1390,7 @@ impl DirectDsdStageHandle {
 pub struct DirectDsdSource {
     ring: Arc<DirectDsdRing>,
     format: DirectDsdFormat,
+    wire_group_bytes: usize,
     control_tx: mpsc::Sender<DirectDsdCommand>,
     staging: Arc<DirectDsdStaging>,
     producer: Option<JoinHandle<()>>,
@@ -1209,7 +1403,15 @@ impl DirectDsdSource {
     }
 
     pub fn open_local_at(path: &Path, position_secs: f64) -> Result<(Self, f64)> {
-        Self::open_local_configured(path, position_secs, None, None, None)
+        Self::open_local_grouped(path, position_secs, DEFAULT_DSD_GROUP_BYTES)
+    }
+
+    pub fn open_local_grouped(
+        path: &Path,
+        position_secs: f64,
+        wire_group_bytes: usize,
+    ) -> Result<(Self, f64)> {
+        Self::open_local_configured(path, position_secs, None, None, None, wire_group_bytes)
     }
 
     pub fn open_local_segment(
@@ -1218,12 +1420,29 @@ impl DirectDsdSource {
         end_frame75: Option<u64>,
         duration_secs: f64,
     ) -> Result<(Self, f64)> {
+        Self::open_local_segment_grouped(
+            path,
+            start_frame75,
+            end_frame75,
+            duration_secs,
+            DEFAULT_DSD_GROUP_BYTES,
+        )
+    }
+
+    pub fn open_local_segment_grouped(
+        path: &Path,
+        start_frame75: u64,
+        end_frame75: Option<u64>,
+        duration_secs: f64,
+        wire_group_bytes: usize,
+    ) -> Result<(Self, f64)> {
         Self::open_local_configured(
             path,
             0.0,
             Some(start_frame75),
             end_frame75,
             Some(duration_secs),
+            wire_group_bytes,
         )
     }
 
@@ -1233,10 +1452,12 @@ impl DirectDsdSource {
         start_frame75: Option<u64>,
         end_frame75: Option<u64>,
         duration_override: Option<f64>,
+        wire_group_bytes: usize,
     ) -> Result<(Self, f64)> {
+        validate_dsd_group_bytes(wire_group_bytes)?;
         let mut reader = DirectDsdReader::open_local(path)?;
         let exact_segment_bits = if let Some(start_frame75) = start_frame75 {
-            configure_dsd_segment(&mut reader, start_frame75, end_frame75)?
+            configure_dsd_segment(&mut reader, start_frame75, end_frame75, wire_group_bytes)?
         } else {
             None
         };
@@ -1250,7 +1471,7 @@ impl DirectDsdSource {
         let actual_position = if start_frame75.is_some() {
             0.0
         } else if position_secs > 0.0 {
-            reader.seek_seconds(position_secs)?
+            reader.seek_seconds_grouped(position_secs, wire_group_bytes)?
         } else {
             0.0
         };
@@ -1258,15 +1479,20 @@ impl DirectDsdSource {
         let ring = Arc::new(DirectDsdRing::new(reader.max_output_len()));
         ring.duration_micros
             .store(duration_micros, Ordering::Release);
-        fill_slot(&mut reader, &ring.slots[0], format.bit_order)?
-            .context("Native DSD 音源没有可播放 payload")?;
+        fill_slot(
+            &mut reader,
+            &ring.slots[0],
+            format.bit_order,
+            wire_group_bytes,
+        )?
+        .context("Native DSD 音源没有可播放 payload")?;
 
         let (control_tx, control_rx) = mpsc::channel();
         let staging = Arc::new(DirectDsdStaging::new());
         let producer_ring = Arc::clone(&ring);
         let producer_staging = Arc::clone(&staging);
         let producer = thread::Builder::new()
-            .name("diretta-direct-dsd".into())
+            .name("direct-dsd-read".into())
             .spawn(move || {
                 let mut active_format = format;
                 let mut wire_bit_order = format.bit_order;
@@ -1284,6 +1510,7 @@ impl DirectDsdSource {
                                 &producer_ring,
                                 active_format,
                                 wire_bit_order,
+                                wire_group_bytes,
                                 position_secs,
                             );
                             if result.is_err() {
@@ -1306,6 +1533,7 @@ impl DirectDsdSource {
                                 &producer_ring,
                                 active_format,
                                 wire_bit_order,
+                                wire_group_bytes,
                                 start_frame75,
                                 end_frame75,
                                 position_secs,
@@ -1326,6 +1554,7 @@ impl DirectDsdSource {
                                 &producer_ring,
                                 active_format,
                                 wire_bit_order,
+                                wire_group_bytes,
                                 position_secs,
                             );
                             if result.is_err() {
@@ -1346,6 +1575,7 @@ impl DirectDsdSource {
                                 &producer_ring,
                                 active_format,
                                 wire_bit_order,
+                                wire_group_bytes,
                                 start_frame75,
                                 end_frame75,
                                 position_secs,
@@ -1363,6 +1593,7 @@ impl DirectDsdSource {
                                 &producer_ring,
                                 active_format,
                                 wire_bit_order,
+                                wire_group_bytes,
                             );
                             match result {
                                 Ok((new_reader, new_format)) => {
@@ -1405,7 +1636,12 @@ impl DirectDsdSource {
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         }
-                        match install_staged_dsd_slot(entry.1, slot, wire_bit_order) {
+                        match install_staged_dsd_slot(
+                            entry.1,
+                            slot,
+                            wire_bit_order,
+                            wire_group_bytes,
+                        ) {
                             Ok((new_reader, new_format)) => {
                                 reader = new_reader;
                                 active_format = new_format;
@@ -1433,11 +1669,16 @@ impl DirectDsdSource {
                         thread::sleep(Duration::from_millis(1));
                         continue;
                     }
-                    match fill_claimed_slot(&mut reader, slot, wire_bit_order) {
+                    match fill_claimed_slot(&mut reader, slot, wire_bit_order, wire_group_bytes) {
                         Ok(Some(())) => next_slot = (next_slot + 1) % producer_ring.slots.len(),
                         Ok(None) => {
                             if let Some(entry) = producer_staging.take_current() {
-                                match install_staged_dsd_slot(entry.1, slot, wire_bit_order) {
+                                match install_staged_dsd_slot(
+                                    entry.1,
+                                    slot,
+                                    wire_bit_order,
+                                    wire_group_bytes,
+                                ) {
                                     Ok((new_reader, new_format)) => {
                                         reader = new_reader;
                                         active_format = new_format;
@@ -1467,6 +1708,7 @@ impl DirectDsdSource {
             Self {
                 ring,
                 format,
+                wire_group_bytes,
                 control_tx,
                 staging,
                 producer: Some(producer),
@@ -1494,6 +1736,13 @@ impl DirectDsdSource {
         DirectDsdStageHandle {
             staging: Arc::clone(&self.staging),
             format: self.format,
+            wire_group_bytes: self.wire_group_bytes,
+        }
+    }
+
+    pub fn consumer(&self) -> DirectDsdConsumer {
+        DirectDsdConsumer {
+            ring: Arc::clone(&self.ring),
         }
     }
 
@@ -1602,6 +1851,7 @@ fn fill_slot(
     reader: &mut DirectDsdReader,
     slot: &DirectDsdSlot,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
 ) -> Result<Option<()>> {
     ensure!(
         slot.state
@@ -1609,7 +1859,7 @@ fn fill_slot(
             .is_ok(),
         "Native DSD slot 状态无效"
     );
-    match fill_claimed_slot(reader, slot, wire_bit_order) {
+    match fill_claimed_slot(reader, slot, wire_bit_order, wire_group_bytes) {
         Ok(value) => Ok(value),
         Err(error) => {
             slot.state.store(SLOT_FREE, Ordering::Release);
@@ -1622,10 +1872,11 @@ fn fill_claimed_slot(
     reader: &mut DirectDsdReader,
     slot: &DirectDsdSlot,
     wire_bit_order: DirectDsdBitOrder,
+    wire_group_bytes: usize,
 ) -> Result<Option<()>> {
     let buffer = unsafe { &mut *slot.buffer.get() };
     let source_bit_order = reader.format().bit_order;
-    let Some(len) = reader.read_block(buffer)? else {
+    let Some(len) = reader.read_block_grouped(buffer, wire_group_bytes)? else {
         return Ok(None);
     };
     adapt_dsd_bit_order(&mut buffer[..len], source_bit_order, wire_bit_order);
@@ -2007,9 +2258,18 @@ mod tests {
         let fixture = TempDsdFile::new("dsf", &bytes);
         let mut reader = DirectDsdReader::open_local(&fixture.path).unwrap();
 
-        reader.limit_bits_per_channel(32).unwrap();
-        assert_eq!(reader.seek_bits_per_channel(0).unwrap(), 0);
-        reader.limit_bits_per_channel(64).unwrap();
+        reader
+            .limit_bits_per_channel(32, DEFAULT_DSD_GROUP_BYTES)
+            .unwrap();
+        assert_eq!(
+            reader
+                .seek_bits_per_channel(0, DEFAULT_DSD_GROUP_BYTES)
+                .unwrap(),
+            0
+        );
+        reader
+            .limit_bits_per_channel(64, DEFAULT_DSD_GROUP_BYTES)
+            .unwrap();
     }
 
     #[test]
@@ -2082,7 +2342,26 @@ mod tests {
             Ok(_) => panic!("未对齐 DSF 不应通过 Source Direct parser"),
             Err(error) => error,
         };
-        assert!(error.to_string().contains("DSD_SIZ_32"));
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn byte_group_dsf_preserves_tail_that_is_not_dsd_siz_32_aligned() {
+        let (bytes, _) = dsf_fixture(24);
+        let fixture = TempDsdFile::new("dsf", &bytes);
+
+        let mut default_reader = DirectDsdReader::open_local(&fixture.path).unwrap();
+        let mut default_output = vec![0_u8; default_reader.max_output_len()];
+        assert!(default_reader.read_block(&mut default_output).is_err());
+
+        let mut byte_reader = DirectDsdReader::open_local(&fixture.path).unwrap();
+        let mut byte_output = vec![0_u8; byte_reader.max_output_len()];
+        let len = byte_reader
+            .read_block_grouped(&mut byte_output, 1)
+            .unwrap()
+            .unwrap();
+        assert_eq!(len, 6);
+        assert_eq!(&byte_output[..len], &[0x01, 0xfe, 0x23, 0xdc, 0x45, 0xba]);
     }
 
     #[test]
@@ -2136,5 +2415,67 @@ mod tests {
     fn strict_dsd_ring_underrun_returns_no_block_instead_of_inserting_data() {
         let ring = DirectDsdRing::new(64);
         assert!(ring.next_block().is_none());
+    }
+
+    #[test]
+    fn rust_dsd_consumer_lease_keeps_slot_in_flight_until_drop() {
+        let ring = Arc::new(DirectDsdRing::new(8));
+        let slot = &ring.slots[0];
+        let buffer = unsafe { &mut *slot.buffer.get() };
+        buffer[..4].copy_from_slice(&[1, 2, 3, 4]);
+        slot.payload_ptr
+            .store(buffer.as_mut_ptr(), Ordering::Relaxed);
+        slot.payload_len.store(4, Ordering::Relaxed);
+        slot.bits_per_channel.store(16, Ordering::Relaxed);
+        slot.state.store(SLOT_READY, Ordering::Release);
+        let consumer = DirectDsdConsumer {
+            ring: Arc::clone(&ring),
+        };
+
+        let lease = match consumer.poll() {
+            DirectDsdPoll::Block(value) => value,
+            _ => panic!("READY DSD slot 应返回 lease"),
+        };
+        assert_eq!(lease.data(), &[1, 2, 3, 4]);
+        assert_eq!(lease.bits_per_channel(), 16);
+        assert!(matches!(consumer.poll(), DirectDsdPoll::Pending));
+        drop(lease);
+        assert_eq!(slot.state.load(Ordering::Acquire), SLOT_FREE);
+        assert_eq!(ring.consumed_bits_per_channel.load(Ordering::Acquire), 16);
+    }
+
+    #[test]
+    fn rust_dsd_consumer_exposes_boundary_without_committing_diretta_state() {
+        let ring = Arc::new(DirectDsdRing::new(8));
+        let slot = &ring.slots[0];
+        let buffer = unsafe { &mut *slot.buffer.get() };
+        buffer[..2].copy_from_slice(&[0x12, 0x34]);
+        slot.payload_ptr
+            .store(buffer.as_mut_ptr(), Ordering::Relaxed);
+        slot.payload_len.store(2, Ordering::Relaxed);
+        slot.bits_per_channel.store(8, Ordering::Relaxed);
+        slot.boundary_duration_micros
+            .store(2_000_000, Ordering::Relaxed);
+        slot.boundary_generation.store(5, Ordering::Relaxed);
+        slot.boundary.store(true, Ordering::Relaxed);
+        slot.state.store(SLOT_READY, Ordering::Release);
+        let consumer = DirectDsdConsumer {
+            ring: Arc::clone(&ring),
+        };
+
+        let lease = match consumer.poll() {
+            DirectDsdPoll::Block(value) => value,
+            _ => panic!("READY DSD boundary slot 应返回 lease"),
+        };
+        assert_eq!(
+            lease.boundary(),
+            Some(DirectDsdBoundary {
+                duration_micros: 2_000_000,
+                generation: 5,
+            })
+        );
+        assert_eq!(ring.transition_count.load(Ordering::Acquire), 0);
+        drop(lease);
+        assert!(!slot.boundary.load(Ordering::Acquire));
     }
 }

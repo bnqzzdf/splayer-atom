@@ -7,6 +7,7 @@
 mod atom_media_extract;
 mod bindings;
 
+pub use audio_engine_core::alsa;
 pub use audio_engine_core::direct_dsd;
 pub use audio_engine_core::direct_pcm;
 pub use audio_engine_core::direct_runtime;
@@ -14,19 +15,18 @@ pub use audio_engine_core::diretta;
 
 pub use audio_engine_core::audio_output;
 pub use audio_engine_core::decoder;
-pub use audio_engine_core::device_watcher;
 pub use audio_engine_core::equalizer;
 pub use audio_engine_core::error;
 pub use audio_engine_core::fft;
 pub use audio_engine_core::logger;
 pub use audio_engine_core::loudness;
+pub use audio_engine_core::media_probe;
 pub use audio_engine_core::metadata;
 pub use audio_engine_core::playback;
 pub use audio_engine_core::player;
 pub use audio_engine_core::priority;
 pub use audio_engine_core::scanner;
 pub use audio_engine_core::shared;
-pub use audio_engine_core::source;
 pub use audio_engine_core::tempo;
 
 pub use atom_media_extract::*;

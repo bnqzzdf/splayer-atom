@@ -1,4 +1,5 @@
 import { playerClient } from "@/core/playerClient";
+import { useStatusStore } from "@/stores/status";
 
 /**
  * FFT 频谱推送的引用计数
@@ -10,13 +11,34 @@ import { playerClient } from "@/core/playerClient";
 
 /** 当前持有 FFT 推送的消费者数量 */
 let refCount = 0;
+let backendEnabled = false;
+let stopCapabilityWatch: (() => void) | null = null;
+
+const setBackendEnabled = (enabled: boolean): void => {
+  if (backendEnabled === enabled) return;
+  backendEnabled = enabled;
+  void playerClient.setFftEnabled(enabled);
+};
+
+const syncBackend = (): void => {
+  const status = useStatusStore();
+  setBackendEnabled(refCount > 0 && status.output.fftAvailable);
+};
+
+const ensureCapabilityWatch = (): void => {
+  if (stopCapabilityWatch !== null) return;
+  const status = useStatusStore();
+  stopCapabilityWatch = watch(
+    () => status.output.fftAvailable,
+    () => syncBackend(),
+    { immediate: true },
+  );
+};
 
 /** 申请 FFT 推送；首个消费者负责开启后端推送 */
 export const acquireFft = (): void => {
   refCount++;
-  if (refCount === 1) {
-    void playerClient.setFftEnabled(true);
-  }
+  if (refCount === 1) ensureCapabilityWatch();
 };
 
 /** 释放 FFT 推送；最后一个消费者关闭后端推送 */
@@ -24,6 +46,8 @@ export const releaseFft = (): void => {
   if (refCount === 0) return;
   refCount--;
   if (refCount === 0) {
-    void playerClient.setFftEnabled(false);
+    stopCapabilityWatch?.();
+    stopCapabilityWatch = null;
+    setBackendEnabled(false);
   }
 };

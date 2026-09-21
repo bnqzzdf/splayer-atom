@@ -107,8 +107,13 @@ test("Web exposes the Core reload-current command", () => {
 test("Web rebuilds audio output through the Core service", () => {
   assert.match(
     playerControlSource,
-    /reinitOutput: \(\): Promise<void> => getPlayer\(\)\.reinitOutput\(\)/,
+    /reinitOutput: \(\): Promise<void> => playbackSession\.reinitOutput\(\)/,
   );
+  assert.match(sessionSource, /export const reinitOutput = async \(\): Promise<void> =>/);
+  const reinit = sessionSource.split("export const reinitOutput = async")[1]?.split("export const startPersonalFm")[0] ?? "";
+  assert.match(reinit, /await loadIndex\(index, false/);
+  assert.match(reinit, /if \(resumePositionMs > 0\) await seek\(resumePositionMs\)/);
+  assert.doesNotMatch(reinit, /getPlayer\(\)\.reinitOutput|resolveTrackSource/);
   assert.match(routesSource, /api\.post\("\/player\/reinit"/);
   assert.match(routesSource, /await playerControl\.reinitOutput\(\)/);
 });

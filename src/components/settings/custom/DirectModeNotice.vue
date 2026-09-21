@@ -2,18 +2,22 @@
 import { useDirectModeState } from "@/core/player/directMode";
 
 const { t } = useI18n();
-const { selected, remoteSelected, blockers } = useDirectModeState();
-const entryBlocked = computed(() => selected.value && blockers.value.length > 0);
+const { selected, alsaDirectSelected, remoteSelected } = useDirectModeState();
 const visible = computed(() => selected.value || remoteSelected.value);
-const titleKey = computed(() => (remoteSelected.value ? "remoteOutput.title" : "directMode.title"));
+const titleKey = computed(() => {
+  if (remoteSelected.value) return "remoteOutput.title";
+  if (alsaDirectSelected.value) return "directMode.alsaTitle";
+  return "directMode.title";
+});
 const messageKey = computed(() => {
   if (remoteSelected.value) return "remoteOutput.processingUnavailable";
-  return entryBlocked.value ? "directMode.entryBlocked" : "directMode.processingUnavailable";
+  if (alsaDirectSelected.value) return "directMode.alsaProcessingUnavailable";
+  return "directMode.processingUnavailable";
 });
 </script>
 
 <template>
-  <SAlert v-if="visible" :type="entryBlocked ? 'warning' : 'info'" :title="t(titleKey)">
+  <SAlert v-if="visible" type="info" :title="t(titleKey)">
     {{ t(messageKey) }}
   </SAlert>
 </template>

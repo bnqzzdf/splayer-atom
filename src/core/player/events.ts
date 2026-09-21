@@ -114,6 +114,8 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
       break;
     }
     case "status":
+      // 输出能力即使在 load 窗口也应立即跟随 Core；播放展示本身仍按下面规则保持平滑。
+      status.output = event.data.output;
       // 歌曲加载中或 loading 事件不更新 UI，保持当前封面/进度/播放状态平滑过渡
       if (event.data.state === "loading" || status.trackLoading) break;
       status.state = event.data.state;

@@ -91,7 +91,9 @@ export const discardDirectInput = async (filePath: string): Promise<void> => {
 export const pruneDirectInputs = async (keepPath: string): Promise<void> => {
   let entries: fs.Dirent[];
   try {
-    entries = await fsp.readdir(tempRoot(), { withFileTypes: true });
+    // 必须在第一次 await 前固定本轮清理集合：boundary 提交后会立即启动下一首 preload，
+    // 后启动/后完成的 staged 文件不能被上一轮异步 prune 误删。
+    entries = fs.readdirSync(tempRoot(), { withFileTypes: true });
   } catch {
     return;
   }

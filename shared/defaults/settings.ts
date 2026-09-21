@@ -9,6 +9,7 @@ export const defaultSystemConfig: SystemConfig = {
     fadeEnabled: true,
     fadeDuration: 200,
     outputDevice: null,
+    alsaPlaybackMode: "direct",
     volume: 1,
     songLevel: "hq",
     allowTrialPlay: false,
@@ -16,6 +17,7 @@ export const defaultSystemConfig: SystemConfig = {
     pauseOnDeviceSwitch: false,
     fuckDjMode: false,
     loudnessNormalization: false,
+    clippingProtection: true,
     equalizer: {
       enabled: false,
       preset: "flat",

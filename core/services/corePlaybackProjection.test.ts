@@ -65,5 +65,10 @@ test("Control reuses session current as loading presentation without mutating lo
 });
 
 test("Direct Core boundary publishes the same loaded-track projection contract", () => {
-  assert.match(session, /publishTrackLoaded\(prepared\.item, prepared\.directSource/);
+  const direct = session.split("export const onNativeDirectTrackBoundary = (")[1];
+  assert.ok(direct);
+  assert.match(direct, /commitGaplessSessionProjection\(/);
+  const sharedBoundaryCommit = session.split("const commitGaplessSessionProjection = (")[1];
+  assert.ok(sharedBoundaryCommit);
+  assert.match(sharedBoundaryCommit, /publishTrackLoaded\(item, source/);
 });

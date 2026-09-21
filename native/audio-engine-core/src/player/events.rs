@@ -11,6 +11,8 @@ pub enum PlayerEvent {
     Ended,
     /// Source Direct 已在同一 Diretta connection 上无缝切入 staged 下一首
     DirectTrackBoundary { duration: f64, generation: u64 },
+    /// Processed PCM 已在同一 ALSA runtime 上播放到 staged 下一首的 DAC-side 边界。
+    ProcessedTrackBoundary { duration: f64, generation: u64 },
     /// 音源失效（网络中断 / URL 过期）
     SourceError,
     /// 位置更新（秒）—— 由内部定时器推送
@@ -18,9 +20,9 @@ pub enum PlayerEvent {
     /// FFT 频谱数据推送（仅在 fft feature 启用时可用）
     #[cfg(feature = "fft")]
     FftData { ldata: Vec<f32>, rdata: Vec<f32> },
-    /// 输出流停滞（输出回调长时间未消费样本，需要外部重建输出）
+    /// 输出流停滞；Core 只进入可恢复暂停态，不自动重建。
     OutputStalled,
-    /// 输出流在运行期失效（CPAL 流错误），由 JS 侧触发输出重建
+    /// 输出流在运行期失效；Direct/Processed 都不得把它改写成 SourceError。
     OutputFailed,
 }
 
