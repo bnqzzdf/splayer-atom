@@ -12,7 +12,6 @@ use crate::decoder;
 use crate::direct_runtime::DirectStageHandle;
 use crate::direct_runtime::{DirectMonitor, DirectPlayback};
 use crate::equalizer::{Equalizer, EQ_BAND_COUNT};
-use crate::fft::FftAnalyzer;
 use crate::playback::PlaybackHandle;
 use crate::shared::Shared;
 use crate::tempo::StretchProcessor;
@@ -62,7 +61,6 @@ pub struct InnerPlayer {
     processed_stage: Option<decoder::ProcessedStageHandle>,
     /// Direct runtime 与 normal playback 互斥；可承载 ALSA direct 或 Diretta transport。
     direct_playback: Option<DirectPlayback>,
-    fft: Arc<FftAnalyzer>,
     /// 当前音频的时长（秒）
     audio_duration: f64,
     /// 原始封面数据缓存（load 时提取，getCoverRaw 时返回，避免重复打开文件）
@@ -86,14 +84,6 @@ pub struct InnerPlayer {
     /// 渐变取消信号和线程句柄
     fade_cancel: Option<Arc<AtomicBool>>,
     fade_handle: Option<JoinHandle<()>>,
-    /// FFT 推送开关（前端需要显示频谱时才启用）
-    #[cfg(feature = "fft")]
-    fft_enabled: Arc<AtomicBool>,
-    /// FFT 推送定时器的停止信号和线程句柄
-    #[cfg(feature = "fft")]
-    fft_timer_stop: Option<Arc<AtomicBool>>,
-    #[cfg(feature = "fft")]
-    fft_timer_handle: Option<JoinHandle<()>>,
     /// 用户选择的输出设备（设备 ID，None = 跟随系统默认）
     selected_device: Option<String>,
     /// ALSA 输出的显式播放模式偏好；Diretta/UPnP 不读取此字段。
@@ -193,7 +183,6 @@ impl InnerPlayer {
             decoder_thread: None,
             processed_stage: None,
             direct_playback: None,
-            fft: Arc::new(FftAnalyzer::new()),
             audio_duration: 0.0,
             cover_raw: None,
             state: PlayerState::Idle,
@@ -207,12 +196,6 @@ impl InnerPlayer {
             position_timer_handle: None,
             fade_cancel: None,
             fade_handle: None,
-            #[cfg(feature = "fft")]
-            fft_enabled: Arc::new(AtomicBool::new(false)),
-            #[cfg(feature = "fft")]
-            fft_timer_stop: None,
-            #[cfg(feature = "fft")]
-            fft_timer_handle: None,
             selected_device: None,
             alsa_playback_mode: AlsaPlaybackMode::Processed,
             normalization_enabled: false,
@@ -250,7 +233,6 @@ impl InnerPlayer {
     /// 注册事件回调（支持热替换：先停止旧的定时器/渐变，确保旧回调的 Arc 引用尽快释放）
     pub fn set_event_callback(&mut self, cb: EventEmitter) {
         self.stop_position_timer();
-        self.stop_fft_timer();
         self.cancel_fade();
         self.event_callback = Some(cb);
     }
@@ -324,21 +306,6 @@ impl InnerPlayer {
         self.direct_playback.is_some()
     }
 
-    pub fn direct_fft_supported(&self) -> bool {
-        self.direct_playback
-            .as_ref()
-            .is_some_and(DirectPlayback::supports_fft_analysis)
-    }
-
-    pub fn fft_available(&self) -> bool {
-        self.playback.is_some() || self.direct_fft_supported()
-    }
-
-    pub fn fft_handle(&self) -> Arc<FftAnalyzer> {
-        Arc::clone(&self.fft)
-    }
-
-    /// 当前真正运行的 native 音频路径；模式偏好本身不等于 exact。
     pub fn output_path(&self) -> Option<&'static str> {
         if let Some(playback) = &self.direct_playback {
             return Some(playback.output_path());
@@ -418,7 +385,6 @@ impl InnerPlayer {
                         state: PlayerState::Playing,
                     });
                     self.start_position_timer();
-                    self.start_fft_timer();
                     Ok(None)
                 }
                 PlayerState::Stopped | PlayerState::Idle => Ok(self.current_source.clone()),
@@ -455,7 +421,6 @@ impl InnerPlayer {
                     state: PlayerState::Playing,
                 });
                 self.start_position_timer();
-                self.start_fft_timer();
 
                 // 非阻塞渐入
                 self.start_fade(0.0, self.target_volume, None);
@@ -481,7 +446,6 @@ impl InnerPlayer {
                 state: PlayerState::Paused,
             });
             self.stop_position_timer();
-            self.stop_fft_timer();
             return Ok(());
         }
 
@@ -506,7 +470,6 @@ impl InnerPlayer {
 
         // 渐出已在后台运行，再同步停止定时器（join 开销不会影响音频淡出时序）
         self.stop_position_timer();
-        self.stop_fft_timer();
         Ok(())
     }
 
@@ -524,7 +487,6 @@ impl InnerPlayer {
                 state: PlayerState::Paused,
             });
             self.stop_position_timer();
-            self.stop_fft_timer();
             return Ok(());
         }
         self.cancel_fade();
@@ -536,7 +498,6 @@ impl InnerPlayer {
             state: PlayerState::Paused,
         });
         self.stop_position_timer();
-        self.stop_fft_timer();
         Ok(())
     }
 
@@ -548,7 +509,6 @@ impl InnerPlayer {
         let recovery_position = self.position();
         self.cancel_fade();
         self.stop_position_timer();
-        self.stop_fft_timer();
         if let Some(stage) = self.processed_stage.take() {
             stage.cancel();
         }
@@ -570,8 +530,6 @@ impl InnerPlayer {
         self.shared = None;
         self.output = None;
         self.seek_base = recovery_position;
-        #[cfg(feature = "fft")]
-        self.fft.reset();
         if self.state != PlayerState::Paused {
             self.state = PlayerState::Paused;
             self.emit(PlayerEvent::StateChanged {
@@ -602,7 +560,6 @@ impl InnerPlayer {
         self.cancel_fade();
         // 2. 停止定时器并等待线程退出（释放 Arc<Shared> 和 Arc<EventEmitter>）
         self.stop_position_timer();
-        self.stop_fft_timer();
         if let Some(stage) = self.processed_stage.take() {
             stage.cancel();
         }
@@ -703,12 +660,6 @@ impl InnerPlayer {
     /// 获取当前播放状态
     pub fn state(&self) -> PlayerState {
         self.state
-    }
-
-    /// 获取 FFT 频谱数据（128 个频段）
-    #[cfg(feature = "fft")]
-    pub fn fft_data(&self) -> (Vec<f32>, Vec<f32>) {
-        self.fft.analyze()
     }
 
     /// 获取缓存的原始封面数据（load 时一次性提取）

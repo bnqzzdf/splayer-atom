@@ -2,8 +2,6 @@
 //!
 //! 作为 Atom 唯一音频实现，由薄 NAPI wrapper 暴露给 Node Core。
 
-//! FFT 频谱分析（fft feature）为可选。
-
 #![allow(dead_code)]
 
 #[cfg(not(target_os = "linux"))]
@@ -20,7 +18,6 @@ pub mod diretta;
 pub mod dsd;
 pub mod equalizer;
 pub mod error;
-pub mod fft;
 pub mod logger;
 pub mod loudness;
 pub mod media_extract;
@@ -36,7 +33,6 @@ pub mod tempo;
 
 pub use error::AudioEngineError;
 pub use ffmpeg_audio::{self, HttpCancelHandle};
-pub use fft::FftAnalyzer;
 pub use metadata::{
     cover_thumb_path, db_to_linear, extract_embedded_lyric, extract_replay_gain,
     find_all_external_lyrics, make_thumbnail_jpeg, AudioMetadata, StreamInfo,

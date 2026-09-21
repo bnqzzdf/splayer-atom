@@ -1,9 +1,7 @@
 use std::io::ErrorKind;
 
 use anyhow::Error;
-use audio_engine_core::{
-    AudioChunk, AudioEngineError, FftAnalyzer, PlayerState, PopResult, Shared,
-};
+use audio_engine_core::{AudioChunk, AudioEngineError, PlayerState, PopResult, Shared};
 
 #[test]
 fn shared_round_trips_chunks_and_tracks_position() {
@@ -14,7 +12,6 @@ fn shared_round_trips_chunks_and_tracks_position() {
 
     shared.push(AudioChunk {
         player_samples: vec![0.1, -0.1],
-        fft_samples: vec![0.2, -0.2],
         source_sample_count: 1,
         track_boundary: None,
     });
@@ -26,7 +23,6 @@ fn shared_round_trips_chunks_and_tracks_position() {
 
     shared.push_output(AudioChunk {
         player_samples: vec![0.3, -0.3],
-        fft_samples: vec![0.4, -0.4],
         source_sample_count: 1,
         track_boundary: None,
     });
@@ -61,21 +57,6 @@ fn shared_normalization_state_is_updated_atomically() {
 
     assert!(shared.is_normalization_enabled());
     assert!((shared.normalization_gain() - 0.5).abs() < f32::EPSILON);
-}
-
-#[test]
-fn fft_analyzer_returns_fixed_sized_silent_spectrum() {
-    let analyzer = FftAnalyzer::new();
-    analyzer.set_enabled(true);
-    analyzer.push_interleaved_samples(&vec![0.0; 2048 * 2]);
-
-    let (left, right) = analyzer.analyze();
-
-    assert!(analyzer.is_enabled());
-    assert_eq!(left.len(), 128);
-    assert_eq!(right.len(), 128);
-    assert!(left.iter().all(|value| *value == 0.0));
-    assert!(right.iter().all(|value| *value == 0.0));
 }
 
 #[test]

@@ -29,7 +29,6 @@ export const useStatusStore = defineStore(
       deviceId: null,
       path: null,
       sampleProcessingAvailable: false,
-      fftAvailable: false,
     });
     /** 当前音源 */
     const currentSource = ref<string | null>(null);
@@ -184,6 +183,10 @@ export const useStatusStore = defineStore(
         "sortField",
         "sortOrder",
       ],
+      afterHydrate: ({ store }) => {
+        const state = store as unknown as { settingsCategory: string };
+        if (state.settingsCategory === "musicSpectrum") state.settingsCategory = "appearance";
+      },
     },
   },
 );

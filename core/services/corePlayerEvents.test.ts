@@ -36,14 +36,15 @@ test("Core native player event router stays Electron-free and owns session lifec
 
 test("output failure is never routed into source recovery or automatic rebuild", () => {
   const source = readFileSync(coreEventsPath, "utf8");
-  const outputFailure = source.split('case "outputFailed":')[1]?.split('case "fftData":')[0] ?? "";
+  const outputFailure = source.split('case "outputFailed":')[1] ?? "";
   assert.match(outputFailure, /markOutputUnavailable/);
   assert.doesNotMatch(outputFailure, /onNativeSourceError|requestReinit|reinitOutput/);
 });
 
 test("Direct monitor routes source and output failures through different events", () => {
   const source = readFileSync(nativeBackgroundPath, "utf8");
-  const directTimer = source.split("if let Some((monitor, seek_base")[1]?.split("let shared =")[0] ?? "";
+  const directTimer =
+    source.split("if let Some((monitor, seek_base")[1]?.split("let shared =")[0] ?? "";
   assert.match(directTimer, /DirectFailureKind::Source => cb\(PlayerEvent::SourceError\)/);
   assert.match(directTimer, /DirectFailureKind::Output => cb\(PlayerEvent::OutputFailed\)/);
 });

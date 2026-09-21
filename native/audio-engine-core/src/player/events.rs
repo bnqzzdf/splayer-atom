@@ -17,9 +17,6 @@ pub enum PlayerEvent {
     SourceError,
     /// 位置更新（秒）—— 由内部定时器推送
     Position { position: f64, duration: f64 },
-    /// FFT 频谱数据推送（仅在 fft feature 启用时可用）
-    #[cfg(feature = "fft")]
-    FftData { ldata: Vec<f32>, rdata: Vec<f32> },
     /// 输出流停滞；Core 只进入可恢复暂停态，不自动重建。
     OutputStalled,
     /// 输出流在运行期失效；Direct/Processed 都不得把它改写成 SourceError。

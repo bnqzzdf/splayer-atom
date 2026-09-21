@@ -12,7 +12,7 @@ import type { WSContext } from "hono/ws";
 const wsClients = new Set<WSContext>();
 
 /** 高频事件名单：默认不向外部 WS 推送（避免带宽爆炸） */
-const HIGH_FREQ_EVENTS = new Set(["fftData", "position"]);
+const HIGH_FREQ_EVENTS = new Set(["position"]);
 
 export const addWsClient = (ws: WSContext): void => {
   wsClients.add(ws);

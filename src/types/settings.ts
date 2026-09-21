@@ -209,8 +209,6 @@ export interface PlayerSettings {
   playerBgRenderScale: number;
   /** 暂停播放时冻结流体背景 */
   playerBgFreezeOnPause: boolean;
-  /** 流体背景随低频节拍脉动 */
-  playerBgBeat: boolean;
   /** 全屏播放器封面布局 */
   coverLayout: CoverLayout;
   /** 播放页封面/歌词分栏占比（0-1，封面侧宽度） */
@@ -225,12 +223,6 @@ export interface PlayerSettings {
   autoImmersive: boolean;
   /** 输出设备 ID；null 表示尚未选择，不跟随桌面默认。 */
   outputDevice: string | null;
-  /** 是否启用音乐频谱可视化 */
-  enableSpectrum: boolean;
-  /** 频谱单条宽度（px） */
-  spectrumBarWidth: number;
-  /** 是否反转频谱方向（启用后低频位于频谱两端） */
-  reverseSpectrum: boolean;
   /** 时间显示格式 */
   timeFormat: TimeFormat;
   /** 显示进度条悬浮信息 */

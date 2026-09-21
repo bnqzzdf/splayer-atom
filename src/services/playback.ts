@@ -1,7 +1,6 @@
 /**
  * 非响应式播放时间源
  *
- * 歌词高亮、频谱等高频组件直接读取，不经过 Vue 响应式系统
  * 进度条等低频 UI 仍从 status store 读取
  *
  * 主进程推送位置时调用 setCurrentTime 更新
@@ -148,17 +147,6 @@ export const setSpeed = (value: number): void => {
   }
   speed = value;
 };
-
-/** 最新 FFT 频谱帧 */
-let fftFrame: [number[], number[]] = [[], []];
-
-/** 主进程推送 FFT 数据时调用 */
-export const setFftFrame = (ldata: number[], rdata: number[]): void => {
-  fftFrame = [ldata, rdata];
-};
-
-/** RAF 循环读取最新频谱帧 */
-export const getFftFrame = (): readonly [number[], number[]] => fftFrame;
 
 /** 重置位置/时长/播放标志 */
 export const reset = (): void => {

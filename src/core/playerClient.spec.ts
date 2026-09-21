@@ -99,24 +99,11 @@ describe("shared player processing Core Protocol client", () => {
     ]);
   });
 
-  it("uses shared helper routes for FFT, cover and external lyric reads", async () => {
-    const fft = { ldata: [0.1], rdata: [0.2] };
+  it("uses shared helper routes for cover and external lyric reads", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ protocol: { version: 1 } }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: fft }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -134,10 +121,7 @@ describe("shared player processing Core Protocol client", () => {
         }),
       );
     vi.stubGlobal("fetch", fetchMock);
-
     const { playerClient } = await import("./playerClient");
-    await expect(playerClient.setFftEnabled(true)).resolves.toEqual({ success: true });
-    await expect(playerClient.getFftData()).resolves.toEqual({ success: true, data: fft });
     await expect(playerClient.getCoverRaw()).resolves.toEqual({
       success: true,
       data: "data:image/jpeg;base64,abc",
@@ -146,16 +130,9 @@ describe("shared player processing Core Protocol client", () => {
       success: true,
       data: "[00:00.00]lyric",
     });
-
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/player/fft");
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
-      method: "POST",
-      body: JSON.stringify({ enabled: true }),
-    });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/player/fft");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/player/cover");
-    expect(fetchMock.mock.calls[4]?.[0]).toBe("http://localhost:14559/api/player/read-lyric");
-    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/player/cover");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/player/read-lyric");
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ path: "/music/a.lrc" }),
     });

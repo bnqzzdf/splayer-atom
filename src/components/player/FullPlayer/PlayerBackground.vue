@@ -136,7 +136,6 @@ onBeforeUnmount(() => {
         :flow-speed="settings.player.playerBgFlowSpeed"
         :render-scale="settings.player.playerBgRenderScale"
         :has-lyric="media.parsedLyric.length > 0"
-        :enable-beat="settings.player.playerBgBeat"
       />
     </div>
   </Transition>

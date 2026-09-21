@@ -155,9 +155,6 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
       cacheScheduler.tick(adjusted);
       break;
     }
-    case "fftData":
-      playback.setFftFrame(event.data.ldata, event.data.rdata);
-      break;
     case "error":
       status.trackLoading = false;
       if (event.data.error === ErrorCode.OUTPUT_DEVICE_REQUIRED) {

@@ -37,15 +37,20 @@ test("fresh installs default ALSA to direct while schema-v3 upgrades preserve pr
 });
 
 test("Core restores the durable ALSA mode before activating a persisted local output", () => {
-  const init = session.split("export const initPlaybackSession = async")[1]?.split("/** 释放 Atom-owned")[0] ?? "";
-  const modeIndex = init.indexOf('player.setAlsaPlaybackMode(store.get("player.alsaPlaybackMode"))');
+  const init =
+    session.split("export const initPlaybackSession = async")[1]?.split("/** 释放 Atom-owned")[0] ??
+    "";
+  const modeIndex = init.indexOf(
+    'player.setAlsaPlaybackMode(store.get("player.alsaPlaybackMode"))',
+  );
   const outputIndex = init.indexOf("await player.setOutputDevice(output)");
   assert.ok(modeIndex >= 0);
   assert.ok(outputIndex > modeIndex);
 });
 
 test("ALSA mode switch rejects Native DSD before releasing the old runtime", () => {
-  const flow = session.split("export const setAlsaPlaybackMode = async")[1]?.split("/** 当前 Native")[0] ?? "";
+  const flow =
+    session.split("export const setAlsaPlaybackMode = async")[1]?.split("/** 当前 Native")[0] ?? "";
   const dsdGuard = flow.indexOf('targetMode === "processed" && isNativeDsdPlaybackSource');
   const stopIndex = flow.indexOf("player.stop()");
   assert.ok(dsdGuard >= 0);
@@ -54,7 +59,8 @@ test("ALSA mode switch rejects Native DSD before releasing the old runtime", () 
 });
 
 test("ALSA direct switch prepares remote bytes before stop and commits preference only after reload", () => {
-  const flow = session.split("export const setAlsaPlaybackMode = async")[1]?.split("/** 当前 Native")[0] ?? "";
+  const flow =
+    session.split("export const setAlsaPlaybackMode = async")[1]?.split("/** 当前 Native")[0] ?? "";
   const materializeIndex = flow.indexOf("materializeDirectInput(resolved.source)");
   const stopIndex = flow.indexOf("player.stop()");
   const nativeModeIndex = flow.indexOf("player.setAlsaPlaybackMode(targetMode)");
@@ -104,13 +110,6 @@ test("all external sample-processing commands converge on playerControl capabili
     routes,
     /getPlayer\(\)\.set(?:Volume|Speed|Pitch|PitchSync|NormalizationEnabled|EqualizerBands|PreampGain|EqualizerEnabled|FadeDuration)/,
   );
-});
-
-test("FFT enable follows the runtime capability without becoming a DSP mode state", () => {
-  assert.match(routes, /enabled && !getPlaybackStatus\(\)\.output\.fftAvailable/);
-  assert.match(routes, /error: "fft_unavailable"/);
-  assert.match(routes, /getPlayer\(\)\.setFftEnabled\(enabled\)/);
-  assert.match(outputStatus, /fftAvailable: native\.fftAvailable === true/);
 });
 
 test("Direct output projects effective unity controls without overwriting saved processed settings", () => {

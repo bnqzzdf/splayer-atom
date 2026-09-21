@@ -1,10 +1,4 @@
-import type {
-  AudioDevice,
-  FftData,
-  IpcResponse,
-  PlayerApi,
-  PlayerStatus,
-} from "@shared/types/player";
+import type { AudioDevice, IpcResponse, PlayerApi, PlayerStatus } from "@shared/types/player";
 import { coreCommand, coreResult } from "./controlClient";
 import { projectOutputDevices } from "./outputDevices";
 import type { AlsaPlaybackMode } from "@shared/types/settings";
@@ -13,8 +7,6 @@ type PlayerControlApi = Pick<
   PlayerApi,
   | "setVolume"
   | "getStatus"
-  | "setFftEnabled"
-  | "getFftData"
   | "setFadeDuration"
   | "setNormalizationEnabled"
   | "setEqualizerEnabled"
@@ -62,13 +54,6 @@ const mapOutputSnapshot = async (
 export const playerClient: PlayerControlApi = {
   setVolume: (volume) => coreCommand("/volume", { volume }),
   getStatus: () => coreResult<PlayerStatus>("/status"),
-  setFftEnabled: (enabled) => coreCommand("/player/fft", { enabled }),
-  getFftData: async () => {
-    const result = await coreResult<{ data: FftData }>("/player/fft");
-    return result.success && result.data
-      ? { success: true, data: result.data.data }
-      : { success: false, error: result.error ?? "CORE_RESPONSE_MISSING_DATA" };
-  },
   setFadeDuration: (durationMs) => coreCommand("/player/fade", { durationMs }),
   setNormalizationEnabled: (enabled) => coreCommand("/player/normalization", { enabled }),
   setEqualizerEnabled: (enabled) => coreCommand("/player/equalizer", { enabled }),

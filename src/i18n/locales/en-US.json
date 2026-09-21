@@ -769,7 +769,6 @@
       "nowPlaying": "Now Playing",
       "media": "Media Controls",
       "device": "Output Device",
-      "musicSpectrum": "Music Spectrum",
       "providerAccounts": "Provider Accounts",
       "listenbrainz": "ListenBrainz",
       "systemConfig": "System",
@@ -930,18 +929,6 @@
     "snapToLyric": {
       "label": "Snap to Nearest Lyric",
       "description": "Automatically snap to the nearest lyric line when adjusting progress"
-    },
-    "enableSpectrum": {
-      "label": "Enable Spectrum",
-      "description": "Real-time spectrum analysis adds some CPU load — consider disabling on lower-power devices"
-    },
-    "spectrumBarWidth": {
-      "label": "Bar Width",
-      "description": "Smaller values give thinner, denser bars"
-    },
-    "reverseSpectrum": {
-      "label": "Reverse Spectrum",
-      "description": "When enabled, the frequency of the bars decreases from the center toward the sides; otherwise it increases."
     },
     "lyricSourcePreference": {
       "label": "Lyric Source Preference",
@@ -1233,10 +1220,6 @@
     "playerBgFreezeOnPause": {
       "label": "Freeze When Paused",
       "description": "Stop the fluid background animation while playback is paused"
-    },
-    "playerBgBeat": {
-      "label": "Beat Pulse",
-      "description": "Make the fluid background pulse with the low-frequency beat of the music"
     },
     "coverLayout": {
       "label": "Cover Layout",

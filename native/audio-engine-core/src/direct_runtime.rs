@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
@@ -8,7 +7,6 @@ use crate::alsa::direct_dsd::{AlsaDirectDsdConnection, AlsaDirectDsdMonitor};
 use crate::alsa::direct_pcm::{AlsaDirectPcmConnection, AlsaDirectPcmMonitor};
 use crate::direct_dsd::{DirectDsdFormat, DirectDsdStageHandle};
 use crate::direct_pcm::{DirectPcmFormat, DirectPcmStageHandle};
-use crate::fft::FftAnalyzer;
 
 #[cfg(feature = "diretta")]
 use crate::direct_dsd::DirectDsdMonitor;
@@ -282,7 +280,6 @@ impl DirectPlayback {
         auto_play: bool,
         cue_start_frame75: Option<u64>,
         cue_end_frame75: Option<u64>,
-        fft: Arc<FftAnalyzer>,
     ) -> Result<Self> {
         if source.starts_with("http://") || source.starts_with("https://") {
             bail!("[Direct] 当前 Direct Lifecycle Gate 仅支持本地 seekable 音源");
@@ -322,7 +319,6 @@ impl DirectPlayback {
                     start_frame75,
                     cue_end_frame75,
                     false,
-                    Arc::clone(&fft),
                 )?
             } else {
                 AlsaDirectPcmConnection::open_local_at(
@@ -331,7 +327,6 @@ impl DirectPlayback {
                     direct_duration,
                     position_secs,
                     false,
-                    Arc::clone(&fft),
                 )?
             };
             (DirectTransport::AlsaPcm(connection), actual_position)
@@ -620,15 +615,6 @@ impl DirectPlayback {
         match &self.transport {
             #[cfg(feature = "diretta")]
             DirectTransport::DirettaPcm(_) | DirectTransport::DirettaDsd(_) => true,
-            _ => false,
-        }
-    }
-
-    /// 只允许 ALSA Direct mono/stereo PCM 进入只读 FFT 旁路。
-    /// Native DSD 和 Diretta 继续保持频谱不可用；多声道在 layout 保真完成前不猜测 L/R。
-    pub fn supports_fft_analysis(&self) -> bool {
-        match &self.transport {
-            DirectTransport::AlsaPcm(value) => matches!(value.config().channels, 1 | 2),
             _ => false,
         }
     }

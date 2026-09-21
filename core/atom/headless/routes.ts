@@ -602,21 +602,6 @@ export const buildHeadlessRoutes = (): Hono => {
   });
   api.get("/player/fade", (c) => c.json({ data: getPlayer().getFadeDuration() }));
 
-  api.post("/player/fft", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { enabled?: boolean } | null;
-    const enabled = body?.enabled === true;
-    if (enabled && !getPlaybackStatus().output.fftAvailable) {
-      return c.json({ error: "fft_unavailable" }, 409);
-    }
-    try {
-      getPlayer().setFftEnabled(enabled);
-      return c.json({ ok: true });
-    } catch (error) {
-      return commandError(c, error);
-    }
-  });
-  api.get("/player/fft", (c) => c.json({ data: getPlayer().getFftData() }));
-
   api.get("/player/cover", (c) => {
     try {
       const raw = getPlayer().getCoverRaw();

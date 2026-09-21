@@ -194,7 +194,7 @@ ListenBrainz 和 Core play stats 优先复用现有公开 helper；只有实际�
 调用。现有 Web Control 的 Play/Pause/Stop/Seek 已经委托
 playbackSession，因此无需为 UPnP 新建 Control API。
 
-旧 IPC 中与 DSP/FFT/native device 明确绑定的能力继续属于 native player，不为 UPnP 进行全局
+旧 IPC 中与 DSP/native device 明确绑定的能力继续属于 native player，不为 UPnP 进行全局
 重构。UPnP 首版只保证标准播放命令走 Core authority。
 
 ### output switch

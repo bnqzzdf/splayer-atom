@@ -10,19 +10,17 @@ use anyhow::{bail, ensure, Context, Result};
 use tracing::warn;
 
 use super::device::AlsaHwEndpoint;
-use super::format::{pack_direct_pcm, pcm_transport_to_fft_stereo, AlsaPcmFormat};
+use super::format::{pack_direct_pcm, AlsaPcmFormat};
 use super::output::{open_pcm_hw, AlsaPcmConfig};
 use super::writer::AlsaFrameWriter;
 use crate::direct_pcm::{
     DirectPcmBoundary, DirectPcmConsumer, DirectPcmFormat, DirectPcmLease, DirectPcmPoll,
     DirectPcmSampleFormat, DirectPcmSource, DirectPcmStageHandle,
 };
-use crate::fft::FftAnalyzer;
 
 const SOURCE_POLL_INTERVAL: Duration = Duration::from_millis(1);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 const PACK_QUEUE_DEPTH: usize = 4;
-const FFT_ANALYSIS_QUEUE_DEPTH: usize = 2;
 
 struct AlsaDirectPcmState {
     submitted_frames: AtomicU64,
@@ -31,7 +29,6 @@ struct AlsaDirectPcmState {
     duration_micros: AtomicU64,
     transition_count: AtomicU64,
     boundary_generation: AtomicU64,
-    fft_epoch: AtomicU64,
     playing: AtomicBool,
     finished: AtomicBool,
     source_failed: AtomicBool,
@@ -48,7 +45,6 @@ impl AlsaDirectPcmState {
             duration_micros: AtomicU64::new(duration_to_micros(duration_secs)),
             transition_count: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
-            fft_epoch: AtomicU64::new(0),
             playing: AtomicBool::new(false),
             finished: AtomicBool::new(false),
             source_failed: AtomicBool::new(false),
@@ -58,7 +54,6 @@ impl AlsaDirectPcmState {
     }
 
     fn reset_timeline(&self, duration_secs: f64) {
-        self.fft_epoch.fetch_add(1, Ordering::AcqRel);
         self.submitted_frames.store(0, Ordering::Release);
         self.played_frames.store(0, Ordering::Release);
         self.track_base_frame.store(0, Ordering::Release);
@@ -176,72 +171,6 @@ enum PreparedPcmEvent {
 struct PackedPcmPreparer {
     command_tx: mpsc::Sender<PreparerCommand>,
     worker: Option<JoinHandle<()>>,
-}
-
-struct DirectPcmFftTap {
-    fft: Arc<FftAnalyzer>,
-    ready_tx: mpsc::SyncSender<FftAnalysisBlock>,
-    recycle_tx: mpsc::SyncSender<Vec<u8>>,
-    recycle_rx: mpsc::Receiver<Vec<u8>>,
-    state: Arc<AlsaDirectPcmState>,
-}
-
-struct FftAnalysisBlock {
-    data: Vec<u8>,
-    end_frame: u64,
-    epoch: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FftBlockDisposition {
-    Wait,
-    Ready,
-    Drop,
-}
-
-fn fft_block_disposition(
-    state: &AlsaDirectPcmState,
-    block: &FftAnalysisBlock,
-) -> FftBlockDisposition {
-    if state.fft_epoch.load(Ordering::Acquire) != block.epoch {
-        return FftBlockDisposition::Drop;
-    }
-    if state.played_frames.load(Ordering::Acquire) >= block.end_frame {
-        FftBlockDisposition::Ready
-    } else {
-        FftBlockDisposition::Wait
-    }
-}
-
-impl DirectPcmFftTap {
-    /// writer 热路径只做有界 memcpy；没有预分配 buffer 或分析队列已满时直接丢分析块。
-    fn try_capture(&self, data: &[u8], end_frame: u64) {
-        if !self.fft.is_enabled() {
-            return;
-        }
-        let Ok(mut buffer) = self.recycle_rx.try_recv() else {
-            return;
-        };
-        if data.len() > buffer.capacity() {
-            let _ = self.recycle_tx.try_send(buffer);
-            return;
-        }
-        buffer.resize(data.len(), 0);
-        buffer.copy_from_slice(data);
-        let block = FftAnalysisBlock {
-            data: buffer,
-            end_frame,
-            epoch: self.state.fft_epoch.load(Ordering::Acquire),
-        };
-        match self.ready_tx.try_send(block) {
-            Ok(()) => {}
-            Err(mpsc::TrySendError::Full(mut block))
-            | Err(mpsc::TrySendError::Disconnected(mut block)) => {
-                block.data.clear();
-                let _ = self.recycle_tx.try_send(block.data);
-            }
-        }
-    }
 }
 
 impl PackedPcmPreparer {
@@ -370,7 +299,6 @@ pub struct AlsaDirectPcmConnection {
     state: Arc<AlsaDirectPcmState>,
     command_tx: mpsc::Sender<WriterCommand>,
     preparer: Option<PackedPcmPreparer>,
-    fft_worker: Option<JoinHandle<()>>,
     cancel: Arc<AtomicBool>,
     writer: Option<JoinHandle<()>>,
     duration_secs: f64,
@@ -383,17 +311,9 @@ impl AlsaDirectPcmConnection {
         duration_secs: f64,
         position_secs: f64,
         auto_play: bool,
-        fft: Arc<FftAnalyzer>,
     ) -> Result<(Self, f64)> {
         let (source, actual_position) = DirectPcmSource::open_local_at(path, position_secs)?;
-        Self::open_source(
-            endpoint,
-            source,
-            duration_secs,
-            actual_position,
-            auto_play,
-            fft,
-        )
+        Self::open_source(endpoint, source, duration_secs, actual_position, auto_play)
     }
 
     pub fn open_local_segment(
@@ -403,18 +323,10 @@ impl AlsaDirectPcmConnection {
         start_frame75: u64,
         end_frame75: Option<u64>,
         auto_play: bool,
-        fft: Arc<FftAnalyzer>,
     ) -> Result<(Self, f64)> {
         let (source, actual_position) =
             DirectPcmSource::open_local_segment(path, start_frame75, end_frame75)?;
-        Self::open_source(
-            endpoint,
-            source,
-            duration_secs,
-            actual_position,
-            auto_play,
-            fft,
-        )
+        Self::open_source(endpoint, source, duration_secs, actual_position, auto_play)
     }
 
     fn open_source(
@@ -423,7 +335,6 @@ impl AlsaDirectPcmConnection {
         duration_secs: f64,
         actual_position: f64,
         auto_play: bool,
-        fft: Arc<FftAnalyzer>,
     ) -> Result<(Self, f64)> {
         let source_format = source.format();
         source.set_duration(duration_secs);
@@ -441,8 +352,6 @@ impl AlsaDirectPcmConnection {
             (PcmInput::Packed(receiver), Some(preparer))
         };
         let (command_tx, command_rx) = mpsc::channel();
-        let (fft_tap, fft_worker) =
-            spawn_direct_pcm_fft_tap(fft, config, Arc::clone(&state), Arc::clone(&cancel))?;
         let writer_state = Arc::clone(&state);
         let writer_cancel = Arc::clone(&cancel);
         let writer = thread::Builder::new()
@@ -454,7 +363,6 @@ impl AlsaDirectPcmConnection {
                     writer_state.as_ref(),
                     writer_cancel.as_ref(),
                     command_rx,
-                    fft_tap,
                 ) {
                     warn!("ALSA direct PCM writer failed: {error:#}");
                     // producer 已明确标记 source failure 时不要再覆盖成设备故障。
@@ -473,7 +381,6 @@ impl AlsaDirectPcmConnection {
             state,
             command_tx,
             preparer,
-            fft_worker,
             cancel,
             writer: Some(writer),
             duration_secs,
@@ -618,83 +525,7 @@ impl Drop for AlsaDirectPcmConnection {
         if let Some(writer) = self.writer.take() {
             let _ = writer.join();
         }
-        if let Some(worker) = self.fft_worker.take() {
-            let _ = worker.join();
-        }
     }
-}
-
-fn spawn_direct_pcm_fft_tap(
-    fft: Arc<FftAnalyzer>,
-    config: AlsaPcmConfig,
-    state: Arc<AlsaDirectPcmState>,
-    cancel: Arc<AtomicBool>,
-) -> Result<(Option<DirectPcmFftTap>, Option<JoinHandle<()>>)> {
-    if !matches!(config.channels, 1 | 2) {
-        return Ok((None, None));
-    }
-
-    let max_bytes = usize::try_from(config.buffer_frames)
-        .context("FFT ALSA buffer frame 数越界")?
-        .checked_mul(usize::from(config.channels))
-        .and_then(|samples| samples.checked_mul(config.format.storage_bytes()))
-        .context("FFT ALSA 分析 buffer 长度溢出")?;
-    let (ready_tx, ready_rx) = mpsc::sync_channel::<FftAnalysisBlock>(FFT_ANALYSIS_QUEUE_DEPTH);
-    let (recycle_tx, recycle_rx) = mpsc::sync_channel::<Vec<u8>>(FFT_ANALYSIS_QUEUE_DEPTH);
-    for _ in 0..FFT_ANALYSIS_QUEUE_DEPTH {
-        recycle_tx
-            .send(Vec::with_capacity(max_bytes))
-            .context("初始化 FFT 分析 buffer pool 失败")?;
-    }
-
-    let worker_fft = Arc::clone(&fft);
-    let worker_recycle_tx = recycle_tx.clone();
-    let worker_state = Arc::clone(&state);
-    let worker = thread::Builder::new()
-        .name("alsa-direct-fft".into())
-        .spawn(move || {
-            let mut stereo = Vec::<f32>::new();
-            while let Ok(mut block) = ready_rx.recv() {
-                loop {
-                    if cancel.load(Ordering::Acquire) {
-                        return;
-                    }
-                    match fft_block_disposition(worker_state.as_ref(), &block) {
-                        FftBlockDisposition::Wait => thread::sleep(Duration::from_millis(2)),
-                        FftBlockDisposition::Drop => break,
-                        FftBlockDisposition::Ready => {
-                            if worker_fft.is_enabled()
-                                && pcm_transport_to_fft_stereo(
-                                    &block.data,
-                                    config.format,
-                                    config.channels,
-                                    &mut stereo,
-                                )
-                                .is_ok()
-                            {
-                                worker_fft
-                                    .push_interleaved_samples_at_rate(&stereo, config.sample_rate);
-                            }
-                            break;
-                        }
-                    }
-                }
-                block.data.clear();
-                let _ = worker_recycle_tx.try_send(block.data);
-            }
-        })
-        .context("启动 ALSA direct FFT 分析线程失败")?;
-
-    Ok((
-        Some(DirectPcmFftTap {
-            fft,
-            ready_tx,
-            recycle_tx,
-            recycle_rx,
-            state,
-        }),
-        Some(worker),
-    ))
 }
 
 fn spawn_packed_preparer(
@@ -874,7 +705,6 @@ fn run_writer(
     state: &AlsaDirectPcmState,
     cancel: &AtomicBool,
     command_rx: mpsc::Receiver<WriterCommand>,
-    fft_tap: Option<DirectPcmFftTap>,
 ) -> Result<()> {
     let mut writer = AlsaFrameWriter::new(handle)?;
     let mut playing = false;
@@ -940,10 +770,6 @@ fn run_writer(
                     written == expected_frames,
                     "ALSA write frame 数与 Direct block 不一致"
                 );
-                let submitted_after = submitted_before.saturating_add(written as u64);
-                if let Some(tap) = &fft_tap {
-                    tap.try_capture(block.data(), submitted_after);
-                }
                 state
                     .submitted_frames
                     .fetch_add(written as u64, Ordering::AcqRel);
@@ -1287,33 +1113,6 @@ mod tests {
         state.output_failed.store(true, Ordering::Release);
         assert!(!monitor.source_failed());
         assert!(monitor.output_failed());
-    }
-
-    #[test]
-    fn fft_tap_drops_when_busy_and_recycles_without_blocking_writer() {
-        let fft = Arc::new(FftAnalyzer::new());
-        fft.set_enabled(true);
-        let state = Arc::new(AlsaDirectPcmState::new(1.0));
-        let (ready_tx, ready_rx) = mpsc::sync_channel::<FftAnalysisBlock>(1);
-        let (recycle_tx, recycle_rx) = mpsc::sync_channel::<Vec<u8>>(2);
-        recycle_tx.send(Vec::with_capacity(8)).unwrap();
-        recycle_tx.send(Vec::with_capacity(8)).unwrap();
-        let tap = DirectPcmFftTap {
-            fft,
-            ready_tx,
-            recycle_tx,
-            recycle_rx,
-            state,
-        };
-
-        tap.try_capture(&[1, 2, 3, 4], 4);
-        // ready queue 已满；第二块必须立即丢弃并把 buffer 放回池，而不是等待分析线程。
-        tap.try_capture(&[5, 6, 7, 8], 8);
-        assert_eq!(ready_rx.try_recv().unwrap().data, vec![1, 2, 3, 4]);
-
-        // 第二次丢弃的 buffer 已回收，所以 writer 下一块仍能立即旁路。
-        tap.try_capture(&[9, 10, 11, 12], 12);
-        assert_eq!(ready_rx.try_recv().unwrap().data, vec![9, 10, 11, 12]);
     }
 
     #[test]

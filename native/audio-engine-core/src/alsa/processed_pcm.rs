@@ -12,7 +12,6 @@ use super::format::pack_processed_pcm;
 use super::output::AlsaPcmHandle;
 use super::writer::AlsaFrameWriter;
 use crate::audio_output::OutputFailureCallback;
-use crate::fft::FftAnalyzer;
 use crate::shared::{PopResult, ProcessedTrackBoundary, Shared};
 
 const SOURCE_POLL_INTERVAL: Duration = Duration::from_millis(1);
@@ -177,7 +176,6 @@ impl AlsaProcessedPcmStream {
     pub fn new(
         handle: AlsaPcmHandle,
         shared: Arc<Shared>,
-        fft: Arc<FftAnalyzer>,
         volume: f32,
         clipping_protection: bool,
         paused: bool,
@@ -196,7 +194,6 @@ impl AlsaProcessedPcmStream {
                 if let Err(error) = run_writer(
                     handle,
                     shared,
-                    fft,
                     worker_volume,
                     worker_clipping_protection,
                     worker_cancel.as_ref(),
@@ -264,7 +261,6 @@ impl Drop for AlsaProcessedPcmStream {
 fn run_writer(
     handle: AlsaPcmHandle,
     shared: Arc<Shared>,
-    fft: Arc<FftAnalyzer>,
     volume: Arc<AtomicU32>,
     clipping_protection: Arc<AtomicBool>,
     cancel: &AtomicBool,
@@ -326,10 +322,6 @@ fn run_writer(
                 if chunk.track_boundary.is_some() {
                     pending_chunk_boundary = chunk.track_boundary.take();
                 }
-                if fft.is_enabled() {
-                    fft.push_interleaved_samples(&chunk.fft_samples);
-                }
-                shared.recycle_fft_buffer(std::mem::take(&mut chunk.fft_samples));
                 pending_source_samples =
                     pending_source_samples.saturating_add(chunk.source_sample_count);
                 if chunk.player_samples.is_empty() {

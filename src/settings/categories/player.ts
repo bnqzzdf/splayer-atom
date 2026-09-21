@@ -127,37 +127,6 @@ const playerCategory: SettingCategory = {
       ],
     },
     {
-      id: "musicSpectrum",
-      tag: { text: "Beta" },
-      items: [
-        {
-          key: "enableSpectrum",
-          type: "switch",
-          binding: { store: "settings", path: "player.enableSpectrum" },
-          defaultValue: false,
-          children: [
-            {
-              key: "spectrumBarWidth",
-              type: "slider",
-              binding: { store: "settings", path: "player.spectrumBarWidth" },
-              min: 1,
-              max: 12,
-              step: 1,
-              defaultValue: 4,
-              marks: { 1: "1", 4: "4", 8: "8", 12: "12" },
-            },
-            {
-              key: "reverseSpectrum",
-              type: "switch",
-              binding: { store: "settings", path: "player.reverseSpectrum" },
-              defaultValue: false,
-            },
-          ],
-        },
-      ],
-    },
-
-    {
       id: "device",
       items: [
         {

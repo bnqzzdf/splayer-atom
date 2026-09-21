@@ -64,13 +64,11 @@ describe("Core Control event client", () => {
       isFinished: false,
     });
     emit("position", { position: 1200, duration: 2000 });
-    emit("fftData", { ldata: [0.1], rdata: [0.2] });
 
     expect(provider).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledWith({ taskId: "task-1", received: 10, total: 100 });
     expect(playerProjection).toHaveBeenCalledWith(expect.objectContaining({ type: "status" }));
     expect(playerProjection).toHaveBeenCalledWith(expect.objectContaining({ type: "position" }));
-    expect(playerProjection).toHaveBeenCalledWith(expect.objectContaining({ type: "fftData" }));
 
     offProvider();
     offProgress();

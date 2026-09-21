@@ -13,10 +13,6 @@ const lyricLoaderSource = readFileSync(
   new URL("../../services/lyric/loader.ts", import.meta.url),
   "utf8",
 );
-const fftCaptureSource = readFileSync(
-  new URL("../../services/fftCapture.ts", import.meta.url),
-  "utf8",
-);
 const lyricPosterSource = readFileSync(
   new URL("../../utils/lyric/poster.ts", import.meta.url),
   "utf8",
@@ -73,23 +69,17 @@ test("renderer processing and status controls use Core Protocol instead of Playe
 });
 
 test("distributed player helpers use Core Protocol without host event facades", () => {
-  assert.match(playerClientSource, /coreCommand\("\/player\/fft", \{ enabled \}\)/);
   assert.match(playerClientSource, /coreResult<\{ data: string \| null \}>\("\/player\/cover"\)/);
   assert.match(playerClientSource, /coreResult<\{ data: string \}>\("\/player\/read-lyric"/);
 
   assert.match(playerCoverSource, /playerClient\.getCoverRaw\(\)/);
   assert.match(lyricPosterSource, /playerClient\.getCoverRaw\(\)/);
   assert.match(lyricLoaderSource, /playerClient\.readLyricFile\(ext\.path\)/);
-  assert.match(fftCaptureSource, /status\.output\.fftAvailable/);
-  assert.match(fftCaptureSource, /playerClient\.setFftEnabled\(enabled\)/);
-  assert.match(fftCaptureSource, /setBackendEnabled\(false\)/);
-
-  const migratedIpc = /window\.api\.player\.(getCoverRaw|readLyricFile|setFftEnabled|getFftData)/;
+  const migratedIpc = /window\.api\.player\.(getCoverRaw|readLyricFile)/;
   for (const source of [
     playerCoverSource,
     lyricPosterSource,
     lyricLoaderSource,
-    fftCaptureSource,
   ]) {
     assert.doesNotMatch(source, migratedIpc);
   }

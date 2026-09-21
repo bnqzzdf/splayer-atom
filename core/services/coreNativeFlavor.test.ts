@@ -37,13 +37,11 @@ const nativeLoaderSource = readFileSync(
 
 test("audio-engine exposes only the Linux Core Cargo flavor", () => {
   assert.match(shimCargoSource, /default = \["core-audio"\]/);
-  assert.match(shimCargoSource, /core-audio = \["audio-engine-core\/fft"\]/);
   assert.doesNotMatch(shimCargoSource, /audio-engine-core\/midi/);
   assert.match(
     shimCargoSource,
     /audio-engine-core = \{ path = "\.\.\/audio-engine-core", default-features = false/,
   );
-  assert.match(coreCargoSource, /default = \["fft"\]/);
   assert.doesNotMatch(coreCargoSource, /rustysynth|midi\s*=/);
   assert.doesNotMatch(
     coreCargoSource,

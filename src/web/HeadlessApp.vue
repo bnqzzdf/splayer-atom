@@ -27,7 +27,6 @@ const status = ref<PlayerStatus>({
     deviceId: null,
     path: null,
     sampleProcessingAvailable: false,
-    fftAvailable: false,
   },
 });
 const outputs = ref<AudioDevice[]>([]);
@@ -52,8 +51,8 @@ const filteredTracks = computed(() => {
 });
 
 const currentTitle = computed(() => session.value.current?.title ?? "未播放");
-const currentArtist = computed(() =>
-  session.value.current?.artists.map((artist) => artist.name).join(" / ") || "Atom Headless",
+const currentArtist = computed(
+  () => session.value.current?.artists.map((artist) => artist.name).join(" / ") || "Atom Headless",
 );
 
 const formatTime = (ms: number): string => {
@@ -303,7 +302,7 @@ onUnmounted(() => {
               <strong>{{ track.title }}</strong>
               <span>
                 {{ track.artists.map((artist) => artist.name).join(" / ") || "未知艺人" }}
-                <template v-if="track.album?.name"> · {{ track.album.name }}</template>
+                <template v-if="track.album?.name">· {{ track.album.name }}</template>
               </span>
             </button>
             <span class="duration">{{ formatTime(track.duration) }}</span>
@@ -319,7 +318,10 @@ onUnmounted(() => {
             <div class="eyebrow">QUEUE</div>
             <h3>播放队列</h3>
           </div>
-          <button v-if="session.queue.length" @click="headlessClient.clearQueue().then(refreshSession)">
+          <button
+            v-if="session.queue.length"
+            @click="headlessClient.clearQueue().then(refreshSession)"
+          >
             清空
           </button>
         </div>
@@ -330,7 +332,9 @@ onUnmounted(() => {
             class="queue-row"
             :class="{ current: queueIndex === session.index }"
           >
-            <span class="queue-index">{{ queueIndex === session.index ? "▶" : queueIndex + 1 }}</span>
+            <span class="queue-index">
+              {{ queueIndex === session.index ? "▶" : queueIndex + 1 }}
+            </span>
             <div>
               <strong>{{ item.track.title }}</strong>
               <span>{{ item.track.artists.map((artist) => artist.name).join(" / ") }}</span>
@@ -350,7 +354,14 @@ onUnmounted(() => {
   padding: 28px;
   background: #0b0c10;
   color: #f4f5f7;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 .topbar,
 .output-card,

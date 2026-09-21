@@ -5,7 +5,6 @@ use tracing::warn;
 
 use crate::alsa::processed_pcm::AlsaProcessedPcmStream;
 use crate::audio_output::AudioOutput;
-use crate::fft::FftAnalyzer;
 use crate::shared::Shared;
 
 /// Processed PCM 播放控制句柄；底层 ALSA handle 始终由独立 writer 线程单独持有。
@@ -17,13 +16,12 @@ impl PlaybackHandle {
     pub fn attach(
         output: &AudioOutput,
         shared: Arc<Shared>,
-        fft: Arc<FftAnalyzer>,
         volume: f32,
         clipping_protection: bool,
         paused: bool,
     ) -> Result<Self> {
         Ok(Self {
-            stream: output.build_stream(shared, fft, volume, clipping_protection, paused)?,
+            stream: output.build_stream(shared, volume, clipping_protection, paused)?,
         })
     }
 

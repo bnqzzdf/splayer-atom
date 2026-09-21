@@ -186,7 +186,6 @@ export const useSettingsStore = defineStore(
       playerBgFlowSpeed: 4,
       playerBgRenderScale: 0.5,
       playerBgFreezeOnPause: false,
-      playerBgBeat: false,
       coverLayout: "default",
       coverLyricRatio: 0.45,
       autoCenterCover: true,
@@ -194,9 +193,6 @@ export const useSettingsStore = defineStore(
       followCoverColor: true,
       autoImmersive: true,
       outputDevice: null,
-      enableSpectrum: false,
-      spectrumBarWidth: 4,
-      reverseSpectrum: false,
       timeFormat: "current-total",
       showProgressTooltip: true,
       showProgressLyric: false,
@@ -352,10 +348,19 @@ export const useSettingsStore = defineStore(
       storage: localStorage,
       omit: ["system"],
       afterHydrate: ({ store }) => {
-        const { lyric, appearance } = store as unknown as {
+        const { lyric, appearance, player } = store as unknown as {
           lyric: LyricSettings;
           appearance: AppearanceSettings;
+          player: Record<string, unknown>;
         };
+        for (const key of [
+          "playerBgBeat",
+          "enableSpectrum",
+          "spectrumBarWidth",
+          "reverseSpectrum",
+        ]) {
+          delete player[key];
+        }
         if (typeof lyric.detectBackgroundLyrics !== "boolean") {
           lyric.detectBackgroundLyrics = true;
         }

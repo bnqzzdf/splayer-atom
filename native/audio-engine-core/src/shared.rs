@@ -15,8 +15,6 @@ pub struct ProcessedTrackBoundary {
 pub struct AudioChunk {
     /// 交错排列的 f32 播放样本（L R L R ...）
     pub player_samples: Vec<f32>,
-    /// 交错排列的 f32 FFT 样本（L R L R ...）
-    pub fft_samples: Vec<f32>,
     /// tempo 处理前的源样本数，用于保持变速时播放位置准确
     pub source_sample_count: u64,
     /// processed gapless 下一首的首个有效输出块标记；只由 writer 在 DAC-side 提交。
@@ -37,7 +35,6 @@ pub struct Shared {
     output_buffer: Mutex<VecDeque<AudioChunk>>,
     output_condvar: Condvar,
     player_buffer_pool: Mutex<Vec<Vec<f32>>>,
-    fft_buffer_pool: Mutex<Vec<Vec<f32>>>,
     decode_eof: AtomicBool,
     output_eof: AtomicBool,
     is_stopping: AtomicBool,
@@ -89,7 +86,6 @@ impl Shared {
             output_buffer: Mutex::new(VecDeque::with_capacity(OUTPUT_BUFFER_CAPACITY)),
             output_condvar: Condvar::new(),
             player_buffer_pool: Mutex::new(Vec::with_capacity(BUFFER_POOL_CAPACITY)),
-            fft_buffer_pool: Mutex::new(Vec::with_capacity(BUFFER_POOL_CAPACITY)),
             decode_eof: AtomicBool::new(false),
             output_eof: AtomicBool::new(false),
             is_stopping: AtomicBool::new(false),
@@ -153,20 +149,6 @@ impl Shared {
     pub fn recycle_player_buffer(&self, mut buffer: Vec<f32>) {
         buffer.clear();
         let mut pool = self.player_buffer_pool.lock();
-        if pool.len() < BUFFER_POOL_CAPACITY {
-            pool.push(buffer);
-        }
-    }
-
-    /// 获取可复用的 FFT 样本缓冲
-    pub fn take_fft_buffer(&self) -> Vec<f32> {
-        self.fft_buffer_pool.lock().pop().unwrap_or_default()
-    }
-
-    /// 归还 FFT 样本缓冲；池满时直接释放以保持内存有界
-    pub fn recycle_fft_buffer(&self, mut buffer: Vec<f32>) {
-        buffer.clear();
-        let mut pool = self.fft_buffer_pool.lock();
         if pool.len() < BUFFER_POOL_CAPACITY {
             pool.push(buffer);
         }
@@ -378,7 +360,6 @@ impl Shared {
         drop(output);
         for chunk in decoded_chunks.into_iter().chain(output_chunks) {
             self.recycle_player_buffer(chunk.player_samples);
-            self.recycle_fft_buffer(chunk.fft_samples);
         }
     }
 }
@@ -393,11 +374,9 @@ mod tests {
 
         for _ in 0..(BUFFER_POOL_CAPACITY + 20) {
             shared.recycle_player_buffer(Vec::with_capacity(16));
-            shared.recycle_fft_buffer(Vec::with_capacity(16));
         }
 
         assert_eq!(shared.player_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
-        assert_eq!(shared.fft_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
     }
 
     #[test]

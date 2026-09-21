@@ -31,7 +31,6 @@ export const projectNativeOutputStatus = (player: PlayerInstance): PlayerOutputS
     deviceId,
     path,
     sampleProcessingAvailable,
-    fftAvailable: native.fftAvailable === true,
   };
 };
 

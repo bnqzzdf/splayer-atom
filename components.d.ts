@@ -20,7 +20,6 @@ declare module 'vue' {
     AutoCloseDialog: typeof import('./src/components/modals/AutoCloseDialog.vue')['default']
     BackgroundImagePicker: typeof import('./src/components/settings/custom/BackgroundImagePicker.vue')['default']
     BackgroundRender: typeof import('./src/components/player/FullPlayer/BackgroundRender.vue')['default']
-    BottomSpectrum: typeof import('./src/components/player/FullPlayer/BottomSpectrum.vue')['default']
     ContextMenuContent: typeof import('reka-ui')['ContextMenuContent']
     ContextMenuItem: typeof import('reka-ui')['ContextMenuItem']
     ContextMenuPortal: typeof import('reka-ui')['ContextMenuPortal']

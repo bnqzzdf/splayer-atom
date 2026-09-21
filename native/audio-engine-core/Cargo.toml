@@ -25,7 +25,6 @@ once_cell = "1"
 
 # DSP
 signalsmith-stretch = "0.1.3"
-rustfft = { version = "6", optional = true }
 
 # 元数据 & 缩略图
 lofty = "0.24"
@@ -52,8 +51,7 @@ alsa = "0.11.0"
 alsa-sys = "0.4.0"
 
 [features]
-default = ["fft"]
-fft = ["dep:rustfft"]
+default = []
 napi = []
 diretta = ["dep:diretta-sys"]
 

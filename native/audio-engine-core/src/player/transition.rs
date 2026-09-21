@@ -21,8 +21,6 @@ use super::{InnerPlayer, PlayerEvent, PlayerState};
 pub struct OldThreads {
     pub decoder_thread: Option<JoinHandle<decoder::DecoderData>>,
     pub position_timer: Option<JoinHandle<()>>,
-    #[cfg(feature = "fft")]
-    pub fft_timer: Option<JoinHandle<()>>,
     pub fade_handle: Option<JoinHandle<()>>,
     pub direct_playback: Option<DirectPlayback>,
 }
@@ -32,9 +30,6 @@ impl OldThreads {
     /// 忽略 join 错误：辅助线程 panic 不阻止新加载，主播放路径不依赖它们
     pub fn join_aux(self) -> Option<JoinHandle<decoder::DecoderData>> {
         drop(self.direct_playback);
-        #[cfg(feature = "fft")]
-        let aux = [self.position_timer, self.fft_timer, self.fade_handle];
-        #[cfg(not(feature = "fft"))]
         let aux = [self.position_timer, self.fade_handle];
         for h in aux.into_iter().flatten() {
             let _ = h.join();
@@ -104,10 +99,6 @@ impl InnerPlayer {
         if let Some(flag) = self.position_timer_stop.take() {
             flag.store(true, Ordering::Relaxed);
         }
-        #[cfg(feature = "fft")]
-        if let Some(flag) = self.fft_timer_stop.take() {
-            flag.store(true, Ordering::Relaxed);
-        }
 
         if let Some(ref shared) = self.shared {
             shared.stop();
@@ -121,16 +112,12 @@ impl InnerPlayer {
         self.shared = None;
         self.cover_raw = None;
         self.seek_base = 0.0;
-        #[cfg(feature = "fft")]
-        self.fft.reset();
         self.equalizer.lock().reset_state();
         self.tempo.lock().reset();
 
         let old_threads = OldThreads {
             decoder_thread: self.decoder_thread.take(),
             position_timer: self.position_timer_handle.take(),
-            #[cfg(feature = "fft")]
-            fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
             direct_playback: self.direct_playback.take(),
         };
@@ -174,11 +161,9 @@ impl InnerPlayer {
             }
         }
         self.stop_position_timer();
-        self.stop_fft_timer();
         if let Some(stage) = self.processed_stage.take() {
             stage.cancel();
         }
-        self.fft.reset();
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
         let playback = self
             .direct_playback
@@ -208,10 +193,6 @@ impl InnerPlayer {
         if let Some(flag) = self.position_timer_stop.take() {
             flag.store(true, Ordering::Relaxed);
         }
-        #[cfg(feature = "fft")]
-        if let Some(flag) = self.fft_timer_stop.take() {
-            flag.store(true, Ordering::Relaxed);
-        }
 
         if let Some(ref shared) = self.shared {
             shared.stop();
@@ -223,8 +204,6 @@ impl InnerPlayer {
         let old_threads = OldThreads {
             decoder_thread: self.decoder_thread.take(),
             position_timer: self.position_timer_handle.take(),
-            #[cfg(feature = "fft")]
-            fft_timer: self.fft_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
             direct_playback: None,
         };
@@ -236,9 +215,6 @@ impl InnerPlayer {
             }
             None => (self.normalization_enabled, 0.0),
         };
-
-        #[cfg(feature = "fft")]
-        self.fft.reset();
 
         Some(SeekTake {
             old_threads,
@@ -282,16 +258,11 @@ impl InnerPlayer {
         let was_paused = self.state == PlayerState::Paused;
         let volume = self.target_volume;
         let clipping_protection = self.clipping_protection_enabled;
-        #[cfg(feature = "fft")]
-        let fft = Arc::clone(&self.fft);
-        #[cfg(not(feature = "fft"))]
-        let fft = Arc::new(crate::fft::FftAnalyzer::new());
         let playback = {
             let output = self.ensure_output()?;
             Arc::new(PlaybackHandle::attach(
                 output,
                 Arc::clone(&shared),
-                fft,
                 volume,
                 clipping_protection,
                 was_paused,
@@ -315,8 +286,6 @@ impl InnerPlayer {
                 state: PlayerState::Playing,
             });
             self.start_position_timer();
-            #[cfg(feature = "fft")]
-            self.start_fft_timer();
         }
 
         Ok(true)
@@ -360,16 +329,11 @@ impl InnerPlayer {
 
         let volume = self.target_volume;
         let clipping_protection = self.clipping_protection_enabled;
-        #[cfg(feature = "fft")]
-        let fft = Arc::clone(&self.fft);
-        #[cfg(not(feature = "fft"))]
-        let fft = Arc::new(crate::fft::FftAnalyzer::new());
         let playback = {
             let output = self.ensure_output()?;
             Arc::new(PlaybackHandle::attach(
                 output,
                 Arc::clone(&shared),
-                fft,
                 volume,
                 clipping_protection,
                 !auto_play,
@@ -393,8 +357,6 @@ impl InnerPlayer {
                 state: PlayerState::Playing,
             });
             self.start_position_timer();
-            #[cfg(feature = "fft")]
-            self.start_fft_timer();
         } else {
             self.state = PlayerState::Paused;
             self.emit(PlayerEvent::StateChanged {
@@ -429,7 +391,6 @@ impl InnerPlayer {
         self.direct_playback = Some(playback);
         if should_play {
             self.start_position_timer();
-            self.start_fft_timer();
         }
         Ok(true)
     }
@@ -460,7 +421,6 @@ impl InnerPlayer {
         self.current_source = Some(source.to_owned());
         self.audio_duration = metadata.duration_secs;
         self.cover_raw = metadata.cover_raw.take();
-        self.fft.reset();
 
         if auto_play {
             self.state = PlayerState::Playing;
@@ -468,7 +428,6 @@ impl InnerPlayer {
                 state: PlayerState::Playing,
             });
             self.start_position_timer();
-            self.start_fft_timer();
         } else {
             self.state = PlayerState::Paused;
             self.emit(PlayerEvent::StateChanged {

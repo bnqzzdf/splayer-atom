@@ -26,24 +26,15 @@ pub const DEFAULT_OUTPUT_CHANNELS: u16 = 2;
 /// 播放输出默认采样率
 pub const DEFAULT_TARGET_SAMPLE_RATE: u32 = 48_000;
 
-/// FFT 计算所需的目标采样率
-pub const FFT_TARGET_SAMPLE_RATE: u32 = 48_000;
-
-/// FFT 始终分析双声道视图，与真实播放输出声道链路相互独立
-const FFT_CHANNELS: u16 = 2;
-
 /// 自定义 File IO 读取失败时，ffmpeg_audio 的 read 回调可能映射为此错误码
 const AVERROR_EIO: i32 = sys::averror(libc::EIO);
 
 /// 解码会话所需的资源（跨 seek 复用，避免重建 ffmpeg_audio 上下文）
 ///
-/// 此处必须进行 1-to-N 分发，因为需要两个可能存在采样率差异的音源
-///  - 播放重采样器输出设备采样率、设备声道数的交错 f32
-///  - FFT 重采样器输出 48kHz 的 stereo f32
+/// 播放重采样器输出设备采样率、设备声道数的交错 f32
 pub struct DecoderData {
     reader: AudioReader,
     player_resampler: Resampler,
-    fft_resampler: Resampler,
     /// 网络中断句柄仅由远端源持有，stop() 取消后可在 seek 前重置
     cancel_handle: Option<HttpCancelHandle>,
     /// CUE 虚拟分轨及当前相对位置，用于精确限制解码边界
@@ -155,7 +146,7 @@ fn run_decode_safely(shared: &Shared, decode: impl FnOnce()) {
 impl DecoderData {
     /// 在已有 reader 上 seek，失败时调用方应回退到完整 load
     ///
-    /// seek 后两个重采样器要 flush 掉残留样本，否则播放/FFT会带上上一段尾巴
+    /// seek 后重采样器要 flush 掉残留样本，避免带上上一段尾巴
     pub fn seek(&mut self, position_secs: f64) -> bool {
         if let Some(handle) = &self.cancel_handle {
             handle.reset();
@@ -179,7 +170,6 @@ impl DecoderData {
             return false;
         }
         let _ = self.player_resampler.flush();
-        let _ = self.fft_resampler.flush();
         if let Some(position) = cue_position_secs {
             self.cue_position_secs = position;
         }
@@ -191,7 +181,7 @@ impl DecoderData {
         self.cancel_handle.clone()
     }
 
-    /// 输出设备格式变化后重建播放重采样器；FFT 分支仍保持固定双声道分析格式
+    /// 输出设备格式变化后重建播放重采样器
     pub fn reconfigure_player_output(&mut self, sample_rate: u32, channels: u16) -> Result<()> {
         self.player_resampler = build_player_resampler(&self.reader, sample_rate, channels)?;
         Ok(())
@@ -230,14 +220,12 @@ fn build_decoder_data(
         cancel_handle,
         cue_info,
     } = prepared;
-    let (player_resampler, fft_resampler) =
-        build_resamplers(&reader, target_rate, target_channels)?;
+    let player_resampler = build_player_resampler(&reader, target_rate, target_channels)?;
     metadata.sample_rate = target_rate;
     let normalization_gain = replay_gain_db.map(metadata::db_to_linear).unwrap_or(1.0);
     let data = DecoderData {
         reader,
         player_resampler,
-        fft_resampler,
         cancel_handle: cancel_handle.clone(),
         cue_info,
         cue_position_secs: 0.0,
@@ -442,24 +430,6 @@ fn build_player_resampler(
         .with_context(|| "构建播放重采样器失败")
 }
 
-fn build_resamplers(
-    reader: &AudioReader,
-    target_rate: u32,
-    target_channels: u16,
-) -> Result<(Resampler, Resampler)> {
-    let player_resampler = build_player_resampler(reader, target_rate, target_channels)?;
-
-    let fft_opts = ResampleOptions::new()
-        .sample_rate(FFT_TARGET_SAMPLE_RATE as i32)
-        .channels(i32::from(FFT_CHANNELS))
-        .format::<f32>();
-    let fft_resampler = reader
-        .build_resampler(fft_opts)
-        .with_context(|| "构建 FFT 重采样器失败")?;
-
-    Ok((player_resampler, fft_resampler))
-}
-
 fn cue_player_sample_limit(data: &DecoderData, sample_rate: u32, channels: u16) -> Option<u64> {
     let cue = data.cue_info.as_ref()?;
     if cue.duration <= 0.0 {
@@ -472,7 +442,6 @@ fn cue_player_sample_limit(data: &DecoderData, sample_rate: u32, channels: u16) 
 
 fn apply_cue_sample_limit(
     player_samples: &mut Vec<f32>,
-    fft_samples: &mut Vec<f32>,
     emitted_samples: &mut u64,
     max_samples: u64,
 ) -> bool {
@@ -483,20 +452,13 @@ fn apply_cue_sample_limit(
 
     if keep < original_player_len {
         player_samples.truncate(keep);
-        if keep == 0 {
-            fft_samples.clear();
-        } else {
-            let fft_frames = fft_samples.len() / usize::from(FFT_CHANNELS);
-            let keep_fft_frames = fft_frames.saturating_mul(keep) / original_player_len;
-            fft_samples.truncate(keep_fft_frames * usize::from(FFT_CHANNELS));
-        }
     }
 
     *emitted_samples = emitted_samples.saturating_add(keep as u64);
     *emitted_samples >= max_samples
 }
 
-/// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放与 FFT 重采样器
+/// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放
 fn run_decoding_loop(
     data: &mut DecoderData,
     shared: &Shared,
@@ -532,30 +494,15 @@ fn run_decoding_loop(
                 let mut player_samples = shared.take_player_buffer();
                 player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
 
-                if data.fft_resampler.process::<f32>(Some(&frame)).is_err() {
-                    debug!("fft resampler 处理失败，结束解码");
-                    shared.recycle_player_buffer(player_samples);
-                    shared.mark_decode_failed();
-                    return;
-                }
-                let mut fft_samples = shared.take_fft_buffer();
-                fft_samples.extend_from_slice(data.fft_resampler.output_as::<f32>());
-
                 // 重采样可能还在攒样本，本轮没出数据就跳过
-                if player_samples.is_empty() && fft_samples.is_empty() {
+                if player_samples.is_empty() {
                     shared.recycle_player_buffer(player_samples);
-                    shared.recycle_fft_buffer(fft_samples);
                     continue;
                 }
                 had_success = true;
 
                 let reached_cue_limit = max_player_samples.is_some_and(|max| {
-                    apply_cue_sample_limit(
-                        &mut player_samples,
-                        &mut fft_samples,
-                        &mut emitted_player_samples,
-                        max,
-                    )
+                    apply_cue_sample_limit(&mut player_samples, &mut emitted_player_samples, max)
                 });
 
                 if shared.is_normalization_enabled() && !player_samples.is_empty() {
@@ -574,7 +521,6 @@ fn run_decoding_loop(
                 shared.push(AudioChunk {
                     source_sample_count: player_samples.len() as u64,
                     player_samples,
-                    fft_samples,
                     track_boundary: track_boundary.take(),
                 });
                 if reached_cue_limit {
@@ -583,31 +529,21 @@ fn run_decoding_loop(
                 }
             }
             Ok(None) | Err(AudioError::Eof) => {
-                // EOF flush：把两个重采样器内部残留挤出来，否则最后几十毫秒丢
+                // EOF flush：把重采样器内部残留挤出来，否则最后几十毫秒丢失
                 let _ = data.player_resampler.process::<f32>(None);
-                let _ = data.fft_resampler.process::<f32>(None);
                 let mut player_samples = shared.take_player_buffer();
                 player_samples.extend_from_slice(data.player_resampler.output_as::<f32>());
-                let mut fft_samples = shared.take_fft_buffer();
-                fft_samples.extend_from_slice(data.fft_resampler.output_as::<f32>());
                 if let Some(max) = max_player_samples {
-                    apply_cue_sample_limit(
-                        &mut player_samples,
-                        &mut fft_samples,
-                        &mut emitted_player_samples,
-                        max,
-                    );
+                    apply_cue_sample_limit(&mut player_samples, &mut emitted_player_samples, max);
                 }
-                if !player_samples.is_empty() || !fft_samples.is_empty() {
+                if !player_samples.is_empty() {
                     shared.push(AudioChunk {
                         source_sample_count: player_samples.len() as u64,
                         player_samples,
-                        fft_samples,
                         track_boundary: track_boundary.take(),
                     });
                 } else {
                     shared.recycle_player_buffer(player_samples);
-                    shared.recycle_fft_buffer(fft_samples);
                 }
                 return;
             }
@@ -667,12 +603,11 @@ mod tests {
 
     fn staged_decoder_for_test(generation: u64) -> StagedProcessedDecoder {
         let reader = AudioReader::new(Cursor::new(mono_wav())).unwrap();
-        let (player_resampler, fft_resampler) = build_resamplers(&reader, 48_000, 1).unwrap();
+        let player_resampler = build_player_resampler(&reader, 48_000, 1).unwrap();
         StagedProcessedDecoder {
             data: DecoderData {
                 reader,
                 player_resampler,
-                fft_resampler,
                 cancel_handle: None,
                 cue_info: None,
                 cue_position_secs: 0.0,
@@ -739,7 +674,6 @@ mod tests {
         let processed = process_audio_chunk(
             AudioChunk {
                 player_samples: vec![0.8, -0.8],
-                fft_samples: Vec::new(),
                 source_sample_count: 2,
                 track_boundary: None,
             },
@@ -766,7 +700,6 @@ mod tests {
             AudioChunk {
                 source_sample_count: input.len() as u64,
                 player_samples: input,
-                fft_samples: Vec::new(),
                 track_boundary: None,
             },
             &equalizer,
@@ -779,32 +712,12 @@ mod tests {
     }
 
     #[test]
-    fn playback_and_fft_resamplers_use_independent_channel_counts() {
-        let mut reader = AudioReader::new(Cursor::new(mono_wav())).unwrap();
-        assert_eq!(reader.source_info().channels, 1);
-        let (mut player_resampler, mut fft_resampler) =
-            build_resamplers(&reader, 48_000, 6).unwrap();
-        let frame = reader.receive_frame().unwrap().unwrap();
-
-        player_resampler.process::<f32>(Some(&frame)).unwrap();
-        fft_resampler.process::<f32>(Some(&frame)).unwrap();
-
-        let player_samples = player_resampler.output_as::<f32>();
-        let fft_samples = fft_resampler.output_as::<f32>();
-        assert!(!player_samples.is_empty());
-        assert!(!fft_samples.is_empty());
-        assert_eq!(player_samples.len() % 6, 0);
-        assert_eq!(fft_samples.len() % usize::from(FFT_CHANNELS), 0);
-    }
-
-    #[test]
     fn cue_limit_uses_remaining_duration_after_seek() {
         let reader = AudioReader::new(Cursor::new(mono_wav())).unwrap();
-        let (player_resampler, fft_resampler) = build_resamplers(&reader, 48_000, 2).unwrap();
+        let player_resampler = build_player_resampler(&reader, 48_000, 2).unwrap();
         let data = DecoderData {
             reader,
             player_resampler,
-            fft_resampler,
             cancel_handle: None,
             cue_info: Some(CueVirtualInfo {
                 physical_path: "album.wav".to_string(),
@@ -816,22 +729,5 @@ mod tests {
         };
 
         assert_eq!(cue_player_sample_limit(&data, 48_000, 2), Some(576_000));
-    }
-
-    #[test]
-    fn cue_limit_truncates_audio_and_fft_at_the_same_frame_fraction() {
-        let mut player_samples = vec![0.0; 200];
-        let mut fft_samples = vec![0.0; 100];
-        let mut emitted = 900;
-
-        assert!(apply_cue_sample_limit(
-            &mut player_samples,
-            &mut fft_samples,
-            &mut emitted,
-            1_000,
-        ));
-        assert_eq!(player_samples.len(), 100);
-        assert_eq!(fft_samples.len(), 50);
-        assert_eq!(emitted, 1_000);
     }
 }

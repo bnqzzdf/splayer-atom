@@ -125,7 +125,6 @@ fn open_direct_playback(
     token: u64,
     cue_start_frame75: Option<u64>,
     cue_end_frame75: Option<u64>,
-    fft: Arc<crate::fft::FftAnalyzer>,
 ) -> anyhow::Result<DirectPlayback> {
     match target {
         DirectLoadTarget::Alsa(selector) => DirectPlayback::open_alsa_local(
@@ -136,7 +135,6 @@ fn open_direct_playback(
             auto_play,
             cue_start_frame75,
             cue_end_frame75,
-            fft,
         ),
         DirectLoadTarget::Diretta(selector) => {
             #[cfg(feature = "diretta")]
@@ -227,18 +225,11 @@ pub struct JsAudioDevice {
     pub is_default: bool,
 }
 
-/// FFT 双声道频谱数据
-#[napi(object)]
-pub struct JsFftData {
-    pub ldata: Vec<f64>,
-    pub rdata: Vec<f64>,
-}
-
 /// 播放器事件，推送给 JS 侧
 #[napi(object)]
 #[derive(Default)]
 pub struct JsPlayerEvent {
-    /// 事件类型："stateChanged" | "ended" | "directTrackBoundary" | "processedTrackBoundary" | "sourceError" | "position" | "fftData" | "outputStalled" | "outputFailed"
+    /// 事件类型："stateChanged" | "ended" | "directTrackBoundary" | "processedTrackBoundary" | "sourceError" | "position" | "outputStalled" | "outputFailed"
     #[napi(js_name = "type")]
     pub event_type: String,
     /// 状态（仅 stateChanged 时有值）
@@ -249,8 +240,6 @@ pub struct JsPlayerEvent {
     pub duration: Option<f64>,
     /// staged generation（仅 *TrackBoundary 时有值）
     pub generation: Option<u32>,
-    /// FFT 频谱数据（仅 fftData 时有值，128 个频段，值域 0.0 ~ 1.0）
-    pub fft_data: Option<JsFftData>,
 }
 
 /// 播放器状态快照
@@ -268,8 +257,6 @@ pub struct JsPlayerStatus {
     pub is_finished: bool,
     /// 实际 native 路径：exact-pcm | native-dsd | decoded-pcm | processed-pcm；空闲时无值。
     pub output_path: Option<String>,
-    /// 当前 runtime 是否提供只读 PCM FFT；Native DSD / Diretta / 无 runtime 为 false。
-    pub fft_available: bool,
 }
 
 /// PlayerState → JS 字符串
@@ -354,14 +341,6 @@ impl AudioPlayer {
                     duration: Some(duration),
                     ..Default::default()
                 },
-                PlayerEvent::FftData { ldata, rdata } => JsPlayerEvent {
-                    event_type: "fftData".into(),
-                    fft_data: Some(JsFftData {
-                        ldata: ldata.into_iter().map(|v| v as f64).collect(),
-                        rdata: rdata.into_iter().map(|v| v as f64).collect(),
-                    }),
-                    ..Default::default()
-                },
                 PlayerEvent::OutputStalled => JsPlayerEvent {
                     event_type: "outputStalled".into(),
                     ..Default::default()
@@ -412,7 +391,6 @@ impl AudioPlayer {
             failure_callback,
             equalizer,
             tempo,
-            fft,
         ) = {
             let mut player = self.inner.lock();
             let device_id = player.selected_device().map(String::from);
@@ -458,7 +436,6 @@ impl AudioPlayer {
                 failure_callback,
                 player.equalizer_handle(),
                 player.tempo_handle(),
-                player.fft_handle(),
             )
         };
 
@@ -501,7 +478,6 @@ impl AudioPlayer {
                     token,
                     cue_start_frame75,
                     cue_end_frame75,
-                    fft,
                 )?;
                 match playback.format() {
                     DirectFormat::Pcm(format) => {
@@ -1055,20 +1031,7 @@ impl AudioPlayer {
             volume: player.volume() as f64,
             is_finished: player.is_finished(),
             output_path: player.output_path().map(String::from),
-            fft_available: player.fft_available(),
         }
-    }
-
-    /// 启用/禁用 FFT 频谱推送（前端需要显示频谱时启用，不显示时禁用以节省性能）
-    #[napi]
-    pub fn set_fft_enabled(&self, enabled: bool) {
-        self.inner.lock().set_fft_enabled(enabled);
-    }
-
-    /// 获取 FFT 推送开关状态
-    #[napi]
-    pub fn get_fft_enabled(&self) -> bool {
-        self.inner.lock().fft_enabled()
     }
 
     /// 启用/禁用音量归一化（实时响度均衡）
@@ -1144,15 +1107,6 @@ impl AudioPlayer {
     #[napi]
     pub fn get_preamp_gain(&self) -> f64 {
         self.inner.lock().preamp_gain() as f64
-    }
-
-    /// 获取 FFT 频谱数据（128 个频段，值域 0.0 ~ 1.0）
-    #[napi]
-    pub fn get_fft_data(&self) -> JsFftData {
-        let (ldata, rdata) = self.inner.lock().fft_data();
-        let ldata = ldata.into_iter().map(|v| v as f64).collect();
-        let rdata = rdata.into_iter().map(|v| v as f64).collect();
-        JsFftData { ldata, rdata }
     }
 
     /// 返回 load 时缓存的原始封面数据（用于 SMTC / 全屏播放器）。

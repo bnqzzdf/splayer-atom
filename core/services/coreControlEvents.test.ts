@@ -31,15 +31,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
   ]) {
     assert.match(eventTypesSource, new RegExp(`type: "${type}"`));
   }
-  for (const type of [
-    "status",
-    "trackLoaded",
-    "position",
-    "fftData",
-    "error",
-    "deviceChanged",
-    "session",
-  ]) {
+  for (const type of ["status", "trackLoaded", "position", "error", "deviceChanged", "session"]) {
     assert.match(eventTypesSource, new RegExp(type));
   }
   assert.doesNotMatch(
@@ -56,7 +48,7 @@ test("Player projections are published only by Core and consumed by Web Control"
   assert.doesNotMatch(deviceSource, /defaultDevice|publishCoreControlEvent/);
   assert.doesNotMatch(deviceSource, /requestReinit|REINIT_DELAY_MS|reinitOutput/);
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "position"/s);
-  assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["fftData", "position"\]\)/);
+  assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["position"\]\)/);
   assert.match(playerControlSource, /subscribeCorePlayerProjection\(handleEvent\)/);
   assert.doesNotMatch(playerControlSource, /window\.api\.player|webRemote|isWebRemote/);
 });

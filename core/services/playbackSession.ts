@@ -294,7 +294,6 @@ const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatu
         deviceId: getSelectedOutputDevice(),
         path: null,
         sampleProcessingAvailable: false,
-        fftAvailable: false,
       },
     },
   });
@@ -1416,9 +1415,7 @@ const isNativeDsdPlaybackSource = (track: Track, source: string): boolean => {
 };
 
 const isAlsaProcessedTarget = (deviceId: string | null | undefined): boolean =>
-  deviceId != null &&
-  isDirectAlsaHardwareOutput(deviceId) &&
-  getAlsaPlaybackMode() === "processed";
+  deviceId != null && isDirectAlsaHardwareOutput(deviceId) && getAlsaPlaybackMode() === "processed";
 
 export const setOutputDevice = async (deviceId: string | null): Promise<void> => {
   assertCoreDirettaPrivilege(deviceId);
@@ -1534,8 +1531,11 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       previousResolved = await resolvePlaybackSource(item.track);
       targetResolved = previousResolved;
       const nativeSource =
-        toNativeSacdPlaybackSource(previousResolved.source, item.track.track, item.track.duration) ??
-        previousResolved.source;
+        toNativeSacdPlaybackSource(
+          previousResolved.source,
+          item.track.track,
+          item.track.duration,
+        ) ?? previousResolved.source;
       if (isAlsaProcessedTarget(deviceId) && isNativeDsdPlaybackSource(item.track, nativeSource)) {
         throw new Error("Native DSD requires ALSA direct mode");
       }
@@ -1625,8 +1625,11 @@ export const setOutputDevice = async (deviceId: string | null): Promise<void> =>
       previousResolved = await resolvePlaybackSource(item.track);
       targetResolved = previousResolved;
       const nativeSource =
-        toNativeSacdPlaybackSource(previousResolved.source, item.track.track, item.track.duration) ??
-        previousResolved.source;
+        toNativeSacdPlaybackSource(
+          previousResolved.source,
+          item.track.track,
+          item.track.duration,
+        ) ?? previousResolved.source;
       if (isAlsaProcessedTarget(deviceId) && isNativeDsdPlaybackSource(item.track, nativeSource)) {
         throw new Error("Native DSD requires ALSA direct mode");
       }
@@ -1823,7 +1826,6 @@ export const getPlaybackStatus = (): PlayerStatus => {
         deviceId,
         path: null,
         sampleProcessingAvailable: false,
-        fftAvailable: false,
       },
     };
   }

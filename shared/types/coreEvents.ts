@@ -9,7 +9,7 @@ import type { PluginInfo } from "./plugin";
 export type CorePlayerProjectionEvent = Extract<
   PlayerEvent,
   {
-    type: "status" | "trackLoaded" | "position" | "fftData" | "error" | "deviceChanged" | "session";
+    type: "status" | "trackLoaded" | "position" | "error" | "deviceChanged" | "session";
   }
 >;
 

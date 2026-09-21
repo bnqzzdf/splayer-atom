@@ -131,8 +131,15 @@ const lyricFontSize = computed(() =>
     : `${settings.lyric.fontSize}px`,
 );
 
-const { immersive, wake, onPlayerMouseEnter, onPlayerMouseLeave, onMainMove, onBarEnter, onBarLeave } =
-  useImmersiveMode(isPlayerExpanded);
+const {
+  immersive,
+  wake,
+  onPlayerMouseEnter,
+  onPlayerMouseLeave,
+  onMainMove,
+  onBarEnter,
+  onBarLeave,
+} = useImmersiveMode(isPlayerExpanded);
 
 const { isFullscreen, toggleFullscreen } = useWindowControls();
 
@@ -212,11 +219,6 @@ const showComments = (): void => {
         <div v-if="fullscreenCover" class="absolute inset-y-0 left-0 w-[60%]">
           <PlayerCover fullscreen />
         </div>
-        <!-- 底部频谱 -->
-        <BottomSpectrum
-          v-if="isPlayerExpanded && settings.player.enableSpectrum"
-          :show="isPlaying && immersive"
-        />
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
           v-if="fullscreenCover"
@@ -279,7 +281,7 @@ const showComments = (): void => {
             v-if="!fullscreenCover"
             class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              isMobile && showLyric && !coverCentered ? 'hidden' : '',
+              isMobile && (status.fullQueueOpen || (showLyric && !coverCentered)) ? 'hidden' : '',
               isMobile ? 'px-4' : 'px-12',
             ]"
             :style="{
@@ -319,10 +321,12 @@ const showComments = (): void => {
             class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               isMobile && !showLyric ? 'hidden' : '',
-              coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
+              coverCentered || status.fullQueueOpen
+                ? 'opacity-0 pointer-events-none'
+                : 'opacity-100',
             ]"
             :style="{
-              width: isMobile ? '100%' : (fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`),
+              width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
             }"
           >
             <!-- 全屏封面模式下的标题信息 -->
@@ -426,7 +430,7 @@ const showComments = (): void => {
             class="absolute inset-y-0 right-0 px-2 md:pl-4 md:py-6 flex items-center"
             :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
             :style="{
-              width: isMobile ? '100%' : (fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`),
+              width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
             }"
           >
             <Transition
@@ -505,7 +509,9 @@ const showComments = (): void => {
           </div>
 
           <!-- 控制区（进度条 + 播放控制） -->
-          <div class="w-full md:w-[clamp(320px,35%,480px)] shrink-0 flex flex-col items-center gap-1">
+          <div
+            class="w-full md:w-[clamp(320px,35%,480px)] shrink-0 flex flex-col items-center gap-1"
+          >
             <div class="flex items-center gap-3">
               <SButton
                 type="cover"

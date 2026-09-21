@@ -121,7 +121,7 @@ impl StretchProcessor {
         self.pitch_sync
     }
 
-    /// 切歌 / seek 时调用，清空 FFT 历史，避免拼接处出现瞬态
+    /// 切歌 / seek 时重置处理器状态，避免拼接处出现瞬态
     pub fn reset(&mut self) {
         self.stretch.reset();
     }

@@ -17,7 +17,6 @@ pub use audio_engine_core::audio_output;
 pub use audio_engine_core::decoder;
 pub use audio_engine_core::equalizer;
 pub use audio_engine_core::error;
-pub use audio_engine_core::fft;
 pub use audio_engine_core::logger;
 pub use audio_engine_core::loudness;
 pub use audio_engine_core::media_probe;

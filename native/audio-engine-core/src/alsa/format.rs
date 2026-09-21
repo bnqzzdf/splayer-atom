@@ -294,80 +294,6 @@ pub fn pack_processed_pcm(
     })
 }
 
-/// 把已经准备提交给 ALSA HW 的 mono/stereo PCM 表示转换成 FFT 只读分析副本。
-///
-/// 这是旁路转换：不回写 transport buffer，也不参与 Direct 完整性判断。多声道在显式
-/// channel-layout 保真完成前不猜测前左/前右的位置，因此这里明确拒绝 channels > 2。
-pub fn pcm_transport_to_fft_stereo(
-    input: &[u8],
-    format: AlsaPcmFormat,
-    channels: u16,
-    output: &mut Vec<f32>,
-) -> Result<()> {
-    ensure!(
-        matches!(channels, 1 | 2),
-        "FFT 旁路当前只支持 mono/stereo PCM"
-    );
-    let channels = usize::from(channels);
-    let sample_bytes = format.storage_bytes();
-    let frame_bytes = sample_bytes
-        .checked_mul(channels)
-        .context("FFT PCM frame 字节数溢出")?;
-    ensure!(
-        input.len().is_multiple_of(frame_bytes),
-        "FFT PCM payload 未按 frame 对齐"
-    );
-    let frames = input.len() / frame_bytes;
-    output.clear();
-    let required_samples = frames.saturating_mul(2);
-    if output.capacity() < required_samples {
-        output.reserve(required_samples);
-    }
-
-    for frame in input.chunks_exact(frame_bytes) {
-        let left = transport_sample_to_f32(&frame[..sample_bytes], format);
-        let right = if channels == 1 {
-            left
-        } else {
-            transport_sample_to_f32(&frame[sample_bytes..sample_bytes * 2], format)
-        };
-        output.extend_from_slice(&[left, right]);
-    }
-    Ok(())
-}
-
-fn transport_sample_to_f32(bytes: &[u8], format: AlsaPcmFormat) -> f32 {
-    match format {
-        AlsaPcmFormat::F32Le => {
-            let sample = f32::from_le_bytes(bytes.try_into().expect("F32 transport 宽度固定"));
-            if sample.is_finite() {
-                sample
-            } else {
-                0.0
-            }
-        }
-        AlsaPcmFormat::S16Le => {
-            f32::from(i16::from_le_bytes(
-                bytes.try_into().expect("S16 transport 宽度固定"),
-            )) / 32768.0
-        }
-        AlsaPcmFormat::S24_3Le | AlsaPcmFormat::S24Le => {
-            let raw =
-                i32::from(bytes[0]) | (i32::from(bytes[1]) << 8) | (i32::from(bytes[2]) << 16);
-            let signed = if raw & 0x0080_0000 != 0 {
-                raw | !0x00ff_ffff
-            } else {
-                raw
-            };
-            signed as f32 / 8_388_608.0
-        }
-        AlsaPcmFormat::S32Le => {
-            i32::from_le_bytes(bytes.try_into().expect("S32 transport 宽度固定")) as f32
-                / 2_147_483_648.0
-        }
-    }
-}
-
 fn quantize_signed(sample: f32, bits: u8) -> i64 {
     let scale = (1_u64 << (bits - 1)) as f64;
     let min = -(scale as i64);
@@ -518,31 +444,6 @@ mod tests {
             assert_eq!(&chunk[..3], &sample.to_le_bytes()[..3]);
             assert_eq!(chunk[3], 0);
         }
-    }
-
-    #[test]
-    fn fft_transport_conversion_duplicates_mono_without_touching_samples() {
-        let input: Vec<u8> = [i16::MIN, 0, i16::MAX]
-            .into_iter()
-            .flat_map(i16::to_le_bytes)
-            .collect();
-        let mut output = Vec::new();
-        pcm_transport_to_fft_stereo(&input, AlsaPcmFormat::S16Le, 1, &mut output).unwrap();
-        assert_eq!(output.len(), 6);
-        assert_eq!(output[0], -1.0);
-        assert_eq!(output[0], output[1]);
-        assert_eq!(output[2], 0.0);
-        assert_eq!(output[2], output[3]);
-        assert_eq!(output[4], output[5]);
-        assert!(output[4] < 1.0 && output[4] > 0.99);
-    }
-
-    #[test]
-    fn fft_transport_conversion_sign_extends_packed_24_bit() {
-        let input = [0x00, 0x00, 0x80, 0xff, 0xff, 0x7f];
-        let mut output = Vec::new();
-        pcm_transport_to_fft_stereo(&input, AlsaPcmFormat::S24_3Le, 2, &mut output).unwrap();
-        assert_eq!(output, vec![-1.0, 8_388_607.0 / 8_388_608.0]);
     }
 
     #[test]

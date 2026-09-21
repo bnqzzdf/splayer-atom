@@ -220,12 +220,7 @@ export interface PlaybackSessionSnapshot {
 }
 
 /** 播放器状态快照 */
-export type PlayerOutputPath =
-  | "exact-pcm"
-  | "native-dsd"
-  | "decoded-pcm"
-  | "processed-pcm"
-  | null;
+export type PlayerOutputPath = "exact-pcm" | "native-dsd" | "decoded-pcm" | "processed-pcm" | null;
 
 export interface PlayerOutputStatus {
   /** Core 当前实际选择的 canonical output id。 */
@@ -234,8 +229,6 @@ export interface PlayerOutputStatus {
   path: PlayerOutputPath;
   /** Core 从实际 path、输出身份与唯一 ALSA 偏好纯派生的样本处理能力。 */
   sampleProcessingAvailable: boolean;
-  /** 当前 runtime 是否能提供只读 PCM FFT；不是样本处理开关。 */
-  fftAvailable: boolean;
 }
 
 export interface PlayerStatus {
@@ -289,16 +282,9 @@ export type PlayerEvent =
   | { type: "setRepeat"; data: { mode: RepeatMode } }
   | { type: "addToQueue"; data: { tracks: Track[]; position: "next" | "end" } }
   | { type: "toggleLike" }
-  | { type: "fftData"; data: FftData }
   | { type: "error"; data: { error: string } }
   | { type: "deviceChanged"; data: { defaultDevice: string | null } }
   | { type: "session"; data: PlaybackSessionSnapshot };
-
-/** FFT 数据 */
-export interface FftData {
-  ldata: number[];
-  rdata: number[];
-}
 
 /** IPC 响应包装 */
 export interface IpcResponse<T = void> {
@@ -410,10 +396,6 @@ export interface PlayerApi {
   getVolume: () => Promise<IpcResponse<number>>;
   /** 获取播放状态快照 */
   getStatus: () => Promise<IpcResponse<PlayerStatus>>;
-  /** 设置 FFT 频谱推送 */
-  setFftEnabled: (enabled: boolean) => Promise<IpcResponse>;
-  /** 获取 FFT 频谱数据 */
-  getFftData: () => Promise<IpcResponse<FftData>>;
   /** 设置渐入渐出时长（毫秒） */
   setFadeDuration: (ms: number) => Promise<IpcResponse>;
   /** 获取渐入渐出时长（毫秒） */

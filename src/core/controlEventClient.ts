@@ -39,7 +39,6 @@ export const isCorePlayerProjectionEvent = (
   (event.type === "status" ||
     event.type === "trackLoaded" ||
     event.type === "position" ||
-    event.type === "fftData" ||
     event.type === "error" ||
     event.type === "deviceChanged" ||
     event.type === "session");

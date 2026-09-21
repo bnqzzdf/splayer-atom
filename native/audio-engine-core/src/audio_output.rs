@@ -12,7 +12,6 @@ use crate::alsa::device::AlsaHwEndpoint;
 use crate::alsa::output::{open_processed_pcm_hw, AlsaPcmConfig};
 use crate::alsa::processed_pcm::AlsaProcessedPcmStream;
 use crate::error::{AudioErrorKind, AudioResultExt};
-use crate::fft::FftAnalyzer;
 use crate::shared::Shared;
 
 /// 输出失败回调：writer 线程调用，只允许发送轻量事件。
@@ -80,7 +79,6 @@ impl AudioOutput {
     pub(crate) fn build_stream(
         &self,
         shared: Arc<Shared>,
-        fft: Arc<FftAnalyzer>,
         volume: f32,
         clipping_protection: bool,
         paused: bool,
@@ -100,7 +98,6 @@ impl AudioOutput {
         AlsaProcessedPcmStream::new(
             handle,
             shared,
-            fft,
             volume,
             clipping_protection,
             paused,

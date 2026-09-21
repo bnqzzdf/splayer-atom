@@ -101,8 +101,6 @@ const attachCorePlayerEvents = (player: PlayerInstance): void => {
         player.markOutputUnavailable();
         break;
       }
-      case "fftData":
-        break;
     }
   });
 };
