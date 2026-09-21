@@ -114,6 +114,11 @@ const coverCentered = computed(() => {
   return !showLyric.value || (settings.player.autoCenterCover && !hasLyric.value);
 });
 
+/** 移动端是否处于歌词展示模式：需同时满足移动端、未打开播放列表、用户开启歌词且当前歌曲存在歌词 */
+const mobileLyricActive = computed(
+  () => isMobile.value && !status.fullQueueOpen && showLyric.value && hasLyric.value,
+);
+
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
   await player.seek(timeMs);
   if (!isPlaying.value) await player.play();
@@ -281,7 +286,7 @@ const showComments = (): void => {
             v-if="!fullscreenCover"
             class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              isMobile && (status.fullQueueOpen || (showLyric && !coverCentered)) ? 'hidden' : '',
+              isMobile && (status.fullQueueOpen || mobileLyricActive) ? 'hidden' : '',
               isMobile ? 'px-4' : 'px-12',
             ]"
             :style="{
@@ -296,7 +301,11 @@ const showComments = (): void => {
             >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id" class="flex flex-col items-center">
-                  <PlayerCover class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square" />
+                  <PlayerCover
+                    class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square"
+                    :class="hasLyric ? 'cursor-pointer' : ''"
+                    @click="hasLyric && (showLyric = true)"
+                  />
                   <div class="w-full pt-4">
                     <PlayerData align="center" />
                   </div>
@@ -320,7 +329,7 @@ const showComments = (): void => {
           <div
             class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              isMobile && !showLyric ? 'hidden' : '',
+              isMobile && !mobileLyricActive ? 'hidden' : '',
               coverCentered || status.fullQueueOpen
                 ? 'opacity-0 pointer-events-none'
                 : 'opacity-100',
@@ -428,7 +437,10 @@ const showComments = (): void => {
           <!-- 播放队列 -->
           <div
             class="absolute inset-y-0 right-0 px-2 md:pl-4 md:py-6 flex items-center"
-            :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
+            :class="[
+              status.fullQueueOpen ? '' : 'pointer-events-none',
+              isMobile && !status.fullQueueOpen ? 'hidden' : '',
+            ]"
             :style="{
               width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
             }"
