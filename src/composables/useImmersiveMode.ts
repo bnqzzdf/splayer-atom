@@ -59,8 +59,13 @@ export const useImmersiveMode = (isPlayerExpanded: Ref<boolean>) => {
 
   onBeforeUnmount(() => clearTimeout(idleTimer));
 
+  const wake = (): void => {
+    armIdle();
+  };
+
   return {
     immersive,
+    wake,
     onPlayerMouseEnter,
     onPlayerMouseLeave,
     onMainMove,
