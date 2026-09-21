@@ -35,6 +35,11 @@ interface CueSheetState {
   files: CueFile[];
 }
 
+export interface CueSheetInspection {
+  audioPath: string;
+  indexedTrackCount: number;
+}
+
 const commandPattern = /^\s*([A-Z0-9]+)\s*(.*)$/i;
 
 /** 生成 CUE 分轨在库中的稳定虚拟路径 */
@@ -144,6 +149,22 @@ export const getCueAudioPath = (content: string, cuePath: string): string | null
   const state = parseState(content);
   if (state.files.length !== 1) return null;
   return path.resolve(path.dirname(cuePath), state.files[0].path);
+};
+
+/**
+ * 仅检查单文件 CUE 的物理引用与 INDEX 01 结构，不做音频 metadata probe。
+ * Folder 浏览用它在未入库状态判断 backing audio 是否可被容器安全替代。
+ */
+export const inspectCueSheet = (content: string, cuePath: string): CueSheetInspection | null => {
+  const state = parseState(content);
+  if (state.files.length !== 1) return null;
+  const file = state.files[0];
+  const indexedTrackCount = file.tracks.filter((track) => track.index01Frame75 != null).length;
+  if (indexedTrackCount === 0) return null;
+  return {
+    audioPath: path.resolve(path.dirname(cuePath), file.path),
+    indexedTrackCount,
+  };
 };
 
 /**

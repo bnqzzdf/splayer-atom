@@ -34,6 +34,9 @@ import { getPlayer } from "@main/services/engine";
 import * as nowPlaying from "@main/services/nowPlaying";
 import { cancelScan, getScanProgress, isScanning, startScan } from "@main/services/scanner";
 import { resolveCoreDirectory } from "@main/services/coreFilesystem";
+import { removePinsUnderRoot } from "@main/services/folderBrowser";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
+import { publishLibraryRevision } from "@main/services/libraryRevision";
 import { deleteLibraryFiles, readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
 import { store } from "@main/store";
 
@@ -189,8 +192,14 @@ export const buildAtomCompatRoutes = (): Hono => {
       return c.json({ success: false, error: "dirs_string_array_required" }, 400);
     }
     const dirs = body.dirs.map((dir) => dir.trim()).filter(Boolean);
-    store.set("library.scanDirs", [...new Set(dirs)]);
-    return c.json({ success: true, data: store.get("library.scanDirs") });
+    const next = [...new Set(dirs)];
+    const previous = store.get("library.scanDirs") as string[];
+    store.set("library.scanDirs", next);
+    for (const removed of previous.filter((dir) => !next.includes(dir))) {
+      removePinsUnderRoot(removed);
+    }
+    publishCoreControlEvent({ type: "libraryRootsChanged", data: { paths: next } });
+    return c.json({ success: true, data: next });
   });
 
   api.post("/library/scan-dirs/add", async (c) => {
@@ -205,7 +214,9 @@ export const buildAtomCompatRoutes = (): Hono => {
     }
     const dirs = store.get("library.scanDirs") as string[];
     if (dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_EXISTS" }, 409);
-    store.set("library.scanDirs", [...dirs, dir]);
+    const next = [...dirs, dir];
+    store.set("library.scanDirs", next);
+    publishCoreControlEvent({ type: "libraryRootsChanged", data: { paths: next } });
     return c.json({ success: true, data: dir });
   });
 
@@ -216,11 +227,12 @@ export const buildAtomCompatRoutes = (): Hono => {
     const dirs = store.get("library.scanDirs") as string[];
     if (!dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_NOT_FOUND" }, 404);
     if (isScanning()) cancelScan();
-    store.set(
-      "library.scanDirs",
-      dirs.filter((item) => item !== dir),
-    );
+    const next = dirs.filter((item) => item !== dir);
+    store.set("library.scanDirs", next);
+    publishCoreControlEvent({ type: "libraryRootsChanged", data: { paths: next } });
+    removePinsUnderRoot(dir);
     deleteTracksByDir(dir);
+    publishLibraryRevision();
     return c.json({ success: true });
   });
 
@@ -277,8 +289,10 @@ export const buildAtomCompatRoutes = (): Hono => {
       const body = (await c.req.json().catch(() => null)) as { incremental?: boolean } | null;
       const dirs = store.get("library.scanDirs") as string[];
       if (dirs.length === 0) return c.json({ success: false, error: "scan_no_dirs" }, 400);
-      startScan(dirs, body?.incremental !== false);
-      return c.json({ success: true });
+      const started = startScan(dirs, body?.incremental !== false);
+      return started
+        ? c.json({ success: true })
+        : c.json({ success: false, error: "scan_already_running" }, 409);
     } catch (error) {
       return c.json({ success: false, error: errorMessage(error) }, 500);
     }

@@ -96,6 +96,44 @@ export const getAllTracks = (): Track[] => {
 };
 
 /**
+ * 按物理文件/容器路径批量解析 canonical Track。
+ * 普通文件按 path 命中；CUE 同时匹配 cue_path/cue_audio_path；SACD 虚拟 Track
+ * 通过其 `{iso}|Track..` 前缀匹配。
+ */
+export const getTracksByPhysicalPaths = (paths: string[]): Track[] => {
+  const requested = [...new Set(paths.map((value) => path.resolve(value)))];
+  if (requested.length === 0) return [];
+  const result = new Map<string, Track>();
+  const database = getDb();
+
+  for (let start = 0; start < requested.length; start += 200) {
+    const chunk = requested.slice(start, start + 200);
+    const values = chunk.map(() => "(?)").join(",");
+    const rows = database
+      .prepare(
+        `WITH requested(path) AS (VALUES ${values})
+         SELECT DISTINCT t.*
+         FROM tracks t
+         INNER JOIN requested r
+           ON t.path = r.path
+           OR t.cue_path = r.path
+           OR t.cue_audio_path = r.path
+           OR (
+             lower(substr(r.path, -4)) = '.iso'
+             AND instr(t.path, r.path || '|Track') = 1
+           )
+         ORDER BY ${trackOrder("t.")}`,
+      )
+      .all(...chunk) as TrackRow[];
+    for (const row of rows) {
+      const track = rowToTrack(row);
+      result.set(track.id, track);
+    }
+  }
+  return [...result.values()];
+};
+
+/**
  * 排除被 CUE 分轨引用的容器整轨文件的 WHERE 片段
  * 容器整轨（如整张原盘 flac）已被虚拟分轨取代，不应在曲库中重复出现
  * @param col - 外层曲目的 path 列（json_each 也有 path 列，带别名时须显式限定）
@@ -225,10 +263,11 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
 export const getCueTrackPathsByDirs = (dirs: string[]): string[] => {
   if (dirs.length === 0) return [];
   const rows: { path: string }[] = [];
-  const stmt = getDb().prepare("SELECT path FROM tracks WHERE cue_path LIKE ?");
+  const stmt = getDb().prepare("SELECT path FROM tracks WHERE cue_path LIKE ? ESCAPE '\\'");
   for (const dir of dirs) {
     const prefix = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + path.sep;
-    rows.push(...(stmt.all(prefix + "%") as { path: string }[]));
+    const escaped = prefix.replace(/[\\%_]/g, "\\$&");
+    rows.push(...(stmt.all(escaped + "%") as { path: string }[]));
   }
   return rows.map((row) => row.path);
 };
@@ -269,7 +308,8 @@ export const searchTracks = (query: string): Track[] => {
 /** 删除指定目录下的所有曲目 */
 export const deleteTracksByDir = (dir: string): void => {
   const prefix = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + path.sep;
-  const patterns = [prefix + "%", prefix + "%", prefix + "%"];
+  const pattern = prefix.replace(/[\\%_]/g, "\\$&") + "%";
+  const patterns = [pattern, pattern, pattern];
   const database = getDb();
   database.transaction(() => {
     database
@@ -277,12 +317,17 @@ export const deleteTracksByDir = (dir: string): void => {
         `DELETE FROM playlist_tracks
          WHERE playlist_id IN (SELECT id FROM playlists WHERE type = 'local')
            AND track_id IN (
-             SELECT id FROM tracks WHERE path LIKE ? OR cue_path LIKE ? OR cue_audio_path LIKE ?
+             SELECT id FROM tracks
+             WHERE path LIKE ? ESCAPE '\\'
+                OR cue_path LIKE ? ESCAPE '\\'
+                OR cue_audio_path LIKE ? ESCAPE '\\'
            )`,
       )
       .run(...patterns);
     database
-      .prepare("DELETE FROM tracks WHERE path LIKE ? OR cue_path LIKE ? OR cue_audio_path LIKE ?")
+      .prepare(
+        "DELETE FROM tracks WHERE path LIKE ? ESCAPE '\\' OR cue_path LIKE ? ESCAPE '\\' OR cue_audio_path LIKE ? ESCAPE '\\'",
+      )
       .run(...patterns);
   })();
 };

@@ -235,6 +235,7 @@ export const closeDatabase = (): void => {
 
 export {
   getAllTracks,
+  getTracksByPhysicalPaths,
   getTrackCount,
   getFileRecords,
   getCueTrackPathsByDirs,

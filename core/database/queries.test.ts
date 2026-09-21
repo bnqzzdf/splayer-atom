@@ -127,6 +127,45 @@ test("library queries keep albums, track numbers, and CUE positions in stable or
     const albumA = database.getAlbumList().find((album) => album.name === "Album A");
     assert.equal(albumA?.year, 1999);
     assert.equal(albumA?.addedAt, 1, "更新既有曲目时应保留首次入库时间");
+
+    database.upsertTracks([
+      {
+        id: "wild-percent",
+        path: "/music/100% Hits/a.cue|Track01|0|1000",
+        cuePath: "/music/100% Hits/a.cue",
+        cueAudioPath: "/music/100% Hits/a.flac",
+        title: "Percent",
+        artists: [],
+        duration: 1000,
+        fileSize: 1,
+        mtime: 1,
+        ctime: 1,
+      },
+      {
+        id: "wild-sibling",
+        path: "/music/100X Hits/b.cue|Track01|0|1000",
+        cuePath: "/music/100X Hits/b.cue",
+        cueAudioPath: "/music/100X Hits/b.flac",
+        title: "Sibling",
+        artists: [],
+        duration: 1000,
+        fileSize: 1,
+        mtime: 1,
+        ctime: 1,
+      },
+    ]);
+    assert.deepEqual(database.getCueTrackPathsByDirs(["/music/100% Hits"]), [
+      "/music/100% Hits/a.cue|Track01|0|1000",
+    ]);
+    database.deleteTracksByDir("/music/100% Hits");
+    assert.equal(
+      database.getAllTracks().some((track) => track.id === "wild-percent"),
+      false,
+    );
+    assert.equal(
+      database.getAllTracks().some((track) => track.id === "wild-sibling"),
+      true,
+    );
   } finally {
     database.closeDatabase();
     if (previousDataDir === undefined) {

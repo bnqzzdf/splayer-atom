@@ -86,6 +86,8 @@ export interface ListenBrainzSettings {
 export interface LibrarySettings {
   /** 扫描目录列表 */
   scanDirs: string[];
+  /** Folder 首页固定的常用目录。 */
+  pinnedFolders: string[];
 }
 
 /** 流媒体总开关 */

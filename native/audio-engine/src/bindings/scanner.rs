@@ -20,6 +20,7 @@ pub struct FileRecord {
     pub mtime: f64,
     pub size: f64,
     pub cover_path: Option<String>,
+    pub force_probe: Option<bool>,
 }
 
 /// 扫描到的曲目信息
@@ -106,13 +107,14 @@ pub struct JsScanEvent {
 /// 在后台线程中执行，不阻塞 Node.js 事件循环。
 /// 每处理约 20 个文件回调一次 progress 事件，完成后回调 done 事件。
 #[napi(
-    ts_args_type = "dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null"
+    ts_args_type = "dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null, skipUnchanged?: boolean | undefined | null"
 )]
 pub fn scan_dirs(
     dirs: Vec<String>,
     callback: Function<JsScanEvent, ()>,
     cover_cache_dir: Option<String>,
     incremental_data: Option<Vec<FileRecord>>,
+    skip_unchanged: Option<bool>,
 ) -> Result<()> {
     let tsfn = callback.build_threadsafe_function().build()?;
 
@@ -124,6 +126,7 @@ pub fn scan_dirs(
                 mtime: r.mtime as u64,
                 size: r.size as u64,
                 cover_path: r.cover_path,
+                force_probe: r.force_probe.unwrap_or(false),
             })
             .collect()
     });
@@ -171,6 +174,7 @@ pub fn scan_dirs(
             &dirs,
             cover_cache_dir.as_deref(),
             records.as_deref(),
+            skip_unchanged.unwrap_or(true),
             &cancel,
             &emit,
         );

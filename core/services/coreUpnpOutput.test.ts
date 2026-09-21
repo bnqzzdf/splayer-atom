@@ -16,6 +16,7 @@ const nativePlayer = read("native/audio-engine/src/bindings/player.rs");
 const nativeCore = read("native/audio-engine-core/src/lib.rs");
 const scannerService = read("core/services/scanner.ts");
 const sacdInput = read("core/atom/sacdInput.ts");
+const localPhysicalSource = read("core/utils/localPhysicalSource.ts");
 const stopUpnpOutput =
   upnpOutput
     .split("export const stopUpnpOutput = async (")[1]
@@ -165,12 +166,14 @@ test("UPnP next-media preparation stays Core-side and does not touch Renderer tr
 
 test("library scanner expands SACD ISO through the Atom-owned sync seam", () => {
   assert.match(scannerService, /getEngine\(\)\.probeSacdTracks\(isoPath\)/);
-  assert.match(scannerService, /SACD_VIRTUAL_PATH/);
-  assert.match(scannerService, /legacy SACD aggregate: force one migration scan/);
+  assert.match(scannerService, /sacdIsoPathFromVirtual/);
+  assert.match(scannerService, /forceProbe: \/\\\.iso\$\/i\.test\(record\.path\)/);
   assert.match(scannerService, /SACD_PLACEHOLDER_TITLE/);
-  assert.match(scannerService, /placeholder title: force metadata refresh/);
+  assert.match(scannerService, /forceProbe: sacdMetadataRefresh\.has\(key\)/);
   assert.match(scannerService, /pendingSacdSyncs/);
-  assert.match(sacdInput, /SACD_VIRTUAL_PATH/);
+  assert.match(sacdInput, /parseSacdVirtualPath/);
+  assert.match(localPhysicalSource, /SACD_VIRTUAL_PATH/);
+  assert.match(localPhysicalSource, /parseSacdVirtualPath/);
   assert.match(session, /parseSacdPlaybackSource/);
 });
 

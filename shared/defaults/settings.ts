@@ -28,6 +28,7 @@ export const defaultSystemConfig: SystemConfig = {
   },
   library: {
     scanDirs: [],
+    pinnedFolders: [],
   },
   lyric: {
     enableOnlineTTMLLyric: false,

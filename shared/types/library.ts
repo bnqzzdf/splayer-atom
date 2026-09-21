@@ -34,6 +34,10 @@ export interface ScanProgress {
   current?: string;
   /** 错误信息（仅 error 阶段） */
   error?: string;
+  /** 本轮扫描的 Core 路径范围；用于区分全库与局部扫描。 */
+  scopeDirs?: string[];
+  /** 本轮是否为增量扫描。 */
+  incremental?: boolean;
 }
 
 /** 音乐库 API */

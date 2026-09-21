@@ -148,6 +148,7 @@ export interface FileRecord {
   mtime: number
   size: number
   coverPath?: string
+  forceProbe?: boolean
 }
 
 /** 初始化原生日志系统。重复调用是无害的（HMR 重载时主进程可能多次注入） */
@@ -362,6 +363,11 @@ export declare function probeMediaQuality(path: string): Promise<JsMediaQuality>
 
 /** Atom 曲库把一个 SACD ISO 展开为稳定虚拟分轨；解析工作在阻塞线程完成。 */
 export declare function probeSacdTracks(isoPath: string): Promise<Array<JsScannedTrack>>
+/** Atom 对单个普通音频做与批量 scanner 相同的完整探测。 */
+export declare function probeScannedTrack(
+  path: string,
+  coverCacheDir?: string | undefined | null,
+): Promise<JsScannedTrack>
 
 /** 读取文件的可编辑标签（异步，阻塞 IO 在 tokio 阻塞线程执行） */
 export declare function readTrackTags(path: string): Promise<JsTrackTags>
@@ -372,7 +378,7 @@ export declare function readTrackTags(path: string): Promise<JsTrackTags>
  * 在后台线程中执行，不阻塞 Node.js 事件循环。
  * 每处理约 20 个文件回调一次 progress 事件，完成后回调 done 事件。
  */
-export declare function scanDirs(dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null): void
+export declare function scanDirs(dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null, skipUnchanged?: boolean | undefined | null): void
 
 /**
  * 批量写入标签（异步），逐项返回结果，单项失败不中断整批。

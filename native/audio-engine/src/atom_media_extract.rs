@@ -45,6 +45,22 @@ pub async fn probe_sacd_tracks(iso_path: String) -> Result<Vec<crate::bindings::
     Ok(tracks.into_iter().map(Into::into).collect())
 }
 
+/// Atom 对单个普通音频做与批量 scanner 相同的完整探测，用于 Folder 定向 canonicalize。
+#[napi]
+pub async fn probe_scanned_track(
+    path: String,
+    cover_cache_dir: Option<String>,
+) -> Result<crate::bindings::JsScannedTrack> {
+    let probe_path = path.clone();
+    let track = tokio::task::spawn_blocking(move || {
+        audio_engine_core::scanner::probe_fast(&probe_path, cover_cache_dir.as_deref())
+    })
+    .await
+    .map_err(napi_error)?
+    .ok_or_else(|| Error::from_reason(format!("无法读取媒体元数据: {path}")))?;
+    Ok(track.into())
+}
+
 /// Atom UPnP 对已经落到本地的媒体文件读取真实编码参数；不创建 AudioPlayer。
 #[napi]
 pub async fn probe_media_quality(path: String) -> Result<JsMediaQuality> {

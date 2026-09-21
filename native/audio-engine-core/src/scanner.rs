@@ -34,6 +34,8 @@ pub struct FileRecord {
     pub mtime: u64,
     pub size: u64,
     pub cover_path: Option<String>,
+    /// 即使 mtime/size 未变化也强制重新 probe（用于旧 SACD 元数据迁移等）。
+    pub force_probe: bool,
 }
 
 /// 扫描到的曲目信息
@@ -464,6 +466,7 @@ pub fn scan_directories(
     dirs: &[String],
     cover_cache_dir: Option<&str>,
     incremental_data: Option<&[FileRecord]>,
+    skip_unchanged: bool,
     cancel: &AtomicBool,
     callback: &dyn Fn(ScanEvent),
 ) {
@@ -471,11 +474,16 @@ pub fn scan_directories(
     info!("开始扫描，目录数: {}", dirs.len());
 
     // 构建已有文件索引 path → (mtime, size, cover cache path)
-    let existing: HashMap<&str, (u64, u64, Option<&str>)> = incremental_data
+    let existing: HashMap<&str, (u64, u64, Option<&str>, bool)> = incremental_data
         .map(|records| {
             records
                 .iter()
-                .map(|r| (r.path.as_str(), (r.mtime, r.size, r.cover_path.as_deref())))
+                .map(|r| {
+                    (
+                        r.path.as_str(),
+                        (r.mtime, r.size, r.cover_path.as_deref(), r.force_probe),
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -532,7 +540,9 @@ pub fn scan_directories(
             let directory_cover = cover_cache_dir
                 .and_then(|_| cached_directory_cover(&mut directory_cover_cache, path));
             // 增量比对：mtime 和 size 都未变化则跳过
-            if let Some(&(old_mtime, old_size, cover_path)) = existing.get(path_str.as_str()) {
+            if let Some(&(old_mtime, old_size, cover_path, force_probe)) =
+                existing.get(path_str.as_str())
+            {
                 let cover_is_current = cover_cache_dir.is_none_or(|cache_dir| {
                     !metadata::cover_cache_needs_refresh(
                         cover_path,
@@ -540,7 +550,12 @@ pub fn scan_directories(
                         directory_cover.as_deref(),
                     )
                 });
-                if old_mtime == mtime && old_size == size && cover_is_current {
+                if skip_unchanged
+                    && !force_probe
+                    && old_mtime == mtime
+                    && old_size == size
+                    && cover_is_current
+                {
                     continue;
                 }
             }

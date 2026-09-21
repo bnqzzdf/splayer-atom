@@ -7,6 +7,7 @@ import { getCoverCacheDir } from "@main/utils/config";
 import { libraryLog } from "@main/utils/logger";
 import type { JsTagWriteRequest } from "@splayer/audio-engine";
 import type { TrackTags, TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
+import { publishLibraryRevision } from "@main/services/libraryRevision";
 
 const knownLibraryPaths = (): Set<string> =>
   new Set(
@@ -57,7 +58,10 @@ export const writeLibraryTags = async (edits: TagEditRequest[]): Promise<TagWrit
       }
       return upsert;
     });
-  if (upserts.length > 0) upsertTracks(upserts);
+  if (upserts.length > 0) {
+    upsertTracks(upserts);
+    publishLibraryRevision();
+  }
 
   const tracks = getTracksByIds(upserts.map((upsert) => upsert.id));
   const byPath = new Map(tracks.map((track) => [track.path, track]));
@@ -89,7 +93,10 @@ export const deleteLibraryFiles = async (
       failed.push(filePath);
     }
   }
-  if (deleted.length > 0) deleteTracksByPaths(deleted);
+  if (deleted.length > 0) {
+    deleteTracksByPaths(deleted);
+    publishLibraryRevision();
+  }
   libraryLog.info(`删除 ${deleted.length} 个文件，${failed.length} 个失败`);
   return { deleted: deleted.length, failed: failed.length };
 };

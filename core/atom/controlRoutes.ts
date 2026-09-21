@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { buildAtomCompatRoutes } from "@main/atom/compat/routes";
 import { buildHeadlessRoutes } from "@main/atom/headless/routes";
+import { buildFolderRoutes } from "@main/atom/folderRoutes";
 
 /**
  * 构建 Web Control 使用的完整 Core Protocol router。
@@ -11,6 +12,7 @@ import { buildHeadlessRoutes } from "@main/atom/headless/routes";
 export const buildCoreControlRoutes = (): Hono => {
   const api = new Hono();
   api.route("/", buildHeadlessRoutes());
+  api.route("/", buildFolderRoutes());
   api.route("/", buildAtomCompatRoutes());
   return api;
 };

@@ -30,6 +30,32 @@ fn unique_temp_dir(name: &str) -> PathBuf {
     dir
 }
 
+fn write_test_wav(path: &std::path::Path) {
+    let sample_rate = 44_100u32;
+    let channels = 1u16;
+    let bits_per_sample = 16u16;
+    let samples = 256u32;
+    let block_align = channels * (bits_per_sample / 8);
+    let byte_rate = sample_rate * u32::from(block_align);
+    let data_size = samples * u32::from(block_align);
+    let riff_size = 36 + data_size;
+    let mut bytes = Vec::with_capacity((44 + data_size) as usize);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&riff_size.to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&channels.to_le_bytes());
+    bytes.extend_from_slice(&sample_rate.to_le_bytes());
+    bytes.extend_from_slice(&byte_rate.to_le_bytes());
+    bytes.extend_from_slice(&block_align.to_le_bytes());
+    bytes.extend_from_slice(&bits_per_sample.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_size.to_le_bytes());
+    bytes.resize(44 + data_size as usize, 0);
+    fs::write(path, bytes).expect("failed to write test wav");
+}
+
 #[test]
 fn scan_empty_directory_produces_done_event() {
     let dir = unique_temp_dir("empty");
@@ -41,6 +67,7 @@ fn scan_empty_directory_produces_done_event() {
         &[dir.to_string_lossy().into_owned()],
         None,
         None,
+        true,
         &cancel,
         &callback,
     );
@@ -77,6 +104,7 @@ fn scan_nonexistent_directory_reports_unavailable() {
         &["/no/such/audio-engine-core-directory".to_string()],
         None,
         None,
+        true,
         &cancel,
         &callback,
     );
@@ -110,6 +138,7 @@ fn scan_cancelled_during_walk_phase_stops_early() {
         &[dir.to_string_lossy().into_owned()],
         None,
         None,
+        true,
         &cancel,
         &callback,
     );
@@ -127,12 +156,82 @@ fn file_record_round_trips_path_mtime_size() {
         mtime: 1_000_000,
         size: 2_048,
         cover_path: None,
+        force_probe: false,
     };
 
     assert_eq!(record.path, "tests/fixtures/track.mp3");
     assert_eq!(record.mtime, 1_000_000);
     assert_eq!(record.size, 2_048);
     assert_eq!(record.cover_path, None);
+}
+
+#[test]
+fn force_rescan_processes_unchanged_existing_file() {
+    let dir = unique_temp_dir("force-rescan");
+    let wav = dir.join("track.wav");
+    write_test_wav(&wav);
+    let (mtime, _ctime, size) = audio_engine_core::scanner::file_stat(&wav).expect("test wav stat");
+    let records = vec![FileRecord {
+        path: wav.to_string_lossy().into_owned(),
+        mtime,
+        size,
+        cover_path: None,
+        force_probe: false,
+    }];
+    let cancel = AtomicBool::new(false);
+
+    let incremental_sink = EventSink::default();
+    let incremental_callback = |event: ScanEvent| incremental_sink.0.lock().unwrap().push(event);
+    audio_engine_core::scanner::scan_directories(
+        &[dir.to_string_lossy().into_owned()],
+        None,
+        Some(&records),
+        true,
+        &cancel,
+        &incremental_callback,
+    );
+    let incremental = incremental_sink.take_events();
+    assert_eq!(incremental.len(), 1);
+    match &incremental[0] {
+        ScanEvent::Done { scanned, total, .. } => {
+            assert_eq!(*scanned, 0);
+            assert_eq!(*total, 0);
+        }
+        ScanEvent::Progress { .. } => panic!("unchanged incremental file should be skipped"),
+    }
+
+    let force_sink = EventSink::default();
+    let force_callback = |event: ScanEvent| force_sink.0.lock().unwrap().push(event);
+    audio_engine_core::scanner::scan_directories(
+        &[dir.to_string_lossy().into_owned()],
+        None,
+        Some(&records),
+        false,
+        &cancel,
+        &force_callback,
+    );
+    let force_events = force_sink.take_events();
+    assert!(
+        force_events.iter().any(|event| matches!(
+            event,
+            ScanEvent::Progress {
+                scanned: 1,
+                total: 1,
+                ..
+            }
+        )),
+        "force rescan must probe an unchanged existing file",
+    );
+    assert!(force_events.iter().any(|event| matches!(
+        event,
+        ScanEvent::Done {
+            scanned: 1,
+            total: 1,
+            ..
+        }
+    )));
+
+    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]

@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { sacdIsoPathFromVirtual } from "./localPhysicalSource";
 
-const SACD_VIRTUAL_PATH = /^(.*\.iso)\|Track\d+\|/i;
 const DISC_LABEL =
   /^(?:cd|disc|disk|sacd|dvd)\s*[-_. ]*0*(\d+)(?:\s*(?:of|\/)\s*\d+)?(?:\s*[-_.].*)?$/i;
 
 /** SACD 虚拟分轨使用物理 ISO 路径参与本地专辑归属。 */
-const physicalPath = (value: string): string => SACD_VIRTUAL_PATH.exec(value)?.[1] ?? value;
+const physicalPath = (value: string): string => sacdIsoPathFromVirtual(value) ?? value;
 
 /** 从 CD1 / Disc 2 / SACD03 这类目录或文件名中提取碟号。 */
 const discNumberFromLabel = (value: string): number | undefined => {

@@ -17,6 +17,9 @@ export type CorePlayerProjectionEvent = Extract<
 export type CoreControlEvent =
   | { type: "providerSessions"; data: ProviderSessionsSnapshot }
   | { type: "libraryScanProgress"; data: ScanProgress }
+  | { type: "libraryChanged"; data: { revision: number } }
+  | { type: "libraryRootsChanged"; data: { paths: string[] } }
+  | { type: "folderPinsChanged"; data: { paths: string[] } }
   | { type: "downloadState"; data: DownloadTask }
   | { type: "downloadProgress"; data: DownloadProgress }
   | { type: "streamingLibraryUpdated"; data: { serverId: string } }

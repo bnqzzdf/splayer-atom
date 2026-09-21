@@ -1,11 +1,10 @@
 import { fileURLToPath } from "node:url";
+import { parseSacdVirtualPath } from "@main/utils/localPhysicalSource";
 
 export interface SacdPlaybackSource {
   isoPath: string;
   trackNum: number;
 }
-
-const SACD_VIRTUAL_PATH = /^(.*\.iso)\|Track(\d+)\|/i;
 
 const localPath = (source: string): string =>
   source.startsWith("file:") ? fileURLToPath(source) : source;
@@ -16,11 +15,8 @@ export const parseSacdPlaybackSource = (
   trackNumHint?: number | null,
 ): SacdPlaybackSource | null => {
   const local = localPath(source);
-  const virtual = SACD_VIRTUAL_PATH.exec(local);
-  if (virtual) {
-    const trackNum = Number(virtual[2]);
-    return Number.isInteger(trackNum) && trackNum > 0 ? { isoPath: virtual[1], trackNum } : null;
-  }
+  const virtual = parseSacdVirtualPath(local);
+  if (virtual) return virtual;
   if (!/\.iso$/i.test(local)) return null;
   const trackNum = trackNumHint ?? 1;
   return Number.isInteger(trackNum) && trackNum > 0 ? { isoPath: local, trackNum } : null;
@@ -36,7 +32,7 @@ export const toNativeSacdPlaybackSource = (
   durationMs = 0,
 ): string | null => {
   const local = localPath(source);
-  if (SACD_VIRTUAL_PATH.test(local)) return local;
+  if (parseSacdVirtualPath(local)) return local;
   const parsed = parseSacdPlaybackSource(local, trackNumHint);
   if (!parsed) return null;
   const duration = Math.max(0, durationMs) / 1000;
