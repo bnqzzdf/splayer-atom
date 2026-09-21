@@ -175,7 +175,7 @@ onMounted(async () => {
         v-if="isMobile"
         v-model:open="mobileTreeOpen"
         side="left"
-        :title="t('common.folders')"
+        :title="t('folder.label')"
         class="w-72"
       >
         <div class="h-full overflow-y-auto p-2">
@@ -228,7 +228,7 @@ onMounted(async () => {
                 @click="mobileTreeOpen = true"
               >
                 <template #icon><IconLucideFolderOpen /></template>
-                <span>{{ t("common.folders") }}</span>
+                <span>{{ t("folder.label") }}</span>
               </SButton>
               <SButton
                 type="primary"
