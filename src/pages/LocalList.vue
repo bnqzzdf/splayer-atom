@@ -159,7 +159,7 @@ onMounted(async () => {
 <template>
   <div class="flex flex-col h-full">
     <div class="shrink-0 px-5 pb-2">
-      <div class="flex items-center justify-between gap-4 mt-2 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mt-2 mb-4">
         <div class="flex items-baseline gap-4">
           <h1 class="text-3xl font-bold text-on-surface text-balance">{{ config.title }}</h1>
           <span
@@ -172,14 +172,14 @@ onMounted(async () => {
         </div>
         <div
           v-if="source.length > 0"
-          class="flex items-center gap-2 text-sm text-on-surface-variant/70"
+          class="flex flex-wrap items-center gap-2 text-sm text-on-surface-variant/70"
         >
           <SInput
             v-model="searchQuery"
             :placeholder="t(mode === 'album' ? 'library.searchAlbums' : 'library.searchArtists')"
             clearable
             round
-            class="w-44 focus-within:w-56"
+            class="w-full sm:w-44 sm:focus-within:w-56"
             data-search-input
           >
             <template #prefix>

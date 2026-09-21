@@ -47,8 +47,8 @@ onMounted(async () => {
 <template>
   <div class="h-full overflow-y-auto [scrollbar-gutter:stable]">
     <div
-      class="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pt-2"
-      :class="isFloatingBar ? 'pb-28' : 'pb-10'"
+      class="mx-auto flex max-w-[1400px] flex-col gap-5 px-3 sm:px-5 pt-2"
+      :class="isFloatingBar ? 'pb-28' : 'pb-6 sm:pb-10'"
     >
       <!-- 曲库概览 -->
       <StatsOverview :stats="libraryStats" />

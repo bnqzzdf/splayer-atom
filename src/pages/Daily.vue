@@ -119,16 +119,16 @@ watch(
   <div class="flex h-full flex-col">
     <!-- 顶栏 -->
     <div class="shrink-0 px-5 pt-2 pb-3">
-      <div class="flex items-center gap-5">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
         <!-- 日历磁贴 -->
         <div
-          class="flex size-28 shrink-0 flex-col items-center justify-center rounded-2xl border border-solid border-primary/15 bg-primary/8"
+          class="flex size-20 sm:size-28 shrink-0 flex-col items-center justify-center rounded-2xl border border-solid border-primary/15 bg-primary/8"
         >
           <template v-if="selectedDay">
             <span class="text-xs text-on-surface-variant/60">
               {{ formatDate(selectedDay.date, { month: "short" }) }}
             </span>
-            <span class="text-4xl font-bold leading-tight text-primary tabular-nums">
+            <span class="text-3xl sm:text-4xl font-bold leading-tight text-primary tabular-nums">
               {{ selectedDay.date.getDate() }}
             </span>
             <span class="text-xs text-on-surface-variant/60">
@@ -159,7 +159,7 @@ watch(
             }}
           </p>
           <!-- 操作行 -->
-          <div class="mt-1 flex items-center justify-between gap-3">
+          <div class="mt-1 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
             <div class="flex items-center gap-2">
               <SButton
                 type="primary"

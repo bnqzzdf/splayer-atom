@@ -215,7 +215,7 @@ const handleSave = async (): Promise<void> => {
   <SDialog
     :open="open"
     :title="t('tagEditor.title')"
-    width="560px"
+    width="min(560px, calc(100vw - 24px))"
     @update:open="emit('update:open', $event)"
   >
     <div class="flex flex-col gap-4">
@@ -237,8 +237,8 @@ const handleSave = async (): Promise<void> => {
       </div>
       <!-- 在线匹配 -->
       <SCard size="small" variant="primary">
-        <div class="flex items-center gap-2">
-          <span class="flex-1 text-sm text-on-surface">{{ t("tagEditor.matchHint") }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="w-full sm:flex-1 text-sm text-on-surface">{{ t("tagEditor.matchHint") }}</span>
           <div class="w-24 shrink-0">
             <SSelect v-model="matchPlatform" :options="platformOptions" />
           </div>
@@ -288,8 +288,8 @@ const handleSave = async (): Promise<void> => {
         </div>
       </SCard>
       <!-- 文本标签 -->
-      <div class="grid grid-cols-2 gap-3">
-        <label class="flex flex-col gap-1 col-span-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1 sm:col-span-2">
           <span class="text-xs text-on-surface-variant">{{ t("tagEditor.fields.title") }}</span>
           <SInput v-model="form.title" />
         </label>

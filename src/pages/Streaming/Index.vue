@@ -132,7 +132,7 @@ const handleMoreMenu = (key: string): void => {
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
     <div class="shrink-0 px-5 pb-2">
-      <div class="flex items-center justify-between mt-2 mb-4 gap-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-2 mb-4 gap-3 sm:gap-4">
         <!-- 标题 + 数量统计 -->
         <div class="flex items-baseline gap-4 min-w-0">
           <h1 class="text-3xl font-bold text-on-surface shrink-0 text-balance">
@@ -149,8 +149,8 @@ const handleMoreMenu = (key: string): void => {
             </span>
           </Transition>
         </div>
-        <div v-if="activeServer" class="flex items-center gap-2 shrink-0">
-          <div class="w-44">
+        <div v-if="activeServer" class="flex flex-wrap items-center gap-2 shrink-0">
+          <div class="w-full sm:w-44">
             <SSelect
               :model-value="activeServerId ?? ''"
               :options="serverOptions"

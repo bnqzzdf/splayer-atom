@@ -18,12 +18,12 @@ const FEATURES = [
 
 <template>
   <div class="flex flex-col items-center text-center w-full max-w-2xl mx-auto my-auto">
-    <SLogo :size="80" class="mb-6" />
-    <h1 class="text-3xl font-bold mb-2">{{ t("onboarding.welcome.title") }}</h1>
-    <p class="text-on-surface-variant/70 mb-8 leading-relaxed">
+    <SLogo :size="72" class="mb-4 sm:mb-6" />
+    <h1 class="text-2xl sm:text-3xl font-bold mb-2">{{ t("onboarding.welcome.title") }}</h1>
+    <p class="text-sm sm:text-base text-on-surface-variant/70 mb-6 sm:mb-8 leading-relaxed">
       {{ t("onboarding.welcome.subtitle") }}
     </p>
-    <div class="grid grid-cols-2 gap-3 w-full mb-10">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mb-6 sm:mb-10">
       <div
         v-for="feature in FEATURES"
         :key="feature.key"

@@ -69,7 +69,7 @@ onMounted(() => void downloadStore.init());
           {{ t("common.totalSongs", { count: currentTasks.length }) }}
         </span>
       </div>
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <STabs
           :model-value="tab"
           :tabs="tabs"

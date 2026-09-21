@@ -61,7 +61,7 @@ watch(
   <SDialog
     :open="open"
     :title="title"
-    width="620px"
+    width="min(620px, calc(100vw - 24px))"
     @update:open="(value) => emit('update:open', value)"
   >
     <div class="flex flex-col gap-3">

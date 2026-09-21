@@ -42,8 +42,9 @@ const DESTROY_DELAY_MS = 180;
 
 const containerStyle = computed(() => ({
   width: props.width,
+  maxWidth: "calc(100vw - 24px)",
   height: props.height === "auto" ? undefined : props.height,
-  maxHeight: props.height === "auto" ? "85vh" : undefined,
+  maxHeight: props.height === "auto" ? "min(85vh, calc(100dvh - 24px))" : "calc(100dvh - 24px)",
   top: props.top,
 }));
 

@@ -34,7 +34,7 @@ const handlePlayAll = (): void => {
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="shrink-0 px-5 py-2 flex items-center justify-between">
+    <div class="shrink-0 px-5 py-2 flex flex-wrap items-center justify-between gap-3">
       <SButton
         type="primary"
         variant="secondary"
@@ -52,7 +52,7 @@ const handlePlayAll = (): void => {
         :placeholder="t('common.search')"
         clearable
         round
-        class="w-40 focus-within:w-56"
+        class="w-full sm:w-40 sm:focus-within:w-56"
         data-search-input
       >
         <template #prefix>

@@ -6,6 +6,8 @@ import { useStatusStore } from "@/stores/status";
 import { useDownloadStore } from "@/stores/download";
 import { useDownload } from "@/composables/useDownload";
 import { dialog } from "@/composables/useDialog";
+import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
 import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
@@ -30,6 +32,13 @@ const media = useMediaStore();
 const status = useStatusStore();
 const downloadStore = useDownloadStore();
 const { retry } = useDownload();
+const { isDesktop } = useResponsiveLayout();
+const { isFloatingBar, PLAYER_BAR_GAP } = useFloatingPlayerBar();
+
+/** 窄屏下底栏位于普通流，不需要 80px 留白 */
+const listPaddingBottom = computed(() =>
+  isDesktop.value ? (isFloatingBar.value ? PLAYER_BAR_GAP : 80) : 16,
+);
 
 const STATUS_KEY: Record<DownloadStatus, string> = {
   queued: "download.status.queued",
@@ -122,7 +131,7 @@ defineExpose({ playAll });
     :get-item-key="(task: DownloadTask) => task.taskId"
     item-fixed
     height="100%"
-    :padding-bottom="80"
+    :padding-bottom="listPaddingBottom"
   >
     <!-- 固定表头 -->
     <template #header>
@@ -130,10 +139,10 @@ defineExpose({ playAll });
         <div class="flex items-center gap-3 pl-3 pr-6 mx-3 h-10 text-sm text-on-surface-variant/60">
           <div class="w-8 shrink-0 flex items-center justify-center"><span>#</span></div>
           <div class="flex-1 min-w-0 px-1.5">{{ t("songList.title") }}</div>
-          <div class="w-32 shrink-0">{{ t("download.colStatus") }}</div>
-          <div class="w-20 shrink-0 text-center">{{ t("download.colSize") }}</div>
-          <div class="w-16 shrink-0 text-center">{{ t("songList.duration") }}</div>
-          <div class="w-20 shrink-0 text-center">{{ t("songList.actions") }}</div>
+          <div class="w-24 sm:w-32 shrink-0">{{ t("download.colStatus") }}</div>
+          <div class="hidden sm:block w-20 shrink-0 text-center">{{ t("download.colSize") }}</div>
+          <div class="hidden md:block w-16 shrink-0 text-center">{{ t("songList.duration") }}</div>
+          <div class="w-16 sm:w-20 shrink-0 text-center">{{ t("songList.actions") }}</div>
         </div>
       </div>
     </template>
@@ -143,7 +152,7 @@ defineExpose({ playAll });
         <div
           class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl border-2 border-solid transition-[background-color,border-color] duration-200"
           :class="rowClass(item)"
-          @dblclick="isDone(item) ? playTask(item) : undefined"
+          @click="isDone(item) ? playTask(item) : undefined"
         >
           <!-- 序号 / 状态图标 -->
           <div
@@ -214,7 +223,7 @@ defineExpose({ playAll });
             </div>
           </div>
           <!-- 进度 / 状态 -->
-          <div class="w-32 shrink-0">
+          <div class="w-24 sm:w-32 shrink-0">
             <div v-if="item.status === 'downloading'" class="flex flex-col gap-1.5">
               <div class="h-1.5 w-full rounded-full bg-on-surface/10 overflow-hidden">
                 <div
@@ -231,18 +240,18 @@ defineExpose({ playAll });
             </span>
           </div>
           <!-- 大小 -->
-          <div class="w-20 shrink-0 text-center text-sm tabular-nums text-on-surface-variant">
+          <div class="hidden sm:block w-20 shrink-0 text-center text-sm tabular-nums text-on-surface-variant">
             {{ sizeText(item) || "—" }}
           </div>
           <!-- 时长 -->
           <div
-            class="w-16 shrink-0 text-center text-sm tabular-nums"
+            class="hidden md:block w-16 shrink-0 text-center text-sm tabular-nums"
             :class="isPlaying(item) ? 'text-primary/60' : 'text-on-surface-variant'"
           >
             {{ item.track.duration ? formatTime(item.track.duration) : "—" }}
           </div>
           <!-- 操作 -->
-          <div class="w-20 shrink-0 flex items-center justify-center gap-1" @click.stop>
+          <div class="w-16 sm:w-20 shrink-0 flex items-center justify-center gap-1" @click.stop>
             <SButton
               v-if="item.status === 'queued' || item.status === 'downloading'"
               variant="ghost"

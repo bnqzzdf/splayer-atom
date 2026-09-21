@@ -390,7 +390,7 @@ const onLoginDialogClose = (open: boolean): void => {
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
     <div class="shrink-0 px-5 pb-2">
-      <div class="mt-2 mb-4 flex items-end justify-between gap-4">
+      <div class="mt-2 mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
         <h1 class="min-w-0 flex items-baseline pr-3">
           <span class="min-w-0 truncate text-3xl font-bold text-on-surface">
             {{ keyword || t("search.title") }}
@@ -403,7 +403,10 @@ const onLoginDialogClose = (open: boolean): void => {
           </span>
         </h1>
         <!-- 平台切换 -->
-        <div class="shrink-0" :class="streaming.activeServer ? 'w-104 max-w-full' : 'w-64'">
+        <div
+          class="w-full sm:w-auto shrink-0 max-w-full overflow-x-auto"
+          :class="streaming.activeServer ? 'sm:w-104' : 'sm:w-64'"
+        >
           <STabs
             :model-value="searchSource"
             :tabs="platformTabs"

@@ -3,6 +3,7 @@ import type { CoverItem } from "@/types/artist";
 import type { ControlAction } from "@/actions/model";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 
 export interface CoverListProps {
   /** 列表数据 */
@@ -48,11 +49,22 @@ const props = withDefaults(defineProps<CoverListProps>(), {
 
 const { t } = useI18n();
 
+const { isDesktop, isMobile } = useResponsiveLayout();
 const { isFloatingBar, PLAYER_BAR_GAP } = useFloatingPlayerBar();
 
-/** 虚拟模式底部 padding：悬浮播放栏下留白避免遮挡 */
+/** 手机端默认最小卡片宽度 128px、间距 12px */
+const effectiveMinSize = computed(() => {
+  if (props.minSize !== 140) return props.minSize;
+  return isMobile.value ? 128 : 140;
+});
+const effectiveGap = computed(() => {
+  if (props.gap !== 20) return props.gap;
+  return isMobile.value ? 12 : 20;
+});
+
+/** 虚拟模式底部 padding：悬浮播放栏下留白避免遮挡（窄屏时底栏在普通流中） */
 const virtualPaddingBottom = computed(() =>
-  isFloatingBar.value ? PLAYER_BAR_GAP : props.paddingBottom,
+  isDesktop.value && isFloatingBar.value ? PLAYER_BAR_GAP : props.paddingBottom,
 );
 
 const emit = defineEmits<{
@@ -83,17 +95,20 @@ const INFO_HEIGHT = 76;
 /** CSS auto-fill 等价计算：列数 = floor((W + G) / (M + G)) */
 const columnCount = computed(() => {
   if (!innerWidth.value) return 1;
-  return Math.max(1, Math.floor((innerWidth.value + props.gap) / (props.minSize + props.gap)));
+  return Math.max(
+    1,
+    Math.floor((innerWidth.value + effectiveGap.value) / (effectiveMinSize.value + effectiveGap.value)),
+  );
 });
 
 /** 单列实际宽度 */
 const colWidth = computed(() => {
-  if (!innerWidth.value) return props.minSize;
-  return (innerWidth.value - (columnCount.value - 1) * props.gap) / columnCount.value;
+  if (!innerWidth.value) return effectiveMinSize.value;
+  return (innerWidth.value - (columnCount.value - 1) * effectiveGap.value) / columnCount.value;
 });
 
 /** 行高 = 封面方形（aspect-square = colWidth）+ 信息区 + 行间距 */
-const rowHeight = computed(() => colWidth.value + INFO_HEIGHT + props.gap);
+const rowHeight = computed(() => colWidth.value + INFO_HEIGHT + effectiveGap.value);
 
 interface Row {
   id: string;
@@ -151,7 +166,7 @@ const getRowKey = (row: Row): string => row.id;
           paddingLeft: `${paddingX}px`,
           paddingRight: `${paddingX}px`,
           gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-          gap: `${gap}px`,
+          gap: `${effectiveGap}px`,
         }"
       >
         <CoverCard
@@ -174,8 +189,8 @@ const getRowKey = (row: Row): string => row.id;
     class="grid"
     :style="{
       padding: `${paddingTop}px ${paddingX}px ${paddingBottom}px`,
-      gridTemplateColumns: `repeat(auto-fill, minmax(${minSize}px, 1fr))`,
-      gap: `${gap}px`,
+      gridTemplateColumns: `repeat(auto-fill, minmax(${effectiveMinSize}px, 1fr))`,
+      gap: `${effectiveGap}px`,
     }"
   >
     <CoverCard

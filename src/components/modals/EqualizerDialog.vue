@@ -132,7 +132,7 @@ const handleReset = (): void => {
   <SDialog
     :open="open"
     :title="t('equalizer.title')"
-    width="540px"
+    width="min(540px, calc(100vw - 24px))"
     @update:open="emit('update:open', $event)"
   >
     <div class="flex flex-col gap-3">
@@ -156,10 +156,11 @@ const handleReset = (): void => {
           @update:model-value="enabled = $event"
         />
       </div>
-      <SCard
-        class="flex items-stretch gap-1 transition-opacity"
-        :class="enabled && !directLocked ? '' : 'opacity-50 pointer-events-none'"
-      >
+      <div class="overflow-x-auto -mx-1 px-1">
+        <SCard
+          class="flex items-stretch gap-1 min-w-[480px] transition-opacity"
+          :class="enabled && !directLocked ? '' : 'opacity-50 pointer-events-none'"
+        >
         <div class="flex-1 flex flex-col items-center gap-2 min-w-0">
           <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
             {{ formatDb(localPreamp) }}
@@ -216,6 +217,7 @@ const handleReset = (): void => {
           <div class="text-xs text-on-surface-variant tabular-nums">{{ label }}</div>
         </div>
       </SCard>
+      </div>
     </div>
 
     <template #footer="{ close }">

@@ -116,7 +116,7 @@ const handleFavoriteAction = async (actionId: string, item: CoverItem): Promise<
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
     <div class="shrink-0 px-5 pb-2">
-      <div class="flex items-baseline gap-4 mt-2 mb-4 min-w-0">
+      <div class="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 mt-2 mb-4 min-w-0">
         <h1 class="text-3xl font-bold text-on-surface shrink-0 text-balance">
           {{ t("favorites.title") }}
         </h1>

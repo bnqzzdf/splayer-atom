@@ -11,6 +11,7 @@ import { useDownload } from "@/composables/useDownload";
 import { useFavorite } from "@/composables/useFavorite";
 import { usePlaylistPicker } from "@/composables/usePlaylistPicker";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import { formatTime } from "@/utils/time";
 import { formatFileSize } from "@/utils/format";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
@@ -86,7 +87,13 @@ const status = useStatusStore();
 const settings = useSettingsStore();
 const fav = useFavorite();
 
+const { isDesktop } = useResponsiveLayout();
 const { isFloatingBar: isFloatingPlayerBar, PLAYER_BAR_GAP } = useFloatingPlayerBar();
+
+/** 窄屏下底栏位于普通流，不需要 80px 的绝对悬浮留白 */
+const listPaddingBottom = computed(() =>
+  isDesktop.value ? (isFloatingPlayerBar.value ? PLAYER_BAR_GAP : 80) : 16,
+);
 
 /** 排序器 默认使用 base 敏感度，忽略大小写 */
 const textCollator = new Intl.Collator(undefined, {
@@ -306,7 +313,7 @@ defineExpose({
         ref="virtualListRef"
         :items="sortedItems"
         :item-height="88"
-        :padding-bottom="isFloatingPlayerBar ? PLAYER_BAR_GAP : 80"
+        :padding-bottom="listPaddingBottom"
         :get-item-key="(item: Track) => item.id"
         item-fixed
         height="100%"
@@ -332,7 +339,7 @@ defineExpose({
             <!-- 批量模式 -->
             <div
               v-if="batch.active.value"
-              class="flex items-center gap-2 pl-3 pr-3 mx-3 h-10 text-sm"
+              class="flex items-center flex-wrap gap-1.5 sm:gap-2 pl-3 pr-3 mx-3 min-h-10 py-1 text-sm"
             >
               <div v-if="showIndex" class="w-8 shrink-0 flex items-center justify-center">
                 <SCheckbox
@@ -487,12 +494,12 @@ defineExpose({
                   {{ t("songList.title") }}
                 </div>
               </div>
-              <div v-if="showAlbum" class="flex-1 min-w-0">{{ t("songList.album") }}</div>
+              <div v-if="showAlbum" class="hidden md:block flex-1 min-w-0">{{ t("songList.album") }}</div>
               <div class="w-14 shrink-0 text-center">{{ t("songList.actions") }}</div>
-              <div v-if="showDuration" class="w-16 shrink-0 text-center">
+              <div v-if="showDuration" class="hidden sm:block w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
-              <div v-if="showSize" class="w-16 shrink-0 text-center">{{ t("songList.size") }}</div>
+              <div v-if="showSize" class="hidden md:block w-16 shrink-0 text-center">{{ t("songList.size") }}</div>
             </div>
           </div>
         </template>
@@ -637,6 +644,24 @@ defineExpose({
                       <span v-if="!item.artists?.length" class="opacity-50">
                         {{ t("playlist.unknownArtist") }}
                       </span>
+                      <!-- 窄屏下如果启用了 showAlbum，在副标题展示专辑名与跳转 -->
+                      <template v-if="showAlbum && item.album?.name">
+                        <span class="md:hidden mx-1 opacity-40">·</span>
+                        <span
+                          class="md:hidden transition-opacity opacity-70"
+                          :class="isAlbumLinkable(item) ? 'cursor-pointer hover:opacity-90' : 'opacity-50'"
+                          @click="isAlbumLinkable(item) ? ($event.stopPropagation(), goAlbum(item)) : undefined"
+                        >
+                          {{ item.album.name }}
+                        </span>
+                      </template>
+                      <!-- 小屏下如果启用了 showDuration，在副标题补充展示时长 -->
+                      <span
+                        v-if="showDuration && item.duration"
+                        class="sm:hidden ml-1 opacity-50 text-xs tabular-nums"
+                      >
+                        · {{ formatTime(item.duration) }}
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -644,7 +669,7 @@ defineExpose({
               <!-- 专辑 -->
               <div
                 v-if="showAlbum"
-                class="flex-1 min-w-0 truncate text-sm"
+                class="hidden md:block flex-1 min-w-0 truncate text-sm"
                 :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface'"
               >
                 <span
@@ -702,7 +727,7 @@ defineExpose({
               <!-- 时长 -->
               <div
                 v-if="showDuration"
-                class="w-16 shrink-0 text-center text-sm tabular-nums"
+                class="hidden sm:block w-16 shrink-0 text-center text-sm tabular-nums"
                 :class="playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant'"
               >
                 {{ formatTime(item.duration) }}
@@ -710,7 +735,7 @@ defineExpose({
               <!-- 文件大小 -->
               <div
                 v-if="showSize"
-                class="w-16 shrink-0 text-center text-sm tabular-nums"
+                class="hidden md:block w-16 shrink-0 text-center text-sm tabular-nums"
                 :class="playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant'"
               >
                 {{ item.fileSize ? formatFileSize(item.fileSize) : "" }}
