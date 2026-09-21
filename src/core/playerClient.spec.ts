@@ -71,7 +71,7 @@ describe("shared player processing Core Protocol client", () => {
       success: true,
       data: {
         selected: devices[2].id,
-        data: [devices[2], { ...devices[4], name: "DX5 II · Diretta" }],
+        data: [devices[2], { ...devices[4], name: "DX5 II" }],
       },
     });
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/api/output/devices");

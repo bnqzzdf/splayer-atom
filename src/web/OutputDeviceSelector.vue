@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { AudioDevice } from "@shared/types/player";
 import { refreshDevices, switchDevice } from "@/core/player";
-import { getOutputDisplayName, getOutputKind, type OutputKind } from "@/core/outputDevices";
+import {
+  getOutputDisplayName,
+  getOutputKind,
+  getOutputPathIndex,
+  type OutputKind,
+} from "@/core/outputDevices";
 import { useStatusStore } from "@/stores/status";
 import AlsaPlaybackModeSelector from "@/components/settings/custom/AlsaPlaybackModeSelector.vue";
 import IconLucideCheck from "~icons/lucide/check";
@@ -51,6 +56,14 @@ const groups = computed<OutputGroup[]>(() => {
   return allGroups.filter((group) => group.kind !== "diretta" || group.devices.length > 0);
 });
 
+const outputLabel = (device: AudioDevice, devices: AudioDevice[]): string => {
+  const name = getOutputDisplayName(device);
+  const pathIndex = getOutputPathIndex(device, devices);
+  return pathIndex === null
+    ? name
+    : `${name} (${t("settings.outputDevice.networkPath", { index: pathIndex })})`;
+};
+
 const refreshDiscovery = async (): Promise<void> => {
   if (refreshing.value) return;
   refreshing.value = true;
@@ -74,7 +87,8 @@ const onSelect = async (deviceId: string): Promise<void> => {
 };
 
 onMounted(() => {
-  void refreshDiscovery();
+  // 初始化尚未完成时补做一次加载；已有快照时打开面板不再重复扫描。
+  if (!status.outputDevicesReady) void refreshDiscovery();
 });
 </script>
 
@@ -111,10 +125,10 @@ onMounted(() => {
               : 'bg-transparent text-on-surface hover:bg-on-surface/8'
           "
           :disabled="selectingId !== null"
-          :title="getOutputDisplayName(device)"
+          :title="outputLabel(device, group.devices)"
           @click="onSelect(device.id)"
         >
-          <span class="truncate">{{ getOutputDisplayName(device) }}</span>
+          <span class="truncate">{{ outputLabel(device, group.devices) }}</span>
           <IconLucideCheck
             v-if="device.id === status.selectedOutputDevice"
             class="absolute right-2.5 size-4 shrink-0 text-primary"

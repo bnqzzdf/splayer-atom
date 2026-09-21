@@ -883,6 +883,7 @@
       "noneAvailable": "未检测到可用的输出设备",
       "noneInGroup": "未发现设备",
       "refresh": "刷新设备",
+      "networkPath": "网络路径 {index}",
       "groups": {
         "alsa": "ALSA",
         "diretta": "Diretta",

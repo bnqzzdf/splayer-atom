@@ -895,6 +895,7 @@
       "noneAvailable": "No available output device was detected",
       "noneInGroup": "No devices found",
       "refresh": "Refresh devices",
+      "networkPath": "Network path {index}",
       "groups": {
         "alsa": "ALSA",
         "diretta": "Diretta",

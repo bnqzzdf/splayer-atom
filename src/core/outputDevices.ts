@@ -12,9 +12,29 @@ export const getOutputKind = (deviceId: string | null | undefined): OutputKind |
   return null;
 };
 
-/** Remove presentation suffixes that should not be repeated next to an output-kind icon. */
+/** 清理驱动和协议附加信息，只保留用户识别设备所需的名称。 */
 export const getOutputDisplayName = (device: Pick<AudioDevice, "id" | "name">): string =>
-  getOutputKind(device.id) === "diretta" ? device.name.replace(/\s*·\s*Diretta$/, "") : device.name;
+  device.name
+    .replace(/^HD-Audio Generic\s*[-,]\s*/i, "")
+    .replace(/\s*[-–—]\s*USB Audio$/i, "")
+    .replace(/\s*·\s*Diretta$/i, "")
+    .trim();
+
+/** 返回同名 Diretta Target 在当前列表中的简短路径序号。 */
+export const getOutputPathIndex = (
+  device: Pick<AudioDevice, "id" | "name">,
+  devices: readonly Pick<AudioDevice, "id" | "name">[],
+): number | null => {
+  if (getOutputKind(device.id) !== "diretta") return null;
+  const sameName = devices.filter(
+    (candidate) =>
+      getOutputKind(candidate.id) === "diretta" &&
+      getOutputDisplayName(candidate) === getOutputDisplayName(device),
+  );
+  if (sameName.length < 2) return null;
+  const index = sameName.findIndex((candidate) => candidate.id === device.id);
+  return index >= 0 ? index + 1 : null;
+};
 
 /** HDMI / DisplayPort HDA 端点默认不占用快捷输出列表；Core 仍保留完整硬件能力。 */
 export const isDisplayAudioOutput = (device: Pick<AudioDevice, "name">): boolean =>
@@ -41,9 +61,11 @@ export const projectOutputDevices = (
   devices: AudioDevice[],
   selectedOutputId: string | null = null,
 ): AudioDevice[] => {
-  const diretta = devices
-    .filter((device) => device.id.startsWith("diretta:"))
-    .map((device) => ({ ...device, name: `${device.name} · Diretta` }));
-  const upnp = devices.filter((device) => device.id.startsWith("upnp:"));
-  return [...filterWebSystemOutputs(devices, selectedOutputId), ...diretta, ...upnp];
+  const projected = devices.map((device) => ({
+    ...device,
+    name: getOutputDisplayName(device),
+  }));
+  const diretta = projected.filter((device) => device.id.startsWith("diretta:"));
+  const upnp = projected.filter((device) => device.id.startsWith("upnp:"));
+  return [...filterWebSystemOutputs(projected, selectedOutputId), ...diretta, ...upnp];
 };
