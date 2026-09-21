@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use alsa::pcm::State;
 use anyhow::{bail, ensure, Context, Result};
+use tracing::warn;
 
 use super::device::AlsaHwEndpoint;
 use super::dsd::{open_dsd_hw, pack_grouped_msb_dsd, AlsaDsdConfig, AlsaDsdFormat};
@@ -389,15 +390,14 @@ impl AlsaDirectDsdConnection {
         let writer = thread::Builder::new()
             .name("alsa-direct-dsd".into())
             .spawn(move || {
-                if run_writer(
+                if let Err(error) = run_writer(
                     handle,
                     input,
                     writer_state.as_ref(),
                     writer_cancel.as_ref(),
                     command_rx,
-                )
-                .is_err()
-                {
+                ) {
+                    warn!("ALSA direct DSD writer failed: {error:#}");
                     // producer 已明确标记 source failure 时不要再覆盖成设备故障。
                     if !writer_state.source_failed.load(Ordering::Acquire) {
                         writer_state.output_failed.store(true, Ordering::Release);
@@ -920,7 +920,13 @@ fn drain_to_pause(
     state: &AlsaDirectDsdState,
     pending_boundaries: &mut VecDeque<PendingBoundary>,
 ) -> Result<()> {
-    drain_stream(writer, state, pending_boundaries, &AtomicBool::new(false))?;
+    drain_stream(
+        writer,
+        state,
+        pending_boundaries,
+        &AtomicBool::new(false),
+        false,
+    )?;
     writer.prepare()
 }
 
@@ -930,8 +936,8 @@ fn drain_to_end(
     pending_boundaries: &mut VecDeque<PendingBoundary>,
     cancel: &AtomicBool,
 ) -> Result<()> {
-    drain_stream(writer, state, pending_boundaries, cancel)?;
-    writer.prepare()
+    // 自然 EOF 后 handle 即将释放，不再 prepare；此时 underrun 只表示已提交帧已被硬件吃空。
+    drain_stream(writer, state, pending_boundaries, cancel, true)
 }
 
 fn drain_stream(
@@ -939,6 +945,7 @@ fn drain_stream(
     state: &AlsaDirectDsdState,
     pending_boundaries: &mut VecDeque<PendingBoundary>,
     cancel: &AtomicBool,
+    terminal_eof: bool,
 ) -> Result<()> {
     let submitted = state.submitted_frames.load(Ordering::Acquire);
     let played = state.played_frames.load(Ordering::Acquire);
@@ -954,20 +961,58 @@ fn drain_stream(
             !cancel.load(Ordering::Acquire),
             "ALSA Native DSD drain 已取消"
         );
+        if terminal_eof && terminal_drain_state_is_complete(writer.state()) {
+            complete_terminal_drain(state, pending_boundaries, submitted);
+            return Ok(());
+        }
         match writer.drain_once() {
             Ok(()) => {
-                state.played_frames.store(submitted, Ordering::Release);
-                commit_boundaries(state, pending_boundaries, submitted);
+                complete_terminal_drain(state, pending_boundaries, submitted);
+                return Ok(());
+            }
+            Err(error) if terminal_eof && terminal_drain_xrun_is_complete(error.errno()) => {
+                complete_terminal_drain(state, pending_boundaries, submitted);
                 return Ok(());
             }
             Err(error) if matches!(error.errno(), libc::EAGAIN | libc::EINTR) => {
-                update_played(writer, state, pending_boundaries)?;
+                // 非阻塞 drain 在曲末常先返回 EAGAIN；等待期间设备可能正好进入
+                // XRUN。自然 EOF 不再读取 delay，避免把“最后一帧已播放完”误判成
+                // 输出故障。暂停 drain 仍保持原来的严格 XRUN 处理。
+                if !terminal_eof {
+                    update_played(writer, state, pending_boundaries)?;
+                }
                 ensure!(Instant::now() < deadline, "ALSA Native DSD drain 超时");
-                let _ = writer.wait(100)?;
+                match writer.wait(100) {
+                    Ok(_) => {}
+                    Err(_error)
+                        if terminal_eof && terminal_drain_state_is_complete(writer.state()) =>
+                    {
+                        complete_terminal_drain(state, pending_boundaries, submitted);
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error),
+                }
             }
             Err(error) => return Err(anyhow::anyhow!(error).context("ALSA Native DSD drain 失败")),
         }
     }
+}
+
+fn terminal_drain_xrun_is_complete(errno: i32) -> bool {
+    errno == libc::EPIPE
+}
+
+fn terminal_drain_state_is_complete(state: State) -> bool {
+    matches!(state, State::Setup | State::XRun)
+}
+
+fn complete_terminal_drain(
+    state: &AlsaDirectDsdState,
+    pending_boundaries: &mut VecDeque<PendingBoundary>,
+    submitted: u64,
+) {
+    state.played_frames.store(submitted, Ordering::Release);
+    commit_boundaries(state, pending_boundaries, submitted);
 }
 
 fn update_played(
@@ -1036,6 +1081,22 @@ mod tests {
             bits_per_frame: 32,
         };
         assert!((monitor.position() - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn terminal_eof_accepts_only_xrun_as_completed_drain() {
+        assert!(terminal_drain_xrun_is_complete(libc::EPIPE));
+        assert!(!terminal_drain_xrun_is_complete(libc::ESTRPIPE));
+        assert!(!terminal_drain_xrun_is_complete(libc::EIO));
+    }
+
+    #[test]
+    fn terminal_eof_accepts_setup_or_xrun_as_completed_state() {
+        assert!(terminal_drain_state_is_complete(State::Setup));
+        assert!(terminal_drain_state_is_complete(State::XRun));
+        assert!(!terminal_drain_state_is_complete(State::Prepared));
+        assert!(!terminal_drain_state_is_complete(State::Running));
+        assert!(!terminal_drain_state_is_complete(State::Suspended));
     }
 
     #[test]
