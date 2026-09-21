@@ -106,6 +106,19 @@ are in the [development guide](./atom-development.md).
 
 - [x] Library, playlist, queue, playback, downloads, statistics, cache, providers, settings and
       plugins are available from Web Control.
+- [ ] Replace the current Web-built Folder tree with the complete
+      [Core-owned Local Folder Browser](./local-folder-browser-plan.md): configured roots must be
+      browsable immediately without a completed scan; ordinary unscanned audio must be playable;
+      CUE/SACD must support on-demand virtual-track browsing/playback; recursive play/queue/playlist
+      actions must be Core-owned and deterministic; Folder view must support scoped recursive
+      scan/rescan through the single scanner authority; local Track actions must support
+      Core-resolved “open containing folder” with ordinary/CUE/SACD focus; read-only supplementary
+      album materials (images, PDF, and supported text/log files) must be browsable without turning
+      Folder view into a file manager; pinned folders, physical folder/file-name search, explicit
+      current-folder-only actions, navigation/viewer position restoration, and paginated/cursor
+      browsing must be included; offline roots, symlinks, long names, large directories, scan-time
+      enrichment, and route restoration must meet the documented acceptance criteria; remove the
+      old full-tree projection after migration.
 - [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
 - [ ] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.
@@ -170,5 +183,6 @@ docs/live-provider-acceptance.md    provider real-account acceptance
 docs/lyric-improvements.md          P0/P1 lyric correctness plan and technical design
 docs/alsa-output-plan.md            shared ALSA backend, Direct/Processed PCM modes and UI design
 docs/upnp-output-plan.md            UPnP output design
+docs/local-folder-browser-plan.md   Core-owned local folder browsing and playback design
 docs/native.md                      retained Rust/N-API modules
 ```
