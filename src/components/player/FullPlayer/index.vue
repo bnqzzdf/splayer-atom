@@ -277,24 +277,38 @@ const showComments = (): void => {
           <!-- 封面与歌曲信息 -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 flex items-center justify-center px-4 md:px-12 transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               isMobile && showLyric && !coverCentered ? 'hidden' : '',
-              coverCentered ? 'w-full md:w-auto md:translate-x-[calc(50vw-50%)]' : '',
+              isMobile ? 'px-4' : 'px-12',
             ]"
             :style="{
               width: isMobile ? '100%' : coverWidth,
+              transform: !isMobile && coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
             }"
           >
+            <!-- 移动端纵向紧凑视图 -->
             <div
-              class="relative flex flex-col items-center text-center md:text-left transition-transform duration-300"
-              :class="isMobile ? 'max-w-[85vw] max-h-[45vh]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+              v-if="isMobile"
+              class="relative flex flex-col items-center text-center max-w-[85vw] max-h-[45vh] transition-transform duration-300"
             >
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id" class="flex flex-col items-center">
                   <PlayerCover class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square" />
-                  <div class="w-full pt-4 md:pt-6">
-                    <PlayerData :align="isMobile ? 'center' : 'left'" />
+                  <div class="w-full pt-4">
+                    <PlayerData align="center" />
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
+            <!-- PC 桌面端（原汁原味大图与绝对定位歌曲信息） -->
+            <div v-else class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
+              <Transition name="scale-switch" mode="out-in">
+                <div :key="displayTrack?.id">
+                  <PlayerCover />
+                  <div class="absolute top-full left-0 w-full pt-6">
+                    <PlayerData align="left" />
                   </div>
                 </div>
               </Transition>
