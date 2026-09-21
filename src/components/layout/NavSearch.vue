@@ -278,13 +278,13 @@ onMounted(() => {
     <div
       role="button"
       :aria-label="t('nav.searchPlaceholder')"
-      class="w-60 h-10 px-4 cursor-pointer flex items-center gap-2 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
+      class="w-10 sm:w-60 h-10 px-2.5 sm:px-4 cursor-pointer flex items-center justify-center sm:justify-start gap-2 rounded-full border border-solid bg-on-surface/3 border-on-surface/15 hover:bg-on-surface/10 hover:border-on-surface/25 transition-colors duration-250 select-none"
       @click="dialogOpen = true"
       @contextmenu.prevent="dialogOpen = true"
       @mousedown.prevent
     >
       <IconLucideSearch class="size-4 text-on-surface-variant/50 shrink-0" />
-      <span class="flex-1 min-w-0 truncate text-base text-on-surface-variant/40">
+      <span class="hidden sm:inline flex-1 min-w-0 truncate text-base text-on-surface-variant/40">
         {{ t("nav.searchPlaceholder") }}
       </span>
     </div>
@@ -294,8 +294,8 @@ onMounted(() => {
     v-model:open="dialogOpen"
     :closable="false"
     :content-style="{ padding: 0 }"
-    width="560px"
-    top="12vh"
+    width="min(560px, calc(100vw - 24px))"
+    top="10vh"
   >
     <div class="flex flex-col">
       <!-- 顶栏：输入框 -->
@@ -411,7 +411,7 @@ onMounted(() => {
                 <IconLucideFlame class="size-4" />
                 <span>{{ t("nav.searchSection.hot") }}</span>
               </div>
-              <div class="grid grid-cols-2 gap-x-2 gap-y-0.5">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5">
                 <div
                   v-for="(item, idx) in hotItems.slice(0, 20)"
                   :key="`${item.keyword}-${idx}`"

@@ -22,10 +22,32 @@ import IconSpHeartMode from "~icons/sp/heart-mode";
 import SButton from "@/components/ui/SButton.vue";
 import SPopselect from "@/components/ui/SPopselect.vue";
 
+const props = withDefaults(
+  defineProps<{
+    collapsed?: boolean;
+    inDrawer?: boolean;
+  }>(),
+  {
+    collapsed: undefined,
+    inDrawer: false,
+  },
+);
+
+const emit = defineEmits<{
+  select: [key: string];
+  close: [];
+}>();
+
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const { appearance, system: systemSettings } = useSettingsStore();
+
+const isCollapsed = computed(() => {
+  if (props.inDrawer) return false;
+  if (props.collapsed !== undefined) return props.collapsed;
+  return appearance.sidebarCollapsed;
+});
 const status = useStatusStore();
 const playlistStore = usePlaylistStore();
 const userStore = useUserStore();
@@ -296,6 +318,8 @@ const activeKey = computed(() => {
 
 const onSelect = (key: string) => {
   router.push(key);
+  emit("select", key);
+  emit("close");
 };
 
 /**
@@ -346,12 +370,12 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full">
-    <SideBarLogo :collapsed="appearance.sidebarCollapsed" />
+    <SideBarLogo v-if="!inDrawer" :collapsed="isCollapsed" />
     <SContextMenu :items="contextMenuItems" @select="onContextMenuSelect">
       <div
         class="flex-1 min-h-0 pb-3 overflow-y-auto transition-[padding] duration-300"
         :class="
-          appearance.sidebarCollapsed
+          isCollapsed
             ? 'px-2 [&::-webkit-scrollbar]:hidden'
             : 'px-3 [scrollbar-gutter:stable]'
         "
@@ -360,11 +384,26 @@ onMounted(() => {
         <SMenu
           :items="menuItems"
           :model-value="activeKey"
-          :collapsed="appearance.sidebarCollapsed"
+          :collapsed="isCollapsed"
           @select="onSelect"
         />
       </div>
     </SContextMenu>
+    <!-- 自定义侧边栏入口（展开状态与抽屉模式下可见） -->
+    <div
+      v-if="!isCollapsed"
+      class="px-3 py-2 shrink-0 border-t border-t-solid border-t-primary/10 flex items-center justify-between text-xs text-on-surface-variant/70"
+    >
+      <SButton
+        variant="text"
+        size="small"
+        class="text-xs"
+        @click="settingsDialog.show('appearance', 'sidebarCustomize')"
+      >
+        <template #icon><IconLucideSettings2 class="size-3.5" /></template>
+        {{ t("nav.menu.customizeSidebar") }}
+      </SButton>
+    </div>
     <!-- 新建歌单 -->
     <PlaylistCreateDialog
       v-model:open="createDialogOpen"
