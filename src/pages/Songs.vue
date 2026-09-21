@@ -58,7 +58,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div class="flex items-center gap-2">
           <SButton
             type="primary"
@@ -85,7 +85,7 @@ onMounted(async () => {
           :placeholder="t('common.search')"
           clearable
           round
-          class="w-40 focus-within:w-56"
+          class="w-full sm:w-40 sm:focus-within:w-56"
           data-search-input
         >
           <template #prefix>

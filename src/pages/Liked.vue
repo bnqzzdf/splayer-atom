@@ -126,7 +126,7 @@ const handleMoreMenu = (key: string): void => {
           </span>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div class="flex items-center gap-3">
           <SButton
             type="primary"
@@ -150,13 +150,13 @@ const handleMoreMenu = (key: string): void => {
             </template>
           </SDropdownMenu>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
           <SInput
             v-model="searchQuery"
             :placeholder="t('common.search')"
             clearable
             round
-            class="w-40 focus-within:w-56"
+            class="w-full sm:w-40 sm:focus-within:w-56"
             data-search-input
           >
             <template #prefix>

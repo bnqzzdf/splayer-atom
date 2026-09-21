@@ -67,7 +67,7 @@ watch(
   <div class="flex flex-col h-full">
     <!-- 顶栏 -->
     <div class="shrink-0 px-5 pb-2">
-      <div class="flex items-center justify-between mt-2 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-2 mb-4 gap-2">
         <div class="flex items-baseline gap-4 min-w-0">
           <h1 class="text-3xl font-bold text-on-surface shrink-0 text-balance">
             {{ t("cloud.title") }}
@@ -95,7 +95,7 @@ watch(
           </div>
         </div>
       </div>
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
         <div class="flex items-center gap-3">
           <SButton
             type="primary"
@@ -124,7 +124,7 @@ watch(
           :placeholder="t('common.search')"
           clearable
           round
-          class="w-40 focus-within:w-56"
+          class="w-full sm:w-40 sm:focus-within:w-56"
           data-search-input
         >
           <template #prefix>

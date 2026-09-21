@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
     <!-- 头部信息 -->
     <div v-if="collection" class="shrink-0 px-5 pb-2">
       <div
-        class="flex mt-2 transition-[gap,margin] duration-300"
+        class="flex flex-col sm:flex-row mt-2 transition-[gap,margin] duration-300"
         :class="collapsed ? 'gap-3' : 'gap-5'"
       >
         <!-- 封面 -->
@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
           :src="collection.cover"
           :alt="collection.title"
           class="rounded-xl shrink-0 transition-[width,height] duration-300"
-          :class="collapsed ? 'size-20' : 'size-40'"
+          :class="collapsed ? 'size-16 sm:size-20' : 'size-28 sm:size-40'"
         />
         <!-- 信息 -->
         <div class="flex-1 flex flex-col min-w-0">
@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
                   {{ t("collection.noDescription") }}
                 </p>
                 <div
-                  class="flex items-center gap-3 text-sm leading-none text-on-surface-variant/50"
+                  class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm leading-none text-on-surface-variant/50"
                 >
                   <span v-if="creatorText" class="flex items-center gap-1 min-w-0">
                     <IconLucideUser class="shrink-0" />
@@ -426,8 +426,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <!-- 操作栏 -->
-          <div class="mt-auto flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
+          <div class="mt-3 sm:mt-auto flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
               <SButton
                 type="primary"
                 variant="secondary"
@@ -492,7 +492,7 @@ onBeforeUnmount(() => {
               :placeholder="t('common.search')"
               clearable
               round
-              class="w-40 focus-within:w-56"
+              class="w-full sm:w-40 sm:focus-within:w-56"
               data-search-input
             >
               <template #prefix>

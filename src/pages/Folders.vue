@@ -8,6 +8,7 @@ import { useLibraryStore } from "@/stores/library";
 import { usePlaylistStore } from "@/stores/playlist";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { toast } from "@/composables/useToast";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import SongList from "@/components/list/SongList.vue";
 import * as player from "@/core/player";
 import IconLucideFolder from "~icons/lucide/folder";
@@ -20,6 +21,7 @@ import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideEllipsis from "~icons/lucide/ellipsis";
 
 const { t } = useI18n();
+const { isMobile } = useResponsiveLayout();
 const libraryStore = useLibraryStore();
 const playlistStore = usePlaylistStore();
 const settingsDialog = useSettingsDialog();
@@ -29,8 +31,13 @@ const trackCount = computed(() => tracks.value.filter((tr) => !!tr.path).length)
 
 const expanded = ref<string[]>([]);
 const selectedFolder = shallowRef<FolderNode | null>(null);
+const mobileTreeOpen = ref(false);
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
 const createOpen = ref(false);
+
+watch(selectedFolder, () => {
+  if (isMobile.value) mobileTreeOpen.value = false;
+});
 
 /** 更多操作菜单 */
 const moreMenuItems = computed<DropdownMenuItem[]>(() => [
@@ -132,8 +139,9 @@ onMounted(async () => {
       </div>
     </div>
     <div v-if="folderTree.length > 0" class="flex-1 min-h-0 flex">
-      <!-- 文件夹树 -->
+      <!-- 桌面端文件夹树 -->
       <div
+        v-if="!isMobile"
         class="w-64 shrink-0 bg-surface-panel border border-solid border-primary/12 rounded-xl ml-3 mb-3 overflow-hidden"
       >
         <STree
@@ -162,6 +170,42 @@ onMounted(async () => {
           </template>
         </STree>
       </div>
+      <!-- 移动端文件夹抽屉 -->
+      <SDrawer
+        v-if="isMobile"
+        v-model:open="mobileTreeOpen"
+        side="left"
+        :title="t('common.folders')"
+        class="w-72"
+      >
+        <div class="h-full overflow-y-auto p-2">
+          <STree
+            v-model="selectedFolder"
+            v-model:expanded="expanded"
+            :items="folderTree"
+            :get-key="getKey"
+            :get-children="getChildren"
+            :indent="16"
+          >
+            <template #node="{ node, isExpanded, hasChildren }">
+              <IconLucideChevronRight
+                v-if="hasChildren"
+                class="size-4 shrink-0 text-on-surface-variant/70 transition-transform duration-200"
+                :class="isExpanded ? 'rotate-90' : ''"
+              />
+              <span v-else class="size-4 shrink-0" />
+              <component
+                :is="isExpanded && hasChildren ? IconLucideFolderOpen : IconLucideFolder"
+                class="size-4 shrink-0"
+              />
+              <span class="flex-1 min-w-0 truncate text-sm">{{ node.name }}</span>
+              <span class="shrink-0 text-xs text-on-surface-variant/50 tabular-nums">
+                {{ node.tracks.length }}
+              </span>
+            </template>
+          </STree>
+        </div>
+      </SDrawer>
       <!-- 歌曲列表 -->
       <div class="flex-1 min-w-0">
         <SongList
@@ -174,8 +218,18 @@ onMounted(async () => {
         >
           <template #topInfo>
             <div
-              class="mx-3 mb-2 flex items-center gap-2 pl-3 pr-6 py-3 bg-surface-panel border-2 border-solid border-primary/12 rounded-xl"
+              class="mx-3 mb-2 flex flex-wrap items-center gap-2 pl-3 pr-4 py-2 sm:py-3 bg-surface-panel border-2 border-solid border-primary/12 rounded-xl"
             >
+              <SButton
+                v-if="isMobile"
+                variant="secondary"
+                size="small"
+                round
+                @click="mobileTreeOpen = true"
+              >
+                <template #icon><IconLucideFolderOpen /></template>
+                <span>{{ t("common.folders") }}</span>
+              </SButton>
               <SButton
                 type="primary"
                 variant="secondary"
@@ -199,8 +253,8 @@ onMounted(async () => {
                   </SButton>
                 </template>
               </SDropdownMenu>
-              <SDivider vertical class="h-6 mx-1" />
-              <IconLucideFolderOpen class="size-4 text-primary shrink-0" />
+              <SDivider vertical class="h-6 mx-1 hidden sm:block" />
+              <IconLucideFolderOpen class="size-4 text-primary shrink-0 hidden sm:block" />
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium truncate">{{ selectedFolder.name }}</div>
                 <div class="text-xs text-on-surface-variant/60 truncate">

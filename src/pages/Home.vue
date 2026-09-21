@@ -79,11 +79,11 @@ const openAlbum = (item: CoverItem): void => {
 <template>
   <div class="h-full overflow-y-auto">
     <div
-      class="mx-auto flex max-w-[1400px] flex-col gap-6 px-6 pt-6"
-      :class="isFloatingBar ? 'pb-28' : 'pb-10'"
+      class="mx-auto flex max-w-[1400px] flex-col gap-6 px-4 sm:px-6 pt-4 sm:pt-6"
+      :class="isFloatingBar ? 'pb-28' : 'pb-6 sm:pb-10'"
     >
       <!-- 问候 -->
-      <header class="flex items-start justify-between gap-6">
+      <header class="flex flex-col sm:flex-row items-start justify-between gap-4 sm:gap-6">
         <div class="min-w-0">
           <h1 class="text-3xl font-bold text-on-surface text-balance">{{ greetingTitle }}</h1>
           <p class="mt-2 text-sm text-on-surface-variant/70">{{ greetingSub }}</p>
@@ -100,9 +100,9 @@ const openAlbum = (item: CoverItem): void => {
       </header>
       <!-- Hero -->
       <SCard v-if="heroLoading || hero" radius="xl" flush class="min-h-40 -mb-3">
-        <div class="flex items-stretch gap-4 p-4">
+        <div class="flex flex-col sm:flex-row items-stretch gap-4 p-4">
           <!-- 封面 -->
-          <div class="size-32 shrink-0 self-center overflow-hidden rounded-lg">
+          <div class="size-24 sm:size-32 shrink-0 self-center overflow-hidden rounded-lg">
             <SImg :src="hero?.cover" :alt="hero?.title" class="size-full" />
           </div>
           <!-- 信息 -->
@@ -126,7 +126,7 @@ const openAlbum = (item: CoverItem): void => {
           <!-- 队列预览 -->
           <ul
             v-if="heroPreview.length > 0"
-            class="w-100 shrink-0 flex-col border-l border-on-surface/8 pl-4 lg:flex"
+            class="w-100 shrink-0 flex-col border-l border-on-surface/8 pl-4 hidden lg:flex"
           >
             <li
               v-for="(track, index) in heroPreview"
@@ -145,7 +145,7 @@ const openAlbum = (item: CoverItem): void => {
         </div>
       </SCard>
       <!-- 快捷入口 -->
-      <section class="grid grid-cols-4 gap-3">
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <SCard
           v-for="action in quickActions"
           :key="action.title"
@@ -173,7 +173,7 @@ const openAlbum = (item: CoverItem): void => {
             {{ continueSubtitle }}
           </p>
         </div>
-        <div v-if="continueItems.length > 0" class="grid grid-cols-3 gap-3">
+        <div v-if="continueItems.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <SCard
             v-for="(item, index) in continueItems"
             :key="`${item.track.source}:${item.track.id}`"

@@ -208,7 +208,7 @@ const codecLabel = (codec: string): string => {
 </script>
 
 <template>
-  <div class="grid grid-cols-[300px_minmax(0,1fr)] gap-5 xl:grid-cols-[300px_minmax(0,1fr)_400px]">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 xl:grid-cols-[300px_minmax(0,1fr)_400px]">
     <!-- 近 90 天热力图 -->
     <SCard radius="xl" class="flex h-52 min-w-0 flex-col gap-3">
       <div class="flex items-baseline justify-between gap-3">
@@ -220,7 +220,8 @@ const codecLabel = (codec: string): string => {
         </span>
       </div>
 
-      <div class="mx-auto flex min-h-0 w-fit flex-1 items-center gap-2">
+      <div class="overflow-x-auto min-h-0 flex-1 py-1">
+        <div class="mx-auto flex w-fit items-center gap-2">
         <div class="grid shrink-0 grid-rows-[1.25rem_repeat(7,13px)] gap-y-0.5">
           <div />
           <div
@@ -263,6 +264,7 @@ const codecLabel = (codec: string): string => {
             </STooltip>
           </template>
         </div>
+      </div>
       </div>
 
       <div class="flex items-center justify-center gap-2 text-xs text-on-surface-variant/50">
@@ -353,7 +355,7 @@ const codecLabel = (codec: string): string => {
     </SCard>
 
     <!-- 音质构成 -->
-    <SCard radius="xl" class="col-span-2 flex h-52 min-w-0 flex-col gap-3 xl:col-span-1">
+    <SCard radius="xl" class="col-span-1 md:col-span-2 flex h-52 min-w-0 flex-col gap-3 xl:col-span-1">
       <div class="flex items-baseline justify-between gap-3">
         <h3 class="text-base font-semibold text-on-surface">
           {{ t("stats.audioQuality") }}
