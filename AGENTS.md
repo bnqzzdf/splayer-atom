@@ -20,6 +20,11 @@
   under the same playback authority.
 - Solve actual problems or accepted requirements with the smallest concrete change. Reuse existing
   models, services, and contracts; never duplicate business authority or canonical state.
+- Optimize for minimal changes, simple implementations, stability, and performance. Do not add
+  safeguards, fallback paths, or tests solely for speculative edge cases.
+- When low-value features cause conflicts or complexity, propose removing them before adding
+  defensive machinery. Remove features only when authorized; keep implementation and verification
+  proportional to the actual task.
 - Split real responsibilities, but add abstractions only for demonstrated needs or repeated
   duplication. Protocol, storage, and UI representations may differ without becoming new authorities.
 
