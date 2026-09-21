@@ -105,7 +105,7 @@ const onClear = (): void => {
                 variant="ghost"
                 circle
                 size="tiny"
-                class="opacity-0 group-hover:opacity-100"
+                class="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 @click.stop="removeAt(index)"
               >
                 <template #icon><IconLucideX /></template>

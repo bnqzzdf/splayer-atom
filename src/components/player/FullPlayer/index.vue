@@ -11,6 +11,7 @@ import { usePlaylistPicker } from "@/composables/usePlaylistPicker";
 import { useImmersiveMode } from "@/composables/useImmersiveMode";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { useProgressLyric } from "@/composables/useProgressLyric";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import Lyrics from "@/components/player/Lyrics/index.vue";
 import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
@@ -43,6 +44,7 @@ const {
 
 const { timeDisplay, toggleTimeFormat } = useTimeFormat();
 const { snapToNearestLyric } = useProgressLyric();
+const { isMobile } = useResponsiveLayout();
 
 const lyricRef = ref<InstanceType<typeof Lyrics> | InstanceType<typeof AMLLLyrics>>();
 const lyricMounted = ref(false);
@@ -129,7 +131,7 @@ const lyricFontSize = computed(() =>
     : `${settings.lyric.fontSize}px`,
 );
 
-const { immersive, onPlayerMouseEnter, onPlayerMouseLeave, onMainMove, onBarEnter, onBarLeave } =
+const { immersive, wake, onPlayerMouseEnter, onPlayerMouseLeave, onMainMove, onBarEnter, onBarLeave } =
   useImmersiveMode(isPlayerExpanded);
 
 const { isFullscreen, toggleFullscreen } = useWindowControls();
@@ -202,6 +204,7 @@ const showComments = (): void => {
         style="--lp-color: rgb(var(--s-cover))"
         @mouseenter="onPlayerMouseEnter"
         @mouseleave="onPlayerMouseLeave"
+        @pointerdown.passive="wake"
       >
         <!-- 背景 -->
         <PlayerBackground />
@@ -227,12 +230,23 @@ const showComments = (): void => {
         />
         <!-- 顶栏 -->
         <div
-          class="absolute top-0 inset-x-0 h-14 z-10 app-drag-region transition-opacity duration-400 flex items-center justify-between px-3"
+          class="absolute top-0 inset-x-0 h-14 z-10 app-drag-region transition-opacity duration-400 flex items-center justify-between px-3 pt-[env(safe-area-inset-top,0px)]"
           :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
           <div class="app-no-drag flex items-center gap-2">
+            <!-- 手机下常显收起按钮 -->
+            <SButton
+              type="cover"
+              variant="ghost"
+              circle
+              :size="40"
+              class="md:hidden"
+              @click="collapse"
+            >
+              <template #icon><IconLucideChevronDown /></template>
+            </SButton>
             <SButton
               type="cover"
               variant="ghost"
@@ -245,7 +259,7 @@ const showComments = (): void => {
               <template #icon><IconLucideTextQuote /></template>
             </SButton>
           </div>
-          <div class="app-no-drag flex items-center gap-3">
+          <div class="app-no-drag flex items-center gap-2">
             <SButton type="cover" variant="ghost" circle :size="40" @click="toggleFullscreen">
               <template #icon>
                 <IconLucideMinimize v-if="isFullscreen" />
@@ -256,34 +270,48 @@ const showComments = (): void => {
           </div>
         </div>
         <!-- 主区域 -->
-        <div class="absolute top-14 inset-x-0 bottom-20" @mousemove="onMainMove">
-          <!-- 左侧 -->
+        <div
+          class="absolute top-14 inset-x-0 bottom-36 md:bottom-20 overflow-hidden"
+          @mousemove="onMainMove"
+        >
+          <!-- 封面与歌曲信息 -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 flex items-center justify-center px-12 transition-transform duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="absolute inset-y-0 left-0 flex items-center justify-center px-4 md:px-12 transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            :class="[
+              isMobile && showLyric && !coverCentered ? 'hidden' : '',
+              coverCentered ? 'w-full md:w-auto md:translate-x-[calc(50vw-50%)]' : '',
+            ]"
             :style="{
-              width: coverWidth,
-              transform: coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
+              width: isMobile ? '100%' : coverWidth,
             }"
           >
-            <div class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
+            <div
+              class="relative flex flex-col items-center text-center md:text-left transition-transform duration-300"
+              :class="isMobile ? 'max-w-[85vw] max-h-[45vh]' : 'w-[clamp(200px,85%,50vh)] -translate-y-[11vh]'"
+            >
               <Transition name="scale-switch" mode="out-in">
-                <div :key="displayTrack?.id">
-                  <PlayerCover />
-                  <div class="absolute top-full left-0 w-full pt-6">
-                    <PlayerData align="left" />
+                <div :key="displayTrack?.id" class="flex flex-col items-center">
+                  <PlayerCover class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square" />
+                  <div class="w-full pt-4 md:pt-6">
+                    <PlayerData :align="isMobile ? 'center' : 'left'" />
                   </div>
                 </div>
               </Transition>
             </div>
           </div>
-          <!-- 右侧 -->
+          <!-- 歌词容器 -->
           <div
-            class="group absolute inset-y-0 right-0 pr-20 flex flex-col transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            :class="coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'"
-            :style="{ width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
+            class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            :class="[
+              isMobile && !showLyric ? 'hidden' : '',
+              coverCentered || status.fullQueueOpen ? 'opacity-0 pointer-events-none' : 'opacity-100',
+            ]"
+            :style="{
+              width: isMobile ? '100%' : (fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`),
+            }"
           >
-            <!-- 全屏封面 -->
+            <!-- 全屏封面模式下的标题信息 -->
             <div
               v-if="fullscreenCover"
               class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
@@ -291,7 +319,7 @@ const showComments = (): void => {
             >
               <PlayerData align="left" simple />
             </div>
-            <!-- 歌词容器 -->
+            <!-- 歌词区域 -->
             <div
               class="lyric-area relative flex-1 min-h-0"
               :style="{
@@ -381,9 +409,11 @@ const showComments = (): void => {
           </div>
           <!-- 播放队列 -->
           <div
-            class="absolute inset-y-0 right-0 pl-4 py-6 flex items-center"
+            class="absolute inset-y-0 right-0 px-2 md:pl-4 md:py-6 flex items-center"
             :class="status.fullQueueOpen ? '' : 'pointer-events-none'"
-            :style="{ width: fullscreenCover ? '50%' : `calc(100% - ${coverWidth})` }"
+            :style="{
+              width: isMobile ? '100%' : (fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`),
+            }"
           >
             <Transition
               enter-active-class="transition-opacity duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
@@ -399,12 +429,13 @@ const showComments = (): void => {
         </div>
         <!-- 底栏 -->
         <div
-          class="absolute bottom-0 inset-x-0 h-20 z-10 flex items-center gap-4 px-4 transition-opacity duration-400"
+          class="absolute bottom-0 inset-x-0 z-10 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-0 md:h-20 transition-opacity duration-400 pb-[env(safe-area-inset-bottom,8px)]"
           :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
-          <div class="flex-1 min-w-0 flex items-center justify-start gap-2">
+          <!-- 桌面左侧操作区 -->
+          <div class="hidden md:flex flex-1 min-w-0 items-center justify-start gap-2">
             <SButton type="cover" variant="ghost" size="large" circle @click="collapse">
               <template #icon><IconLucideChevronDown /></template>
             </SButton>
@@ -458,7 +489,9 @@ const showComments = (): void => {
               </template>
             </SDropdownMenu>
           </div>
-          <div class="shrink-0 flex flex-col items-center gap-1 w-[clamp(360px,35%,480px)]">
+
+          <!-- 控制区（进度条 + 播放控制） -->
+          <div class="w-full md:w-[clamp(320px,35%,480px)] shrink-0 flex flex-col items-center gap-1">
             <div class="flex items-center gap-3">
               <SButton
                 type="cover"
@@ -556,7 +589,67 @@ const showComments = (): void => {
               </span>
             </div>
           </div>
-          <div class="flex-1 min-w-0 flex items-center justify-end">
+
+          <!-- 手机下底部工具行：Fav, Comments, Playlist, Download, Toolbar -->
+          <div
+            class="flex md:hidden items-center justify-between w-full pt-1 border-t border-t-solid border-t-cover/10"
+          >
+            <div class="flex items-center gap-1">
+              <SButton
+                type="cover"
+                variant="ghost"
+                size="small"
+                circle
+                :disabled="!hasTrack"
+                @click="fav.toggle(displayTrack)"
+              >
+                <template #icon>
+                  <SIconSwap :active="fav.isLiked(displayTrack)">
+                    <template #on><IconFavorite class="size-4" /></template>
+                    <template #off><IconFavoriteOutline class="size-4" /></template>
+                  </SIconSwap>
+                </template>
+              </SButton>
+              <SButton
+                type="cover"
+                variant="ghost"
+                size="small"
+                circle
+                :disabled="!hasTrack"
+                @click="showComments"
+              >
+                <template #icon><IconLucideMessageCircle class="size-4" /></template>
+              </SButton>
+              <SButton
+                v-if="displayTrack?.source === 'local' || displayTrack?.source === 'netease'"
+                type="cover"
+                variant="ghost"
+                size="small"
+                circle
+                @click="displayTrack && openPicker([displayTrack])"
+              >
+                <template #icon><IconLucideListPlus class="size-4" /></template>
+              </SButton>
+              <SDropdownMenu
+                v-if="canDownload"
+                :items="downloadQualityItems"
+                cover
+                side="top"
+                align="start"
+                @select="onDownloadSelect"
+              >
+                <template #trigger>
+                  <SButton type="cover" variant="ghost" size="small" circle>
+                    <template #icon><IconLucideDownload class="size-4" /></template>
+                  </SButton>
+                </template>
+              </SDropdownMenu>
+            </div>
+            <Toolbar cover />
+          </div>
+
+          <!-- 桌面右侧 Toolbar -->
+          <div class="hidden md:flex flex-1 min-w-0 items-center justify-end">
             <Toolbar cover />
           </div>
         </div>

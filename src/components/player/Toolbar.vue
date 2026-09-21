@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import OutputDeviceSelector from "@/web/OutputDeviceSelector.vue";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
+import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import * as player from "@/core/player";
 import { useDirectModeState } from "@/core/player/directMode";
 import { getOutputDisplayName, getOutputKind } from "@/core/outputDevices";
@@ -19,15 +20,20 @@ const props = withDefaults(
   defineProps<{
     /** 是否使用封面主题 */
     cover?: boolean;
+    /** 是否用于窄屏底栏第二行紧凑布局 */
+    compact?: boolean;
   }>(),
-  { cover: false },
+  { cover: false, compact: false },
 );
 
 const { t } = useI18n();
 const status = useStatusStore();
 const settings = useSettingsStore();
+const { isMobile } = useResponsiveLayout();
 const { remoteSelected, sampleControlsUnavailable: processingLocked } = useDirectModeState();
+
 const outputPopoverOpen = ref(false);
+const touchVolumeOpen = ref(false);
 const outputSelectionRequired = computed(
   () => status.outputDevicesReady && status.selectedOutputDevice === null,
 );
@@ -125,10 +131,207 @@ const onMoreMenuSelect = (key: string): void => {
 </script>
 
 <template>
-  <div class="flex items-center gap-1">
+  <!-- 紧凑双行下第二行工具栏 -->
+  <div v-if="compact" class="flex items-center justify-between w-full min-w-0">
+    <!-- 左侧：输出设备与音质 -->
+    <div class="flex items-center gap-1.5 min-w-0 shrink-0">
+      <SPopover
+        v-model:open="outputPopoverOpen"
+        trigger="click"
+        side="top"
+        :cover="cover"
+        content-class="w-76 px-3 py-3"
+      >
+        <template #trigger>
+          <SButton
+            :type="outputSelectionRequired ? 'primary' : buttonType"
+            :variant="outputSelectionRequired ? 'tertiary' : 'ghost'"
+            size="small"
+            class="min-w-9 max-w-36 px-2 text-xs"
+            :class="outputSelectionRequired ? undefined : mutedClass"
+            :title="`${t('settings.outputDevice.label')}: ${selectedOutputLabel}`"
+          >
+            <template #icon>
+              <svg
+                v-if="selectedOutputKind === 'diretta'"
+                viewBox="0 0 24 24"
+                role="img"
+                aria-label="Diretta"
+                class="size-3.5"
+              >
+                <path
+                  fill="currentColor"
+                  d="M4 2h7c4.5 0 7.8 2.1 9.2 5.5C17.8 5.8 15 5 11.8 5H9a2 2 0 0 0-2 2v10l-3-2V2Z"
+                />
+                <path
+                  fill="#9560D9"
+                  d="M17 7c2.5 1.7 4 4.1 4 7 0 5-3.8 8-9.5 8H4v-5c2 1.5 4.4 2 7.2 2 4.2 0 6.8-2.2 6.8-5.8 0-2.3-.3-4.3-1-6.2Z"
+                />
+              </svg>
+              <component :is="selectedOutputIcon" v-else class="size-3.5" />
+            </template>
+            <span class="max-w-24 truncate text-xs">{{ selectedOutputLabel }}</span>
+          </SButton>
+        </template>
+        <div class="flex flex-col gap-2">
+          <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
+          <div v-if="outputSelectionRequired" class="text-xs text-on-surface-variant">
+            {{ t("settings.outputDevice.requiredHint") }}
+          </div>
+          <OutputDeviceSelector @selected="outputPopoverOpen = false" />
+          <div
+            v-if="settings.player.outputDevice?.startsWith('diretta:')"
+            class="text-xs text-on-surface-variant"
+          >
+            Diretta Source Direct
+          </div>
+        </div>
+      </SPopover>
+      <QualityControl v-if="settings.appearance.showQualitySwitch" :cover="cover" />
+    </div>
+
+    <!-- 右侧：播放模式、循环、音量、队列与更多 -->
+    <div class="flex items-center gap-0.5 shrink-0">
+      <!-- 播放顺序 / 随机 / 心动 / FM 模式 -->
+      <SButton
+        type="primary"
+        variant="ghost"
+        circle
+        ripple
+        :size="34"
+        @click="
+          status.fmMode
+            ? player.dislikeFmTrack()
+            : status.heartMode
+              ? player.exitHeartMode()
+              : player.toggleShuffleMode()
+        "
+      >
+        <template #icon>
+          <IconLucideHeartOff v-if="status.fmMode" class="size-4" />
+          <IconSpHeartMode v-else-if="status.heartMode" class="size-4" />
+          <IconLucideShuffle v-else-if="status.shuffleMode === 'on'" class="size-4" />
+          <IconSpPlayOrder v-else class="size-4" />
+        </template>
+      </SButton>
+
+      <!-- 循环模式 -->
+      <SButton
+        :type="status.fmMode ? 'default' : 'primary'"
+        variant="ghost"
+        circle
+        ripple
+        :size="34"
+        :disabled="status.fmMode"
+        @click="player.cycleRepeatMode()"
+      >
+        <template #icon>
+          <IconLucideInfinity v-if="status.fmMode" class="size-4" />
+          <IconLucideRepeat1 v-else-if="status.repeatMode === 'one'" class="size-4" />
+          <IconLucideRepeat v-else :class="status.repeatMode === 'off' ? 'opacity-40 size-4' : 'size-4'" />
+        </template>
+      </SButton>
+
+      <!-- 触摸音量面板（打开面板不触犯静音） -->
+      <SPopover
+        v-model:open="touchVolumeOpen"
+        trigger="click"
+        side="top"
+        :cover="cover"
+        content-class="w-56 px-3 py-3"
+      >
+        <template #trigger>
+          <SButton
+            :type="buttonType"
+            variant="ghost"
+            circle
+            :size="34"
+            :class="mutedClass"
+            :disabled="processingLocked"
+            :title="processingLocked ? processingUnavailableTitle : undefined"
+          >
+            <template #icon>
+              <IconLucideVolumeX v-if="volumePercent === 0" class="size-4" />
+              <IconLucideVolume1 v-else-if="volumePercent < 50" class="size-4" />
+              <IconLucideVolume2 v-else class="size-4" />
+            </template>
+          </SButton>
+        </template>
+        <div class="flex items-center gap-2">
+          <SButton
+            :type="buttonType"
+            variant="ghost"
+            circle
+            size="small"
+            :disabled="processingLocked"
+            @click="toggleMute"
+          >
+            <template #icon>
+              <IconLucideVolumeX v-if="volumePercent === 0" class="size-4" />
+              <IconLucideVolume2 v-else class="size-4" />
+            </template>
+          </SButton>
+          <SSlider
+            :model-value="status.volume"
+            :min="0"
+            :max="1"
+            :step="0.01"
+            :thumb-size="14"
+            :track-height="4"
+            :cover="cover"
+            :disabled="processingLocked"
+            class="flex-1"
+            @change="player.setVolume($event)"
+          />
+          <span class="text-xs tabular-nums w-8 text-right">{{ volumePercent }}%</span>
+        </div>
+      </SPopover>
+
+      <!-- 播放列表气泡 -->
+      <SPopover
+        v-model:open="status.outerQueueOpen"
+        trigger="click"
+        side="top"
+        :side-offset="12"
+        content-class="!p-0 w-72 sm:w-80 h-[min(60vh,520px)] overflow-hidden"
+      >
+        <template #trigger>
+          <SButton
+            :type="status.outerQueueOpen ? 'primary' : buttonType"
+            :variant="status.outerQueueOpen ? 'tertiary' : 'ghost'"
+            circle
+            :size="34"
+            :class="status.outerQueueOpen ? undefined : mutedClass"
+          >
+            <template #icon><IconLucideListMusic class="size-4" /></template>
+          </SButton>
+        </template>
+        <QueuePopover @close="status.outerQueueOpen = false" />
+      </SPopover>
+
+      <!-- 更多菜单 -->
+      <SDropdownMenu
+        :items="moreMenuItems"
+        side="top"
+        align="end"
+        :cover="cover"
+        @select="onMoreMenuSelect"
+      >
+        <template #trigger>
+          <SButton :type="buttonType" variant="ghost" circle :size="34" :class="mutedClass">
+            <template #icon><IconLucideMoreVertical class="size-4" /></template>
+          </SButton>
+        </template>
+      </SDropdownMenu>
+    </div>
+  </div>
+
+  <!-- 默认 / 宽屏工具栏 -->
+  <div v-else class="flex items-center gap-1">
     <!-- 在线音质 -->
     <QualityControl v-if="settings.appearance.showQualitySwitch" :cover="cover" />
-    <!-- Web 没有系统托盘/原生菜单，直接在播放器工具栏暴露主机输出选择。 -->
+
+    <!-- 主机输出选择 -->
     <SPopover
       v-model:open="outputPopoverOpen"
       trigger="click"
@@ -180,7 +383,65 @@ const onMoreMenuSelect = (key: string): void => {
         </div>
       </div>
     </SPopover>
-    <SPopover trigger="hover" side="top" :cover="cover" content-class="px-3 pb-2 pt-3">
+
+    <!-- 触摸音量面板（移动端采用点击打开） -->
+    <SPopover
+      v-if="isMobile"
+      v-model:open="touchVolumeOpen"
+      trigger="click"
+      side="top"
+      :cover="cover"
+      content-class="w-56 px-3 py-3"
+    >
+      <template #trigger>
+        <SButton
+          :type="buttonType"
+          variant="ghost"
+          circle
+          size="large"
+          :class="mutedClass"
+          :disabled="processingLocked"
+          :title="processingLocked ? processingUnavailableTitle : undefined"
+        >
+          <template #icon>
+            <IconLucideVolumeX v-if="volumePercent === 0" />
+            <IconLucideVolume1 v-else-if="volumePercent < 50" />
+            <IconLucideVolume2 v-else />
+          </template>
+        </SButton>
+      </template>
+      <div class="flex items-center gap-2">
+        <SButton
+          :type="buttonType"
+          variant="ghost"
+          circle
+          size="small"
+          :disabled="processingLocked"
+          @click="toggleMute"
+        >
+          <template #icon>
+            <IconLucideVolumeX v-if="volumePercent === 0" class="size-4" />
+            <IconLucideVolume2 v-else class="size-4" />
+          </template>
+        </SButton>
+        <SSlider
+          :model-value="status.volume"
+          :min="0"
+          :max="1"
+          :step="0.01"
+          :thumb-size="14"
+          :track-height="4"
+          :cover="cover"
+          :disabled="processingLocked"
+          class="flex-1"
+          @change="player.setVolume($event)"
+        />
+        <span class="text-xs tabular-nums w-8 text-right">{{ volumePercent }}%</span>
+      </div>
+    </SPopover>
+
+    <!-- 桌面悬停音量面板（hover 展开，点击静音） -->
+    <SPopover v-else trigger="hover" side="top" :cover="cover" content-class="px-3 pb-2 pt-3">
       <template #trigger>
         <SButton
           :type="buttonType"
@@ -218,6 +479,7 @@ const onMoreMenuSelect = (key: string): void => {
         <span class="text-xs tabular-nums mt-2">{{ volumePercent }}%</span>
       </div>
     </SPopover>
+
     <!-- 私人 FM 模式调整 -->
     <SButton
       v-if="status.fmMode"
@@ -231,6 +493,7 @@ const onMoreMenuSelect = (key: string): void => {
     >
       <template #icon><IconLucideRadio /></template>
     </SButton>
+
     <!-- 全屏播放器内播放列表 -->
     <SButton
       v-else-if="cover"
@@ -243,6 +506,7 @@ const onMoreMenuSelect = (key: string): void => {
     >
       <template #icon><IconLucideListMusic /></template>
     </SButton>
+
     <!-- 常规播放列表气泡 -->
     <SPopover
       v-else
@@ -250,7 +514,7 @@ const onMoreMenuSelect = (key: string): void => {
       trigger="click"
       side="top"
       :side-offset="12"
-      content-class="!p-0 w-72 h-[min(60vh,520px)] overflow-hidden"
+      content-class="!p-0 w-72 sm:w-80 h-[min(60vh,520px)] overflow-hidden"
     >
       <template #trigger>
         <SButton
@@ -265,6 +529,7 @@ const onMoreMenuSelect = (key: string): void => {
       </template>
       <QueuePopover @close="status.outerQueueOpen = false" />
     </SPopover>
+
     <SDropdownMenu
       :items="moreMenuItems"
       side="top"
@@ -278,10 +543,12 @@ const onMoreMenuSelect = (key: string): void => {
         </SButton>
       </template>
     </SDropdownMenu>
-    <EqualizerDialog v-model:open="equalizerOpen" />
-    <SpeedDialog v-model:open="speedOpen" />
-    <AbLoopDialog v-model:open="abLoopOpen" />
-    <AutoCloseDialog v-model:open="autoCloseOpen" />
-    <FmModeDialog v-model:open="fmModeOpen" />
   </div>
+
+  <!-- 弹窗组件（两种模式均需渲染） -->
+  <EqualizerDialog v-model:open="equalizerOpen" />
+  <SpeedDialog v-model:open="speedOpen" />
+  <AbLoopDialog v-model:open="abLoopOpen" />
+  <AutoCloseDialog v-model:open="autoCloseOpen" />
+  <FmModeDialog v-model:open="fmModeOpen" />
 </template>

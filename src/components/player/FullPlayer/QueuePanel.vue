@@ -22,7 +22,7 @@ const {
 
 <template>
   <div class="flex flex-col h-full text-cover">
-    <div class="shrink-0 flex items-start justify-between gap-4 pl-1 pr-20 pb-4">
+    <div class="shrink-0 flex items-start justify-between gap-4 pl-1 pr-4 md:pr-20 pb-4">
       <div class="flex flex-col min-w-0 pl-2.5">
         <h2 class="m-0 text-2xl font-semibold leading-tight truncate">
           {{ t("playlist.title") }}
@@ -79,7 +79,7 @@ const {
         :get-item-key="(item: Track) => item.id"
       >
         <template #default="{ item, index }: { item: Track; index: number }">
-          <div class="relative pl-1 pr-20 py-1">
+          <div class="relative pl-1 pr-4 md:pr-20 py-1">
             <div
               class="group relative flex items-center gap-3 px-2.5 h-16 rounded-xl cursor-pointer transition-[background-color] duration-150"
               :class="
@@ -109,7 +109,7 @@ const {
                 variant="ghost"
                 circle
                 size="tiny"
-                class="opacity-0 group-hover:opacity-100"
+                class="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 @click.stop="removeAt(index)"
               >
                 <template #icon><IconLucideX /></template>
