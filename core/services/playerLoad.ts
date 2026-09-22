@@ -6,7 +6,8 @@ import {
 } from "@main/atom/directInput";
 import { ErrorCode } from "@shared/types/errors";
 import type { LyricFormat } from "@shared/types/lyrics";
-import type { IpcResponse, LoadOptions, LoadResult } from "@shared/types/player";
+import type { IpcResponse, LoadOptions, LoadResult, MediaInfo } from "@shared/types/player";
+import type { JsMusicMetadata } from "@splayer/audio-engine";
 import { getPlayer } from "@main/services/engine";
 import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
@@ -35,6 +36,22 @@ export const nextPlayerLoadSeq = (): number => ++loadSeq;
 
 /** 判断异步结果是否仍属于当前播放 generation。 */
 export const isCurrentPlayerLoadSeq = (seq: number): boolean => seq === loadSeq;
+
+/** 把 native 本地 metadata 投影为可补齐轻量 Track 的展示字段，不建立新的 library authority。 */
+export const localMediaInfoFromNativeMetadata = (meta: JsMusicMetadata): MediaInfo => ({
+  title: meta.title,
+  artists: parseArtists(meta.artist ?? ""),
+  album: parseAlbum(meta.album ?? ""),
+  duration: toMs(meta.duration),
+  cover: toCacheUrl(meta.cover),
+  quality: {
+    sampleRate: meta.originalSampleRate,
+    channels: meta.channels,
+    bitsPerSample: meta.bitsPerSample,
+    bitRate: meta.bitRate,
+    codec: meta.codec,
+  },
+});
 
 /** 判断原生错误是否为设备错误。 */
 const isNativeDeviceError = (error: unknown): boolean => String(error).includes("[Device]");

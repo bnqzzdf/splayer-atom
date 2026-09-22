@@ -1,8 +1,11 @@
 import type { LyricFormat } from "@shared/types/lyrics";
-import type { PlaybackContext, Track, TrackDetail } from "@shared/types/player";
+import type { MediaInfo, PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { setActiveCueTrack } from "@main/services/playerTimeline";
-import { nextPlayerLoadSeq } from "@main/services/playerLoad";
+import {
+  localMediaInfoFromNativeMetadata,
+  nextPlayerLoadSeq,
+} from "@main/services/playerLoad";
 import { pruneDirectInputs } from "@main/atom/directInput";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";
@@ -11,6 +14,7 @@ import { beginCorePlayStats } from "@main/services/headlessPlayStats";
 export interface ProcessedStageResult {
   staged: boolean;
   detail?: TrackDetail;
+  mediaInfo?: MediaInfo;
 }
 
 /** 只准备 decoder/resampler；不会切换当前 Track，也不会创建第二个 ALSA runtime。 */
@@ -23,6 +27,7 @@ export const stageProcessedPlaybackNext = async (
   if (!meta) return { staged: false };
   return {
     staged: true,
+    mediaInfo: localMediaInfoFromNativeMetadata(meta),
     detail: {
       quality: {
         sampleRate: meta.originalSampleRate,

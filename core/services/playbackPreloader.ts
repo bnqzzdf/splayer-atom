@@ -1,4 +1,9 @@
-import type { DirectStageResult, PlaybackQueueItem, TrackDetail } from "@shared/types/player";
+import type {
+  DirectStageResult,
+  MediaInfo,
+  PlaybackQueueItem,
+  TrackDetail,
+} from "@shared/types/player";
 import { discardDirectInput, materializeDirectInput } from "@main/atom/directInput";
 import { toNativeSacdPlaybackSource } from "@main/atom/sacdInput";
 import { cancelDirectPlaybackNext, stageDirectPlaybackNext } from "@main/services/directGapless";
@@ -28,9 +33,11 @@ interface PreparedPlaybackSource {
   directGeneration: number | null;
   directSource: string | null;
   directDetail?: DirectStageResult["detail"];
+  directMediaInfo?: DirectStageResult["mediaInfo"];
   processedGeneration: number | null;
   processedSource: string | null;
   processedDetail?: TrackDetail;
+  processedMediaInfo?: MediaInfo;
   upnpMedia?: PreparedUpnpMedia;
 }
 
@@ -45,6 +52,7 @@ export interface PreparedDirectPlaybackBoundary {
   source: ResolvedPlaybackSource;
   directSource: string;
   directDetail?: DirectStageResult["detail"];
+  directMediaInfo?: DirectStageResult["mediaInfo"];
 }
 
 export interface PreparedProcessedPlaybackBoundary {
@@ -53,6 +61,7 @@ export interface PreparedProcessedPlaybackBoundary {
   source: ResolvedPlaybackSource;
   processedSource: string;
   processedDetail?: TrackDetail;
+  processedMediaInfo?: MediaInfo;
 }
 
 let preloadToken = 0;
@@ -178,7 +187,11 @@ const stageDirectSource = async (
   token: number,
   track: PlaybackQueueItem["track"],
   directSource: string,
-): Promise<{ generation: number; detail?: DirectStageResult["detail"] } | null> => {
+): Promise<{
+  generation: number;
+  detail?: DirectStageResult["detail"];
+  mediaInfo?: DirectStageResult["mediaInfo"];
+} | null> => {
   nextDirectGeneration = (nextDirectGeneration % 0xffff_ffff) + 1;
   const generation = nextDirectGeneration;
   const operation = directStageChain.then(async (): Promise<DirectStageResult | null> => {
@@ -212,7 +225,7 @@ const stageDirectSource = async (
   const result = await operation;
 
   if (token !== preloadToken || !result?.staged) return null;
-  return { generation, detail: result.detail };
+  return { generation, detail: result.detail, mediaInfo: result.mediaInfo };
 };
 
 const canStageProcessed = (
@@ -272,6 +285,7 @@ const stageProcessedSource = async (
   source: ResolvedPlaybackSource;
   processedSource: string;
   detail?: TrackDetail;
+  mediaInfo?: MediaInfo;
 } | null> => {
   if (!canStageProcessed(track, resolved)) return null;
   nextProcessedGeneration = (nextProcessedGeneration % 0xffff_ffff) + 1;
@@ -296,6 +310,7 @@ const stageProcessedSource = async (
     source: prepared.source,
     processedSource: prepared.processedSource,
     detail: result.detail,
+    mediaInfo: result.mediaInfo,
   };
 };
 
@@ -324,9 +339,11 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
       let directGeneration: number | null = null;
       let directSource: string | null = null;
       let directDetail: DirectStageResult["detail"] | undefined;
+      let directMediaInfo: DirectStageResult["mediaInfo"] | undefined;
       let processedGeneration: number | null = null;
       let processedSource: string | null = null;
       let processedDetail: TrackDetail | undefined;
+      let processedMediaInfo: MediaInfo | undefined;
       let upnpMedia: PreparedUpnpMedia | undefined;
       const directPrepared = await prepareDirectSource(token, item.track, source);
       if (token !== preloadToken) {
@@ -344,6 +361,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         if (staged) {
           directGeneration = staged.generation;
           directDetail = staged.detail;
+          directMediaInfo = staged.mediaInfo;
         }
       } else if (store.get("player.outputDevice")?.startsWith("upnp:") === true) {
         try {
@@ -365,6 +383,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
             source = staged.source;
             processedSource = staged.processedSource;
             processedDetail = staged.detail;
+            processedMediaInfo = staged.mediaInfo;
           }
         } catch (error) {
           if (token === preloadToken) {
@@ -386,9 +405,11 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         directGeneration,
         directSource,
         directDetail,
+        directMediaInfo,
         processedGeneration,
         processedSource,
         processedDetail,
+        processedMediaInfo,
         upnpMedia,
       };
       playerLog.debug(
@@ -452,6 +473,7 @@ export const consumeDirectPlaybackBoundary = (
     source: prepared.source,
     directSource: prepared.directSource,
     directDetail: prepared.directDetail,
+    directMediaInfo: prepared.directMediaInfo,
   };
   preloadToken++;
   clearPrepared(false);
@@ -481,6 +503,7 @@ export const consumeProcessedPlaybackBoundary = (
     source: prepared.source,
     processedSource: prepared.processedSource,
     processedDetail: prepared.processedDetail,
+    processedMediaInfo: prepared.processedMediaInfo,
   };
   preloadToken++;
   clearPrepared(false);

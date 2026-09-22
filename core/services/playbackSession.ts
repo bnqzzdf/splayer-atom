@@ -273,6 +273,23 @@ const publishTrackLoaded = (
   publishCoreControlEvent(event);
 };
 
+/** gapless/full load 都用同一规则补齐未扫描本地文件的轻量 Track。 */
+const enrichLocalTrackFromMediaInfo = (track: Track, mediaInfo?: MediaInfo): Track => {
+  if (track.source !== "local" || !mediaInfo) return track;
+  const fileName = track.path?.split(/[/\\]/).pop() ?? "";
+  const derivedTitle = fileName.replace(/\.[^.]+$/, "");
+  return {
+    ...track,
+    title:
+      !track.title || track.title === derivedTitle ? mediaInfo.title || track.title : track.title,
+    artists: track.artists.length > 0 ? track.artists : (mediaInfo.artists ?? []),
+    album: track.album ?? mediaInfo.album,
+    duration: track.duration || mediaInfo.duration,
+    cover: track.cover ?? mediaInfo.cover,
+    quality: track.quality ?? mediaInfo.quality,
+  };
+};
+
 const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatus()): void => {
   const playing = remote.state === "playing";
   onCorePlayerState(remote.state);
@@ -561,19 +578,7 @@ const loadIndex = async (
 
   if (resolved.cacheAfterLoad && !cacheStartedFromDirectInput) cacheResolvedSource();
   if (track.source === "local") {
-    const mediaInfo = result.data.mediaInfo;
-    const fileName = track.path?.split(/[/\\]/).pop() ?? "";
-    const derivedTitle = fileName.replace(/\.[^.]+$/, "");
-    item.track = {
-      ...track,
-      title:
-        !track.title || track.title === derivedTitle ? mediaInfo.title || track.title : track.title,
-      artists: track.artists.length > 0 ? track.artists : (mediaInfo.artists ?? []),
-      album: track.album ?? mediaInfo.album,
-      duration: track.duration || mediaInfo.duration,
-      cover: track.cover ?? mediaInfo.cover,
-      quality: track.quality ?? mediaInfo.quality,
-    };
+    item.track = enrichLocalTrackFromMediaInfo(track, result.data.mediaInfo);
   }
 
   if (mode === "personalFm") {
@@ -1192,15 +1197,17 @@ export const onNativeDirectTrackBoundary = (
   }
 
   try {
-    const track = prepared.item.track;
+    const track = enrichLocalTrackFromMediaInfo(prepared.item.track, prepared.directMediaInfo);
+    const item = { ...prepared.item, track };
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
-    commitDirectPlaybackBoundary(prepared.directSource, duration, track, prepared.item.context);
+    commitDirectPlaybackBoundary(prepared.directSource, duration, track, item.context);
     commitGaplessSessionProjection(
       prepared.queueIndex,
-      prepared.item,
+      item,
       prepared.directSource,
       duration,
       prepared.directDetail,
+      prepared.directMediaInfo,
     );
   } catch (error) {
     playerLog.error(`[session] Direct boundary commit failed: ${String(error)}`);
@@ -1217,6 +1224,7 @@ const commitGaplessSessionProjection = (
   source: string,
   duration: number,
   detail?: TrackDetail,
+  mediaInfo?: MediaInfo,
 ): void => {
   const track = item.track;
   if (mode === "personalFm") {
@@ -1224,6 +1232,12 @@ const commitGaplessSessionProjection = (
     originalQueue = null;
     index = queue.length > 0 ? 0 : -1;
   } else {
+    queue[queueIndex] = { ...queue[queueIndex], ...item, track: { ...track } };
+    if (originalQueue) {
+      originalQueue = originalQueue.map((original) =>
+        original.track.id === track.id ? { ...original, track: { ...track } } : original,
+      );
+    }
     index = queueIndex;
   }
   active = index >= 0;
@@ -1233,8 +1247,9 @@ const commitGaplessSessionProjection = (
   nowPlaying.onPlayStateChange("playing");
   publish();
   publishTrackLoaded(item, source, true, detail, {
+    ...mediaInfo,
     duration,
-    quality: detail?.quality,
+    quality: mediaInfo?.quality ?? detail?.quality,
   });
   scheduleNextPlaybackPreload();
 };
@@ -1270,20 +1285,22 @@ export const onNativeProcessedTrackBoundary = (
   }
 
   try {
-    const track = prepared.item.track;
+    const track = enrichLocalTrackFromMediaInfo(prepared.item.track, prepared.processedMediaInfo);
+    const item = { ...prepared.item, track };
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
     commitProcessedPlaybackBoundary(
       prepared.processedSource,
       duration,
       track,
-      prepared.item.context,
+      item.context,
     );
     commitGaplessSessionProjection(
       prepared.queueIndex,
-      prepared.item,
+      item,
       prepared.processedSource,
       duration,
       prepared.processedDetail,
+      prepared.processedMediaInfo,
     );
   } catch (error) {
     playerLog.error(`[session] processed boundary commit failed: ${String(error)}`);

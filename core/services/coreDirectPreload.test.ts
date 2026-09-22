@@ -7,6 +7,7 @@ const read = (path: string): string => readFileSync(resolve(process.cwd(), path)
 
 const preloader = read("core/services/playbackPreloader.ts");
 const session = read("core/services/playbackSession.ts");
+const directGapless = read("core/services/directGapless.ts");
 const coreEvents = read("core/services/corePlayerEvents.ts");
 const webEvents = read("src/core/player/events.ts");
 const nativePlayer = read("native/audio-engine-core/src/player/mod.rs");
@@ -71,6 +72,19 @@ test("Node Core consumes Direct boundary into the authoritative session", () => 
   assert.match(session, /consumeDirectPlaybackBoundary\(generation, queue\)/);
   assert.match(session, /commitDirectPlaybackBoundary/);
   assert.match(session, /scheduleNextPlaybackPreload\(\)/);
+});
+
+test("Direct gapless keeps staged local metadata when Folder playback started from lightweight Tracks", () => {
+  assert.match(directGapless, /mediaInfo: localMediaInfoFromNativeMetadata\(meta\)/);
+  assert.match(preloader, /directMediaInfo: prepared\.directMediaInfo/);
+  assert.match(
+    session,
+    /enrichLocalTrackFromMediaInfo\(prepared\.item\.track, prepared\.directMediaInfo\)/,
+  );
+  const projection = session.split("const commitGaplessSessionProjection = (")[1];
+  assert.ok(projection, "shared gapless session projection should exist");
+  assert.match(projection, /queue\[queueIndex\] = .*track: \{ \.\.\.track \}/);
+  assert.match(projection, /\.\.\.mediaInfo,[\s\S]*duration,[\s\S]*quality:/);
 });
 
 test("Direct gapless boundary invalidates the previous raw cover", () => {

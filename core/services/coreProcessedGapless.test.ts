@@ -53,3 +53,12 @@ test("processed gapless boundary updates source and statistics without creating 
   assert.match(processedGapless, /listenbrainz\.onTrackLoaded/);
   assert.doesNotMatch(processedGapless, /new AudioPlayer|AudioOutput|OutputRegistry/);
 });
+
+test("processed gapless preserves staged media metadata for lightweight local queue Tracks", () => {
+  assert.match(processedGapless, /mediaInfo: localMediaInfoFromNativeMetadata\(meta\)/);
+  assert.match(preloader, /processedMediaInfo: prepared\.processedMediaInfo/);
+  assert.match(
+    session,
+    /enrichLocalTrackFromMediaInfo\(prepared\.item\.track, prepared\.processedMediaInfo\)/,
+  );
+});
