@@ -62,23 +62,19 @@ describe("Library Core Protocol client", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toMatch(/\/api\/library\/albums$/);
   });
 
-  it("uses the shared Core routes for scan roots, tags and file mutation", async () => {
+  it("uses the shared Core routes for scan roots and tags without file deletion", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ success: true, data: "/music" }))
       .mockResolvedValueOnce(jsonResponse({ success: true, data: { title: "Track" } }))
-      .mockResolvedValueOnce(jsonResponse({ success: true, data: [] }))
-      .mockResolvedValueOnce(jsonResponse({ success: true, data: { deleted: 1, failed: 0 } }));
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const { libraryClient } = await import("./libraryClient");
     await expect(libraryClient.addScanDir("/music")).resolves.toMatchObject({ success: true });
     await expect(libraryClient.readTags("/music/a.flac")).resolves.toMatchObject({ success: true });
     await expect(libraryClient.writeTags([])).resolves.toMatchObject({ success: true });
-    await expect(libraryClient.deleteTracks(["/music/a.flac"])).resolves.toMatchObject({
-      success: true,
-    });
 
     expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/library/scan-dirs/add");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
@@ -87,6 +83,6 @@ describe("Library Core Protocol client", () => {
     });
     expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/library/tags/read");
     expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/library/tags/write");
-    expect(fetchMock.mock.calls[4]?.[0]).toBe("http://localhost:14559/api/library/files");
+    expect(fetchMock.mock.calls).toHaveLength(4);
   });
 });

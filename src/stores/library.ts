@@ -282,20 +282,6 @@ export const useLibraryStore = defineStore("library", () => {
     unsubscribeLibraryLikesChanged = null;
   };
 
-  /** 删除曲目文件并刷新列表 */
-  const deleteTracks = async (paths: string[]): Promise<{ deleted: number; failed: number }> => {
-    const res = await libraryClient.deleteTracks(paths);
-    if (res.success) {
-      const pathSet = new Set(paths);
-      // 从本地列表中移除已删除的曲目
-      const remaining = tracks.value.filter((t) => !t.path || !pathSet.has(t.path));
-      tracks.value = remaining;
-      cacheTracks(remaining);
-      return res.data ?? { deleted: 0, failed: paths.length };
-    }
-    return { deleted: 0, failed: paths.length };
-  };
-
   /**
    * 按 id 替换曲目数据并回写缓存（标签编辑后调用）
    * @param updates 更新后的 Track 列表
@@ -403,7 +389,6 @@ export const useLibraryStore = defineStore("library", () => {
     removeScanDir,
     subscribeScanProgress,
     unsubscribeScanProgress,
-    deleteTracks,
     applyTrackUpdates,
     getArtistAvatar,
     setArtistAvatar,

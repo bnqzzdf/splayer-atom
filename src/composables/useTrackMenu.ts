@@ -23,7 +23,6 @@ import IconListPlus from "~icons/lucide/list-plus";
 import IconSquarePen from "~icons/lucide/square-pen";
 import IconDownload from "~icons/lucide/download";
 import IconCopy from "~icons/lucide/copy";
-import IconTrash2 from "~icons/lucide/trash-2";
 import IconListMinus from "~icons/lucide/list-minus";
 import IconCloudOff from "~icons/lucide/cloud-off";
 import IconSearch from "~icons/lucide/search";
@@ -45,8 +44,6 @@ export interface TrackMenuOptions {
   onAddToPlaylist?: (track: Track) => void;
   /** 从集合移除回调 */
   onRemove?: (track: Track) => void;
-  /** 删除文件回调 */
-  onDeleteFile?: (track: Track) => void;
   /** 编辑元数据回调 */
   onEditTags?: (track: Track) => void;
   /** 下载回调；quality 为空表示用设置中的默认音质 */
@@ -155,15 +152,6 @@ export const useTrackMenu = (
         separator: true,
         visible: isPlaylist && canRemove,
         coreCommand: "playlist.removeTracks",
-      }),
-      action({
-        id: "deleteFile",
-        label: t("songList.context.deleteFile"),
-        icon: markRaw(IconTrash2),
-        separator: !(isPlaylist && canRemove),
-        visible: isLocal && !isCue,
-        danger: true,
-        coreCommand: "library.deleteTracks",
       }),
       action({
         id: "removeFromCloud",
@@ -310,9 +298,6 @@ export const useTrackMenu = (
       }
       case "removeFromCollection":
         options.onRemove?.(current);
-        break;
-      case "deleteFile":
-        options.onDeleteFile?.(current);
         break;
       case "editTags":
         options.onEditTags?.(current);

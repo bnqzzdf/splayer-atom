@@ -41,7 +41,7 @@ import { resolveCoreDirectory } from "@main/services/coreFilesystem";
 import { removePinsUnderRoot } from "@main/services/folderBrowser";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { publishLibraryRevision } from "@main/services/libraryRevision";
-import { deleteLibraryFiles, readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
+import { readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
 import { store } from "@main/store";
 
 const errorMessage = (error: unknown): string =>
@@ -292,20 +292,6 @@ export const buildAtomCompatRoutes = (): Hono => {
         success: true,
         data: await writeLibraryTags(body.edits as TagEditRequest[]),
       });
-    } catch (error) {
-      return c.json({ success: false, error: errorMessage(error) }, 400);
-    }
-  });
-
-  api.delete("/library/files", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { paths?: unknown } | null;
-    if (!Array.isArray(body?.paths) || !body.paths.every((item) => typeof item === "string")) {
-      return c.json({ success: false, error: "paths_string_array_required" }, 400);
-    }
-    try {
-      const data = await deleteLibraryFiles(body.paths);
-      publishLibraryLikes();
-      return c.json({ success: true, data });
     } catch (error) {
       return c.json({ success: false, error: errorMessage(error) }, 400);
     }

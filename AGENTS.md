@@ -48,6 +48,8 @@
 - Frontend time is milliseconds; convert native seconds at the Core boundary.
 - Persist lightweight canonical `Track` values; load details/lyrics on demand and release large
   objects after use. Centralize durable data/cache paths per [deployment](docs/core-deployment.md).
+- Host media files are user-owned: Atom must not expose commands or UI that delete music files.
+  Cleanup may remove only Atom-owned cache, temporary, staging, or partial-download files.
 - Caches need explicit eviction. Use appropriately sized images; pause RAF/canvas/high-frequency
   UI work while Web Control is hidden.
 - ListenBrainz is Core-owned and performs no background work when disabled. When enabled,

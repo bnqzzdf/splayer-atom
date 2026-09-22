@@ -149,13 +149,6 @@ export const libraryClient: LibraryApi = {
       success: false,
       error: errorText(error),
     })),
-
-  deleteTracks: (paths) =>
-    request<IpcResponse<{ deleted: number; failed: number }>>("/library/files", {
-      method: "DELETE",
-      body: JSON.stringify({ paths }),
-    }).catch((error) => ({ success: false, error: errorText(error) })),
-
   readTags: (path) =>
     request<IpcResponse<TrackTags>>("/library/tags/read", json({ path })).catch((error) => ({
       success: false,

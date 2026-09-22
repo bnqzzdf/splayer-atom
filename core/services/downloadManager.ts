@@ -393,19 +393,6 @@ export const cancel = (taskId: string): void => {
   broadcastState(pending.task);
 };
 
-/** 下载附带的歌词文件可能的扩展名 */
-const LYRIC_SIDECAR_EXTS = [".lrc", ".qrc", ".yrc", ".krc", ".ttml", ".lys"];
-
-/**
- * 删除已下载的音频文件及同名歌词文件
- * @param filePath 音频文件路径
- */
-const deleteDownloadedFile = async (filePath: string): Promise<void> => {
-  await fsp.unlink(filePath).catch(() => {});
-  const base = filePath.slice(0, filePath.length - path.extname(filePath).length);
-  await Promise.all(LYRIC_SIDECAR_EXTS.map((ext) => fsp.unlink(`${base}${ext}`).catch(() => {})));
-};
-
 /**
  * 删除一条任务记录
  * @param taskId 任务 ID
@@ -423,9 +410,7 @@ export const remove = (taskId: string): void => {
       tasks.delete(taskId);
     }
   }
-  const filePath = db.findById(taskId)?.filePath;
   db.remove(taskId);
-  if (filePath) void deleteDownloadedFile(filePath);
 };
 
 /** 清空已结束任务 */
