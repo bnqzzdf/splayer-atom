@@ -10,16 +10,16 @@
 
 ## 一、已确证的事实（均有实测证据，不要推翻重查）
 
-| # | 事实 | 证据 |
-|---|---|---|
-| 1 | 授权端点 = `https://www.qobuz.com/signin/oauth`，参数 `ext_app_id` + `redirect_url` | 用户提供的链接 base64 解码结果 |
-| 2 | app_id = `798273057`（与网页播放器一致） | 用户 F12 确认 |
-| 3 | 回调参数名 = **`code_autorisation`**（8 位，单次有效） | 实测落地 URL：`https://play.qobuz.com/discover?code_autorisation=HUukQqWc` |
-| 4 | `redirect_url` **被采用**（回调发生在该地址） | 同上，回调目标即 URL 中给出的地址 |
-| 5 | 邮箱+密码登录**不可用**，勿再尝试 | 无会话实例上假凭据：不签名 401，**加签名后仍 401**；且 `user/login` 是唯一 `signed=false` 的调用，改成 signed 无改善（改动已回退） |
-| 6 | 设备码流程**不存在**（TIDAL 才有 RFC 8628） | `native/streaming-api/src/tidal/auth.rs` 有 `auth_device_authorization`；qobuz 侧无对应实现与公开端点 |
-| 7 | 现有「粘贴 token」路径**完全可用** | 干净实例（.132）实测：登出 → 只给 token 登录 → 搜索/直链全部 OK |
-| 8 | Qobuz 对**未签名**请求一律回 `401 User authentication is required` | 多个端点、含故意用 `bogus123`，响应完全相同 → 该 401 无法用于区分端点 |
+| #   | 事实                                                                                | 证据                                                                                                                               |
+| --- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 授权端点 = `https://www.qobuz.com/signin/oauth`，参数 `ext_app_id` + `redirect_url` | 用户提供的链接 base64 解码结果                                                                                                     |
+| 2   | app_id = `798273057`（与网页播放器一致）                                            | 用户 F12 确认                                                                                                                      |
+| 3   | 回调参数名 = **`code_autorisation`**（8 位，单次有效）                              | 实测落地 URL：`https://play.qobuz.com/discover?code_autorisation=HUukQqWc`                                                         |
+| 4   | `redirect_url` **被采用**（回调发生在该地址）                                       | 同上，回调目标即 URL 中给出的地址                                                                                                  |
+| 5   | 邮箱+密码登录**不可用**，勿再尝试                                                   | 无会话实例上假凭据：不签名 401，**加签名后仍 401**；且 `user/login` 是唯一 `signed=false` 的调用，改成 signed 无改善（改动已回退） |
+| 6   | 设备码流程**不存在**（TIDAL 才有 RFC 8628）                                         | `native/streaming-api/src/tidal/auth.rs` 有 `auth_device_authorization`；qobuz 侧无对应实现与公开端点                              |
+| 7   | 现有「粘贴 token」路径**完全可用**                                                  | 干净实例（.132）实测：登出 → 只给 token 登录 → 搜索/直链全部 OK                                                                    |
+| 8   | Qobuz 对**未签名**请求一律回 `401 User authentication is required`                  | 多个端点、含故意用 `bogus123`，响应完全相同 → 该 401 无法用于区分端点                                                              |
 
 ## 二、唯一未知点（开工前需要它，或用一个探针替代）
 
@@ -51,6 +51,7 @@ POST /api.json/0.2/user/login   (form: app_id + code_autorisation)
 /// 返回 { url, port }；url 已带 ext_app_id 与 redirect_url=http://127.0.0.1:<port>/qobuz/cb
 pub async fn auth_oauth_start(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError>
 ```
+
 - 端口取随机空闲端口，监听 `127.0.0.1`，**只在登录期间存活**，拿到回调或超时（建议 180s）即关闭。
 - 只接受 `GET /qobuz/cb`，从 query 取 `code_autorisation`；其余请求回 404。
 
@@ -59,6 +60,7 @@ pub async fn auth_oauth_start(&self, params: &HashMap<String, Value>) -> Result<
 /// 返回与现有 auth_login 完全相同的形状（user_id / user_auth_token / display_name / is_active / max_format_id）
 pub async fn auth_oauth_await(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError>
 ```
+
 - 兑换必须走 **`self.request(...)` 的签名路径**（`signed = true`）——浏览器那条路能成，正是因为它带着签名；
   事实 #8 表明不带签名的请求一律 401。
 - 若确认兑换端点无需签名，仍建议保持 signed=true，避免依赖未签名通道。
