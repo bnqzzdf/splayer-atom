@@ -148,3 +148,28 @@ test("输出格式约束不要被误报成网络错误", () => {
   const netIdx = mapper.indexOf("ErrorCode.NETWORK_TIMEOUT");
   assert.ok(fmtIdx >= 0 && netIdx > fmtIdx, "格式约束判定必须在网络判定之前");
 });
+
+test("Qobuz 试听片段不再被当成整曲，也不再谎称网络故障", () => {
+  const qobuz = resolverSource
+    .split("const resolveQobuz = async (")[1]
+    ?.split("const resolveTidal = async (")[0];
+  assert.ok(qobuz, "resolveQobuz 应当存在");
+  // 识别 range= 试听片段并按 trial 处理
+  assert.ok(qobuz.includes("range="));
+  assert.match(qobuz, /provider: "trial"/);
+  assert.match(qobuz, /ErrorCode\.PROVIDER_TRIAL_DISABLED/);
+  // 拿不到直链时按「暂无音源」而不是通用解析失败
+  assert.match(qobuz, /ErrorCode\.PROVIDER_UNAVAILABLE/);
+  // 这条路径绝不能再出现网络类错误码——那正是之前误导用户去查网络的原因
+  // 检查错误码**用法**（注释里提到该词不算）
+  assert.ok(!qobuz.includes("ErrorCode.NETWORK_ERROR"));
+});
+
+test("TIDAL 非订阅不再报「无法获取播放地址」", () => {
+  const tidal = resolverSource
+    .split("const resolveTidal = async (")[1]
+    ?.split("export const resolveDownloadSource")[0];
+  assert.ok(tidal, "resolveTidal 应当存在");
+  assert.match(tidal, /ErrorCode\.PROVIDER_VIP_REQUIRED/);
+  assert.ok(!tidal.includes("ErrorCode.URL_RESOLVE_FAILED"));
+});

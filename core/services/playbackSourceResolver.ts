@@ -502,9 +502,22 @@ const resolveQobuz = async (
     track_id: track.id,
     format_id: QOBUZ_FORMAT_ID[quality],
   })) as { url?: string; sample?: boolean };
-  if (!resolved.url || resolved.sample) {
-    throw sourceError(ErrorCode.URL_RESOLVE_FAILED, `Qobuz track unavailable: ${track.id}`);
+  if (!resolved.url) {
+    throw sourceError(ErrorCode.PROVIDER_UNAVAILABLE, `Qobuz track unavailable: ${track.id}`);
   }
+
+  // 非订阅账号拿到的是带 `range=<起>-<止>` 的**试听片段**（实测 range=20-30），
+  // 不是整曲。以前这里把它当整曲交给播放器，播放器打不开 → 报 NETWORK_ERROR，
+  // 界面上成了「音源连接失败，请检查网络」，完全误导。现在按试听处理。
+  const preview = resolved.sample === true || /[?&]range=\d+-\d+/.test(resolved.url);
+  if (preview) {
+    if (store.get("player.allowTrialPlay") !== true) {
+      throw sourceError(ErrorCode.PROVIDER_TRIAL_DISABLED, `Qobuz preview disabled: ${track.id}`);
+    }
+    // 试听片段不写缓存：它只有十几秒，缓存下来会污染后续整曲播放
+    return { source: resolved.url, provider: "trial" };
+  }
+
   return {
     source: resolved.url,
     provider: "official",
@@ -530,7 +543,12 @@ const resolveTidal = async (
     return { source: resolved.localPath, provider: "official", format: "m4a", size: resolved.size };
   }
   if (!resolved.streamUrl) {
-    throw sourceError(ErrorCode.URL_RESOLVE_FAILED, `TIDAL track unavailable: ${track.id}`);
+    // 实测：非订阅账号拿不到 streamUrl。以前报 URL_RESOLVE_FAILED（「无法获取播放地址」），
+    // 用户以为是解析故障；真实原因是缺少会员权益。
+    throw sourceError(
+      ErrorCode.PROVIDER_VIP_REQUIRED,
+      `TIDAL requires a subscription: ${track.id}`,
+    );
   }
   return {
     source: resolved.streamUrl,
