@@ -40,10 +40,13 @@ Diretta SDK 与已验证源码路径一致。
 Core 默认地址为 `http://127.0.0.1:14558`：
 
 ```bash
-ARTIFACT=out/splayer-atom-core-1.0.0-rc.3-20260916-system-linux-x64.tar.gz
+ARTIFACT=/path/to/the-built-system-linux-x64.tar.gz
 pnpm check:hardware-release -- \
   --artifact "$ARTIFACT"
 ```
+
+使用由目标 Git 提交构建的 artifact 执行清单，并记录、核对 artifact 的 `runtime.json` 中的
+`atomCommit`，以此确认其源码身份。
 
 远端可信 LAN Core 使用显式 origin：
 

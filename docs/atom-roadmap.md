@@ -8,7 +8,9 @@ complete ALSA output replacement with one backend and explicit Direct / Processe
 including Native DSD, retained lossy playback and existing PCM DSP features.
 Final hardware checks and release packaging follow that work; release timing does not reduce its scope.
 
-Target release: **1.0.0-rc.3**.
+The release version is assigned when a release is prepared. Use the artifact's recorded Git commit
+as the exact identity of a build; do not treat an RC version mentioned in planning or deployment
+notes as a source revision.
 
 Lasting constraints are defined in the repository's `AGENTS.md`; development and release workflows
 are in the [development guide](./atom-development.md).
@@ -178,8 +180,9 @@ product goal.
 2. Finish bitstream, restart/SIGTERM/output-switch/reconnect and long-run hardware acceptance.
 3. Finish Qobuz real-account acceptance.
 4. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
-5. Run the complete install/upgrade/rollback checklist with the 1.0 RC artifact.
-6. Publish `1.0.0-rc.3` after the acceptance gates pass, then prepare the 1.0 stable release.
+5. Run the complete install/upgrade/rollback checklist against an artifact built from the intended
+   Git commit.
+6. After the acceptance gates pass, prepare the stable release from a clean, recorded Git commit.
 
 ## 11. Related documents
 
