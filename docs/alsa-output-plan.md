@@ -2,13 +2,25 @@
 
 日期：2026-09-20。
 
-状态：实施设计，代码尚未实现，硬件尚未验收。完成情况由 [Roadmap](./atom-roadmap.md) 维护。
+状态（2026-09-22 核对）：ALSA HW 双模式、PCM/Native DSD、Core/Web 控制与 CPAL 移除已实现；
+用户确认已实际试听两天，覆盖 Direct/Processed、各自支持的 PCM/Native DSD、暂停、seek、
+切歌及输出切换，并通过 `/proc/asound/.../stream0` 对比确认输出采样率、比特率与音源一致。
+同日本机 FC4 自动化实测确认 Direct PCM/DSD64、暂停恢复、seek 与跨格式切歌正常，
+但重复发现 Processed PCM seek 返回“缺少已协商 ALSA 输出”；需修复并复验，详见
+[实机记录](./hardware-release-checklist.md)。
+仍需收口本文要求的统一 native 生命周期与 producer/writer 职责：
+当前 Direct/Processed 保留独立编排，Processed 的最终增益、limiter、打包和缓冲扩容仍在 writer。
+已取得 PCM/DSD 在 USB 驱动提交层的独立逐字节一致性证据，并通过 clean artifact smoke、
+播放中重启/SIGTERM、FC4 断开重连和 Diretta 往返切换；最终设备 bitstream 与完整发布验收
+仍未完成，另发现重启后直接 Play 不加载队列。范围详见
+[2026-09-22 实测](./alsa-acceptance-2026-09-22.md)。
+完成情况由 [Roadmap](./atom-roadmap.md) 维护。
 本文按一个完整目标设计，不拆成先发布 PCM、以后补 DSD 或长期保留旧后端的交付批次。
 
 已确认的产品要求：同一个 ALSA 后端提供“精确直通”和“PCM 处理”两种明确模式；保留
 MP3/AAC 等有损播放以及现有 PCM DSP 功能。直通时不提供可操作的 DSP，PCM 处理时不
 显示精确直通标识。播放主界面不新增常驻技术状态文字，允许小图标或不标识；详细信息
-仅按需查看。本文其余细节是实施决策，不表示当前版本已具备这些行为。
+仅按需查看。本文其余细节是实施设计；当前完成范围以上述状态与 Roadmap 为准。
 
 ## 1. 最终目标
 
@@ -53,6 +65,9 @@ direct 模式的软件保证止于向已协商的 ALSA HW 接口提交的数据�
 也不能以所有 DSP 开关关闭为依据补上直通图标。
 
 ## 2. 现有实现审计与保留判断
+
+本节记录实施前的审计基线；其中 CPAL、隐式全路径 limiter 和欠载静音填充等描述不代表
+当前实现。后续改造已落地的范围见文首状态，表中的最终处理仍用于核对尚未完成的设计项。
 
 当前 `decoder.rs` 将解码结果送入输出设备格式的 `f32` resampler，再进入 DSP。
 `process_audio_chunk()` 在 tempo bypass 时仍调用阈值为 `0.98` 的 `OutputLimiter`。

@@ -13,7 +13,51 @@
 - PCM 与 Native DSD 混合格式队列已完成过夜循环长时间播放，连续 format transition 未观察到
   播放中断或格式切换异常。
 
-这些结果属于当前开发期硬件基线。正式发布时无需重新证明实现原理，但仍必须使用准备发布的
+ALSA HW 双模式实现另有开发期实机记录，用户于 2026-09-22 确认：
+
+- 已实际试听两天，覆盖 Direct/Processed 及各自支持的 PCM/Native DSD。
+- 暂停、拖动进度、切歌和输出切换均已测试，拖动与播放正常。
+- 通过 `/proc/asound/.../stream0` 对比音源与声卡输出参数，确认采样率、比特率一致。
+
+这完成了上述范围的开发期试听、参数核对与生命周期验收；参数一致不等于有效 PCM 样本或
+DSD 逻辑位序列已逐位比较，独立 ALSA bitstream 证据和最终发布包验收仍单独记录。
+
+### 2026-09-22 本机自动化实测补充
+
+通过运行中 Core 的 HTTP 播放接口实测，读取 `/proc/asound/card2/stream0`、
+`pcm0p/sub0/hw_params` 与 `pcm0p/sub0/status` 交叉核对，未绕过 Atom 使用外部播放器。
+Core 为已安装的 1.1.0，提交 `cecee166b5c3014d0221a2573965314dfda79d98`，
+`sourceDirty=false`，与本次审计源码一致；设备为 `alsa:hw:CARD=FC4,DEV=0`（HiBy FC4）。
+
+| 路径              | 音源                                                                    | 实际 ALSA 输出                                     | 结果                                                  |
+| ----------------- | ----------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| Direct PCM        | Brahms / Haydn Variations，FLAC，44.1 kHz、16-bit、双声道；ffprobe 核对 | `S16_LE`，44100 Hz，2 channels，`RUNNING`          | 播放进度推进、暂停位置保持、恢复、seek 到 60 秒均通过 |
+| Direct Native DSD | Accardo / Beethoven Op.40，DSF，DSD64、双声道；读取 DSF 头核对          | `DSD_U32_BE`，88200 frame/s，2 channels，`RUNNING` | 播放进度推进、暂停位置保持、恢复、seek 到 60 秒均通过 |
+| Processed PCM     | 同一 FLAC                                                               | `S32_LE`，44100 Hz，2 channels，`RUNNING`          | 正常播放和进度推进通过；seek 失败，见下文             |
+
+DSD 的 88200 frame/s × 每声道每帧 32 bit = 2822400 bit/s，即原生 DSD64；
+USB altset 4 声明 `DOP=0`。不能将 DSD transport frame rate 误认为 PCM 重采样。
+PCM seek 到曲尾后自动切入 DSD，以及从 DSD 手动切回 PCM，均成功重新协商并播放。
+
+**发现的问题：Processed PCM seek。** 首轮在切换到 Processed 后 seek 到 30 秒返回
+HTTP 400。随后从停止状态重新加载同一 FLAC 为 Processed，seek 到 30 秒仍失败；
+重新播放后 seek 到 60 秒再次失败。响应均为
+`[Other] processed playback 缺少已协商 ALSA 输出`，播放器转为 paused、位置归零、
+output path 清空。同期 Core 日志出现 `native outputFailed, playback paused for explicit recovery`。
+该复现覆盖了用户试听记录中尚未暴露的失败路径，应修复后重新验收，不能将 Processed seek
+列为无条件通过。
+
+两轮测试结束均恢复原队列、Direct 模式及原 FC4 输出，保持停止，设备 PCM 状态为 `closed`。
+原始快照、检查结果及复现响应保存在测试主机 `/tmp/atom-alsa-live-20260922/`；
+此处保留持久化结论，临时文件不作为唯一验收记录。上述首轮测试没有进行数字输出逐位采集，
+也没有执行服务重启/SIGTERM、升级回滚或全部发布检查。
+
+同日后续验证已完成 USB 提交数据逐字节比较、Diretta 往返切换、播放中重启/SIGTERM、
+FC4 断开重连及 clean artifact smoke，并发现重启后直接 Play 不加载队列的问题。
+完整范围、结果、包/音源 hash 和证据边界见
+[2026-09-22 ALSA 与发布包实测](./alsa-acceptance-2026-09-22.md)。
+
+这些结果属于当前开发期硬件基线。正式发布时无需重新证明已验证的实现原理，但仍必须使用准备发布的
 **最终 clean artifact** 做一次 release-candidate hardware smoke，以证明发布包、native feature、
 Diretta SDK 与已验证源码路径一致。
 
