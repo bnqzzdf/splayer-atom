@@ -143,12 +143,16 @@ const alignItems = computed(() => {
 <template>
   <div
     v-if="displayTrack"
-    class="w-full flex flex-col gap-[0.5em] overflow-hidden px-2"
+    class="w-full min-w-0 flex flex-col gap-[0.5em] overflow-hidden px-2"
     style="font-size: clamp(12px, calc(14 / 1080 * 100vh), 16px)"
     :class="alignItems"
   >
     <!-- 标题 -->
-    <SMarquee fit class="max-w-full text-[2em] font-semibold leading-tight">
+    <SMarquee
+      :key="displayTrack.title"
+      fit
+      class="max-w-full min-w-0 text-[2em] font-semibold leading-tight"
+    >
       {{ displayTrack.title }}
     </SMarquee>
     <!-- 副标题/注释 -->

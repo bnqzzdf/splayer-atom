@@ -328,16 +328,16 @@ const showComments = (): void => {
             <!-- 移动端纵向紧凑视图 -->
             <div
               v-if="isMobile"
-              class="relative flex flex-col items-center text-center max-w-[85vw] max-h-[45vh] transition-transform duration-300"
+              class="relative flex flex-col items-center text-center w-full max-w-[85vw] max-h-[45vh] min-w-0 transition-transform duration-300"
             >
               <Transition name="scale-switch" mode="out-in">
-                <div :key="displayTrack?.id" class="flex flex-col items-center">
+                <div :key="displayTrack?.id" class="flex flex-col items-center w-full min-w-0 max-w-full">
                   <PlayerCover
                     class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square"
                     :class="hasLyric ? 'cursor-pointer' : ''"
                     @click="hasLyric && (showLyric = true)"
                   />
-                  <div class="w-full pt-4">
+                  <div class="w-full min-w-0 pt-4">
                     <PlayerData align="center" />
                   </div>
                 </div>

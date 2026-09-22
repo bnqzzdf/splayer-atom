@@ -46,21 +46,8 @@ const menuItems = computed<DropdownMenuItem[]>(() => [
   { key: "settings", label: t("nav.globalSettings"), icon: IconSettings, separator: true },
 ]);
 
-const mobileMenuItems = computed<DropdownMenuItem[]>(() => [
-  { key: "forward", label: t("nav.forward", "前进"), icon: IconLucideChevronRight },
-  {
-    key: "theme",
-    label: themeLabel.value,
-    icon: themeIcon.value,
-    disabled: theme.appearanceStyle === "image",
-  },
-  { key: "uiZoom", label: t("uiZoom.title"), icon: IconScaling },
-  { key: "settings", label: t("nav.globalSettings"), icon: IconSettings, separator: true },
-]);
-
 const onMenuSelect = (key: string): void => {
-  if (key === "forward") router.forward();
-  else if (key === "theme") theme.cycleMode();
+  if (key === "theme") theme.cycleMode();
   else if (key === "uiZoom") uiZoomOpen.value = true;
   else if (key === "settings") showSettings();
 };
@@ -68,7 +55,7 @@ const onMenuSelect = (key: string): void => {
 
 <template>
   <div class="flex items-center justify-between flex-1 h-full min-w-0">
-    <!-- 手机窄屏顶栏：菜单、返回、搜索、账户、更多 -->
+    <!-- 手机窄屏顶栏：菜单、返回、前进、搜索、账户、更多 -->
     <template v-if="isMobile">
       <div class="flex items-center gap-1.5 min-w-0 shrink-0">
         <SButton
@@ -88,9 +75,21 @@ const onMenuSelect = (key: string): void => {
           circle
           :size="38"
           :icon-size="20"
+          :title="t('nav.back', '后退')"
           @click="router.back()"
         >
           <template #icon><IconLucideChevronLeft /></template>
+        </SButton>
+        <SButton
+          class="shrink-0"
+          variant="tertiary"
+          circle
+          :size="38"
+          :icon-size="20"
+          :title="t('nav.forward', '前进')"
+          @click="router.forward()"
+        >
+          <template #icon><IconLucideChevronRight /></template>
         </SButton>
       </div>
 
@@ -99,7 +98,7 @@ const onMenuSelect = (key: string): void => {
       <div class="flex items-center gap-1.5 shrink-0">
         <NavSearch />
         <NavUser />
-        <SDropdownMenu :items="mobileMenuItems" @select="onMenuSelect">
+        <SDropdownMenu :items="menuItems" @select="onMenuSelect">
           <template #trigger>
             <SButton class="shrink-0" variant="tertiary" circle :size="38">
               <template #icon><IconLucideMoreVertical /></template>

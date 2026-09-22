@@ -59,7 +59,7 @@ onUnmounted(() => {
   <div
     ref="containerRef"
     class="overflow-hidden min-w-0 text-left"
-    :class="[fit ? 'max-w-full' : 'w-full', isOverflowing && mask && 's-marquee-mask']"
+    :class="[fit && !isOverflowing ? 'max-w-full' : 'w-full', isOverflowing && mask && 's-marquee-mask']"
     :style="{
       '--marquee-duration': animDuration,
       '--marquee-delay': `${delay}ms`,
