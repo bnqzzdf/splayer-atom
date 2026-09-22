@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { CORE_PROTOCOL_VERSION } from "../../../shared/constants/coreProtocol";
+import { MANAGED_PROVIDER_PLATFORMS } from "../../../shared/types/apis";
 import type { CoreCapabilities, CoreInfo } from "@shared/types/core";
+import type { ManagedProviderPlatform } from "../../../shared/types/apis";
 import { runtimeEnvironment } from "./environment";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "./nodeRuntime";
 
@@ -46,6 +48,13 @@ const readNativeBuildMetadata = (): NativeBuildMetadata => {
   }
 };
 
+/** 托管平台能力位恒为 true；平台集合只有 `MANAGED_PROVIDER_PLATFORMS` 一个来源。 */
+const managedProviderCapabilities = (): Pick<CoreCapabilities, ManagedProviderPlatform> => {
+  const capabilities = {} as Pick<CoreCapabilities, ManagedProviderPlatform>;
+  for (const platform of MANAGED_PROVIDER_PLATFORMS) capabilities[platform] = true;
+  return capabilities;
+};
+
 /** 返回当前 Core 实际可用的 domain capability，不包含登录态。 */
 export const getCoreCapabilities = (): CoreCapabilities => {
   const nativeBuild = readNativeBuildMetadata();
@@ -54,9 +63,7 @@ export const getCoreCapabilities = (): CoreCapabilities => {
     playback: true,
     download: true,
     diretta: nativeBuild.diretta === true,
-    netease: true,
-    qobuz: true,
-    tidal: true,
+    ...managedProviderCapabilities(),
     remoteOutput: false,
   };
 };

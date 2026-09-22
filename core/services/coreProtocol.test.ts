@@ -9,6 +9,7 @@ import {
   isCoreProtocolCompatible,
 } from "../../shared/constants/coreProtocol";
 import { getCoreCapabilities, getCoreInfo } from "../atom/runtime/coreInfo";
+import { MANAGED_PROVIDER_PLATFORMS } from "../../shared/types/apis";
 
 const controlClientSource = readFileSync(
   new URL("../../src/core/controlClient.ts", import.meta.url),
@@ -58,6 +59,16 @@ test("Core capability reports actual Diretta native metadata instead of a hard-c
     assert.equal(info.capabilities.download, true);
     assert.equal(info.capabilities.diretta, true);
     assert.equal(info.capabilities.remoteOutput, false);
+    // 能力位必须与 MANAGED_PROVIDER_PLATFORMS 完全对齐，不能再出现漏声明的平台。
+    for (const platform of MANAGED_PROVIDER_PLATFORMS) {
+      assert.equal(info.capabilities[platform], true, `${platform} capability 缺失`);
+    }
+    assert.deepEqual(
+      Object.keys(info.capabilities).filter((key) =>
+        (MANAGED_PROVIDER_PLATFORMS as readonly string[]).includes(key),
+      ),
+      [...MANAGED_PROVIDER_PLATFORMS],
+    );
   } finally {
     if (previous === undefined) Reflect.deleteProperty(process.env, "ATOM_NATIVE_DIR");
     else Reflect.set(process.env, "ATOM_NATIVE_DIR", previous);
