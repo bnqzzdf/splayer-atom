@@ -36,3 +36,6 @@ package-lock.json
 
 # Headless 运行数据（数据库等，禁止入库）
 .dbg/
+
+# 源码交付包携带的构建身份（由打包脚本生成，见 scripts/atom/sourceIdentity.ts）
+/SOURCE_COMMIT

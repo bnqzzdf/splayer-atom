@@ -23,6 +23,7 @@ import {
   resolveCoreBuildDate,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
+import { resolveSourceIdentity, sourceIdentityFailureMessage } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const outputDir = path.join(root, "out", "core-system");
@@ -39,7 +40,9 @@ if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join("
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
 
-const fail = (message: string): never => {
+// 显式标注类型：只有 const 带显式类型注解时，TS 才会把对它的调用视为 never，
+// 从而在 `if (!x) fail(...)` 之后正确收窄。
+const fail: (message: string) => never = (message) => {
   throw new Error(`[CoreStage] ${message}`);
 };
 
@@ -67,19 +70,15 @@ requireFile(audioEngineFile, "Core audio-engine addon");
 requireFile(streamingApiFile, "Core streaming-api addon");
 requireFile(path.join(root, "LICENSE"), "AGPL license");
 
-const gitHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
-if (gitHead.error) throw gitHead.error;
-if (gitHead.status !== 0 || gitHead.signal || !gitHead.stdout.trim()) {
-  fail(`无法读取 Atom commit: ${`${gitHead.stdout ?? ""}${gitHead.stderr ?? ""}`.trim()}`);
-}
-const atomCommit = gitHead.stdout.trim();
-const gitStatus = spawnSync("git", ["status", "--porcelain", "--untracked-files=normal"], {
-  cwd: root,
-  encoding: "utf8",
-});
-if (gitStatus.error) throw gitStatus.error;
-if (gitStatus.status !== 0 || gitStatus.signal) fail("无法读取 Atom worktree 状态");
-const sourceDirty = gitStatus.stdout.trim().length > 0;
+// 构建身份不一定来自 git：源码交付包是纯导出、不含 .git，此时回退到
+// ATOM_COMMIT 环境变量或包内 SOURCE_COMMIT 文件，使交付包可以独立编译。
+const sourceIdentity = resolveSourceIdentity(root);
+if (!sourceIdentity) fail(sourceIdentityFailureMessage());
+const atomCommit = sourceIdentity.commit;
+const sourceDirty = sourceIdentity.dirty;
+console.log(
+  `[CoreStage] 源码身份: ${atomCommit.slice(0, 7)} dirty=${sourceDirty} (来源=${sourceIdentity.origin})`,
+);
 
 const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   profile?: string;

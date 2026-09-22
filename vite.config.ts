@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
@@ -11,24 +10,17 @@ import { FileSystemIconLoader } from "unplugin-icons/loaders";
 import RekaResolver from "reka-ui/resolver";
 import Components from "unplugin-vue-components/vite";
 import pkg from "./package.json" with { type: "json" };
+import { resolveSourceIdentity } from "./scripts/atom/sourceIdentity";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 
-const getGitCommit = (): string => {
-  try {
-    return execSync("git rev-parse HEAD").toString().trim().slice(0, 7) || "unknown";
-  } catch {
-    return "unknown";
-  }
-};
+// 与 stage-core-system.ts 共用同一条身份回退链（git → ATOM_COMMIT → SOURCE_COMMIT），
+// 这样源码交付包在无 .git 环境下构建时，Web 侧显示的 commit / 日期也不会变成 unknown。
+const sourceIdentity = resolveSourceIdentity(root);
 
-const getGitDate = (): string => {
-  try {
-    return execSync("git log -1 --format=%cI").toString().trim() || "unknown";
-  } catch {
-    return "unknown";
-  }
-};
+const getGitCommit = (): string => sourceIdentity?.commit.slice(0, 7) ?? "unknown";
+
+const getGitDate = (): string => sourceIdentity?.date ?? "unknown";
 
 /** SPlayer Atom 唯一 Web Control 构建配置。 */
 export default defineConfig({
