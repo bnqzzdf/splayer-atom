@@ -1,4 +1,12 @@
 import type { Platform, PlatformProfile } from "@shared/types/platform";
+import {
+  fetchQQMusicLoginStatus,
+  logoutQQMusic,
+  qqmusicQrLoginAdapter,
+  qqmusicWxQrLoginAdapter,
+  setQQMusicCookie,
+} from "./qqmusic";
+import { fetchKugouLoginStatus, kugouQrLoginAdapter, logoutKugou, setKugouCookie } from "./kugou";
 import { fetchQobuzLoginStatus, logoutQobuz } from "./qobuz";
 import { fetchTidalLoginStatus, logoutTidal } from "./tidal";
 
@@ -31,6 +39,34 @@ export interface PlatformAccountAdapter {
 }
 
 const adapters: Partial<Record<Platform, PlatformAccountAdapter>> = {
+  qqmusic: {
+    displayName: "QM",
+    userIdLabel: "UIN",
+    fetchProfile: fetchQQMusicLoginStatus,
+    logout: logoutQQMusic,
+    setCookie: setQQMusicCookie,
+    qrLogin: qqmusicQrLoginAdapter,
+    qrLoginOptions: [
+      {
+        key: "qq",
+        labelKey: "settings.platformLogin.loginQrQQ",
+        adapter: qqmusicQrLoginAdapter,
+      },
+      {
+        key: "wx",
+        labelKey: "settings.platformLogin.loginQrWX",
+        adapter: qqmusicWxQrLoginAdapter,
+      },
+    ],
+  },
+  kugou: {
+    displayName: "KG",
+    userIdLabel: "ID",
+    fetchProfile: fetchKugouLoginStatus,
+    logout: logoutKugou,
+    setCookie: setKugouCookie,
+    qrLogin: kugouQrLoginAdapter,
+  },
   qobuz: {
     displayName: "Qobuz",
     userIdLabel: "ID",

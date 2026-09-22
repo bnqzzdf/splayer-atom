@@ -11,8 +11,14 @@ import {
 } from "@main/apis/netease";
 import { NeteaseRequestError } from "@main/apis/netease/core/request";
 import { cookieToJson } from "@main/apis/netease/core/cookie";
-import { callQQMusic, clearQQMusicCookies, mergeQQMusicCookies } from "@main/apis/qqmusic";
-import { callKugou, clearKugouSession, mergeKugouSession } from "@main/apis/kugou";
+import {
+  callQQMusic,
+  clearQQMusicCookies,
+  getQQMusicCookies,
+  getQQMusicUin,
+  mergeQQMusicCookies,
+} from "@main/apis/qqmusic";
+import { callKugou, clearKugouSession, getKugouSession, mergeKugouSession } from "@main/apis/kugou";
 import { callQobuz } from "@main/apis/qobuz";
 import { getQobuzAuthStatus } from "@main/apis/qobuz/auth";
 import { callTidal } from "@main/apis/tidal";
@@ -27,8 +33,34 @@ let lastSessionProjection = "";
 export const getProviderSessions = (): ProviderSessionsSnapshot => {
   const qobuz = getQobuzAuthStatus();
   const tidal = getTidalAuthStatus();
+  // QM：uin 与任一登录 key 同时存在才算已登录（与 user_detail 的判定保持一致）。
+  const qmUin = getQQMusicUin();
+  const qmCookies = getQQMusicCookies();
+  const qmAuthenticated =
+    Boolean(qmUin) &&
+    qmUin !== "0" &&
+    Boolean(
+      qmCookies.qm_keyst ||
+        qmCookies.qqmusic_key ||
+        qmCookies.pskey ||
+        qmCookies.p_skey ||
+        qmCookies.skey,
+    );
+  // KG：token + userid 是扫码/或 Cookie 登录后落库的凭据。
+  const kgSession = getKugouSession();
+  const kgAuthenticated = Boolean(kgSession.token && kgSession.userid);
   return {
     netease: { authenticated: Boolean(getNeteaseCookies().MUSIC_U) },
+    qqmusic: {
+      authenticated: qmAuthenticated,
+      ...(qmAuthenticated ? { userId: qmUin } : {}),
+      ...(qmAuthenticated && qmCookies.nickname ? { username: qmCookies.nickname } : {}),
+    },
+    kugou: {
+      authenticated: kgAuthenticated,
+      ...(kgAuthenticated ? { userId: String(kgSession.userid) } : {}),
+      ...(kgAuthenticated && kgSession.nickname ? { username: kgSession.nickname } : {}),
+    },
     qobuz: {
       authenticated: qobuz.loggedIn,
       userId: qobuz.userId,

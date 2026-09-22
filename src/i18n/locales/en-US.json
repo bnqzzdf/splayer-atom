@@ -1422,6 +1422,7 @@
       "logout": "Log Out",
       "logoutTitle": "Log Out from {name}",
       "logoutConfirm": "Are you sure you want to log out of current {name} account ({user})?",
+      "cookieHint": "Paste this platform's full cookie string (QM needs uin / qm_keyst, KG needs token / userid)",
       "cookieTitle": "Set {name} Cookie",
       "cookiePlaceholder": "Please enter Cookie",
       "toast": {
@@ -1545,9 +1546,18 @@
         "homepage": "Homepage"
       },
       "grant": {
-        "network": { "label": "Network", "desc": "Can make network requests" },
-        "control": { "label": "Control", "desc": "Can control the player" },
-        "ui": { "label": "Interface", "desc": "Can extend or modify the app interface" }
+        "network": {
+          "label": "Network",
+          "desc": "Can make network requests"
+        },
+        "control": {
+          "label": "Control",
+          "desc": "Can control the player"
+        },
+        "ui": {
+          "label": "Interface",
+          "desc": "Can extend or modify the app interface"
+        }
       }
     },
     "pluginManager": {

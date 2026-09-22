@@ -21,10 +21,22 @@
       "subtitle": "Linux 音乐 Core 与 Web Control，完成几步设置即可开始使用",
       "start": "开始设置",
       "features": {
-        "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
-        "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
-        "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词、翻译、音译与时间偏移" }
+        "local": {
+          "title": "本地音乐库",
+          "desc": "扫描本地目录，自动整理音乐库"
+        },
+        "quality": {
+          "title": "无损音质",
+          "desc": "原生音频引擎，支持多种无损格式"
+        },
+        "streaming": {
+          "title": "流媒体服务器",
+          "desc": "Subsonic / Jellyfin / Emby 等"
+        },
+        "lyrics": {
+          "title": "丰富歌词体验",
+          "desc": "AMLL 逐字歌词、翻译、音译与时间偏移"
+        }
       }
     },
     "library": {
@@ -1410,6 +1422,7 @@
       "logout": "退出登录",
       "logoutTitle": "退出 {name} 登录",
       "logoutConfirm": "确定要退出当前 {name} 账号（{user}）吗？",
+      "cookieHint": "粘贴对应平台的完整 Cookie 字符串（QM 需含 uin / qm_keyst，KG 需含 token / userid）",
       "cookieTitle": "设置 {name} Cookie",
       "cookiePlaceholder": "请输入 Cookie",
       "toast": {
@@ -1533,9 +1546,18 @@
         "homepage": "主页"
       },
       "grant": {
-        "network": { "label": "联网", "desc": "插件可发起网络请求" },
-        "control": { "label": "控制", "desc": "插件可控制播放器" },
-        "ui": { "label": "界面", "desc": "插件可扩展或修改应用界面" }
+        "network": {
+          "label": "联网",
+          "desc": "插件可发起网络请求"
+        },
+        "control": {
+          "label": "控制",
+          "desc": "插件可控制播放器"
+        },
+        "ui": {
+          "label": "界面",
+          "desc": "插件可扩展或修改应用界面"
+        }
       }
     },
     "pluginManager": {

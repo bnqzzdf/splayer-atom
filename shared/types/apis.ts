@@ -6,7 +6,7 @@
 export type ApiPlatform = "netease" | "qqmusic" | "kugou" | "qobuz" | "tidal";
 
 /** Atom 主动维护并投影登录态的在线平台。 */
-export const MANAGED_PROVIDER_PLATFORMS = ["netease", "qobuz", "tidal"] as const;
+export const MANAGED_PROVIDER_PLATFORMS = ["netease", "qqmusic", "kugou", "qobuz", "tidal"] as const;
 export type ManagedProviderPlatform = (typeof MANAGED_PROVIDER_PLATFORMS)[number];
 
 /** 判断平台是否属于 Atom 正式维护的 Provider Core Domain。 */

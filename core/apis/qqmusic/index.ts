@@ -11,10 +11,15 @@
 
 import { createHash } from "node:crypto";
 import { modules } from "./modules";
-import { clearQQMusicCookies, mergeQQMusicCookies } from "./core/request";
+import {
+  clearQQMusicCookies,
+  getQQMusicCookies,
+  getQQMusicUin,
+  mergeQQMusicCookies,
+} from "./core/request";
 import type { QMParams } from "./core/types";
 
-export { clearQQMusicCookies, mergeQQMusicCookies };
+export { clearQQMusicCookies, getQQMusicCookies, getQQMusicUin, mergeQQMusicCookies };
 
 /** 2 分钟响应缓存 */
 const DEFAULT_TTL = 2 * 60 * 1000;
