@@ -7,6 +7,8 @@ import type { ArtistProfile } from "@/types/artist";
 import { useLibraryStore } from "@/stores/library";
 import { useStreamingStore } from "@/stores/streaming";
 import { fetchArtist as fetchNeteaseArtist } from "@/apis/artist/netease";
+import { fetchQQMusicArtist } from "@/apis/artist/qqmusic";
+import { fetchKugouArtist } from "@/apis/artist/kugou";
 import { fetchArtist as fetchQobuzArtist } from "@/apis/artist/qobuz";
 import { fetchArtist as fetchTidalArtist } from "@/apis/artist/tidal";
 import { albumsToCoverItems } from "@/utils/format/coverItem";
@@ -23,7 +25,7 @@ export interface LoadArtistOptions {
 
 /**
  * 加载指定歌手
- * @param source - 来源：local / streaming / netease / qobuz / tidal
+ * @param source - 来源：local / streaming / netease / qqmusic / kugou / qobuz / tidal
  * @param id     歌手 id（route 原始字符串）
  * @param options 回调与中断信号
  */
@@ -42,6 +44,14 @@ export const loadArtist = async (
   }
   if (source === "netease") {
     await loadNetease(id, options);
+    return;
+  }
+  if (source === "qqmusic") {
+    await loadQQMusic(id, options);
+    return;
+  }
+  if (source === "kugou") {
+    await loadKugou(id, options);
     return;
   }
   if (source === "qobuz") {
@@ -110,6 +120,20 @@ const loadNetease = async (id: string, options: LoadArtistOptions): Promise<void
     trackCount: result.tracks.length,
     albumCount: albums.length,
   });
+};
+
+const loadQQMusic = async (id: string, options: LoadArtistOptions): Promise<void> => {
+  const artistId = decodeURIComponent(id);
+  const profile = await fetchQQMusicArtist(artistId, options.fallbackName ?? artistId);
+  if (options.signal?.aborted) return;
+  options.onUpdate(profile);
+};
+
+const loadKugou = async (id: string, options: LoadArtistOptions): Promise<void> => {
+  const artistId = decodeURIComponent(id);
+  const profile = await fetchKugouArtist(artistId, options.fallbackName ?? artistId);
+  if (options.signal?.aborted) return;
+  options.onUpdate(profile);
 };
 
 const loadQobuz = async (id: string, options: LoadArtistOptions): Promise<void> => {

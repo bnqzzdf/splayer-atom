@@ -14,6 +14,7 @@ import { useStatusStore } from "@/stores/status";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { libraryClient } from "@/core/libraryClient";
 
 const { t } = useI18n();
@@ -22,8 +23,6 @@ const router = useRouter();
 const status = useStatusStore();
 const providerSessions = useProviderSessionsStore();
 const streaming = useStreamingStore();
-const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
-if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 void streaming.init();
 
 type SearchSource = Platform | "local" | "streaming";
@@ -52,15 +51,21 @@ const tabs = computed(() => {
   return items;
 });
 
-/** NCM 搜索允许匿名使用；Qobuz/TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
+/** NCM / QM / KG 搜索允许匿名使用；Qobuz / TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
+const ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
+  "netease",
+  "qqmusic",
+  "kugou",
+]);
+
 const isSearchPlatformAvailable = (platform: Platform): boolean =>
-  platform === "netease" ||
-  ((platform === "qobuz" || platform === "tidal") && providerSessions.isAuthenticated(platform));
+  ANONYMOUS_SEARCH_PLATFORMS.has(platform) || providerSessions.isAuthenticated(platform);
 
 const platformTabs = computed(() => {
-  const online = ALL_PLATFORMS.filter(
-    (key) => atomSearchPlatforms.has(key) && isSearchPlatformAvailable(key),
-  ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+  const online = ALL_PLATFORMS.filter(isSearchPlatformAvailable).map((key) => ({
+    key,
+    label: PLATFORM_SHORT_NAME[key],
+  }));
   const mediaSource = streaming.activeServer
     ? [{ key: "streaming", label: t("search.source.streaming") }]
     : [];
@@ -369,7 +374,14 @@ const isAuthError = computed(() => {
 const loginDialogOpen = ref(false);
 const loginDialogTab = ref<"qobuz" | "tidal">("qobuz");
 
+/** QM / KG 的登录入口在设置面板的「在线平台账号」区，搜索页不再另开登录弹窗。 */
+const ACCOUNT_SETTINGS_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(["qqmusic", "kugou"]);
+
 const openLoginModal = (): void => {
+  if (ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)) {
+    useSettingsDialog().show("network");
+    return;
+  }
   if (status.searchPlatform === "tidal") {
     loginDialogTab.value = "tidal";
   } else {
@@ -435,32 +447,21 @@ const onLoginDialogClose = (open: boolean): void => {
           <IconLucideLogIn class="size-8" />
         </div>
         <div class="text-base font-semibold text-on-surface mb-1">
-          {{
-            (status.searchPlatform === "tidal"
-              ? "TIDAL"
-              : status.searchPlatform === "qobuz"
-                ? "Qobuz"
-                : status.searchPlatform.toUpperCase()) + " 尚未登录"
-          }}
+          {{ PLATFORM_SHORT_NAME[status.searchPlatform] }} 尚未登录
         </div>
         <div class="text-xs text-on-surface-variant/80 mb-5 leading-relaxed">
           {{
             status.searchPlatform === "tidal"
               ? "搜索与播放 TIDAL 曲目需要先绑定授权您的 TIDAL 账号"
-              : "搜索与播放该平台曲目需要先登录账号"
+              : ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)
+                ? "搜索与播放该平台曲目需要先在「设置 → 在线平台账号」中登录"
+                : "搜索与播放该平台曲目需要先登录账号"
           }}
         </div>
         <div class="flex items-center gap-3">
           <SButton type="primary" size="medium" @click="openLoginModal">
             <template #icon><IconLucideLogIn class="size-4" /></template>
-            登录
-            {{
-              status.searchPlatform === "tidal"
-                ? "TIDAL"
-                : status.searchPlatform === "qobuz"
-                  ? "Qobuz"
-                  : status.searchPlatform.toUpperCase()
-            }}
+            登录 {{ PLATFORM_SHORT_NAME[status.searchPlatform] }}
           </SButton>
           <SButton variant="secondary" size="medium" @click="onRetry">
             <template #icon><IconLucideRotateCw class="size-4" /></template>

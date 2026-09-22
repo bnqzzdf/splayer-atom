@@ -48,6 +48,8 @@ describe("managed Provider Core Protocol client", () => {
   it("uses the same Core routes for session refresh, clear and manual cookie", async () => {
     const sessions = {
       netease: { authenticated: true },
+      qqmusic: { authenticated: false },
+      kugou: { authenticated: false },
       qobuz: { authenticated: false },
       tidal: { authenticated: false },
     };
@@ -96,11 +98,12 @@ describe("managed Provider Core Protocol client", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/providers/set-cookie");
   });
 
-  it("keeps QQ Music and Kugou outside the managed Provider Core Domain", () => {
+  it("keeps every Core-managed platform inside the managed Provider Core Domain", () => {
     expect(isManagedProviderPlatform("netease")).toBe(true);
+    expect(isManagedProviderPlatform("qqmusic")).toBe(true);
+    expect(isManagedProviderPlatform("kugou")).toBe(true);
     expect(isManagedProviderPlatform("qobuz")).toBe(true);
     expect(isManagedProviderPlatform("tidal")).toBe(true);
-    expect(isManagedProviderPlatform("qqmusic")).toBe(false);
-    expect(isManagedProviderPlatform("kugou")).toBe(false);
+    expect(isManagedProviderPlatform("local")).toBe(false);
   });
 });
