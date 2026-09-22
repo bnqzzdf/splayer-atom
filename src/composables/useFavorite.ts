@@ -58,9 +58,13 @@ export const useFavorite = () => {
   const toggle = async (track: Track | null | undefined): Promise<void> => {
     if (!track) return;
     if (track.source === "local") {
-      const next = library.toggleLike(track.id);
-      recordFavoriteChange(track, next);
-      toast.success(t(next ? "liked.toast.added" : "liked.toast.removed"));
+      try {
+        const next = await library.toggleLike(track.id);
+        recordFavoriteChange(track, next);
+        toast.success(t(next ? "liked.toast.added" : "liked.toast.removed"));
+      } catch {
+        toast.error(t("liked.toast.failed"));
+      }
       return;
     }
     if (track.source === "netease") {

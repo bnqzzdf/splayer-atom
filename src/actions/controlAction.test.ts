@@ -49,10 +49,8 @@ test("Track actions declare Core commands without host-only actions", () => {
   assert.match(trackMenuSource, /id: "playNext"[\s\S]*coreCommand: "player\.insertQueueNext"/);
   assert.match(trackMenuSource, /id: "addToQueue"[\s\S]*coreCommand: "player\.insertQueueEnd"/);
   assert.match(trackMenuSource, /id: "download"[\s\S]*coreCommand: "download\.start"/);
-  assert.match(
-    trackMenuSource,
-    /id: "deleteFile"[\s\S]*danger: true[\s\S]*coreCommand: "library\.deleteTracks"/,
-  );
+  assert.doesNotMatch(trackMenuSource, /deleteFile|library\.deleteTracks/);
+  assert.doesNotMatch(songListSource, /batchDelete|onDeleteFile|songList\.context\.deleteFile/);
   assert.match(trackMenuSource, /id: "comments"[\s\S]*coreCommand: "comments\.get"/);
   assert.doesNotMatch(trackMenuSource, /showInExplorer|requiredCapability|hostFileExplorer/);
 });

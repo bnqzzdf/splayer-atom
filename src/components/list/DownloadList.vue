@@ -5,7 +5,6 @@ import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useDownloadStore } from "@/stores/download";
 import { useDownload } from "@/composables/useDownload";
-import { dialog } from "@/composables/useDialog";
 import { useFloatingPlayerBar } from "@/composables/useFloatingPlayerBar";
 import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
 import { isLosslessQuality, getQualityLabel } from "@/utils/quality";
@@ -102,16 +101,6 @@ const rowClass = (task: DownloadTask): string => {
     return `${base} cursor-pointer hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12`;
   }
   return base;
-};
-
-/** 二次确认后删除已下载的本地文件并移除记录 */
-const confirmDelete = async (task: DownloadTask): Promise<void> => {
-  const confirmed = await dialog.confirm({
-    title: t("download.deleteConfirmTitle"),
-    content: t("download.deleteConfirmContent"),
-    type: "warning",
-  });
-  if (confirmed) downloadStore.remove(task.taskId);
 };
 
 /** 播放全部已完成（供下载页顶栏调用） */
@@ -278,17 +267,6 @@ defineExpose({ playAll });
                 size="small"
                 :title="t('download.remove')"
                 @click="downloadStore.remove(item.taskId)"
-              >
-                <template #icon><IconLucideTrash2 /></template>
-              </SButton>
-            </template>
-            <template v-else-if="isDone(item)">
-              <SButton
-                variant="ghost"
-                circle
-                size="small"
-                :title="t('download.deleteFile')"
-                @click="confirmDelete(item)"
               >
                 <template #icon><IconLucideTrash2 /></template>
               </SButton>

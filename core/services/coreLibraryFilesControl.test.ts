@@ -8,48 +8,34 @@ const libraryClientSource = readFileSync(
   new URL("../../src/core/libraryClient.ts", import.meta.url),
   "utf8",
 );
+const libraryTypesSource = readFileSync(
+  new URL("../../shared/types/library.ts", import.meta.url),
+  "utf8",
+);
 const tagEditorSource = readFileSync(
   new URL("../../src/components/modals/TagEditorDialog.vue", import.meta.url),
   "utf8",
 );
 
-const between = (source: string, start: string, end: string): string => {
-  const tail = source.split(start)[1];
-  assert.ok(tail, `missing start marker: ${start}`);
-  const section = tail.split(end)[0];
-  assert.ok(section, `missing end marker: ${end}`);
-  return section;
-};
-
-test("Core library file service stays Electron-free and scopes mutation to known library paths", () => {
+test("Core library file service stays Electron-free and only exposes tag mutation", () => {
   assert.doesNotMatch(serviceSource, /from "electron"/);
   assert.match(serviceSource, /getAllTracks\(\)/);
   assert.match(serviceSource, /assertKnownLibraryPath\(filePath\)/);
   assert.match(serviceSource, /edits\.some\(\(edit\) => !known\.has\(edit\.path\)\)/);
-  const deleteFlow = between(
-    serviceSource,
-    "export const deleteLibraryFiles = async",
-    "return { deleted: deleted.length, failed: failed.length };",
-  );
-  const guardIndex = deleteFlow.indexOf("if (!known.has(filePath))");
-  const unlinkIndex = deleteFlow.indexOf("await fs.unlink(filePath)");
-  assert.ok(guardIndex >= 0);
-  assert.ok(unlinkIndex > guardIndex);
+  assert.doesNotMatch(serviceSource, /deleteLibraryFiles|fs\.unlink/);
 });
 
-test("Core routes and Web client expose real library delete and tag operations", () => {
+test("Core routes and Web client expose tag operations without host-file deletion", () => {
   assert.match(routesSource, /api\.post\("\/library\/tags\/read"/);
   assert.match(routesSource, /api\.post\("\/library\/tags\/write"/);
-  assert.match(routesSource, /api\.delete\("\/library\/files"/);
+  assert.doesNotMatch(routesSource, /\/library\/files|deleteLibraryFiles/);
   assert.match(libraryClientSource, /request<IpcResponse<TrackTags>>\("\/library\/tags\/read"/);
   assert.match(
     libraryClientSource,
     /request<IpcResponse<TagWriteOutcome\[\]>>\("\/library\/tags\/write"/,
   );
-  assert.match(
-    libraryClientSource,
-    /request<IpcResponse<\{ deleted: number; failed: number \}>>\("\/library\/files"/,
-  );
+  assert.doesNotMatch(libraryClientSource, /deleteTracks|\/library\/files/);
+  assert.doesNotMatch(libraryTypesSource, /deleteTracks/);
 });
 
 test("Web tag editor edits Core files without a local filesystem picker", () => {

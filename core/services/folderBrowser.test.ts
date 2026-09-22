@@ -304,6 +304,21 @@ test("Folder Browser browses live media/materials without a completed scan", asy
       ["cue-track-2"],
       "Folder container track playlist action must canonicalize and add only the selected split",
     );
+    const batchPlaylist = playlists.createPlaylist({
+      type: "local",
+      title: "Folder batch",
+    });
+    const addBatch = await folder.addFolderBatchToPlaylist(batchPlaylist.id, [
+      { kind: "path", path: indexed },
+      { kind: "container-track", containerPath: cueActionCue, trackId: "cue-track-2" },
+      { kind: "path", path: indexed },
+    ]);
+    assert.equal(addBatch.added, 2);
+    assert.deepEqual(
+      playlists.getPlaylist(batchPlaylist.id)?.tracks.map((track) => track.id),
+      ["indexed-track", "cue-track-2"],
+      "Folder batch playlist actions preserve explicit selection order and deduplicate tracks",
+    );
 
     const first = await folder.browseFolder(root, undefined, 2);
     assert.equal(first.entries.length, 2);

@@ -54,7 +54,7 @@ test("Folder presentation supports list/grid without changing route semantics", 
   assert.ok(foldersSource.includes("atom-folder-view-mode"));
   assert.ok(foldersSource.includes('kind: "directory-grid"'));
   assert.ok(foldersSource.includes("directoryThumbnailUrl(entry.path)"));
-  assert.ok(foldersSource.includes('<div class="absolute right-2 top-2">'));
+  assert.ok(foldersSource.includes('class="absolute right-2 top-2"'));
   assert.equal(foldersSource.includes('class="absolute right-2 top-2 opacity-90"'), false);
 });
 
@@ -64,6 +64,19 @@ test("Folder container splits can be added individually to an existing or new pl
   assert.ok(foldersSource.includes("trackTarget.trackId"));
   assert.ok(folderClientSource.includes('"/library/folders/playlist-track"'));
   assert.ok(foldersSource.includes("createTargetTrack?.title"));
+});
+
+test("Folder batch management keeps explicit file selection Core-owned", () => {
+  assert.ok(foldersSource.includes('key: "batchManage"'));
+  assert.ok(foldersSource.includes("batchSelectedTargets"));
+  assert.ok(foldersSource.includes("folderBrowserClient.batchPlay(mode, targets)"));
+  assert.ok(
+    foldersSource.includes("folderBrowserClient.addBatchToPlaylist(playlistId, batchTargets)"),
+  );
+  assert.ok(foldersSource.includes("item.entry.kind !== 'directory'"));
+  assert.ok(foldersSource.includes("item.entry.kind !== 'material'"));
+  assert.ok(folderClientSource.includes('"/library/folders/batch/playlist"'));
+  assert.ok(folderClientSource.includes("/library/folders/batch/"));
 });
 
 test("Show in folder remains shared across player and queue surfaces", () => {

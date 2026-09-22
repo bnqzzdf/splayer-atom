@@ -49,6 +49,20 @@ export interface StreamingServerInput {
 /** 错误归类 */
 export type StreamingErrorCode = "auth" | "network" | "protocol" | "unknown";
 
+/** Core 持有的激活流媒体服务器运行时连接状态。 */
+export interface StreamingConnectionStatus {
+  connected: boolean;
+  error?: string;
+  errorCode?: StreamingErrorCode;
+}
+
+/** Core 流媒体配置 + 当前运行时连接投影。 */
+export interface StreamingConfigSnapshot {
+  servers: StreamingServerConfig[];
+  activeServerId: string | null;
+  connectionStatus: StreamingConnectionStatus;
+}
+
 /** 连通性测试结果 */
 export interface StreamingPingResult {
   /** 是否连通成功 */

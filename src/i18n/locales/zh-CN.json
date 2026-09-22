@@ -21,22 +21,10 @@
       "subtitle": "Linux 音乐 Core 与 Web Control，完成几步设置即可开始使用",
       "start": "开始设置",
       "features": {
-        "local": {
-          "title": "本地音乐库",
-          "desc": "扫描本地目录，自动整理音乐库"
-        },
-        "quality": {
-          "title": "无损音质",
-          "desc": "原生音频引擎，支持多种无损格式"
-        },
-        "streaming": {
-          "title": "流媒体服务器",
-          "desc": "Subsonic / Jellyfin / Emby 等"
-        },
-        "lyrics": {
-          "title": "丰富歌词体验",
-          "desc": "AMLL 逐字歌词、翻译、音译与时间偏移"
-        }
+        "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
+        "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
+        "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
+        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词、翻译、音译与时间偏移" }
       }
     },
     "library": {
@@ -539,7 +527,6 @@
       "copyPath": "复制文件路径",
       "editTags": "编辑元数据",
       "download": "下载到 Core",
-      "deleteFile": "删除文件",
       "searchSame": "同名搜索",
       "more": "更多操作",
       "copyTitle": "复制歌曲名称",
@@ -556,10 +543,7 @@
     },
     "delete": {
       "removeConfirmOne": "确认从{type}移除「{title}」？",
-      "removeConfirm": "确认从{type}移除 {count} 首歌曲？",
-      "fileTitle": "删除文件",
-      "fileConfirmOne": "确认从磁盘删除「{title}」？此操作不可撤销",
-      "fileConfirm": "确认从磁盘删除 {count} 个文件？此操作不可撤销"
+      "removeConfirm": "确认从{type}移除 {count} 首歌曲？"
     },
     "toast": {
       "addedToNext": "已添加到下一曲播放",
@@ -656,9 +640,6 @@
     "retry": "重试",
     "openFolder": "打开所在文件夹",
     "remove": "移除",
-    "deleteFile": "删除文件",
-    "deleteConfirmTitle": "删除下载文件",
-    "deleteConfirmContent": "将从磁盘永久删除该歌曲文件，此操作不可恢复。确认删除？",
     "tagWarning": "标签写入失败，文件已保存",
     "resolveFailed": "无法下载到 Core：{title}",
     "alreadyQueued": "该歌曲已在 Core 下载队列",
@@ -1422,7 +1403,6 @@
       "logout": "退出登录",
       "logoutTitle": "退出 {name} 登录",
       "logoutConfirm": "确定要退出当前 {name} 账号（{user}）吗？",
-      "cookieHint": "粘贴对应平台的完整 Cookie 字符串（QM 需含 uin / qm_keyst，KG 需含 token / userid）",
       "cookieTitle": "设置 {name} Cookie",
       "cookiePlaceholder": "请输入 Cookie",
       "toast": {
@@ -1546,18 +1526,9 @@
         "homepage": "主页"
       },
       "grant": {
-        "network": {
-          "label": "联网",
-          "desc": "插件可发起网络请求"
-        },
-        "control": {
-          "label": "控制",
-          "desc": "插件可控制播放器"
-        },
-        "ui": {
-          "label": "界面",
-          "desc": "插件可扩展或修改应用界面"
-        }
+        "network": { "label": "联网", "desc": "插件可发起网络请求" },
+        "control": { "label": "控制", "desc": "插件可控制播放器" },
+        "ui": { "label": "界面", "desc": "插件可扩展或修改应用界面" }
       }
     },
     "pluginManager": {

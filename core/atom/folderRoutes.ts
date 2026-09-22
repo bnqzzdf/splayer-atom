@@ -4,6 +4,9 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 import type {
   FolderActionRequest,
+  FolderBatchActionRequest,
+  FolderBatchPlaylistRequest,
+  FolderBatchTarget,
   FolderPlaylistRequest,
   FolderPlaylistTrackRequest,
   FolderScanRequest,
@@ -11,6 +14,7 @@ import type {
 import type { Track } from "@shared/types/player";
 import {
   addContainerTrackToPlaylist,
+  addFolderBatchToPlaylist,
   addFolderToPlaylist,
   authorizeFolderPath,
   browseFolder,
@@ -24,6 +28,7 @@ import {
   readFolderTextMaterial,
   resolveTrackFolderLocation,
   runFolderAction,
+  runFolderBatchAction,
   searchFolders,
   unpinFolder,
 } from "@main/services/folderBrowser";
@@ -53,6 +58,19 @@ const boundedInt = (
 ): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, Math.trunc(parsed))) : fallback;
+};
+
+const isFolderBatchTarget = (value: unknown): value is FolderBatchTarget => {
+  if (!value || typeof value !== "object") return false;
+  const target = value as Record<string, unknown>;
+  if (target.kind === "path") return typeof target.path === "string" && !!target.path;
+  return (
+    target.kind === "container-track" &&
+    typeof target.containerPath === "string" &&
+    !!target.containerPath &&
+    typeof target.trackId === "string" &&
+    !!target.trackId
+  );
 };
 
 interface ByteRange {
@@ -250,6 +268,29 @@ export const buildFolderRoutes = (): Hono => {
     });
   }
 
+  for (const [route, mode] of [
+    ["/library/folders/batch/play", "play"],
+    ["/library/folders/batch/play-next", "play-next"],
+    ["/library/folders/batch/queue", "queue"],
+  ] as const) {
+    api.post(route, async (c) => {
+      const body = (await c.req.json().catch(() => null)) as FolderBatchActionRequest | null;
+      if (
+        !body ||
+        !Array.isArray(body.targets) ||
+        body.targets.length === 0 ||
+        !body.targets.every(isFolderBatchTarget)
+      ) {
+        return c.json({ error: "folder_batch_action_request_invalid" }, 400);
+      }
+      try {
+        return c.json(await runFolderBatchAction(mode, body.targets));
+      } catch (error) {
+        return errorResponse(c, error);
+      }
+    });
+  }
+
   api.post("/library/folders/playlist", async (c) => {
     const body = (await c.req.json().catch(() => null)) as FolderPlaylistRequest | null;
     if (!body || typeof body.path !== "string" || typeof body.playlistId !== "string") {
@@ -278,6 +319,25 @@ export const buildFolderRoutes = (): Hono => {
       return c.json(
         await addContainerTrackToPlaylist(body.playlistId, body.containerPath, body.trackId),
       );
+    } catch (error) {
+      return errorResponse(c, error);
+    }
+  });
+
+  api.post("/library/folders/batch/playlist", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as FolderBatchPlaylistRequest | null;
+    if (
+      !body ||
+      typeof body.playlistId !== "string" ||
+      !body.playlistId ||
+      !Array.isArray(body.targets) ||
+      body.targets.length === 0 ||
+      !body.targets.every(isFolderBatchTarget)
+    ) {
+      return c.json({ error: "folder_batch_playlist_request_invalid" }, 400);
+    }
+    try {
+      return c.json(await addFolderBatchToPlaylist(body.playlistId, body.targets));
     } catch (error) {
       return errorResponse(c, error);
     }

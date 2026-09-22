@@ -25,6 +25,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
     "libraryScanProgress",
     "downloadState",
     "downloadProgress",
+    "streamingConfigUpdated",
     "streamingLibraryUpdated",
     "lyricOffset",
     "pluginStatus",
@@ -38,6 +39,7 @@ test("shared Core event contract stays limited to pure domain projections", () =
     eventTypesSource,
     /type: "(?:play|pause|next|prev|toggleLike|setRepeat|setShuffle)"/,
   );
+  assert.doesNotMatch(eventClientSource, /op: "visibility"|sendVisibility/);
 });
 
 test("Player projections are published only by Core and consumed by Web Control", () => {

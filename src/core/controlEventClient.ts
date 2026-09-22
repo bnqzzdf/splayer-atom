@@ -91,11 +91,6 @@ const connectWeb = (): (() => void) => {
   let reconnectTimer: number | null = null;
   let statusTimer: number | null = null;
 
-  const sendVisibility = (): void => {
-    if (ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ op: "visibility", visible: document.visibilityState === "visible" }));
-  };
-
   const syncSnapshots = async (): Promise<void> => {
     try {
       const [session, status] = await Promise.all([
@@ -135,7 +130,6 @@ const connectWeb = (): (() => void) => {
   };
 
   const handleVisibility = (): void => {
-    sendVisibility();
     if (document.visibilityState === "visible") void syncStatus();
   };
 
@@ -160,7 +154,6 @@ const connectWeb = (): (() => void) => {
     if (disposed) return;
     ws = new WebSocket(`${wsOrigin}/ws`);
     ws.onopen = () => {
-      sendVisibility();
       void syncSnapshots();
       startStatusPolling();
     };

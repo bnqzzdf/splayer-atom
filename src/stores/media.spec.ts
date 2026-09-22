@@ -1,11 +1,11 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const updateLyrics = vi.hoisted(() => vi.fn());
+const getLyricOffset = vi.hoisted(() => vi.fn().mockResolvedValue(0));
 
 vi.mock("@/services/lyric/loader", () => ({ watchLyricPreference: vi.fn() }));
 vi.mock("@/core/nowPlayingClient", () => ({
-  nowPlayingClient: { updateLyrics },
+  nowPlayingClient: { getLyricOffset },
 }));
 
 import { useMediaStore } from "./media";
@@ -13,7 +13,7 @@ import { useMediaStore } from "./media";
 describe("media lyric commit", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    updateLyrics.mockReset();
+    getLyricOffset.mockClear();
   });
 
   it("无效候选不会清空已经解析成功的歌词", () => {
@@ -31,6 +31,6 @@ describe("media lyric commit", () => {
     expect(media.activeLyric).toEqual(lrc);
     expect(media.lyricContent?.content).toBe("[00:01.00]base");
     expect(media.parsedLyric).toHaveLength(1);
-    expect(updateLyrics).toHaveBeenCalledTimes(1);
+    expect(getLyricOffset).not.toHaveBeenCalled();
   });
 });

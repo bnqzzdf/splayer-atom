@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
-import type { Track, PlayerState } from "@shared/types/player";
-import type { LyricLine, LyricData } from "@shared/types/lyrics";
+import type { Track, TrackDetail, PlayerState } from "@shared/types/player";
+import type { LyricData } from "@shared/types/lyrics";
+import { lyricOffsetSourceKey } from "@shared/types/lyrics";
 import type {
   NowPlayingSnapshot,
   NowPlayingPositionSync,
@@ -12,8 +13,6 @@ import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 type NowPlayingEvents = {
   /** 歌曲切换 */
   "track-change": [{ track: Track | null }];
-  /** 歌词内容变化 */
-  "lyric-change": [NowPlayingSnapshot];
   /** 播放位置锚点 */
   "position-sync": [NowPlayingPositionSync];
   /** 当前曲目歌词偏移变化 */
@@ -22,10 +21,8 @@ type NowPlayingEvents = {
 
 /** 当前歌曲轻量信息 */
 let currentTrack: Track | null = null;
-/** 当前歌曲的完整解析歌词 */
-let currentLyric: LyricLine[] = [];
-/** 当前激活的歌词源 */
-let currentSource: LyricData = null;
+/** 当前实际加载完成时解析出的媒体详情；用于晚连接 Control 恢复本地/内嵌歌词。 */
+let currentDetail: TrackDetail | null = null;
 /** 最近一次播放位置（毫秒） */
 let lastPosition = 0;
 /** lastPosition 真实成立的墙钟时刻（Date.now 毫秒），用于补偿其过期时长 */
@@ -36,8 +33,6 @@ let playing = false;
 let playState: PlayerState = "idle";
 /** 当前播放速度倍率（0.5 ~ 2.0） */
 let playSpeed = 1.0;
-/** 当前曲目对应的歌词偏移（ms，正值为歌词提前） */
-let currentLyricOffsetMs = 0;
 
 /** 内部事件总线 */
 const emitter = new EventEmitter<NowPlayingEvents>();
@@ -53,10 +48,8 @@ const emitLyricOffsetChange = (data: NowPlayingLyricOffsetSync): void => {
  * @param source - 歌词源，null（歌词未加载）时退化为裸 trackId
  */
 const offsetKey = (trackId: string, source: LyricData): string => {
-  if (!source) return trackId;
-  const src =
-    source.source === "online" && source.platform ? `online:${source.platform}` : source.source;
-  return `${trackId}|${src}`;
+  const sourceKey = lyricOffsetSourceKey(source);
+  return sourceKey ? `${trackId}|${sourceKey}` : trackId;
 };
 
 /**
@@ -70,57 +63,21 @@ const readOffset = (trackId: string | null | undefined, source: LyricData): numb
   return store.get("player.lyricOffsets")?.[offsetKey(trackId, source)] ?? 0;
 };
 
-/** 当前生效偏移对应的存储 key，用于检测曲目/歌词源变化 */
-let currentOffsetKey = "";
-
 /**
  * 同步当前播放状态
  * @param track - 当前曲目
- * @param lyric - 当前歌词
- * @param source - 当前歌词源
+ * @param detail - 当前加载完成后的媒体详情
  */
-export const update = (track: Track | null, lyric: LyricLine[], source: LyricData): void => {
+export const update = (track: Track | null, detail: TrackDetail | null = null): void => {
   const trackChanged = (currentTrack?.id ?? null) !== (track?.id ?? null);
   currentTrack = track;
-  currentLyric = lyric;
-  currentSource = source;
+  currentDetail = detail;
   if (trackChanged) {
     // 重置播放进度
     lastPosition = 0;
     lastPositionAt = Date.now();
     emitter.emit("track-change", { track });
   }
-  // 曲目或歌词源任一变化都重读偏移并广播
-  const key = track?.id ? offsetKey(track.id, source) : "";
-  if (trackChanged || key !== currentOffsetKey) {
-    currentOffsetKey = key;
-    currentLyricOffsetMs = readOffset(track?.id, source);
-    emitLyricOffsetChange({
-      trackId: track?.id ?? null,
-      offsetMs: currentLyricOffsetMs,
-    });
-  }
-  emitter.emit("lyric-change", snapshot());
-};
-
-/**
- * 临时接收 Control 解析后的歌词 presentation；当前 Track 仍只由 Core playback lifecycle 更新。
- * @param lyric - 已解析歌词行
- * @param source - 当前歌词源
- */
-export const updateLyrics = (lyric: LyricLine[], source: LyricData): void => {
-  currentLyric = lyric;
-  currentSource = source;
-  const key = currentTrack?.id ? offsetKey(currentTrack.id, source) : "";
-  if (key !== currentOffsetKey) {
-    currentOffsetKey = key;
-    currentLyricOffsetMs = readOffset(currentTrack?.id, source);
-    emitLyricOffsetChange({
-      trackId: currentTrack?.id ?? null,
-      offsetMs: currentLyricOffsetMs,
-    });
-  }
-  emitter.emit("lyric-change", snapshot());
 };
 
 /**
@@ -188,79 +145,47 @@ const LYRIC_OFFSET_LIMIT_MS = 60_000;
  * @param trackId - 目标 Track.id
  * @param offsetMs - 偏移值（毫秒），自动 clamp 到 ±60s
  */
-export const setLyricOffset = (trackId: string, offsetMs: number): void => {
+export const setLyricOffset = (trackId: string, source: LyricData, offsetMs: number): void => {
   if (!trackId) return;
   // IPC 进来可能是 NaN/Infinity，会污染所有下游时间叠加计算，统一视为清除
   const normalized = Number.isFinite(offsetMs) ? Math.trunc(offsetMs) : 0;
   const value = Math.max(-LYRIC_OFFSET_LIMIT_MS, Math.min(LYRIC_OFFSET_LIMIT_MS, normalized));
-  const key = offsetKey(trackId, currentSource);
+  const key = offsetKey(trackId, source);
   const map = { ...(store.get("player.lyricOffsets") ?? {}) };
   if (value === 0) delete map[key];
   else map[key] = value;
   store.set("player.lyricOffsets", map);
-  // 影响当前曲目则更新运行时缓存并广播
-  if (currentTrack && currentTrack.id === trackId) {
-    currentLyricOffsetMs = value;
-    emitLyricOffsetChange({ trackId, offsetMs: value });
-  }
+  emitLyricOffsetChange({ trackId, source, offsetMs: value });
 };
 
-/** 拉取当前完整状态 */
+/** 读取指定曲目、指定歌词源的偏移。 */
+export const getLyricOffset = (trackId: string, source: LyricData): number =>
+  readOffset(trackId, source);
+
+/** 拉取当前实际加载完成的播放状态。 */
 export const snapshot = (): NowPlayingSnapshot => ({
   track: currentTrack,
-  lyric: currentLyric,
-  source: currentSource,
+  detail: currentDetail,
   position: lastPosition,
   playing,
   state: playState,
   speed: playSpeed,
-  lyricOffsetMs: currentLyricOffsetMs,
   // 用 position 的成立时刻，接收端据此补偿其过期时长
   sendTimestamp: lastPositionAt || Date.now(),
 });
 
-/** 获取不含完整歌词正文的轻量播放快照 */
-export const lightSnapshot = () => ({
-  track: currentTrack,
-  position: lastPosition,
-  playing,
-  state: playState,
-  speed: playSpeed,
-  lyricOffsetMs: currentLyricOffsetMs,
-  lyricAvailable: currentLyric.length > 0,
-  lyricLineCount: currentLyric.length,
-  sendTimestamp: lastPositionAt || Date.now(),
-});
-
-/** 获取当前曲目的完整歌词快照 */
-export const lyricSnapshot = () => ({
-  trackId: currentTrack?.id ?? null,
-  lyric: currentLyric,
-  source: currentSource,
-  lyricOffsetMs: currentLyricOffsetMs,
-});
+export const lightSnapshot = snapshot;
 
 /** 清空 */
 export const clear = (): void => {
   currentTrack = null;
-  currentLyric = [];
-  currentSource = null;
-  currentLyricOffsetMs = 0;
-  currentOffsetKey = "";
-  emitter.emit("lyric-change", snapshot());
-  emitLyricOffsetChange({ trackId: null, offsetMs: 0 });
+  currentDetail = null;
 };
 
 /** 订阅歌曲切换 */
 export const onTrackChange = (listener: (data: { track: Track | null }) => void): (() => void) => {
   emitter.on("track-change", listener);
   return () => emitter.off("track-change", listener);
-};
-
-/** 订阅歌词内容变化 */
-export const onLyricChange = (listener: (snap: NowPlayingSnapshot) => void): (() => void) => {
-  emitter.on("lyric-change", listener);
-  return () => emitter.off("lyric-change", listener);
 };
 
 /** 订阅播放位置锚点 */

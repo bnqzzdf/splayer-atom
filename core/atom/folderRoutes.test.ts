@@ -137,6 +137,23 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
     const location = (await locationResponse.json()) as { path: string; focusPath: string };
     assert.equal(location.path, root);
     assert.equal(location.focusPath, path.join(root, "track.flac"));
+
+    const invalidBatch = await app.request("http://folder.test/library/folders/batch/queue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets: [{ kind: "path" }] }),
+    });
+    assert.equal(invalidBatch.status, 400);
+
+    const invalidBatchPlaylist = await app.request(
+      "http://folder.test/library/folders/batch/playlist",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlistId: "x", targets: [] }),
+      },
+    );
+    assert.equal(invalidBatchPlaylist.status, 400);
   } finally {
     database.closeDatabase();
     if (previousDataDir === undefined) delete process.env.ATOM_DATA_DIR;

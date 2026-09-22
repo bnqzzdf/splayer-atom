@@ -3,6 +3,8 @@ import { fetchBytes } from "@main/utils/fetchBytes";
 import type { Album, Track } from "@shared/types/player";
 import type {
   StreamingConnectResult,
+  StreamingConfigSnapshot,
+  StreamingConnectionStatus,
   StreamingLibrarySnapshot,
   StreamingPingResult,
   StreamingSearchResult,
@@ -25,27 +27,82 @@ import {
 } from "./connection";
 import { deleteLibraryByServer, getLibrarySnapshot, searchLibrary } from "./library";
 import { cancelStreamingSync, queueStreamingSync } from "./sync";
+import { publishCoreControlEvent } from "@main/services/coreControlEvents";
+
+let connectionStatus: StreamingConnectionStatus = { connected: false };
+
+const loadServers = (): StreamingConfigSnapshot => ({
+  ...getStreamingConfig(),
+  connectionStatus: { ...connectionStatus },
+});
+
+const publishConfig = (): StreamingConfigSnapshot => {
+  const snapshot = loadServers();
+  publishCoreControlEvent({ type: "streamingConfigUpdated", data: snapshot });
+  return snapshot;
+};
+
+const connect = async (serverId: string): Promise<StreamingConnectResult> => {
+  const result = await connectStreamingServer(serverId);
+  const activeServerId = getStreamingConfig().activeServerId;
+  if (activeServerId === serverId) {
+    connectionStatus = result.ok
+      ? { connected: true }
+      : { connected: false, error: result.error, errorCode: result.code };
+    publishConfig();
+  }
+  return result;
+};
 
 /** Streaming Core Control 服务；最终播放 URL 不属于本接口。 */
 export const streamingControl = {
-  loadServers: getStreamingConfig,
-  addServer: (input: StreamingServerInput): StreamingServerConfig => addStreamingServer(input),
+  loadServers,
+  addServer: (input: StreamingServerInput): StreamingServerConfig => {
+    const server = addStreamingServer(input);
+    publishConfig();
+    return server;
+  },
   updateServer: (serverId: string, input: StreamingServerInput): StreamingServerConfig => {
     invalidateStreamingSession(serverId);
     cancelStreamingSync(serverId);
-    return updateStreamingServer(serverId, input);
+    if (getStreamingConfig().activeServerId === serverId) connectionStatus = { connected: false };
+    const server = updateStreamingServer(serverId, input);
+    publishConfig();
+    return server;
   },
   removeServer: (serverId: string): void => {
+    const wasActive = getStreamingConfig().activeServerId === serverId;
     invalidateStreamingSession(serverId);
     cancelStreamingSync(serverId);
     removeStreamingServer(serverId);
+    if (wasActive) connectionStatus = { connected: false };
     if (isDbOpen()) deleteLibraryByServer(serverId);
+    publishConfig();
   },
-  setActiveServer: (serverId: string | null): void => setActiveStreamingServer(serverId),
+  setActiveServer: async (serverId: string | null): Promise<StreamingConfigSnapshot> => {
+    setActiveStreamingServer(serverId);
+    connectionStatus = { connected: false };
+    if (serverId) {
+      await connect(serverId);
+      return loadServers();
+    }
+    return publishConfig();
+  },
   testConnection: (input: StreamingServerInput, serverId?: string): Promise<StreamingPingResult> =>
     testStreamingConnection(input, serverId),
-  connect: (serverId: string): Promise<StreamingConnectResult> => connectStreamingServer(serverId),
-  disconnect: (serverId: string): void => invalidateStreamingSession(serverId),
+  connect,
+  disconnect: (serverId: string): void => {
+    invalidateStreamingSession(serverId);
+    if (getStreamingConfig().activeServerId === serverId) {
+      connectionStatus = { connected: false };
+      publishConfig();
+    }
+  },
+  /** Core 启动后自行恢复 active server，不依赖任何 Web Control 打开页面。 */
+  restoreActiveConnection: async (): Promise<void> => {
+    const serverId = getStreamingConfig().activeServerId;
+    if (serverId) await connect(serverId);
+  },
   getSnapshot: (serverId: string): StreamingLibrarySnapshot => getLibrarySnapshot(serverId),
   sync: (serverId: string, force = false): boolean =>
     queueStreamingSync(getStreamingServer(serverId), force),

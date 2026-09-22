@@ -21,6 +21,10 @@ const downloadStoreSource = readFileSync(
   new URL("../../src/stores/download.ts", import.meta.url),
   "utf8",
 );
+const downloadListSource = readFileSync(
+  new URL("../../src/components/list/DownloadList.vue", import.meta.url),
+  "utf8",
+);
 const downloadDirSource = readFileSync(
   new URL("../../src/components/settings/custom/DownloadDirConfig.vue", import.meta.url),
   "utf8",
@@ -84,6 +88,16 @@ test("Web Control exposes real Core download queue management", () => {
     downloadStoreSource,
     /subscribeCoreControlEvent\("downloadProgress", applyProgress\)/,
   );
+});
+
+test("download task removal never deletes completed media files", () => {
+  const removeSection = managerSource
+    .split("export const remove = (taskId: string): void => {")[1]
+    ?.split("/** 清空已结束任务 */")[0];
+  assert.ok(removeSection, "download remove implementation should exist");
+  assert.doesNotMatch(removeSection, /unlink|deleteDownloadedFile|filePath/);
+  assert.doesNotMatch(managerSource, /deleteDownloadedFile|LYRIC_SIDECAR_EXTS/);
+  assert.doesNotMatch(downloadListSource, /download\.deleteFile|confirmDelete\(/);
 });
 
 test("obsolete renderer download-resolution protocol is absent", () => {

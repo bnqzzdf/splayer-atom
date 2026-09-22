@@ -7,6 +7,7 @@ import type {
 } from "@shared/types/player";
 import type { TagEditRequest, TagWriteOutcome } from "@shared/types/tagEditor";
 import type { AlsaPlaybackMode } from "@shared/types/settings";
+import { isSameLyricOffsetSource } from "@shared/types/lyrics";
 import type { PersonalFmOptions } from "@/types/netease";
 import { handleEvent } from "./events";
 import type { RepeatMode, ShuffleMode } from "@/stores/status";
@@ -17,7 +18,11 @@ import { usePluginsStore } from "@/stores/plugins";
 import { useHistoryStore } from "@/stores/history";
 import { useLibraryStore } from "@/stores/library";
 import * as queue from "@/stores/queue";
-import { isAlsaDirectOutput, isDirettaOutput, isSampleProcessingUnavailableSelected } from "./directMode";
+import {
+  isAlsaDirectOutput,
+  isDirettaOutput,
+  isSampleProcessingUnavailableSelected,
+} from "./directMode";
 import * as playback from "@/services/playback";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as autoClose from "@/services/autoClose";
@@ -579,24 +584,6 @@ export const removeFromQueue = async (index: number): Promise<void> => {
 };
 
 /**
- * 文件删除后同步队列：移除被删曲目，当前播放曲被删则切下一首（队列空则停止）
- * @param ids - 被删除的 Track id 列表
- */
-export const purgeDeletedTracks = async (ids: readonly string[]): Promise<void> => {
-  const currentId = useMediaStore().track?.id;
-  // 先移除非当前曲：若先删当前曲，自动切到的下一首可能也在删除列表里，造成连环重载
-  for (const id of ids) {
-    if (id === currentId) continue;
-    const index = queue.findTrackIndex(id);
-    if (index !== -1) await removeFromQueue(index);
-  }
-  if (currentId && ids.includes(currentId)) {
-    const index = queue.findTrackIndex(currentId);
-    if (index !== -1) await removeFromQueue(index);
-  }
-};
-
-/**
  * 插入歌曲到队列指定位置，自动调整 playIndex
  * 队列中已有同 ID 歌曲时移动到目标位置
  * @param item - 要插入的歌曲
@@ -739,23 +726,30 @@ export const initPlayer = async (): Promise<void> => {
   unsubscribeCoreProjection?.();
   unsubscribeCoreProjection = subscribeCorePlayerProjection(handleEvent);
   unsubscribeLyricOffset?.();
-  unsubscribeLyricOffset = subscribeCoreControlEvent("lyricOffset", ({ offsetMs }) => {
-    status.lyricOffsetMs = offsetMs;
-    useMediaStore().updateLyricIndex(playback.getCurrentTime() + offsetMs);
-  });
-  try {
-    status.lyricOffsetMs = await nowPlayingClient.getLyricOffset();
-  } catch (error) {
-    console.error("[player] getLyricOffset failed", error);
-  }
+  unsubscribeLyricOffset = subscribeCoreControlEvent(
+    "lyricOffset",
+    ({ trackId, source, offsetMs }) => {
+      const media = useMediaStore();
+      if (media.track?.id !== trackId) return;
+      if (!isSameLyricOffsetSource(media.activeLyric, source)) return;
+      status.lyricOffsetMs = offsetMs;
+      media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
+    },
+  );
 
   await refreshDevices();
   const media = useMediaStore();
   const current = status.currentTrack;
   if (current) {
-    media.setTrack(current);
+    let loaded = null;
+    try {
+      loaded = await nowPlayingClient.getCurrentPlayback();
+    } catch (error) {
+      console.error("[player] getCurrentPlayback failed", error);
+    }
+    media.setTrack(loaded?.track ?? current, loaded?.detail ?? undefined);
     media.setPlaybackContext(status.currentPlaybackContext);
-    lyricLoader.beginLoad();
+    void lyricLoader.loadForTrack(loaded?.detail ?? null);
   }
 
   const currentStatus = await playerClient.getStatus();

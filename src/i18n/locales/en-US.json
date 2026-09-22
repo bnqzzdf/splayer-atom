@@ -539,7 +539,6 @@
       "copyPath": "Copy File Path",
       "editTags": "Edit Metadata",
       "download": "Download to Core",
-      "deleteFile": "Delete File",
       "searchSame": "Search by Name",
       "more": "More",
       "copyTitle": "Copy Title",
@@ -556,10 +555,7 @@
     },
     "delete": {
       "removeConfirmOne": "Remove \"{title}\" from {type}?",
-      "removeConfirm": "Remove {count} songs from {type}?",
-      "fileTitle": "Delete File",
-      "fileConfirmOne": "Permanently delete \"{title}\" from disk? This cannot be undone",
-      "fileConfirm": "Permanently delete {count} files from disk? This cannot be undone"
+      "removeConfirm": "Remove {count} songs from {type}?"
     },
     "toast": {
       "addedToNext": "Added to play next",
@@ -656,9 +652,6 @@
     "retry": "Retry",
     "openFolder": "Show in folder",
     "remove": "Remove",
-    "deleteFile": "Delete file",
-    "deleteConfirmTitle": "Delete downloaded file",
-    "deleteConfirmContent": "This permanently deletes the song file from disk and cannot be undone. Delete it?",
     "tagWarning": "Failed to write tags; file saved",
     "resolveFailed": "Cannot download to Core: {title}",
     "alreadyQueued": "Already in the Core download queue",
@@ -1422,7 +1415,6 @@
       "logout": "Log Out",
       "logoutTitle": "Log Out from {name}",
       "logoutConfirm": "Are you sure you want to log out of current {name} account ({user})?",
-      "cookieHint": "Paste this platform's full cookie string (QM needs uin / qm_keyst, KG needs token / userid)",
       "cookieTitle": "Set {name} Cookie",
       "cookiePlaceholder": "Please enter Cookie",
       "toast": {
@@ -1546,18 +1538,9 @@
         "homepage": "Homepage"
       },
       "grant": {
-        "network": {
-          "label": "Network",
-          "desc": "Can make network requests"
-        },
-        "control": {
-          "label": "Control",
-          "desc": "Can control the player"
-        },
-        "ui": {
-          "label": "Interface",
-          "desc": "Can extend or modify the app interface"
-        }
+        "network": { "label": "Network", "desc": "Can make network requests" },
+        "control": { "label": "Control", "desc": "Can control the player" },
+        "ui": { "label": "Interface", "desc": "Can extend or modify the app interface" }
       }
     },
     "pluginManager": {

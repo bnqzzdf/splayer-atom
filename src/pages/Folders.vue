@@ -2,6 +2,7 @@
 defineOptions({ name: "Folders" });
 
 import type {
+  FolderBatchTarget,
   FolderBrowseEntry,
   FolderBrowsePage,
   FolderContainerResult,
@@ -48,6 +49,9 @@ import IconZoomOut from "~icons/lucide/zoom-out";
 import IconShuffle from "~icons/lucide/shuffle";
 import IconList from "~icons/lucide/list";
 import IconLayoutGrid from "~icons/lucide/layout-grid";
+import IconListChecks from "~icons/lucide/list-checks";
+import IconArrowLeftRight from "~icons/lucide/arrow-left-right";
+import IconX from "~icons/lucide/x";
 
 type ViewRow =
   | { kind: "section"; key: string; label: string; count: number }
@@ -114,6 +118,8 @@ const filterQuery = ref("");
 let ignoreFilterReload = false;
 const folderViewMode = ref<"list" | "grid">("list");
 const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
+const batchActive = ref(false);
+const batchSelectedKeys = shallowRef<Set<string>>(new Set());
 
 const createOpen = ref(false);
 const playlistPickerOpen = ref(false);
@@ -123,6 +129,7 @@ const createTargetPath = ref("");
 const createTargetTrack = shallowRef<{ containerPath: string; trackId: string; title: string } | null>(
   null,
 );
+const createBatchTargets = shallowRef<FolderBatchTarget[] | null>(null);
 
 const viewerOpen = ref(false);
 const viewerMaterial = shallowRef<FolderMaterialEntry | null>(null);
@@ -223,6 +230,80 @@ const viewRows = computed<ViewRow[]>(() => {
   );
   return rows;
 });
+
+const batchTargetForRow = (
+  row: ViewRow,
+): { key: string; target: FolderBatchTarget } | null => {
+  if (row.kind === "container-track") {
+    return {
+      key: row.key,
+      target: {
+        kind: "container-track",
+        containerPath: row.containerPath,
+        trackId: row.track.id,
+      },
+    };
+  }
+  if (row.kind !== "entry") return null;
+  if (row.entry.kind === "directory" || row.entry.kind === "material") return null;
+  return { key: row.key, target: { kind: "path", path: row.entry.path } };
+};
+
+const batchCandidates = computed(() =>
+  viewRows.value
+    .map(batchTargetForRow)
+    .filter(
+      (item): item is { key: string; target: FolderBatchTarget } => item !== null,
+    ),
+);
+const batchSelectedTargets = computed(() =>
+  batchCandidates.value
+    .filter((item) => batchSelectedKeys.value.has(item.key))
+    .map((item) => item.target),
+);
+const batchSelectedCount = computed(() => batchSelectedTargets.value.length);
+const batchAllSelected = computed(
+  () =>
+    batchCandidates.value.length > 0 &&
+    batchSelectedCount.value === batchCandidates.value.length,
+);
+const batchPartialSelected = computed(
+  () => batchSelectedCount.value > 0 && !batchAllSelected.value,
+);
+
+const setBatchSelection = (keys: Iterable<string>): void => {
+  batchSelectedKeys.value = new Set(keys);
+};
+
+const enterBatch = (): void => {
+  batchActive.value = true;
+  setBatchSelection([]);
+};
+
+const exitBatch = (): void => {
+  batchActive.value = false;
+  setBatchSelection([]);
+};
+
+const toggleBatchKey = (key: string): void => {
+  const next = new Set(batchSelectedKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  batchSelectedKeys.value = next;
+};
+
+const toggleBatchAll = (): void => {
+  if (batchAllSelected.value) setBatchSelection([]);
+  else setBatchSelection(batchCandidates.value.map((item) => item.key));
+};
+
+const invertBatchSelection = (): void => {
+  setBatchSelection(
+    batchCandidates.value
+      .filter((item) => !batchSelectedKeys.value.has(item.key))
+      .map((item) => item.key),
+  );
+};
 
 const pdfUrl = computed(() => {
   if (!viewerMaterial.value || viewerMaterial.value.materialType !== "pdf") return "";
@@ -562,6 +643,22 @@ const runAction = async (
   }
 };
 
+const runBatchAction = async (mode: "play" | "play-next" | "queue"): Promise<void> => {
+  const targets = batchSelectedTargets.value;
+  if (targets.length === 0) return;
+  try {
+    const result = await folderBrowserClient.batchPlay(mode, targets);
+    if (result.failed.length > 0) toast.warning(result.failed[0]);
+    if (mode === "queue" && result.count > 0) toast.success(t("songList.toast.addedToQueue"));
+    if (mode === "play-next" && result.count > 0) {
+      toast.success(t("songList.toast.addedToNext"));
+    }
+    if (result.count > 0) exitBatch();
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  }
+};
+
 const playContainerTrack = (track: Track, mode: "play" | "play-next" | "queue"): void => {
   if (mode === "play") void player.playNow(track);
   else if (mode === "play-next") {
@@ -598,6 +695,7 @@ const openCreatePlaylist = (targetPath: string, recursive: boolean): void => {
   createTargetPath.value = targetPath;
   createRecursive.value = recursive;
   createTargetTrack.value = null;
+  createBatchTargets.value = null;
   playlistPickerOpen.value = true;
   if (!playlistStore.initialized) {
     void playlistStore.load().catch((value) =>
@@ -609,11 +707,26 @@ const openCreatePlaylist = (targetPath: string, recursive: boolean): void => {
 const openContainerTrackPlaylist = (track: Track, containerPath: string): void => {
   createTargetPath.value = containerPath;
   createRecursive.value = false;
+  createBatchTargets.value = null;
   createTargetTrack.value = {
     containerPath,
     trackId: track.id,
     title: track.title,
   };
+  playlistPickerOpen.value = true;
+  if (!playlistStore.initialized) {
+    void playlistStore.load().catch((value) =>
+      toast.error(value instanceof Error ? value.message : String(value)),
+    );
+  }
+};
+
+const openBatchPlaylist = (): void => {
+  if (batchSelectedTargets.value.length === 0 || !currentPath.value) return;
+  createTargetPath.value = currentPath.value;
+  createRecursive.value = false;
+  createTargetTrack.value = null;
+  createBatchTargets.value = [...batchSelectedTargets.value];
   playlistPickerOpen.value = true;
   if (!playlistStore.initialized) {
     void playlistStore.load().catch((value) =>
@@ -628,18 +741,21 @@ const openPlaylistCreate = (): void => {
 };
 
 const addPlaylistTarget = async (playlistId: string): Promise<number> => {
+  const batchTargets = createBatchTargets.value;
   const trackTarget = createTargetTrack.value;
-  const result = trackTarget
-    ? await folderBrowserClient.addContainerTrackToPlaylist(
-        playlistId,
-        trackTarget.containerPath,
-        trackTarget.trackId,
-      )
-    : await folderBrowserClient.addToPlaylist(
-        playlistId,
-        createTargetPath.value,
-        createRecursive.value,
-      );
+  const result = batchTargets
+    ? await folderBrowserClient.addBatchToPlaylist(playlistId, batchTargets)
+    : trackTarget
+      ? await folderBrowserClient.addContainerTrackToPlaylist(
+          playlistId,
+          trackTarget.containerPath,
+          trackTarget.trackId,
+        )
+      : await folderBrowserClient.addToPlaylist(
+          playlistId,
+          createTargetPath.value,
+          createRecursive.value,
+        );
   await playlistStore.load();
   return result.added;
 };
@@ -648,9 +764,12 @@ const handlePlaylistPick = async (playlistId: string): Promise<void> => {
   if (!createTargetPath.value || playlistSubmitting.value) return;
   playlistSubmitting.value = true;
   try {
+    const wasBatch = !!createBatchTargets.value;
     const added = await addPlaylistTarget(playlistId);
     toast.success(t("collection.tracksAdded", { count: added }));
     playlistPickerOpen.value = false;
+    createBatchTargets.value = null;
+    if (wasBatch) exitBatch();
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   } finally {
@@ -661,14 +780,23 @@ const handlePlaylistPick = async (playlistId: string): Promise<void> => {
 const handleCreated = async (playlistId: string): Promise<void> => {
   if (!createTargetPath.value) return;
   try {
+    const wasBatch = !!createBatchTargets.value;
     const added = await addPlaylistTarget(playlistId);
     toast.success(t("collection.tracksAdded", { count: added }));
+    createBatchTargets.value = null;
+    if (wasBatch) exitBatch();
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   }
 };
 
 const folderMenuItems = computed<DropdownMenuItem[]>(() => [
+  {
+    key: "batchManage",
+    label: t("songList.batch.manage"),
+    icon: IconListChecks,
+    disabled: batchCandidates.value.length === 0,
+  },
   {
     key: "shuffle",
     label: t("folder.shuffle"),
@@ -715,7 +843,8 @@ const folderMenuItems = computed<DropdownMenuItem[]>(() => [
 ]);
 
 const handleFolderMenu = (key: string): void => {
-  if (key === "playCurrent") void runAction(currentPath.value, "play", false);
+  if (key === "batchManage") enterBatch();
+  else if (key === "playCurrent") void runAction(currentPath.value, "play", false);
   else if (key === "playNext") void runAction(currentPath.value, "play-next", true);
   else if (key === "playNextCurrent") void runAction(currentPath.value, "play-next", false);
   else if (key === "queue") void runAction(currentPath.value, "queue", true);
@@ -936,6 +1065,7 @@ watch(viewerOpen, (open) => {
 watch(
   currentPath,
   (path) => {
+    exitBatch();
     restoreFolderFilter(path);
     void loadCurrent();
   },
@@ -1035,62 +1165,126 @@ onBeforeUnmount(() => {
         v-if="currentPath && !searchQuery.trim()"
         class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-solid border-primary/12 bg-surface-panel px-3 py-2"
       >
-        <SButton
-          type="primary"
-          variant="secondary"
-          size="small"
-          round
-          @click="runAction(currentPath, 'play', true)"
-        >
-          <template #icon><IconPlay /></template>
-          {{ t("common.playAll") }}
-        </SButton>
-        <SButton
-          variant="secondary"
-          size="small"
-          round
-          :disabled="scanning"
-          @click="handleScan(true)"
-        >
-          <template #icon>
-            <IconRefreshCw :class="scanCoversCurrent ? 'animate-spin' : ''" />
-          </template>
-          {{ t("folder.scan") }}
-        </SButton>
-        <SDropdownMenu :items="folderMenuItems" align="start" @select="handleFolderMenu">
-          <template #trigger>
-            <SButton variant="secondary" circle size="small">
-              <template #icon><IconEllipsis /></template>
-            </SButton>
-          </template>
-        </SDropdownMenu>
-        <SInput
-          v-model="filterQuery"
-          :placeholder="t('folder.filterPlaceholder')"
-          clearable
-          round
-          class="ml-auto w-full sm:w-72"
-        >
-          <template #prefix><IconSearch class="size-4 opacity-50" /></template>
-        </SInput>
-        <SButton
-          variant="secondary"
-          circle
-          size="small"
-          :title="t(folderViewMode === 'list' ? 'folder.gridView' : 'folder.listView')"
-          @click="folderViewMode = folderViewMode === 'list' ? 'grid' : 'list'"
-        >
-          <template #icon>
-            <IconLayoutGrid v-if="folderViewMode === 'list'" />
-            <IconList v-else />
-          </template>
-        </SButton>
-        <div
-          v-if="scanCoversCurrent && scanProgress"
-          class="text-xs tabular-nums text-on-surface-variant/60"
-        >
-          {{ scanProgress.scanned }}/{{ scanProgress.total || "—" }}
-        </div>
+        <template v-if="batchActive">
+          <SCheckbox
+            :checked="batchAllSelected"
+            :indeterminate="batchPartialSelected"
+            size="small"
+            @update:checked="toggleBatchAll"
+          />
+          <span class="shrink-0 text-sm tabular-nums text-on-surface-variant">
+            {{ t("songList.batch.selected", { count: batchSelectedCount }) }}
+          </span>
+          <SDivider vertical />
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="batchSelectedCount === 0"
+            @click="invertBatchSelection"
+          >
+            <template #icon><IconArrowLeftRight class="size-3.5" /></template>
+            {{ t("songList.batch.invert") }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="batchSelectedCount === 0"
+            @click="runBatchAction('play')"
+          >
+            <template #icon><IconPlay class="size-3.5" /></template>
+            {{ t("folder.play") }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="batchSelectedCount === 0"
+            @click="runBatchAction('play-next')"
+          >
+            <template #icon><IconListEnd class="size-3.5" /></template>
+            {{ t("folder.playNext") }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="batchSelectedCount === 0"
+            @click="runBatchAction('queue')"
+          >
+            <template #icon><IconListMusic class="size-3.5" /></template>
+            {{ t("folder.queue") }}
+          </SButton>
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="batchSelectedCount === 0"
+            @click="openBatchPlaylist"
+          >
+            <template #icon><IconListPlus class="size-3.5" /></template>
+            {{ t("folder.addToPlaylist") }}
+          </SButton>
+          <SDivider vertical />
+          <SButton variant="ghost" size="small" @click="exitBatch">
+            <template #icon><IconX class="size-3.5" /></template>
+            {{ t("songList.batch.exit") }}
+          </SButton>
+        </template>
+        <template v-else>
+          <SButton
+            type="primary"
+            variant="secondary"
+            size="small"
+            round
+            @click="runAction(currentPath, 'play', true)"
+          >
+            <template #icon><IconPlay /></template>
+            {{ t("common.playAll") }}
+          </SButton>
+          <SButton
+            variant="secondary"
+            size="small"
+            round
+            :disabled="scanning"
+            @click="handleScan(true)"
+          >
+            <template #icon>
+              <IconRefreshCw :class="scanCoversCurrent ? 'animate-spin' : ''" />
+            </template>
+            {{ t("folder.scan") }}
+          </SButton>
+          <SDropdownMenu :items="folderMenuItems" align="start" @select="handleFolderMenu">
+            <template #trigger>
+              <SButton variant="secondary" circle size="small">
+                <template #icon><IconEllipsis /></template>
+              </SButton>
+            </template>
+          </SDropdownMenu>
+          <SInput
+            v-model="filterQuery"
+            :placeholder="t('folder.filterPlaceholder')"
+            clearable
+            round
+            class="ml-auto w-full sm:w-72"
+          >
+            <template #prefix><IconSearch class="size-4 opacity-50" /></template>
+          </SInput>
+          <SButton
+            variant="secondary"
+            circle
+            size="small"
+            :title="t(folderViewMode === 'list' ? 'folder.gridView' : 'folder.listView')"
+            @click="folderViewMode = folderViewMode === 'list' ? 'grid' : 'list'"
+          >
+            <template #icon>
+              <IconLayoutGrid v-if="folderViewMode === 'list'" />
+              <IconList v-else />
+            </template>
+          </SButton>
+          <div
+            v-if="scanCoversCurrent && scanProgress"
+            class="text-xs tabular-nums text-on-surface-variant/60"
+          >
+            {{ scanProgress.scanned }}/{{ scanProgress.total || "—" }}
+          </div>
+        </template>
       </div>
     </div>
 
@@ -1246,7 +1440,11 @@ onBeforeUnmount(() => {
                 :key="entry.path"
                 class="group relative min-w-0 rounded-xl border border-solid border-primary/10 bg-surface-panel transition-colors hover:bg-primary/6"
               >
-                <button class="block w-full min-w-0 p-3 text-left" @click="activateEntry(entry)">
+                <button
+                  class="block w-full min-w-0 p-3 text-left"
+                  :class="batchActive ? 'cursor-default opacity-60' : ''"
+                  @click="batchActive ? undefined : activateEntry(entry)"
+                >
                   <div
                     class="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-primary/8 text-primary"
                   >
@@ -1264,7 +1462,7 @@ onBeforeUnmount(() => {
                     {{ entry.name }}
                   </div>
                 </button>
-                <div class="absolute right-2 top-2">
+                <div v-if="!batchActive" class="absolute right-2 top-2">
                   <SDropdownMenu
                     :items="entryMenu(entry)"
                     align="end"
@@ -1284,12 +1482,23 @@ onBeforeUnmount(() => {
           <div
             v-else-if="item.kind === 'container-track'"
             class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors"
-            :class="highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6'"
+            :class="[
+              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
+              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
+            ]"
+            @click="batchActive ? toggleBatchKey(item.key) : undefined"
           >
-            <IconMusic class="size-4 shrink-0 text-primary/70" />
+            <SCheckbox
+              v-if="batchActive"
+              :checked="batchSelectedKeys.has(item.key)"
+              size="small"
+              @update:checked="toggleBatchKey(item.key)"
+              @click.stop
+            />
+            <IconMusic v-else class="size-4 shrink-0 text-primary/70" />
             <button
               class="min-w-0 flex-1 text-left"
-              @dblclick="playContainerTrack(item.track, 'play')"
+              @dblclick="batchActive ? undefined : playContainerTrack(item.track, 'play')"
             >
               <div class="truncate text-sm font-medium">{{ item.track.title }}</div>
               <div class="truncate text-xs text-on-surface-variant/50">
@@ -1297,6 +1506,7 @@ onBeforeUnmount(() => {
               </div>
             </button>
             <SButton
+              v-if="!batchActive"
               variant="text"
               circle
               size="small"
@@ -1305,6 +1515,7 @@ onBeforeUnmount(() => {
               <template #icon><IconPlay /></template>
             </SButton>
             <SDropdownMenu
+              v-if="!batchActive"
               :items="[
                 { key: 'playNext', label: t('folder.playNext'), icon: IconListEnd },
                 { key: 'queue', label: t('folder.queue'), icon: IconListMusic },
@@ -1329,8 +1540,29 @@ onBeforeUnmount(() => {
           <div
             v-else
             class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors"
-            :class="highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6'"
+            :class="[
+              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
+              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
+            ]"
+            @click="
+              batchActive &&
+              item.entry.kind !== 'directory' &&
+              item.entry.kind !== 'material'
+                ? toggleBatchKey(item.key)
+                : undefined
+            "
           >
+            <SCheckbox
+              v-if="
+                batchActive &&
+                item.entry.kind !== 'directory' &&
+                item.entry.kind !== 'material'
+              "
+              :checked="batchSelectedKeys.has(item.key)"
+              size="small"
+              @update:checked="toggleBatchKey(item.key)"
+              @click.stop
+            />
             <template v-if="item.entry.kind === 'material' && materialHasThumbnail(item.entry)">
               <img
                 :src="folderBrowserClient.thumbnailUrl(item.entry.path)"
@@ -1356,7 +1588,20 @@ onBeforeUnmount(() => {
             />
             <IconFileAudio v-else class="size-6 shrink-0 text-primary" />
 
-            <button class="min-w-0 flex-1 text-left" @click="activateEntry(item.entry)">
+            <button
+              class="min-w-0 flex-1 text-left"
+              :class="
+                batchActive &&
+                (item.entry.kind === 'directory' || item.entry.kind === 'material')
+                  ? 'cursor-default opacity-60'
+                  : ''
+              "
+              @click="
+                batchActive
+                  ? undefined
+                  : activateEntry(item.entry)
+              "
+            >
               <div class="line-clamp-2 break-words text-sm font-medium">
                 {{ item.entry.kind === "track" ? item.entry.track.title : item.entry.name }}
               </div>
@@ -1385,11 +1630,11 @@ onBeforeUnmount(() => {
             </button>
 
             <IconChevronRight
-              v-if="item.entry.kind === 'directory'"
+              v-if="item.entry.kind === 'directory' && !batchActive"
               class="size-4 shrink-0 opacity-30"
             />
             <SButton
-              v-else-if="item.entry.kind !== 'material'"
+              v-else-if="item.entry.kind !== 'material' && !batchActive"
               variant="text"
               circle
               size="small"
@@ -1398,7 +1643,7 @@ onBeforeUnmount(() => {
               <template #icon><IconPlay /></template>
             </SButton>
             <SDropdownMenu
-              v-if="entryMenu(item.entry).length"
+              v-if="!batchActive && entryMenu(item.entry).length"
               :items="entryMenu(item.entry)"
               align="end"
               @select="(key: string) => handleEntryMenu(item.entry, key)"

@@ -24,7 +24,6 @@ import IconLucideListEnd from "~icons/lucide/list-end";
 import IconLucideListPlus from "~icons/lucide/list-plus";
 import IconLucideListMinus from "~icons/lucide/list-minus";
 import IconLucideDownload from "~icons/lucide/download";
-import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideArrowLeftRight from "~icons/lucide/arrow-left-right";
 import IconLucideX from "~icons/lucide/x";
 import IconLucideCloud from "~icons/lucide/cloud";
@@ -259,7 +258,6 @@ const { items: contextMenuItems, handleSelect: onContextMenu } = useTrackMenu(co
   playbackContext: computed(() => props.playbackContext),
   onAddToPlaylist: (track) => openPicker([track]),
   onRemove: (track) => batch.requestDelete([track], "remove"),
-  onDeleteFile: (track) => batch.requestDelete([track], "file"),
   onRemoveFromCloud: (track) => batch.requestDelete([track], "cloud"),
   onEditTags: (track) => {
     tagEditorTrack.value = track;
@@ -414,17 +412,6 @@ defineExpose({
               >
                 <template #icon><IconLucideCloudOff class="size-3.5" /></template>
                 <span>{{ t("cloud.removeAction") }}</span>
-              </SButton>
-              <SButton
-                v-if="source === 'local'"
-                type="error"
-                variant="ghost"
-                size="small"
-                :disabled="batch.selectedCount.value === 0"
-                @click="batch.batchDelete"
-              >
-                <template #icon><IconLucideTrash2 class="size-3.5" /></template>
-                <span>{{ t("songList.context.deleteFile") }}</span>
               </SButton>
               <SDivider vertical />
               <SButton variant="ghost" size="small" @click="batch.exit">
