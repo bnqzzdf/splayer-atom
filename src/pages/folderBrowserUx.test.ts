@@ -54,6 +54,8 @@ test("Folder presentation supports list/grid without changing route semantics", 
   assert.ok(foldersSource.includes("atom-folder-view-mode"));
   assert.ok(foldersSource.includes('kind: "directory-grid"'));
   assert.ok(foldersSource.includes("directoryThumbnailUrl(entry.path)"));
+  assert.ok(foldersSource.includes('<div class="absolute right-2 top-2">'));
+  assert.equal(foldersSource.includes('class="absolute right-2 top-2 opacity-90"'), false);
 });
 
 test("Folder container splits can be added individually to an existing or new playlist", () => {

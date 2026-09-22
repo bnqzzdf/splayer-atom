@@ -1264,22 +1264,19 @@ onBeforeUnmount(() => {
                     {{ entry.name }}
                   </div>
                 </button>
-                <SDropdownMenu
-                  :items="entryMenu(entry)"
-                  align="end"
-                  @select="(key: string) => handleEntryMenu(entry, key)"
-                >
-                  <template #trigger>
-                    <SButton
-                      variant="secondary"
-                      circle
-                      size="small"
-                      class="absolute right-2 top-2 opacity-90"
-                    >
-                      <template #icon><IconEllipsis /></template>
-                    </SButton>
-                  </template>
-                </SDropdownMenu>
+                <div class="absolute right-2 top-2">
+                  <SDropdownMenu
+                    :items="entryMenu(entry)"
+                    align="end"
+                    @select="(key: string) => handleEntryMenu(entry, key)"
+                  >
+                    <template #trigger>
+                      <SButton variant="secondary" circle size="small" class="opacity-90">
+                        <template #icon><IconEllipsis /></template>
+                      </SButton>
+                    </template>
+                  </SDropdownMenu>
+                </div>
               </div>
             </div>
           </section>
