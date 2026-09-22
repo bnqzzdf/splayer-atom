@@ -7,6 +7,7 @@ import {
   pluginPlaybackSource,
 } from "../../shared/utils/pluginPlayback";
 
+const playerLoadSource = readFileSync(new URL("./playerLoad.ts", import.meta.url), "utf8");
 const resolverSource = readFileSync(
   new URL("./playbackSourceResolver.ts", import.meta.url),
   "utf8",
@@ -172,4 +173,17 @@ test("TIDAL 非订阅不再报「无法获取播放地址」", () => {
   assert.ok(tidal, "resolveTidal 应当存在");
   assert.match(tidal, /ErrorCode\.PROVIDER_VIP_REQUIRED/);
   assert.ok(!tidal.includes("ErrorCode.URL_RESOLVE_FAILED"));
+});
+
+test("输出格式约束不得被误判成网络错误（http 源也一样）", () => {
+  assert.ok(playerLoadSource, "playerLoad 源码应当可读");
+  const classify = playerLoadSource
+    .split("const classifyLoadError = (error: unknown, source: string): ErrorCode => {")[1]
+    ?.split("};")[0];
+  assert.ok(classify, "classifyLoadError 应当存在");
+  const fmtIdx = classify.indexOf("isNativeOutputFormatError(error)");
+  const netIdx = classify.indexOf("ErrorCode.NETWORK_ERROR");
+  assert.ok(fmtIdx >= 0, "必须先识别输出格式约束");
+  assert.ok(netIdx > fmtIdx, "格式约束判定必须排在 NETWORK_ERROR 回退之前");
+  assert.match(playerLoadSource, /strict Source Direct/);
 });
