@@ -28,10 +28,14 @@ test("Node Core mounts one combined Control router", () => {
 test("active Library requests use the Core client and shared event envelope", () => {
   assert.match(libraryStoreSource, /libraryClient\.getTracks\(\)/);
   assert.match(libraryStoreSource, /libraryClient\.addScanDir\(dir\)/);
+  assert.match(libraryStoreSource, /libraryClient\.getLikedTrackIds\(\)/);
+  assert.match(libraryStoreSource, /libraryClient\.importLikedTrackIds\(legacyLiked\)/);
+  assert.match(libraryStoreSource, /libraryClient\.setTrackLiked\(trackId, liked\)/);
   assert.match(
     libraryStoreSource,
     /subscribeCoreControlEvent\("libraryScanProgress", \(data\) => \{/,
   );
+  assert.match(libraryStoreSource, /subscribeCoreControlEvent\("libraryLikesChanged"/);
   assert.doesNotMatch(
     libraryStoreSource,
     /window\.api\.library\.(?:getTracks|getAlbums|getArtists|getAlbumTracks|getArtistTracks|prefetchArtistAvatars|scan|cancelScan|addScanDir|removeScanDir|deleteTracks)/,

@@ -41,25 +41,25 @@ const reconcileSessionTrack = async (
   const expected = session.current;
   if (!expected) return;
   try {
-    const loaded = await nowPlayingClient.getCurrentTrack();
-    if (generation !== sessionTrackReconcileGeneration || !loaded) return;
+    const loaded = await nowPlayingClient.getCurrentPlayback();
+    if (generation !== sessionTrackReconcileGeneration || !loaded.track) return;
     const status = useStatusStore();
     if (!isSameTrackIdentity(status.currentTrack, expected)) return;
-    if (!isSameTrackIdentity(loaded, expected)) return;
+    if (!isSameTrackIdentity(loaded.track, expected)) return;
     const media = useMediaStore();
     if (isSameTrackIdentity(media.track, expected)) return;
 
     // trackLoaded 丢失时旧 detail/歌词也属于上一曲；先原子清掉旧 presentation 再恢复已加载 Track。
     media.clear();
-    media.setTrack(loaded);
+    media.setTrack(loaded.track, loaded.detail ?? undefined);
     media.setPlaybackContext(queue.getQueueItem(session.index)?.context);
     status.trackLoading = false;
-    status.duration = loaded.duration || status.duration;
+    status.duration = loaded.track.duration || status.duration;
     playback.setDuration(status.duration);
-    void lyricLoader.loadForTrack(null);
-    extractColorFromUrl(loaded.cover ?? loaded.coverOriginal ?? null);
-    void coverLoader.loadCoverForTrack(loaded);
-    void useHistoryStore().record(loaded);
+    void lyricLoader.loadForTrack(loaded.detail);
+    extractColorFromUrl(loaded.track.cover ?? loaded.track.coverOriginal ?? null);
+    void coverLoader.loadCoverForTrack(loaded.track);
+    void useHistoryStore().record(loaded.track);
   } catch {
     // 短暂断线由下一次 session snapshot / WS 重连继续恢复，不制造额外错误状态。
   }

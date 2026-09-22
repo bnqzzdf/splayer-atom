@@ -77,6 +77,12 @@ export interface LibraryApi {
   removeScanDir: (dir: string) => Promise<IpcResponse>;
   /** 获取已配置的扫描目录 */
   getScanDirs: () => Promise<IpcResponse<string[]>>;
+  /** 获取 Core 持有的本地红心曲目 ID。 */
+  getLikedTrackIds: () => Promise<IpcResponse<string[]>>;
+  /** 修改一首本地曲目的红心状态。 */
+  setTrackLiked: (trackId: string, liked: boolean) => Promise<IpcResponse<string[]>>;
+  /** 一次性并集合并旧 Web Control 的本地红心数据。 */
+  importLikedTrackIds: (trackIds: string[]) => Promise<IpcResponse<string[]>>;
   /** 删除曲目文件并从数据库移除 */
   deleteTracks: (paths: string[]) => Promise<IpcResponse<{ deleted: number; failed: number }>>;
   /** 读取本地文件的可编辑标签 */

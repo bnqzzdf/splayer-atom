@@ -83,6 +83,8 @@ test("Web Streaming Control uses Core Protocol while playable URLs stay out of i
 });
 
 test("Streaming library refresh uses the shared Core event envelope", () => {
+  assert.match(eventTypes, /type: "streamingConfigUpdated"/);
+  assert.match(controlService, /publishCoreControlEvent\(\{ type: "streamingConfigUpdated"/);
   assert.match(eventTypes, /type: "streamingLibraryUpdated"/);
   assert.match(
     syncSource,
@@ -90,6 +92,8 @@ test("Streaming library refresh uses the shared Core event envelope", () => {
   );
   assert.doesNotMatch(syncSource, /sendToMain\("streaming:libraryUpdated"/);
   assert.match(storeSource, /streamingClient\.onLibraryUpdated/);
+  assert.match(storeSource, /streamingClient\.onConfigUpdated/);
+  assert.doesNotMatch(storeSource, /connectToServer\(activeServerId\.value\)/);
 });
 
 test("Streaming search stays Core-owned and includes playlists", () => {

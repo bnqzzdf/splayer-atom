@@ -29,9 +29,10 @@ export const useLibraryStore = defineStore("library", () => {
   /** 本地红心 id 集合 */
   const likedIdSet = shallowRef<Set<string>>(new Set());
 
-  /** 持久化喜欢列表 */
-  const persistLiked = (): void => {
-    trackDb.setItem(LIKED_IDS_KEY, [...likedOrderedIds.value]).catch(() => {});
+  /** 应用 Core 权威本地红心快照。 */
+  const applyLikedIds = (ids: string[]): void => {
+    likedOrderedIds.value = [...ids];
+    likedIdSet.value = new Set(ids);
   };
 
   /** 是否已收藏 */
@@ -41,19 +42,15 @@ export const useLibraryStore = defineStore("library", () => {
    * 切换收藏
    * @param trackId 歌曲 id
    */
-  const toggleLike = (trackId: string): boolean => {
+  const toggleLike = async (trackId: string): Promise<boolean> => {
     if (!trackId) return false;
-    const next = new Set(likedIdSet.value);
-    if (next.has(trackId)) {
-      next.delete(trackId);
-      likedOrderedIds.value = likedOrderedIds.value.filter((id) => id !== trackId);
-    } else {
-      next.add(trackId);
-      likedOrderedIds.value = [trackId, ...likedOrderedIds.value];
+    const liked = !likedIdSet.value.has(trackId);
+    const result = await libraryClient.setTrackLiked(trackId, liked);
+    if (!result.success || !result.data) {
+      throw new Error(result.error ?? "LIBRARY_LIKE_FAILED");
     }
-    likedIdSet.value = next;
-    persistLiked();
-    return next.has(trackId);
+    applyLikedIds(result.data);
+    return liked;
   };
 
   /** 标准化歌手名 */
@@ -109,25 +106,30 @@ export const useLibraryStore = defineStore("library", () => {
     // 扫描进度是曲库域投影，由 store 常驻订阅，避免关闭设置页后丢失完成事件。
     subscribeScanProgress();
     // 先从 IndexedDB 读缓存，立即渲染
-    const [cached, likedCached] = await Promise.all([
+    const [cached, legacyLiked] = await Promise.all([
       trackDb.getItem<Track[]>("tracks").catch(() => null),
       trackDb.getItem<string[]>(LIKED_IDS_KEY).catch(() => null),
     ]);
     if (cached?.length) tracks.value = cached;
-    if (Array.isArray(likedCached)) {
-      likedOrderedIds.value = likedCached;
-      likedIdSet.value = new Set(likedCached);
-    }
-    // 拿最新数据并回写缓存
-    const [tracksRes, dirsRes] = await Promise.all([
+    // 拿最新数据并回写缓存；旧浏览器红心只做一次并集合并迁移。
+    const likesPromise =
+      Array.isArray(legacyLiked) && legacyLiked.length > 0
+        ? libraryClient.importLikedTrackIds(legacyLiked)
+        : libraryClient.getLikedTrackIds();
+    const [tracksRes, dirsRes, likesRes] = await Promise.all([
       libraryClient.getTracks(),
       libraryClient.getScanDirs(),
+      likesPromise,
     ]);
     if (tracksRes.success && tracksRes.data) {
       tracks.value = tracksRes.data;
       cacheTracks(tracksRes.data);
     }
     if (dirsRes.success && dirsRes.data) scanDirs.value = dirsRes.data;
+    if (likesRes.success && likesRes.data) {
+      applyLikedIds(likesRes.data);
+      if (Array.isArray(legacyLiked)) void trackDb.removeItem(LIKED_IDS_KEY).catch(() => {});
+    }
     initialized.value = true;
     // 同步服务端真实扫描状态，防止残留
     try {
@@ -227,6 +229,7 @@ export const useLibraryStore = defineStore("library", () => {
   let unsubscribe: (() => void) | null = null;
   let unsubscribeLibraryChanged: (() => void) | null = null;
   let unsubscribeLibraryRootsChanged: (() => void) | null = null;
+  let unsubscribeLibraryLikesChanged: (() => void) | null = null;
 
   const refreshTracksProjection = (): void => {
     libraryClient.getTracks().then((res) => {
@@ -263,6 +266,9 @@ export const useLibraryStore = defineStore("library", () => {
     unsubscribeLibraryRootsChanged = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
       scanDirs.value = [...data.paths];
     });
+    unsubscribeLibraryLikesChanged = subscribeCoreControlEvent("libraryLikesChanged", ({ ids }) => {
+      applyLikedIds(ids);
+    });
   };
 
   const unsubscribeScanProgress = (): void => {
@@ -272,28 +278,19 @@ export const useLibraryStore = defineStore("library", () => {
     unsubscribeLibraryChanged = null;
     unsubscribeLibraryRootsChanged?.();
     unsubscribeLibraryRootsChanged = null;
+    unsubscribeLibraryLikesChanged?.();
+    unsubscribeLibraryLikesChanged = null;
   };
 
   /** 删除曲目文件并刷新列表 */
   const deleteTracks = async (paths: string[]): Promise<{ deleted: number; failed: number }> => {
     const res = await libraryClient.deleteTracks(paths);
     if (res.success) {
-      // 找出被删歌曲的 id，用于裁喜欢
       const pathSet = new Set(paths);
-      const deletedIds = new Set(
-        tracks.value.filter((t) => t.path && pathSet.has(t.path)).map((t) => t.id),
-      );
       // 从本地列表中移除已删除的曲目
       const remaining = tracks.value.filter((t) => !t.path || !pathSet.has(t.path));
       tracks.value = remaining;
       cacheTracks(remaining);
-      // 同步剪掉失效的喜欢 id
-      if (deletedIds.size > 0 && likedOrderedIds.value.some((id) => deletedIds.has(id))) {
-        const filtered = likedOrderedIds.value.filter((id) => !deletedIds.has(id));
-        likedOrderedIds.value = filtered;
-        likedIdSet.value = new Set(filtered);
-        persistLiked();
-      }
       return res.data ?? { deleted: 0, failed: paths.length };
     }
     return { deleted: 0, failed: paths.length };

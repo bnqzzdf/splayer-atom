@@ -47,8 +47,9 @@ test("successful loads publish a recoverable snapshot before the transient track
 });
 
 test("Control reconciles a missed trackLoaded event only against Core loaded state", () => {
-  assert.match(rendererEvents, /nowPlayingClient\.getCurrentTrack\(\)/);
-  assert.match(rendererEvents, /isSameTrackIdentity\(loaded, expected\)/);
+  assert.match(rendererEvents, /nowPlayingClient\.getCurrentPlayback\(\)/);
+  assert.match(rendererEvents, /isSameTrackIdentity\(loaded\.track, expected\)/);
+  assert.match(rendererEvents, /lyricLoader\.loadForTrack\(loaded\.detail\)/);
   const section = rendererEvents.split('case "session": {')[1]?.split("break;")[0];
   assert.ok(section, "session projection handler should exist");
   assert.match(section, /reconcileSessionPresentation\(event\.data\)/);

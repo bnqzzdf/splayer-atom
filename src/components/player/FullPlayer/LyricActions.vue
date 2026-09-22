@@ -36,7 +36,7 @@ const songOffset = computed(() => status.lyricOffsetMs);
 const writeOffset = (offsetMs: number): void => {
   const id = media.track?.id;
   if (!id) return;
-  nowPlayingClient.setLyricOffset(id, offsetMs);
+  nowPlayingClient.setLyricOffset(id, media.activeLyric, offsetMs);
 };
 
 /** 弹层里直接编辑（ms） */

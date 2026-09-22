@@ -6,6 +6,7 @@ import type { MusicCommentQuery } from "@shared/types/comment";
 import type { PersonalFmOptions } from "@shared/types/personalFm";
 import type { DownloadRequest } from "@shared/types/download";
 import type { Platform } from "@shared/types/platform";
+import type { LyricData } from "@shared/types/lyrics";
 import type { StreamingServerInput } from "@shared/types/streaming";
 import type {
   PluginInvokeMenuArgs,
@@ -627,25 +628,22 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.get("/now-playing", (c) => c.json(nowPlaying.lightSnapshot()));
-  api.get("/lyrics", (c) => c.json(nowPlaying.lyricSnapshot()));
-  api.post("/now-playing", async (c) => {
+  api.post("/now-playing/lyric-offset/query", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
-      lyric?: unknown[];
-      source?: unknown;
+      trackId?: unknown;
+      source?: LyricData;
     } | null;
-    nowPlaying.updateLyrics(
-      Array.isArray(body?.lyric) ? (body.lyric as never[]) : [],
-      (body?.source ?? null) as never,
-    );
-    return c.json({ ok: true });
+    if (typeof body?.trackId !== "string") return c.json({ error: "trackId_required" }, 400);
+    return c.json({ offsetMs: nowPlaying.getLyricOffset(body.trackId, body.source ?? null) });
   });
   api.post("/now-playing/lyric-offset", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       trackId?: unknown;
+      source?: LyricData;
       offsetMs?: unknown;
     } | null;
     if (typeof body?.trackId !== "string") return c.json({ error: "trackId_required" }, 400);
-    nowPlaying.setLyricOffset(body.trackId, Number(body.offsetMs ?? 0));
+    nowPlaying.setLyricOffset(body.trackId, body.source ?? null, Number(body.offsetMs ?? 0));
     return c.json({ ok: true });
   });
   api.post("/lyrics/match-by-id", async (c) => {
@@ -714,8 +712,7 @@ export const buildHeadlessRoutes = (): Hono => {
   api.post("/streaming/active", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { serverId?: string | null } | null;
     try {
-      streamingControl.setActiveServer(body?.serverId ?? null);
-      return c.json({ ok: true });
+      return c.json(await streamingControl.setActiveServer(body?.serverId ?? null));
     } catch (error) {
       return commandError(c, error);
     }

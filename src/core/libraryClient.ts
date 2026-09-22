@@ -135,6 +135,21 @@ export const libraryClient: LibraryApi = {
   getScanDirs: () =>
     asIpc(async () => (await request<{ data: string[] }>("/library/scan-dirs")).data),
 
+  getLikedTrackIds: () =>
+    asIpc(async () => (await request<{ data: string[] }>("/library/liked")).data),
+
+  setTrackLiked: (trackId, liked) =>
+    request<IpcResponse<string[]>>("/library/liked", json({ trackId, liked })).catch((error) => ({
+      success: false,
+      error: errorText(error),
+    })),
+
+  importLikedTrackIds: (trackIds) =>
+    request<IpcResponse<string[]>>("/library/liked/import", json({ trackIds })).catch((error) => ({
+      success: false,
+      error: errorText(error),
+    })),
+
   deleteTracks: (paths) =>
     request<IpcResponse<{ deleted: number; failed: number }>>("/library/files", {
       method: "DELETE",
