@@ -1083,6 +1083,11 @@ let unsubscribeRoots: (() => void) | null = null;
 const refreshOnRevision = useDebounceFn(() => {
   if (currentPath.value && !loading.value) void refreshCurrent();
 }, 250);
+const onLibraryRevision = (): void => {
+  // 扫描自己的目录时，批次变化由 done 统一刷新；不要让 debounce 跨过 done 后再触发第二次刷新。
+  if (scanCoversCurrent.value) return;
+  refreshOnRevision();
+};
 
 onMounted(async () => {
   const savedViewMode = window.sessionStorage.getItem("atom-folder-view-mode");
@@ -1094,8 +1099,15 @@ onMounted(async () => {
   }
   unsubscribeScan = subscribeCoreControlEvent("libraryScanProgress", (progress) => {
     scanProgress.value = progress;
+    if (
+      progress.phase === "done" &&
+      currentPath.value &&
+      progress.scopeDirs?.some((scope) => folderPathWithinRoot(currentPath.value, scope))
+    ) {
+      void refreshCurrent();
+    }
   });
-  unsubscribeRevision = subscribeCoreControlEvent("libraryChanged", refreshOnRevision);
+  unsubscribeRevision = subscribeCoreControlEvent("libraryChanged", onLibraryRevision);
   unsubscribePins = subscribeCoreControlEvent("folderPinsChanged", () => {
     void loadRoots();
   });

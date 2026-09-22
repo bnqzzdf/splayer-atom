@@ -58,6 +58,15 @@ test("Folder presentation supports list/grid without changing route semantics", 
   assert.equal(foldersSource.includes('class="absolute right-2 top-2 opacity-90"'), false);
 });
 
+test("Folder scan refreshes once at completion instead of reloading every library batch", () => {
+  assert.ok(foldersSource.includes("if (scanCoversCurrent.value) return;"));
+  assert.ok(foldersSource.includes('progress.phase === "done"'));
+  assert.ok(foldersSource.includes("folderPathWithinRoot(currentPath.value, scope)"));
+  assert.ok(
+    foldersSource.includes('subscribeCoreControlEvent("libraryChanged", onLibraryRevision)'),
+  );
+});
+
 test("Folder container splits can be added individually to an existing or new playlist", () => {
   assert.ok(foldersSource.includes("openContainerTrackPlaylist(item.track, item.containerPath)"));
   assert.ok(foldersSource.includes("folderBrowserClient.addContainerTrackToPlaylist("));

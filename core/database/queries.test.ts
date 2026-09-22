@@ -128,6 +128,15 @@ test("library queries keep albums, track numbers, and CUE positions in stable or
     assert.equal(albumA?.year, 1999);
     assert.equal(albumA?.addedAt, 1, "更新既有曲目时应保留首次入库时间");
 
+    database
+      .getDb()
+      .prepare("UPDATE tracks SET cover = ? WHERE id = ?")
+      .run("cache://covers/cover_deadbeefdeadbeef_thumb.jpg", "a1");
+    assert.equal(
+      database.getCoverSourcePath("cache://covers/cover_deadbeefdeadbeef_thumb.jpg"),
+      "/music/a-01.flac",
+    );
+
     database.upsertTracks([
       {
         id: "wild-percent",

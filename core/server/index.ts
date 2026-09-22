@@ -10,6 +10,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { WebSocketServer } from "ws";
 import { serverLog } from "@main/utils/logger";
 import { getArtistCacheDir, getBackgroundsDir, getCoverCacheDir } from "@main/utils/config";
+import { repairMissingCoverCache } from "@main/services/coverCacheRepair";
 import { buildCoreControlRoutes } from "@main/atom/controlRoutes";
 import { getCoreServerPort } from "@main/runtime";
 import { wsHandlers } from "./ws";
@@ -70,12 +71,12 @@ export const startServer = (): Promise<CoreServerStatus> =>
     );
 
     const imageCaches = [
-      ["/cache/covers", getCoverCacheDir],
-      ["/cache/artists", getArtistCacheDir],
-      ["/cache/backgrounds", getBackgroundsDir],
+      ["/cache/covers", getCoverCacheDir, repairMissingCoverCache],
+      ["/cache/artists", getArtistCacheDir, undefined],
+      ["/cache/backgrounds", getBackgroundsDir, undefined],
     ] as const;
-    for (const [prefix, getRoot] of imageCaches) {
-      app.use(`${prefix}/*`, createDynamicCacheRoute(prefix, getRoot));
+    for (const [prefix, getRoot, repairMissing] of imageCaches) {
+      app.use(`${prefix}/*`, createDynamicCacheRoute(prefix, getRoot, repairMissing));
     }
 
     if (!process.env.ATOM_WEB_DEV_URL) {

@@ -259,7 +259,7 @@ export const useLibraryStore = defineStore("library", () => {
       }
     });
     unsubscribeLibraryChanged = subscribeCoreControlEvent("libraryChanged", () => {
-      // 扫描过程由 done 时统一拉取全量曲库，避免每个 20-track batch 重取大 JSON。
+      // 扫描过程由 done 时统一拉取全量曲库，避免扫描批次中重复拉取大 JSON。
       // 定向 canonicalization / 标签写入等非扫描 mutation 则立即刷新全局曲库投影。
       if (!scanning.value) refreshTracksProjection();
     });

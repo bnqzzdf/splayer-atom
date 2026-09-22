@@ -25,7 +25,7 @@ const AUDIO_EXTENSIONS: &[&str] = &[
 ];
 
 /// 每批回调的文件数
-const BATCH_SIZE: usize = 20;
+const BATCH_SIZE: usize = 100;
 const SLOW_PROBE_THRESHOLD_MS: u128 = 50;
 const MAX_PROBE_WORKERS: usize = 8;
 
