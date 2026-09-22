@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 import { ErrorCode } from "../../shared/types/errors";
 import { shouldSkipDjTrack } from "../../shared/utils/djMode";
 import {
+  classifyPluginFailureMessage,
   isSkippablePlaybackError,
   neteaseUnavailableErrorCode,
   nextPlaybackPreloadIndex,
   playbackSourceCacheKey,
+  pluginUnavailableErrorCode,
   shouldRetryPlaybackSource,
 } from "./playbackSourcePolicy";
 
@@ -49,6 +51,10 @@ describe("isSkippablePlaybackError", () => {
       ErrorCode.NETEASE_VIP_REQUIRED,
       ErrorCode.NETEASE_PURCHASE_REQUIRED,
       ErrorCode.NETEASE_TRIAL_DISABLED,
+      ErrorCode.PROVIDER_VIP_REQUIRED,
+      ErrorCode.PROVIDER_PURCHASE_REQUIRED,
+      ErrorCode.PROVIDER_TRIAL_DISABLED,
+      ErrorCode.PROVIDER_UNAVAILABLE,
     ]) {
       assert.equal(isSkippablePlaybackError(code), true);
     }
@@ -67,6 +73,33 @@ describe("neteaseUnavailableErrorCode", () => {
     assert.equal(neteaseUnavailableErrorCode(1), ErrorCode.NETEASE_VIP_REQUIRED);
     assert.equal(neteaseUnavailableErrorCode("4"), ErrorCode.NETEASE_PURCHASE_REQUIRED);
     assert.equal(neteaseUnavailableErrorCode(0), ErrorCode.NETEASE_UNAVAILABLE);
+  });
+});
+
+describe("pluginUnavailableErrorCode", () => {
+  it("maps a structured plugin reason onto the platform-neutral codes", () => {
+    assert.equal(pluginUnavailableErrorCode("vip"), ErrorCode.PROVIDER_VIP_REQUIRED);
+    assert.equal(pluginUnavailableErrorCode("purchase"), ErrorCode.PROVIDER_PURCHASE_REQUIRED);
+    assert.equal(pluginUnavailableErrorCode("trial"), ErrorCode.PROVIDER_TRIAL_DISABLED);
+    assert.equal(pluginUnavailableErrorCode("unavailable"), ErrorCode.PROVIDER_UNAVAILABLE);
+  });
+});
+
+describe("classifyPluginFailureMessage", () => {
+  it("recovers entitlement reasons from legacy lx plugins that only throw text", () => {
+    assert.equal(
+      classifyPluginFailureMessage("需要购买数字专辑"),
+      ErrorCode.PROVIDER_PURCHASE_REQUIRED,
+    );
+    assert.equal(classifyPluginFailureMessage("仅提供试听片段"), ErrorCode.PROVIDER_TRIAL_DISABLED);
+    assert.equal(classifyPluginFailureMessage("需要VIP会员"), ErrorCode.PROVIDER_VIP_REQUIRED);
+    assert.equal(classifyPluginFailureMessage("该歌曲无版权"), ErrorCode.PROVIDER_UNAVAILABLE);
+  });
+
+  it("stays conservative instead of inventing an entitlement conclusion", () => {
+    for (const message of ["request timeout", "socket hang up", "", undefined, 42]) {
+      assert.equal(classifyPluginFailureMessage(message), null);
+    }
   });
 });
 

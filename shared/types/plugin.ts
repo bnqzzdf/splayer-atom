@@ -206,10 +206,22 @@ export interface MusicUrlReq {
     [key: string]: unknown;
   };
 }
+/**
+ * 插件上报的音源不可用原因。
+ *
+ * 上游 lx 协议只保证 `url`，因此这是**可选**的增强：插件能给就给，
+ * Core 在拿不到结构化原因时退回按错误文案归类，不再一律报「无法获取播放地址」。
+ */
+export type MusicUrlUnavailableReason = "vip" | "purchase" | "trial" | "unavailable";
+
 export interface MusicUrlRes {
   url: string;
   quality?: PluginQuality;
   expire?: number;
+  /** url 为空时，插件可声明不可用的原因（会员/购买/仅试听/无版权）。 */
+  reason?: MusicUrlUnavailableReason;
+  /** 该音源是否为试听片段。 */
+  trial?: boolean;
 }
 
 export interface MenuClickReq {

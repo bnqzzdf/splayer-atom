@@ -4,8 +4,10 @@ import type { PluginQuality } from "@shared/types/plugin";
 import type { Track } from "@shared/types/player";
 import { buildPluginPlaybackMusicInfo, pluginPlaybackSource } from "@shared/utils/pluginPlayback";
 import {
+  classifyPluginFailureMessage,
   neteaseUnavailableErrorCode,
   playbackSourceCacheKey,
+  pluginUnavailableErrorCode,
 } from "@main/services/playbackSourcePolicy";
 import { callNetease } from "@main/apis/netease";
 import { callQobuz } from "@main/apis/qobuz";
@@ -167,6 +169,14 @@ const resolvePluginCompatibility = async (
   }
 
   const musicInfo = buildPluginPlaybackMusicInfo(track, pluginSource);
+  // 多插件兜底期间记录「最强」的失败信号：结构化 reason 优先于文案归类。
+  // 只为一件事——让用户看到「需要会员 / 需购买 / 仅试听 / 无版权」，
+  // 而不是把一切都压成 URL_RESOLVE_FAILED。
+  let structuredCode: ErrorCode | null = null;
+  let messageCode: ErrorCode | null = null;
+  let lastMessage = "";
+  const allowTrial = store.get("player.allowTrialPlay") === true;
+
   for (const plugin of candidates) {
     try {
       const resolved = await resolvePluginUrl({
@@ -175,20 +185,36 @@ const resolvePluginCompatibility = async (
         quality,
         musicInfo,
       });
-      if (!resolved.url) continue;
+      if (!resolved.url) {
+        if (resolved.reason) structuredCode = pluginUnavailableErrorCode(resolved.reason);
+        continue;
+      }
+      // 插件声明为试听片段时，与官方音源一致地遵守「允许试听播放」设置。
+      if (resolved.trial === true && !allowTrial) {
+        structuredCode = ErrorCode.PROVIDER_TRIAL_DISABLED;
+        continue;
+      }
       return {
         source: resolved.url,
-        provider: "plugin",
-        cacheAfterLoad: cacheAfterLoad(track, cacheKey, resolved.url),
+        provider: resolved.trial === true ? "trial" : "plugin",
+        cacheAfterLoad:
+          resolved.trial === true ? undefined : cacheAfterLoad(track, cacheKey, resolved.url),
       };
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message) lastMessage = message;
+      const classified = classifyPluginFailureMessage(message);
+      if (classified) messageCode = classified;
       // 兼容上游多插件兜底：单插件失败不阻止尝试下一候选。
       continue;
     }
   }
+  const code = structuredCode ?? messageCode ?? ErrorCode.URL_RESOLVE_FAILED;
   throw sourceError(
-    ErrorCode.URL_RESOLVE_FAILED,
-    `Inherited plugin source failed for ${track.source} track: ${track.id}`,
+    code,
+    `Inherited plugin source failed for ${track.source} track: ${track.id} (${code})${
+      lastMessage ? `: ${lastMessage}` : ""
+    }`,
   );
 };
 

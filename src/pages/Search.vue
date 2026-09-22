@@ -12,6 +12,7 @@ import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { useCoreCapabilitiesStore } from "@/stores/coreCapabilities";
 import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
@@ -22,6 +23,7 @@ const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
 const providerSessions = useProviderSessionsStore();
+const coreCapabilities = useCoreCapabilitiesStore();
 const streaming = useStreamingStore();
 void streaming.init();
 
@@ -58,8 +60,15 @@ const ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
   "kugou",
 ]);
 
+/**
+ * 平台是否可作为搜索来源。
+ *
+ * 先看 Core 是否声明了该平台能力位（不含该平台的 Core 不应出现它的入口），
+ * 再看登录态（匿名平台始终可用，其余需已认证）。
+ */
 const isSearchPlatformAvailable = (platform: Platform): boolean =>
-  ANONYMOUS_SEARCH_PLATFORMS.has(platform) || providerSessions.isAuthenticated(platform);
+  coreCapabilities.supportsPlatform(platform) &&
+  (ANONYMOUS_SEARCH_PLATFORMS.has(platform) || providerSessions.isAuthenticated(platform));
 
 const platformTabs = computed(() => {
   const online = ALL_PLATFORMS.filter(isSearchPlatformAvailable).map((key) => ({
@@ -75,16 +84,18 @@ const platformTabs = computed(() => {
 watch(
   () =>
     [
+      searchSource.value,
       providerSessions.initialized,
+      coreCapabilities.initialized,
       providerSessions.sessions.qobuz.authenticated,
       providerSessions.sessions.tidal.authenticated,
     ] as const,
-  ([initialized]) => {
-    if (!initialized) return;
-    const source = searchSource.value;
-    if ((source === "qobuz" || source === "tidal") && !providerSessions.isAuthenticated(source)) {
-      searchSource.value = "local";
-    }
+  ([source, sessionsReady, capabilitiesReady]) => {
+    if (source === "local" || source === "streaming") return;
+    // 两份投影都就绪后才判定：未就绪时保持现状，避免把可用平台误退回本地；
+    // 就绪后同时覆盖「用户选了不可用平台」与「能力位/登录态后到」两种情形。
+    if (!sessionsReady || !capabilitiesReady) return;
+    if (!isSearchPlatformAvailable(source)) searchSource.value = "local";
   },
   { immediate: true },
 );

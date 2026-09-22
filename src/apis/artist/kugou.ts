@@ -1,3 +1,4 @@
+import type { Track } from "@shared/types/player";
 import type { ArtistProfile } from "@/types/artist";
 import { kugou as kgApi } from "@/apis/kugou";
 import {
@@ -42,5 +43,33 @@ export const fetchKugouArtist = async (
     albums,
     trackCount: body.artist?.songCount ?? tracks.length,
     albumCount: body.artist?.albumCount ?? albums.length,
+  };
+};
+
+/**
+ * 触底加载更多 KG 歌手歌曲
+ * @param id - 歌手 ID
+ * @param offset - 已加载歌曲数
+ * @param limit - 单页数量
+ * @returns 新一页歌曲与是否还有更多
+ */
+export const fetchKugouArtistSongs = async (
+  id: string,
+  offset: number,
+  limit = 50,
+): Promise<{ tracks: Track[]; more: boolean }> => {
+  const page = Math.floor(offset / limit) + 1;
+  const body = await kgApi.artist<KGArtistDetailResponse>({
+    id,
+    page,
+    pagesize: limit,
+    includeAlbums: false,
+  });
+  if (body.code !== 200) throw new Error(body.message || `KG 歌手歌曲请求失败: ${body.code}`);
+  const tracks = kgSongsToTracks(body.songs);
+  const total = body.artist?.songCount;
+  return {
+    tracks,
+    more: total != null ? offset + tracks.length < total : tracks.length >= limit,
   };
 };

@@ -1,5 +1,5 @@
 import { ErrorCode } from "../../shared/types/errors";
-import type { PluginQuality } from "../../shared/types/plugin";
+import type { MusicUrlUnavailableReason, PluginQuality } from "../../shared/types/plugin";
 import type { RepeatMode, ShuffleMode, Track } from "../../shared/types/player";
 
 export type PlaybackCacheKeyTrack = Pick<Track, "id" | "source" | "serverId" | "originalId">;
@@ -37,6 +37,10 @@ const SKIPPABLE_PLAYBACK_ERRORS = new Set<string>([
   ErrorCode.NETEASE_PURCHASE_REQUIRED,
   ErrorCode.NETEASE_TRIAL_DISABLED,
   ErrorCode.NETEASE_UNAVAILABLE,
+  ErrorCode.PROVIDER_VIP_REQUIRED,
+  ErrorCode.PROVIDER_PURCHASE_REQUIRED,
+  ErrorCode.PROVIDER_TRIAL_DISABLED,
+  ErrorCode.PROVIDER_UNAVAILABLE,
 ]);
 
 /** 单曲级失败可由 Core 有界跳过；设备类/全局错误必须留给用户处理。 */
@@ -49,6 +53,42 @@ export const neteaseUnavailableErrorCode = (fee: unknown): ErrorCode => {
   if (value === 1) return ErrorCode.NETEASE_VIP_REQUIRED;
   if (value === 4) return ErrorCode.NETEASE_PURCHASE_REQUIRED;
   return ErrorCode.NETEASE_UNAVAILABLE;
+};
+
+/** 插件上报的结构化原因 → 平台中立错误码。 */
+export const pluginUnavailableErrorCode = (reason: MusicUrlUnavailableReason): ErrorCode => {
+  if (reason === "vip") return ErrorCode.PROVIDER_VIP_REQUIRED;
+  if (reason === "purchase") return ErrorCode.PROVIDER_PURCHASE_REQUIRED;
+  if (reason === "trial") return ErrorCode.PROVIDER_TRIAL_DISABLED;
+  return ErrorCode.PROVIDER_UNAVAILABLE;
+};
+
+/** 文案归类规则；顺序即优先级。 */
+const PLUGIN_FAILURE_PATTERNS: ReadonlyArray<readonly [RegExp, ErrorCode]> = [
+  [
+    /购买|数字专辑|数字单曲|付费专辑|purchase|need\s*to\s*buy|buy\s*album/i,
+    ErrorCode.PROVIDER_PURCHASE_REQUIRED,
+  ],
+  [/试听|trial|preview/i, ErrorCode.PROVIDER_TRIAL_DISABLED],
+  [/vip|会员|绿钻|豪华绿钻|开通会员|member|privilege/i, ErrorCode.PROVIDER_VIP_REQUIRED],
+  [
+    /无版权|下架|暂无|不可用|copyright|unavailable|not\s*available|下架/i,
+    ErrorCode.PROVIDER_UNAVAILABLE,
+  ],
+];
+
+/**
+ * 无结构化原因时，按插件抛出的错误文案归类。
+ *
+ * 上游 lx 插件只会抛一条文案，因此这里做**保守**归类：认不出来时返回 null，
+ * 由调用方退回通用的 `URL_RESOLVE_FAILED`，不伪造权益结论。
+ */
+export const classifyPluginFailureMessage = (message: unknown): ErrorCode | null => {
+  if (typeof message !== "string" || !message) return null;
+  for (const [pattern, code] of PLUGIN_FAILURE_PATTERNS) {
+    if (pattern.test(message)) return code;
+  }
+  return null;
 };
 
 /** Native sourceError 只允许在线/流媒体输入对同一 canonical Track fresh resolve 一次。 */

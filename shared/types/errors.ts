@@ -45,6 +45,15 @@ export enum ErrorCode {
   NETEASE_TRIAL_DISABLED = "NETEASE_TRIAL_DISABLED",
   /** 在线歌曲暂无可用官方音源 */
   NETEASE_UNAVAILABLE = "NETEASE_UNAVAILABLE",
+  // 平台无关的在线源权益错误：用于 Core 不直接解析、由插件返回音源的平台（QM / KG 等）
+  /** 需要该平台会员权益 */
+  PROVIDER_VIP_REQUIRED = "PROVIDER_VIP_REQUIRED",
+  /** 需要单独购买数字单曲/专辑 */
+  PROVIDER_PURCHASE_REQUIRED = "PROVIDER_PURCHASE_REQUIRED",
+  /** 仅提供试听且试听播放被禁用 */
+  PROVIDER_TRIAL_DISABLED = "PROVIDER_TRIAL_DISABLED",
+  /** 该平台暂无可用音源（无版权 / 已下架等） */
+  PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE",
 
   // 标签编辑相关
   /** 读取文件标签失败 */

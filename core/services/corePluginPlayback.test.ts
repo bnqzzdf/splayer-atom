@@ -66,3 +66,22 @@ test("Qobuz and TIDAL remain Atom official-provider paths without new plugin own
   assert.match(dispatch, /track\.source === "tidal"\) return resolveTidal/);
   assert.doesNotMatch(dispatch, /pluginPlaybackSource\("qobuz"\)|pluginPlaybackSource\("tidal"\)/);
 });
+
+test("plugin source failures keep the entitlement reason instead of collapsing to URL_RESOLVE_FAILED", () => {
+  const section = resolverSource
+    .split("const resolvePluginCompatibility = async (")[1]
+    ?.split("const resolveNetease = async (")[0];
+  assert.ok(section, "plugin compatibility resolver should exist");
+
+  // 结构化 reason 优先，其次按文案归类，最后才退回通用失败码。
+  assert.match(section, /pluginUnavailableErrorCode\(resolved\.reason\)/);
+  assert.match(section, /classifyPluginFailureMessage\(message\)/);
+  assert.match(
+    section,
+    /const code = structuredCode \?\? messageCode \?\? ErrorCode\.URL_RESOLVE_FAILED/,
+  );
+  assert.match(section, /resolved\.trial === true && !allowTrial/);
+  assert.match(section, /ErrorCode\.PROVIDER_TRIAL_DISABLED/);
+  // provider 字段要能区分试听与正常插件音源。
+  assert.match(section, /provider: resolved\.trial === true \? "trial" : "plugin"/);
+});
