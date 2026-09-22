@@ -138,6 +138,12 @@ const alignItems = computed(() => {
   if (props.align === "right") return "items-end";
   return "items-center";
 });
+
+const justifyContent = computed(() => {
+  if (props.align === "left") return "justify-start";
+  if (props.align === "right") return "justify-end";
+  return "justify-center";
+});
 </script>
 
 <template>
@@ -148,13 +154,15 @@ const alignItems = computed(() => {
     :class="alignItems"
   >
     <!-- 标题 -->
-    <SMarquee
-      :key="displayTrack.title"
-      fit
-      class="max-w-full min-w-0 text-[2em] font-semibold leading-tight"
-    >
-      {{ displayTrack.title }}
-    </SMarquee>
+    <div class="flex w-full min-w-0" :class="justifyContent">
+      <SMarquee
+        :key="displayTrack.title"
+        fit
+        class="max-w-full min-w-0 text-[2em] font-semibold leading-tight"
+      >
+        {{ displayTrack.title }}
+      </SMarquee>
+    </div>
     <!-- 副标题/注释 -->
     <div
       v-if="!simple && displayTrack.comment"
