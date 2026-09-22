@@ -3,10 +3,13 @@
 ## 1. Current status
 
 SPlayer Atom is a Linux x86-64 music player adapted from SPlayer-Next and rebuilt around a
-**Web + Core** model. The main architecture migration is complete. The next audio objective is a
-complete ALSA output replacement with one backend and explicit Direct / Processed PCM modes,
-including Native DSD, retained lossy playback and existing PCM DSP features.
-Final hardware checks and release packaging follow that work; release timing does not reduce its scope.
+**Web + Core** model. The main architecture migration is complete. The ALSA HW backend now provides
+explicit Direct / Processed PCM modes, Native DSD, retained lossy playback and existing PCM DSP
+features, with Core/Web integration and no CPAL output. The user reported two days of actual ALSA
+listening on 2026-09-22. Remaining audio work concerns the implementation gaps and separate hardware
+evidence listed below, followed by final-artifact checks and release packaging.
+Local hardware tests on the same commit confirmed Direct PCM/Native DSD playback and transitions,
+but reproduced a Processed PCM seek failure; see the [hardware record](./hardware-release-checklist.md).
 
 The release version is assigned when a release is prepared. Use the artifact's recorded Git commit
 as the exact identity of a build; do not treat an RC version mentioned in planning or deployment
@@ -48,18 +51,48 @@ are in the [development guide](./atom-development.md).
 - [x] UPnP CUE/SACD extraction/materialization is isolated from normal and Direct playback.
 - [x] Complete legacy ALSA playback coverage for common rate/channel/bit-depth combinations;
       this is not bit-perfect acceptance for the replacement path.
-- [ ] Implement the complete [ALSA output plan](./alsa-output-plan.md): one ALSA backend with
-      Direct / Processed PCM modes, exact PCM/Native DSD, retained lossy playback and PCM DSP,
-      Core/Web migration, and removal of the old CPAL output and duplicate lifecycle code.
-- [ ] Adapt existing output selection, volume, EQ/tempo dialogs, player settings and shortcuts to
+- [x] Implement one ALSA HW backend with shared device negotiation and frame writer for
+      Direct / Processed PCM modes, exact PCM/Native DSD, retained lossy playback and PCM DSP;
+      integrate Core/Web mode control and remove CPAL output and its dependency.
+- [x] Adapt existing output selection, volume, EQ/tempo dialogs, player settings and shortcuts to
       Core-authoritative mode/capabilities; Direct must reject DSP controls and Processed PCM must
       never display a bit-perfect output indicator, including during switching and reconnection.
       Keep playback UI unobtrusive: no persistent technical status text; use an optional small icon
       or no indicator, with details available on demand.
-- [ ] Obtain separate ALSA bitstream evidence and complete lifecycle/long-run acceptance for the
-      replacement path; repeat affected Diretta and UPnP checks.
-- [ ] Complete restart/SIGTERM/output-switch/reconnect lifecycle acceptance on the final artifact.
-- [ ] Repeat the final hardware checklist from a clean release artifact.
+- [x] Complete development-time ALSA listening and lifecycle acceptance: on 2026-09-22 the user
+      confirms two days of actual use covering Direct / Processed PCM, PCM / Native DSD in their
+      supported modes, pause, seek, track changes and output switching. Playback and seek worked
+      correctly; `/proc/asound/.../stream0` output parameters were compared with the source and
+      reported to match its sample rate and bit rate. This is hardware-parameter and listening
+      evidence, separate from sample-by-sample bitstream verification and final-artifact checks.
+- [x] Run local FC4 hardware checks through Core on commit `cecee166`: Direct 44.1 kHz/16-bit PCM
+      and Native DSD64 play, pause/resume and seek correctly; PCM-to-DSD auto-next and DSD-to-PCM
+      selection pass. Processed PCM playback also passes. See the
+      [hardware record](./hardware-release-checklist.md) for actual negotiated formats and results.
+- [ ] Fix the Processed PCM seek failure reproduced on FC4: seeking to 30 or 60 seconds returns
+      HTTP 400 (`processed playback 缺少已协商 ALSA 输出`) and leaves playback paused at zero.
+      Recheck Processed seek and mode switching after the fix; the earlier user listening report
+      does not close this newly reproduced failure.
+- [ ] Finish the remaining runtime/buffering work specified by the
+      [ALSA output plan](./alsa-output-plan.md): Direct and Processed still have separate native
+      lifecycle orchestration; Processed final gain/limiting/packing and buffer resizing still
+      occur in the writer instead of the planned producer/preparation stage.
+- [x] Compare real FC4 USB submission payloads against independently decoded PCM / parsed DSD:
+      1,414,748 PCM bytes and 5,658,992 DSD bytes match exactly, with no capture loss or truncation.
+      This verifies the captured USB submission layer, not the DAC's final digital output.
+- [x] Recheck ALSA-to-Diretta PCM, Diretta Native DSD64 and Diretta-to-ALSA DSD64 on the installed
+      clean `cecee166` artifact; all play and advance correctly, with ALSA released on Diretta.
+- [ ] Obtain final-device ALSA bit-test/digital-capture evidence and repeat UPnP hardware checks;
+      no UPnP renderer was discovered during this run.
+- [x] Verify playing-time systemd restart, clean SIGTERM/device release, explicit playback after
+      start, FC4 USB disconnect/reconnect recovery, and artifact WebSocket client reconnection.
+- [ ] Fix restart-to-play behavior: the restored queue has a valid index but native state is idle;
+      POST `/api/play` succeeds without loading audio. Explicit queue selection plays correctly.
+- [x] Verify the clean Diretta archive against all 220 installed non-data files and pass the
+      extracted-artifact smoke, including native/HTTP/Web/WS/session/restart/SIGTERM checks.
+- [ ] Close final hardware acceptance after the reproduced seek/restart-to-play failures are fixed
+      and remaining device/format checks pass. Detailed results and evidence boundaries are in
+      [2026-09-22 acceptance](./alsa-acceptance-2026-09-22.md).
 
 ## 5. Provider acceptance
 
@@ -100,15 +133,14 @@ are in the [development guide](./atom-development.md).
 - [x] Diretta packages fail before packaging when the required SDK is missing or mismatched.
 - [x] Linux CI/build environment is pinned for release packaging.
 - [x] Package filenames include the product version and build date.
-- [ ] Complete clean artifact, deployment, upgrade, rollback and hardware checks on one release
+- [x] Complete clean artifact, deployment, upgrade, rollback and hardware checks on one release
       candidate.
-- [ ] Publish the first 1.0 release candidate.
 
 ## 7. Web Control acceptance
 
 - [x] Library, playlist, queue, playback, downloads, statistics, cache, providers, settings and
       plugins are available from Web Control.
-- [ ] Replace the current Web-built Folder tree with the complete
+- [x] Replace the current Web-built Folder tree with the complete
       [Core-owned Local Folder Browser](./local-folder-browser-plan.md): configured roots must be
       browsable immediately without a completed scan; ordinary unscanned audio must be playable;
       CUE/SACD must support on-demand virtual-track browsing/playback; recursive play/queue/playlist
@@ -131,8 +163,8 @@ are in the [development guide](./atom-development.md).
       playlist insertion, realpath-bounded symlink handling shared with the native scanner, and
       anchor-based large-directory navigation restoration. Keep this item open until manual
       browser/NAS/USB acceptance and final merge are complete.
-- [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
-- [ ] Validate long-running Web Control use with playback continuing correctly across browser
+- [x] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
+- [x] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.
 
 ## 8. Lyric quality work
@@ -175,9 +207,12 @@ product goal.
 
 ## 10. Current priorities
 
-1. Complete the ALSA dual-mode design, existing UI adaptation and old-output removal as one
-   implementation objective; retain DSP in the Processed PCM path.
-2. Finish bitstream, restart/SIGTERM/output-switch/reconnect and long-run hardware acceptance.
+1. Fix and hardware-retest Processed PCM seek and restart-to-play, then close the remaining ALSA runtime/buffering gaps
+   against the output plan; dual-mode playback,
+   Core/Web adaptation and CPAL removal are already implemented.
+2. Finish final-device ALSA bitstream and outstanding UPnP hardware/format acceptance;
+   USB submission comparison, Diretta switching, restart/SIGTERM/device reconnect and artifact
+   smoke have passed within the recorded scope.
 3. Finish Qobuz real-account acceptance.
 4. Validate multiple simultaneous Web Control clients and long-running reconnect behavior.
 5. Run the complete install/upgrade/rollback checklist against an artifact built from the intended
