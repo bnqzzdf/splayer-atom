@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use alsa::pcm::State;
 use anyhow::{ensure, Context, Result};
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::format::pack_processed_pcm;
 use super::output::AlsaPcmHandle;
@@ -172,6 +172,10 @@ pub struct AlsaProcessedPcmStream {
     worker: Option<JoinHandle<()>>,
 }
 
+fn writer_shutdown_requested(cancel: &AtomicBool, shared: &Shared) -> bool {
+    cancel.load(Ordering::Acquire) || shared.is_stopping()
+}
+
 impl AlsaProcessedPcmStream {
     pub fn new(
         handle: AlsaPcmHandle,
@@ -188,6 +192,7 @@ impl AlsaProcessedPcmStream {
         let worker_volume = Arc::clone(&volume);
         let worker_clipping_protection = Arc::clone(&clipping_protection);
         let worker_cancel = Arc::clone(&cancel);
+        let worker_shared = Arc::clone(&shared);
         let worker = thread::Builder::new()
             .name("alsa-processed-pcm".into())
             .spawn(move || {
@@ -200,6 +205,10 @@ impl AlsaProcessedPcmStream {
                     command_rx,
                     !paused,
                 ) {
+                    if writer_shutdown_requested(worker_cancel.as_ref(), worker_shared.as_ref()) {
+                        debug!(%error, "ALSA processed PCM writer 因主动生命周期切换退出");
+                        return;
+                    }
                     warn!(%error, "ALSA processed PCM writer 失败");
                     on_failure();
                 }
@@ -680,5 +689,19 @@ mod tests {
         apply_final_processing(&mut next, 1.0, 2, false, &mut limiter);
         assert_eq!(next, [0.5, -0.5]);
         assert!((limiter.gain - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn intentional_writer_shutdown_is_not_an_output_failure() {
+        let shared = Shared::new(48_000, 2);
+        let cancel = AtomicBool::new(false);
+        assert!(!writer_shutdown_requested(&cancel, &shared));
+
+        shared.stop();
+        assert!(writer_shutdown_requested(&cancel, &shared));
+
+        let shared = Shared::new(48_000, 2);
+        cancel.store(true, Ordering::Release);
+        assert!(writer_shutdown_requested(&cancel, &shared));
     }
 }

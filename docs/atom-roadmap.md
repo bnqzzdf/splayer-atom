@@ -10,6 +10,8 @@ listening on 2026-09-22. Remaining audio work concerns the implementation gaps a
 evidence listed below, followed by final-artifact checks and release packaging.
 Local hardware tests on the same commit confirmed Direct PCM/Native DSD playback and transitions,
 but reproduced a Processed PCM seek failure; see the [hardware record](./hardware-release-checklist.md).
+The two reproduced lifecycle defects now have software fixes in the development tree; their hardware
+acceptance remains open until the fixed build is retested on the real output.
 
 The release version is assigned when a release is prepared. Use the artifact's recorded Git commit
 as the exact identity of a build; do not treat an RC version mentioned in planning or deployment
@@ -69,10 +71,10 @@ are in the [development guide](./atom-development.md).
       and Native DSD64 play, pause/resume and seek correctly; PCM-to-DSD auto-next and DSD-to-PCM
       selection pass. Processed PCM playback also passes. See the
       [hardware record](./hardware-release-checklist.md) for actual negotiated formats and results.
-- [ ] Fix the Processed PCM seek failure reproduced on FC4: seeking to 30 or 60 seconds returns
-      HTTP 400 (`processed playback 缺少已协商 ALSA 输出`) and leaves playback paused at zero.
-      Recheck Processed seek and mode switching after the fix; the earlier user listening report
-      does not close this newly reproduced failure.
+- [ ] Hardware-retest the Processed PCM seek fix on FC4. The reproduced 30/60-second seek failure
+      came from an intentional writer cancellation being reported as `outputFailed`, which cleared
+      the negotiated processed output before seek commit. Intentional lifecycle shutdown no longer
+      reports an output failure; recheck Processed seek and mode switching on the fixed build.
 - [ ] Finish the remaining runtime/buffering work specified by the
       [ALSA output plan](./alsa-output-plan.md): Direct and Processed still have separate native
       lifecycle orchestration; Processed final gain/limiting/packing and buffer resizing still
@@ -86,8 +88,8 @@ are in the [development guide](./atom-development.md).
       no UPnP renderer was discovered during this run.
 - [x] Verify playing-time systemd restart, clean SIGTERM/device release, explicit playback after
       start, FC4 USB disconnect/reconnect recovery, and artifact WebSocket client reconnection.
-- [ ] Fix restart-to-play behavior: the restored queue has a valid index but native state is idle;
-      POST `/api/play` succeeds without loading audio. Explicit queue selection plays correctly.
+- [ ] Hardware-retest restart-to-play on the fixed build. Core `play()` now reloads the restored
+      queue when native state is `idle`, instead of forwarding Play to an unloaded native runtime.
 - [x] Verify the clean Diretta archive against all 220 installed non-data files and pass the
       extracted-artifact smoke, including native/HTTP/Web/WS/session/restart/SIGTERM checks.
 - [ ] Close final hardware acceptance after the reproduced seek/restart-to-play failures are fixed
@@ -207,7 +209,7 @@ product goal.
 
 ## 10. Current priorities
 
-1. Fix and hardware-retest Processed PCM seek and restart-to-play, then close the remaining ALSA runtime/buffering gaps
+1. Hardware-retest the Processed PCM seek and restart-to-play software fixes, then close the remaining ALSA runtime/buffering gaps
    against the output plan; dual-mode playback,
    Core/Web adaptation and CPAL removal are already implemented.
 2. Finish final-device ALSA bitstream and outstanding UPnP hardware/format acceptance;
