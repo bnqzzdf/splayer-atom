@@ -31,7 +31,7 @@ import {
 import { getCoverCacheDir, isWin } from "@main/utils/config";
 import { decodeAuto, readFileAutoEncoding } from "@main/utils/encoding";
 import { createLocalAlbumId, inferDiscNumberFromPath } from "@main/utils/localAlbum";
-import { toCacheUrl } from "@main/atom/cacheUrl";
+import { fromCacheUrl, toCacheUrl } from "@main/atom/cacheUrl";
 import { localTrackContainerPath, sacdIsoPathFromVirtual } from "@main/utils/localPhysicalSource";
 import { parseAlbum, parseArtists } from "@main/utils/metadata";
 import { store } from "@main/store";
@@ -63,6 +63,7 @@ const MAX_CUE_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT_PREVIEW_BYTES = 1024 * 1024;
 const MAX_THUMBNAIL_SOURCE_BYTES = 64 * 1024 * 1024;
 const MAX_THUMBNAIL_CACHE_ITEMS = 128;
+const DIRECTORY_ARTWORK_NAMES = ["cover", "folder", "album", "front", "封面", "封套"];
 const thumbnailCache = new Map<string, Buffer>();
 const strictUtf8Decoder = new TextDecoder("utf-8", { fatal: true });
 const windows1252Decoder = new TextDecoder("windows-1252");
@@ -103,6 +104,18 @@ export const resolveFolderPath = (input: string): { path: string; root: string }
   return { path: candidate, root };
 };
 
+const assertResolvedRealPath = async (resolved: {
+  path: string;
+  root: string;
+}): Promise<string> => {
+  const [realRoot, realTarget] = await Promise.all([
+    fs.realpath(resolved.root),
+    fs.realpath(resolved.path),
+  ]);
+  if (!isWithin(realRoot, realTarget)) throw new Error("FOLDER_PATH_OUTSIDE_LIBRARY_ROOT");
+  return realRoot;
+};
+
 const existsAsDirectory = async (value: string): Promise<boolean> => {
   try {
     return (await fs.stat(value)).isDirectory();
@@ -132,19 +145,35 @@ export const listPinnedFolders = async (): Promise<FolderPinEntry[]> => {
         roots
           .filter((configured) => isWithin(configured, candidate))
           .sort((a, b) => b.length - a.length)[0] ?? null;
+      let available = false;
+      if (root !== null && (await existsAsDirectory(candidate))) {
+        try {
+          await assertResolvedRealPath({ path: candidate, root });
+          available = true;
+        } catch {
+          available = false;
+        }
+      }
       return {
         name: path.basename(candidate) || candidate,
         path: candidate,
         root,
-        available: root !== null && (await existsAsDirectory(candidate)),
+        available,
       };
     }),
   );
 };
 
+export const authorizeFolderPath = async (input: string): Promise<{ path: string; root: string }> => {
+  const resolved = resolveFolderPath(input);
+  await assertResolvedRealPath(resolved);
+  return resolved;
+};
+
 export const pinFolder = async (input: string): Promise<FolderPinEntry[]> => {
   const resolved = resolveFolderPath(input);
   if (!(await existsAsDirectory(resolved.path))) throw new Error("FOLDER_DIRECTORY_NOT_FOUND");
+  await assertResolvedRealPath(resolved);
   const current = store.get("library.pinnedFolders");
   if (!current.some((item) => pathKey(item) === pathKey(resolved.path))) {
     store.set("library.pinnedFolders", [...current, resolved.path]);
@@ -184,7 +213,11 @@ type PhysicalEntry = {
   mtime: number;
 };
 
-const statPhysicalEntry = async (parent: string, entry: Dirent): Promise<PhysicalEntry | null> => {
+const statPhysicalEntry = async (
+  parent: string,
+  entry: Dirent,
+  realRoot?: string,
+): Promise<PhysicalEntry | null> => {
   const child = path.join(parent, entry.name);
   try {
     if (entry.isDirectory()) {
@@ -196,6 +229,10 @@ const statPhysicalEntry = async (parent: string, entry: Dirent): Promise<Physica
       return { name: entry.name, path: child, type: "file", size: stat.size, mtime: stat.mtimeMs };
     }
     if (!entry.isSymbolicLink()) return null;
+    if (realRoot) {
+      const realTarget = await fs.realpath(child);
+      if (!isWithin(realRoot, realTarget)) return null;
+    }
     const stat = await fs.stat(child);
     if (stat.isDirectory()) {
       return { name: entry.name, path: child, type: "directory", size: 0, mtime: stat.mtimeMs };
@@ -209,11 +246,14 @@ const statPhysicalEntry = async (parent: string, entry: Dirent): Promise<Physica
   }
 };
 
-const listPhysicalEntries = async (directory: string): Promise<PhysicalEntry[]> => {
+const listPhysicalEntries = async (
+  directory: string,
+  realRoot?: string,
+): Promise<PhysicalEntry[]> => {
   const entries = await fs.readdir(directory, { withFileTypes: true });
-  return (await Promise.all(entries.map((entry) => statPhysicalEntry(directory, entry)))).filter(
-    (entry): entry is PhysicalEntry => entry !== null,
-  );
+  return (
+    await Promise.all(entries.map((entry) => statPhysicalEntry(directory, entry, realRoot)))
+  ).filter((entry): entry is PhysicalEntry => entry !== null);
 };
 
 const materialType = (filePath: string): FolderMaterialType | null => {
@@ -428,7 +468,7 @@ const inspectCueContainer = async (
     const content = await readFileAutoEncoding(cuePath);
     const inspection = inspectCueSheet(content, cuePath);
     if (!inspection) return null;
-    resolveFolderPath(inspection.audioPath);
+    await assertResolvedRealPath(resolveFolderPath(inspection.audioPath));
     const audioStat = await fs.stat(inspection.audioPath);
     if (!audioStat.isFile() || !isOrdinaryAudio(inspection.audioPath)) return null;
     return {
@@ -452,20 +492,38 @@ const compareBrowseEntries = (a: FolderBrowseEntry, b: FolderBrowseEntry): numbe
   return collator.compare(a.name, b.name);
 };
 
-const encodeBrowseCursor = (offset: number, mtime: number): string =>
-  Buffer.from(JSON.stringify({ offset, mtime }), "utf8").toString("base64url");
+const normalizeBrowseFilter = (value?: string): string => value?.trim().toLocaleLowerCase() ?? "";
+
+const matchesBrowseFilter = (entry: FolderBrowseEntry, filter: string): boolean => {
+  if (!filter) return true;
+  const values = [entry.name];
+  if (entry.kind === "track") {
+    values.push(entry.track.title);
+    if (entry.track.album?.name) values.push(entry.track.album.name);
+    values.push(...entry.track.artists.map((artist) => artist.name));
+  }
+  return values.some((value) => value.toLocaleLowerCase().includes(filter));
+};
+
+const encodeBrowseCursor = (offset: number, mtime: number, filter: string): string =>
+  Buffer.from(JSON.stringify({ offset, mtime, filter }), "utf8").toString("base64url");
 
 const decodeBrowseCursor = (
   cursor: string | undefined,
-): { offset: number; mtime: number } | null => {
+): { offset: number; mtime: number; filter: string } | null => {
   if (!cursor) return null;
   try {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
       offset?: unknown;
       mtime?: unknown;
+      filter?: unknown;
     };
     if (!Number.isInteger(value.offset) || typeof value.mtime !== "number") return null;
-    return { offset: Math.max(0, Number(value.offset)), mtime: value.mtime };
+    return {
+      offset: Math.max(0, Number(value.offset)),
+      mtime: value.mtime,
+      filter: typeof value.filter === "string" ? value.filter : "",
+    };
   } catch {
     return null;
   }
@@ -476,6 +534,7 @@ export const browseFolder = async (
   cursor?: string,
   requestedLimit = DEFAULT_BROWSE_LIMIT,
   focusPath?: string,
+  filter?: string,
 ): Promise<FolderBrowsePage> => {
   const resolved = resolveFolderPath(input);
   let directoryStat;
@@ -493,14 +552,19 @@ export const browseFolder = async (
     };
   }
   if (!directoryStat.isDirectory()) throw new Error("FOLDER_DIRECTORY_NOT_FOUND");
+  const realRoot = await assertResolvedRealPath(resolved);
 
   const parsedCursor = decodeBrowseCursor(cursor);
   if (cursor && !parsedCursor) throw new Error("FOLDER_CURSOR_INVALID");
+  const normalizedFilter = normalizeBrowseFilter(filter);
+  if (parsedCursor && parsedCursor.filter !== normalizedFilter) {
+    throw new Error("FOLDER_CURSOR_INVALID");
+  }
   if (parsedCursor && Math.abs(parsedCursor.mtime - directoryStat.mtimeMs) > 0.5) {
     throw new Error("FOLDER_CURSOR_STALE");
   }
 
-  const physical = await listPhysicalEntries(resolved.path);
+  const physical = await listPhysicalEntries(resolved.path, realRoot);
   const files = physical.filter((entry) => entry.type === "file");
   const mediaPaths = files
     .filter((entry) => {
@@ -583,7 +647,8 @@ export const browseFolder = async (
   }
 
   entries.sort(compareBrowseEntries);
-  const counts = entries.reduce(
+  const filteredEntries = entries.filter((entry) => matchesBrowseFilter(entry, normalizedFilter));
+  const counts = filteredEntries.reduce(
     (result, entry) => {
       if (entry.kind === "directory") result.directories++;
       else if (entry.kind === "material") result.materials++;
@@ -600,11 +665,11 @@ export const browseFolder = async (
   const requestedFocus = focusPath?.trim() ? path.resolve(focusPath) : "";
   const focusIndex =
     !parsedCursor && requestedFocus
-      ? entries.findIndex((entry) => pathKey(entry.path) === pathKey(requestedFocus))
+      ? filteredEntries.findIndex((entry) => pathKey(entry.path) === pathKey(requestedFocus))
       : -1;
   const offset =
     parsedCursor?.offset ?? (focusIndex >= 0 ? Math.floor(focusIndex / limit) * limit : 0);
-  const pageEntries = entries.slice(offset, offset + limit);
+  const pageEntries = filteredEntries.slice(offset, offset + limit);
   const nextOffset = offset + pageEntries.length;
   return {
     path: resolved.path,
@@ -615,11 +680,11 @@ export const browseFolder = async (
     entries: pageEntries,
     previousCursor:
       offset > 0
-        ? encodeBrowseCursor(Math.max(0, offset - limit), directoryStat.mtimeMs)
+        ? encodeBrowseCursor(Math.max(0, offset - limit), directoryStat.mtimeMs, normalizedFilter)
         : undefined,
     nextCursor:
-      nextOffset < entries.length
-        ? encodeBrowseCursor(nextOffset, directoryStat.mtimeMs)
+      nextOffset < filteredEntries.length
+        ? encodeBrowseCursor(nextOffset, directoryStat.mtimeMs, normalizedFilter)
         : undefined,
   };
 };
@@ -637,7 +702,7 @@ const probeCueTracks = async (cuePath: string): Promise<Track[]> => {
   const content = await readFileAutoEncoding(cuePath);
   const audioPath = getCueAudioPath(content, cuePath);
   if (!audioPath) throw new Error("FOLDER_CUE_UNSUPPORTED");
-  resolveFolderPath(audioPath);
+  await assertResolvedRealPath(resolveFolderPath(audioPath));
   const canonical = getTracksByPhysicalPaths([audioPath]);
   const audioTrack = canonicalForExactFile(canonical, audioPath);
   const metadata = audioTrack
@@ -703,11 +768,13 @@ const probeSacdTracks = async (isoPath: string): Promise<Track[]> => {
 };
 
 export const openFolderContainer = async (input: string): Promise<FolderContainerResult> => {
-  const { path: containerPath } = resolveFolderPath(input);
+  const resolved = resolveFolderPath(input);
+  const containerPath = resolved.path;
   const ext = extension(containerPath);
   if (ext !== "cue" && ext !== "iso") throw new Error("FOLDER_CONTAINER_UNSUPPORTED");
   const stat = await fs.stat(containerPath);
   if (!stat.isFile()) throw new Error("FOLDER_CONTAINER_NOT_FOUND");
+  await assertResolvedRealPath(resolved);
 
   const canonical = containerCanonicalTracks(
     containerPath,
@@ -790,6 +857,7 @@ type ResolveActionOptions = { recursive: boolean; canonicalize: boolean };
 const resolveDirectoryAction = async (
   directory: string,
   options: ResolveActionOptions,
+  realRoot: string,
   visitedRealDirs: Set<string>,
   failures: string[],
 ): Promise<Track[]> => {
@@ -800,13 +868,17 @@ const resolveDirectoryAction = async (
     failures.push(directory);
     return [];
   }
+  if (!isWithin(realRoot, real)) {
+    failures.push(directory);
+    return [];
+  }
   const realKey = pathKey(real);
   if (visitedRealDirs.has(realKey)) return [];
   visitedRealDirs.add(realKey);
 
   let physical: PhysicalEntry[];
   try {
-    physical = await listPhysicalEntries(directory);
+    physical = await listPhysicalEntries(directory, realRoot);
   } catch {
     failures.push(directory);
     return [];
@@ -867,7 +939,9 @@ const resolveDirectoryAction = async (
   if (!options.recursive) return directTracks;
   const result = [...directTracks];
   for (const child of physical.filter((item) => item.type === "directory")) {
-    result.push(...(await resolveDirectoryAction(child.path, options, visitedRealDirs, failures)));
+    result.push(
+      ...(await resolveDirectoryAction(child.path, options, realRoot, visitedRealDirs, failures)),
+    );
   }
   return result;
 };
@@ -876,12 +950,14 @@ const resolveActionTracks = async (
   input: string,
   options: ResolveActionOptions,
 ): Promise<{ tracks: Track[]; failed: string[] }> => {
-  const { path: target } = resolveFolderPath(input);
+  const resolved = resolveFolderPath(input);
+  const target = resolved.path;
   const stat = await fs.stat(target);
+  const realRoot = await assertResolvedRealPath(resolved);
   const failed: string[] = [];
   if (stat.isDirectory()) {
     return {
-      tracks: await resolveDirectoryAction(target, options, new Set(), failed),
+      tracks: await resolveDirectoryAction(target, options, realRoot, new Set(), failed),
       failed,
     };
   }
@@ -964,6 +1040,19 @@ export const addFolderToPlaylist = async (
   return { count: resolved.tracks.length, failed: resolved.failed, added };
 };
 
+export const addContainerTrackToPlaylist = async (
+  playlistId: string,
+  containerPath: string,
+  trackId: string,
+): Promise<{ count: number; failed: string[]; added: number }> => {
+  const canonical = await canonicalizeContainer(containerPath);
+  publishLibraryRevision();
+  const track = canonical.find((item) => item.id === trackId);
+  if (!track) throw new Error("FOLDER_CONTAINER_TRACK_NOT_FOUND");
+  const added = addPlaylistTracks(playlistId, [track.id]);
+  return { count: 1, failed: [], added };
+};
+
 export const resolveTrackFolderLocation = (track: Track): FolderNavigationTarget => {
   const container = localTrackContainerPath(track);
   if (!container) throw new Error("FOLDER_TRACK_HAS_NO_LOCAL_PATH");
@@ -1013,7 +1102,7 @@ export const searchFolders = async (
   let visited = 0;
   let truncated = false;
 
-  const walk = async (directory: string, root: string): Promise<void> => {
+  const walk = async (directory: string, root: string, realRoot: string): Promise<void> => {
     if (matches.length >= targetCount || truncated || signal?.aborted) return;
     let real: string;
     try {
@@ -1021,12 +1110,13 @@ export const searchFolders = async (
     } catch {
       return;
     }
+    if (!isWithin(realRoot, real)) return;
     const key = pathKey(real);
     if (visitedRealDirs.has(key)) return;
     visitedRealDirs.add(key);
     let items: PhysicalEntry[];
     try {
-      items = await listPhysicalEntries(directory);
+      items = await listPhysicalEntries(directory, realRoot);
     } catch {
       return;
     }
@@ -1057,13 +1147,19 @@ export const searchFolders = async (
         });
         if (matches.length >= targetCount) return;
       }
-      if (item.type === "directory") await walk(item.path, root);
+      if (item.type === "directory") await walk(item.path, root, realRoot);
       if (matches.length >= targetCount || truncated) return;
     }
   };
 
   for (const root of configuredRoots()) {
-    await walk(root, root);
+    let realRoot: string;
+    try {
+      realRoot = await fs.realpath(root);
+    } catch {
+      continue;
+    }
+    await walk(root, root, realRoot);
     if (matches.length >= targetCount || truncated || signal?.aborted) break;
   }
   if (signal?.aborted) throw new Error("FOLDER_SEARCH_CANCELLED");
@@ -1085,11 +1181,13 @@ const assertMaterial = async (
   entry: FolderMaterialEntry;
   mime: string;
 }> => {
-  const { path: filePath } = resolveFolderPath(input);
+  const resolved = resolveFolderPath(input);
+  const filePath = resolved.path;
   const type = materialType(filePath);
   if (!type) throw new Error("FOLDER_MATERIAL_UNSUPPORTED");
   const stat = await fs.stat(filePath);
   if (!stat.isFile()) throw new Error("FOLDER_MATERIAL_NOT_FOUND");
+  await assertResolvedRealPath(resolved);
   await verifyMaterialSignature(filePath, type);
   const ext = extension(filePath);
   const mime =
@@ -1139,20 +1237,20 @@ export const readFolderTextMaterial = async (input: string): Promise<FolderTextM
   }
 };
 
-export const makeFolderMaterialThumbnail = async (input: string): Promise<Buffer> => {
-  const material = await assertMaterial(input);
-  if (material.entry.materialType !== "image") throw new Error("FOLDER_MATERIAL_NOT_IMAGE");
-  if (material.entry.size > MAX_THUMBNAIL_SOURCE_BYTES) {
+const makeImageThumbnailFromPath = async (sourcePath: string): Promise<Buffer> => {
+  const stat = await fs.stat(sourcePath);
+  if (!stat.isFile()) throw new Error("FOLDER_MATERIAL_NOT_FOUND");
+  if (stat.size > MAX_THUMBNAIL_SOURCE_BYTES) {
     throw new Error("FOLDER_MATERIAL_IMAGE_TOO_LARGE");
   }
-  const key = `${pathKey(material.entry.path)}\0${material.entry.mtime}\0${material.entry.size}`;
+  const key = `${pathKey(sourcePath)}\0${stat.mtimeMs}\0${stat.size}`;
   const cached = thumbnailCache.get(key);
   if (cached) {
     thumbnailCache.delete(key);
     thumbnailCache.set(key, cached);
     return cached;
   }
-  const bytes = await fs.readFile(material.entry.path);
+  const bytes = await fs.readFile(sourcePath);
   const thumbnail = await getEngine().makeImageThumbnail(bytes, 320);
   thumbnailCache.set(key, thumbnail);
   while (thumbnailCache.size > MAX_THUMBNAIL_CACHE_ITEMS) {
@@ -1161,4 +1259,83 @@ export const makeFolderMaterialThumbnail = async (input: string): Promise<Buffer
     thumbnailCache.delete(oldest);
   }
   return thumbnail;
+};
+
+export const makeFolderMaterialThumbnail = async (input: string): Promise<Buffer> => {
+  const material = await assertMaterial(input);
+  if (material.entry.materialType !== "image") throw new Error("FOLDER_MATERIAL_NOT_IMAGE");
+  return makeImageThumbnailFromPath(material.entry.path);
+};
+
+const folderDirectoryArtworkPath = async (
+  physical: PhysicalEntry[],
+): Promise<string | null> => {
+  const images = physical.filter(
+    (item) => item.type === "file" && materialType(item.path) === "image",
+  );
+  for (const preferred of DIRECTORY_ARTWORK_NAMES) {
+    const found = images.find(
+      (item) => path.basename(item.name, path.extname(item.name)).toLocaleLowerCase() === preferred,
+    );
+    if (!found) continue;
+    try {
+      await verifyMaterialSignature(found.path, "image");
+      return found.path;
+    } catch {
+      // 损坏或伪装图片继续尝试下一个候选。
+    }
+  }
+  if (images.length === 1) {
+    try {
+      await verifyMaterialSignature(images[0]!.path, "image");
+      return images[0]!.path;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+const folderCanonicalCoverPath = (physical: PhysicalEntry[]): string | null => {
+  const mediaPaths = physical
+    .filter((item) => {
+      if (item.type !== "file") return false;
+      const ext = extension(item.path);
+      return isOrdinaryAudio(item.path) || ext === "cue" || ext === "iso";
+    })
+    .map((item) => item.path);
+  if (mediaPaths.length === 0) return null;
+  const covers = getTracksByPhysicalPaths(mediaPaths)
+    .map((track) => track.cover)
+    .filter((cover): cover is string => !!cover);
+  if (covers.length === 0) return null;
+  const first = covers[0]!;
+  return covers.every((cover) => cover === first) ? first : null;
+};
+
+export const resolveFolderDirectoryArtworkPath = async (input: string): Promise<string | null> => {
+  const resolved = resolveFolderPath(input);
+  const directory = resolved.path;
+  const stat = await fs.stat(directory);
+  if (!stat.isDirectory()) throw new Error("FOLDER_DIRECTORY_NOT_FOUND");
+  const realRoot = await assertResolvedRealPath(resolved);
+
+  const physical = await listPhysicalEntries(directory, realRoot);
+  const artwork = await folderDirectoryArtworkPath(physical);
+  if (artwork) return artwork;
+
+  const canonicalCover = folderCanonicalCoverPath(physical);
+  if (!canonicalCover) return null;
+  const cachedCoverPath = fromCacheUrl(canonicalCover);
+  if (!cachedCoverPath) return null;
+  try {
+    return (await fs.stat(cachedCoverPath)).isFile() ? cachedCoverPath : null;
+  } catch {
+    return null;
+  }
+};
+
+export const makeFolderDirectoryThumbnail = async (input: string): Promise<Buffer | null> => {
+  const sourcePath = await resolveFolderDirectoryArtworkPath(input);
+  return sourcePath ? makeImageThumbnailFromPath(sourcePath) : null;
 };

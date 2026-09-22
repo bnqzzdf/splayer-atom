@@ -46,10 +46,12 @@ export const folderBrowserClient = {
     cursor?: string,
     limit = 200,
     focusPath?: string,
+    filter?: string,
   ): Promise<FolderBrowsePage> => {
     const params = new URLSearchParams({ path, limit: String(limit) });
     if (cursor) params.set("cursor", cursor);
     if (focusPath) params.set("focus", focusPath);
+    if (filter) params.set("filter", filter);
     return mapBrowse(await request<FolderBrowsePage>(`/library/folders/browse?${params}`));
   },
 
@@ -112,6 +114,13 @@ export const folderBrowserClient = {
   ): Promise<FolderPlaylistResult> =>
     request("/library/folders/playlist", json({ playlistId, path, recursive })),
 
+  addContainerTrackToPlaylist: (
+    playlistId: string,
+    containerPath: string,
+    trackId: string,
+  ): Promise<FolderPlaylistResult> =>
+    request("/library/folders/playlist-track", json({ playlistId, containerPath, trackId })),
+
   readText: (path: string): Promise<FolderTextMaterial> =>
     request(`/library/folders/material/text?path=${encodeURIComponent(path)}`),
 
@@ -120,4 +129,7 @@ export const folderBrowserClient = {
 
   thumbnailUrl: (path: string): string =>
     `${coreApiOrigin}/api/library/folders/material/thumbnail?path=${encodeURIComponent(path)}`,
+
+  directoryThumbnailUrl: (path: string): string =>
+    `${coreApiOrigin}/api/library/folders/directory/thumbnail?path=${encodeURIComponent(path)}`,
 };

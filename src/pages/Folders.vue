@@ -5,6 +5,7 @@ import type {
   FolderBrowseEntry,
   FolderBrowsePage,
   FolderContainerResult,
+  FolderDirectoryEntry,
   FolderMaterialEntry,
   FolderPinEntry,
   FolderRootEntry,
@@ -17,8 +18,10 @@ import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { folderBrowserClient } from "@/core/folderBrowserClient";
 import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
+import { usePlaylistStore } from "@/stores/playlist";
 import { toast } from "@/composables/useToast";
 import { formatFileSize } from "@/utils/format";
+import { appendFolderPath, folderPathWithinRoot } from "@/utils/folderPath";
 import * as player from "@/core/player";
 import IconFolder from "~icons/lucide/folder";
 import IconFolderOpen from "~icons/lucide/folder-open";
@@ -43,28 +46,29 @@ import IconSettings2 from "~icons/lucide/settings-2";
 import IconZoomIn from "~icons/lucide/zoom-in";
 import IconZoomOut from "~icons/lucide/zoom-out";
 import IconShuffle from "~icons/lucide/shuffle";
+import IconList from "~icons/lucide/list";
+import IconLayoutGrid from "~icons/lucide/layout-grid";
 
 type ViewRow =
   | { kind: "section"; key: string; label: string; count: number }
+  | { kind: "directory-grid"; key: string; entries: FolderDirectoryEntry[] }
   | { kind: "entry"; key: string; entry: FolderBrowseEntry }
   | { kind: "container-track"; key: string; track: Track; containerPath: string };
+
+type FolderScrollState = {
+  top: number;
+  anchorPath?: string;
+  anchorOffset: number;
+};
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const settingsDialog = useSettingsDialog();
+const playlistStore = usePlaylistStore();
 
 const routeText = (value: unknown): string =>
   typeof value === "string" ? value : Array.isArray(value) ? String(value[0] ?? "") : "";
-
-const pathWithinRoot = (candidate: string, root: string): boolean => {
-  const normalizedRoot = root.replace(/\/+$/, "") || "/";
-  const normalizedCandidate = candidate.replace(/\/+$/, "") || "/";
-  return (
-    normalizedCandidate === normalizedRoot ||
-    normalizedCandidate.startsWith(normalizedRoot === "/" ? "/" : normalizedRoot + "/")
-  );
-};
 
 const currentPath = computed(() => routeText(route.query.path));
 const requestedContainerPath = computed(() => routeText(route.query.container));
@@ -83,21 +87,20 @@ const loadingMore = ref(false);
 const error = ref("");
 const listRef = shallowRef<SVirtualListExposed | null>(null);
 const loadedPath = ref("");
-const scrollPositions = new Map<string, number>();
+const loadedFilter = ref("");
+const scrollPositions = new Map<string, FolderScrollState>();
+const folderFilters = new Map<string, string>();
 const highlightKey = ref("");
 let highlightTimer: number | null = null;
+let browseGeneration = 0;
 
 const scanProgress = shallowRef<ScanProgress | null>(null);
 const scanning = computed(() => scanProgress.value?.phase === "scanning");
 const scanCoversCurrent = computed(() => {
   if (!scanning.value || !currentPath.value) return false;
-  return (
-    scanProgress.value?.scopeDirs?.some((scope) => {
-      if (scope === currentPath.value) return true;
-      const prefix = scope.endsWith("/") ? scope : scope + "/";
-      return currentPath.value.startsWith(prefix);
-    }) ?? false
-  );
+  return scanProgress.value?.scopeDirs?.some((scope) =>
+    folderPathWithinRoot(currentPath.value, scope),
+  ) ?? false;
 });
 
 const searchQuery = ref("");
@@ -107,9 +110,19 @@ const searchCursor = ref<string>();
 let searchGeneration = 0;
 let searchAbortController: AbortController | null = null;
 
+const filterQuery = ref("");
+let ignoreFilterReload = false;
+const folderViewMode = ref<"list" | "grid">("list");
+const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
+
 const createOpen = ref(false);
+const playlistPickerOpen = ref(false);
+const playlistSubmitting = ref(false);
 const createRecursive = ref(true);
 const createTargetPath = ref("");
+const createTargetTrack = shallowRef<{ containerPath: string; trackId: string; title: string } | null>(
+  null,
+);
 
 const viewerOpen = ref(false);
 const viewerMaterial = shallowRef<FolderMaterialEntry | null>(null);
@@ -145,7 +158,7 @@ const breadcrumb = computed(() => {
   const rows = [{ name: root.split(/[/\\]/).filter(Boolean).pop() || root, path: root }];
   let cursor = root;
   for (const segment of segments) {
-    cursor = cursor.endsWith("/") ? cursor + segment : cursor + "/" + segment;
+    cursor = appendFolderPath(cursor, segment);
     rows.push({ name: segment, path: cursor });
   }
   return rows;
@@ -179,12 +192,28 @@ const viewRows = computed<ViewRow[]>(() => {
       }
     }
   };
-  append(
-    "folders",
-    t("folder.subfolders"),
-    directories,
-    page.value?.counts.directories ?? directories.length,
-  );
+  if (folderViewMode.value === "list") {
+    append(
+      "folders",
+      t("folder.subfolders"),
+      directories,
+      page.value?.counts.directories ?? directories.length,
+    );
+  } else if (directories.length > 0) {
+    rows.push({
+      kind: "section",
+      key: "section:folders",
+      label: t("folder.subfolders"),
+      count: page.value?.counts.directories ?? directories.length,
+    });
+    for (let index = 0; index < directories.length; index += 6) {
+      rows.push({
+        kind: "directory-grid",
+        key: `directory-grid:${index}`,
+        entries: directories.slice(index, index + 6),
+      });
+    }
+  }
   append("tracks", t("folder.tracks"), media, page.value?.counts.media ?? media.length);
   append(
     "materials",
@@ -209,16 +238,49 @@ const pdfUrl = computed(() => {
 const materialHasThumbnail = (material: FolderMaterialEntry): boolean =>
   material.materialType === "image" && !material.path.toLowerCase().endsWith(".gif");
 
+const rowAnchorPath = (row: ViewRow | undefined): string | undefined => {
+  if (!row || row.kind === "section") return undefined;
+  if (row.kind === "entry") return row.entry.path;
+  if (row.kind === "container-track") return row.containerPath;
+  return row.entries[0]?.path;
+};
+
+const rowContainsPath = (row: ViewRow, path: string): boolean => {
+  if (row.kind === "entry") return row.entry.path === path;
+  if (row.kind === "container-track") return row.containerPath === path;
+  if (row.kind === "directory-grid") return row.entries.some((entry) => entry.path === path);
+  return false;
+};
+
 const saveCurrentScroll = (): void => {
   if (!loadedPath.value || !listRef.value) return;
-  scrollPositions.set(loadedPath.value, listRef.value.getScrollTop());
+  const top = listRef.value.getScrollTop();
+  let anchorIndex = Math.max(0, listRef.value.actualStartIndex);
+  while (anchorIndex < viewRows.value.length && viewRows.value[anchorIndex]?.kind === "section") {
+    anchorIndex++;
+  }
+  const anchorPath = rowAnchorPath(viewRows.value[anchorIndex]);
+  const anchorOffset =
+    anchorPath && anchorIndex < viewRows.value.length
+      ? top - listRef.value.getItemTop(anchorIndex)
+      : 0;
+  scrollPositions.set(loadedPath.value, { top, anchorPath, anchorOffset });
 };
 
 const restoreScroll = async (path: string): Promise<void> => {
-  const top = scrollPositions.get(path);
-  if (top == null || top <= 0) return;
+  const state = scrollPositions.get(path);
+  if (!state || state.top <= 0) return;
   await nextTick();
-  listRef.value?.scrollTo(top);
+  const list = listRef.value;
+  if (!list) return;
+  if (state.anchorPath) {
+    const anchorIndex = viewRows.value.findIndex((row) => rowContainsPath(row, state.anchorPath!));
+    if (anchorIndex >= 0) {
+      list.scrollTo(list.getItemTop(anchorIndex) + state.anchorOffset);
+      return;
+    }
+  }
+  list.scrollTo(state.top);
 };
 
 const loadRoots = async (): Promise<void> => {
@@ -250,15 +312,19 @@ const focusRequestedEntry = async (): Promise<void> => {
 
 const loadContainer = async (): Promise<void> => {
   const target = requestedContainerPath.value;
-  if (!target || !currentPath.value) {
+  const folderPath = currentPath.value;
+  if (!target || !folderPath) {
     container.value = null;
     await focusRequestedEntry();
     return;
   }
   try {
-    container.value = await folderBrowserClient.openContainer(target);
+    const result = await folderBrowserClient.openContainer(target);
+    if (requestedContainerPath.value !== target || currentPath.value !== folderPath) return;
+    container.value = result;
     await focusRequestedEntry();
   } catch {
+    if (requestedContainerPath.value !== target || currentPath.value !== folderPath) return;
     container.value = null;
     toast.error(t("folder.containerLoadFailed"));
   }
@@ -266,7 +332,10 @@ const loadContainer = async (): Promise<void> => {
 
 const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true): Promise<void> => {
   saveCurrentScroll();
+  const generation = ++browseGeneration;
   const target = currentPath.value;
+  const activeFilter = filterQuery.value.trim();
+  directoryThumbnailFailures.value = new Set();
   loadedPath.value = target;
   error.value = "";
   entries.value = [];
@@ -275,75 +344,118 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   page.value = null;
   container.value = null;
   if (!target) {
+    loadedFilter.value = "";
     loading.value = true;
     try {
       await loadRoots();
     } catch (value) {
-      error.value = value instanceof Error ? value.message : String(value);
+      if (generation === browseGeneration && !currentPath.value) {
+        error.value = value instanceof Error ? value.message : String(value);
+      }
     } finally {
-      loading.value = false;
+      if (generation === browseGeneration) loading.value = false;
     }
     return;
   }
   loading.value = true;
   try {
+    const savedAnchorPath = restoreSavedPosition
+      ? scrollPositions.get(target)?.anchorPath
+      : undefined;
     const result = await folderBrowserClient.browse(
       target,
       undefined,
       200,
-      focusOverride || requestedContainerPath.value || requestedFocusPath.value || undefined,
+      focusOverride ||
+        requestedContainerPath.value ||
+        requestedFocusPath.value ||
+        savedAnchorPath ||
+        undefined,
+      activeFilter || undefined,
     );
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      filterQuery.value.trim() !== activeFilter
+    ) {
+      return;
+    }
     page.value = result;
     entries.value = result.entries;
     previousCursor.value = result.previousCursor;
     nextCursor.value = result.nextCursor;
+    loadedFilter.value = activeFilter;
     if (restoreSavedPosition) await restoreScroll(target);
     await loadContainer();
   } catch (value) {
-    error.value = value instanceof Error ? value.message : String(value);
+    if (
+      generation === browseGeneration &&
+      currentPath.value === target &&
+      filterQuery.value.trim() === activeFilter
+    ) {
+      error.value = value instanceof Error ? value.message : String(value);
+    }
   } finally {
-    loading.value = false;
+    if (generation === browseGeneration) loading.value = false;
   }
+};
+
+const markDirectoryThumbnailFailed = (path: string): void => {
+  if (directoryThumbnailFailures.value.has(path)) return;
+  const next = new Set(directoryThumbnailFailures.value);
+  next.add(path);
+  directoryThumbnailFailures.value = next;
 };
 
 const refreshCurrent = async (): Promise<void> => {
-  const rowsBefore = viewRows.value;
-  const startIndex = Math.max(0, listRef.value?.actualStartIndex ?? 0);
-  let anchorIndex = startIndex;
-  while (anchorIndex < rowsBefore.length && rowsBefore[anchorIndex]?.kind === "section") {
-    anchorIndex++;
-  }
-  const anchor = rowsBefore[anchorIndex];
-  const anchorKey = anchor?.key;
-  const anchorPath =
-    anchor?.kind === "entry"
-      ? anchor.entry.path
-      : anchor?.kind === "container-track"
-        ? anchor.containerPath
-        : undefined;
-  const top = listRef.value?.getScrollTop() ?? 0;
-  const relative = anchorKey && listRef.value ? top - listRef.value.getItemTop(anchorIndex) : 0;
+  const target = currentPath.value;
+  saveCurrentScroll();
+  const state = scrollPositions.get(target);
+  const anchorPath = state?.anchorPath;
   await loadCurrent(anchorPath, false);
-  await nextTick();
-  if (anchorKey && listRef.value) {
-    const nextIndex = viewRows.value.findIndex((row) => row.key === anchorKey);
-    if (nextIndex >= 0) {
-      listRef.value.scrollTo(listRef.value.getItemTop(nextIndex) + relative);
-      return;
-    }
-  }
-  if (top > 0) listRef.value?.scrollTo(top);
+  if (currentPath.value !== target || loadedPath.value !== target) return;
+  await restoreScroll(target);
 };
 
 const loadMore = async (): Promise<void> => {
-  if (!currentPath.value || !nextCursor.value || loadingMore.value) return;
+  if (
+    !currentPath.value ||
+    !nextCursor.value ||
+    loadingMore.value ||
+    filterQuery.value.trim() !== loadedFilter.value
+  )
+    return;
+  const generation = browseGeneration;
+  const target = currentPath.value;
+  const activeFilter = loadedFilter.value;
+  const cursor = nextCursor.value;
   loadingMore.value = true;
   try {
-    const result = await folderBrowserClient.browse(currentPath.value, nextCursor.value);
+    const result = await folderBrowserClient.browse(
+      target,
+      cursor,
+      200,
+      undefined,
+      activeFilter || undefined,
+    );
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter
+    ) {
+      return;
+    }
     page.value = result;
     entries.value = [...entries.value, ...result.entries];
     nextCursor.value = result.nextCursor;
   } catch (value) {
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter
+    ) {
+      return;
+    }
     if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
       await refreshCurrent();
     } else {
@@ -355,7 +467,17 @@ const loadMore = async (): Promise<void> => {
 };
 
 const loadPrevious = async (): Promise<void> => {
-  if (!currentPath.value || !previousCursor.value || loadingMore.value) return;
+  if (
+    !currentPath.value ||
+    !previousCursor.value ||
+    loadingMore.value ||
+    filterQuery.value.trim() !== loadedFilter.value
+  )
+    return;
+  const generation = browseGeneration;
+  const target = currentPath.value;
+  const activeFilter = loadedFilter.value;
+  const cursor = previousCursor.value;
   loadingMore.value = true;
   const rowsBefore = viewRows.value;
   const anchorIndex = Math.max(0, listRef.value?.actualStartIndex ?? 0);
@@ -364,7 +486,20 @@ const loadPrevious = async (): Promise<void> => {
   const anchorOffset =
     anchorKey && listRef.value ? scrollTop - listRef.value.getItemTop(anchorIndex) : 0;
   try {
-    const result = await folderBrowserClient.browse(currentPath.value, previousCursor.value);
+    const result = await folderBrowserClient.browse(
+      target,
+      cursor,
+      200,
+      undefined,
+      activeFilter || undefined,
+    );
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter
+    ) {
+      return;
+    }
     entries.value = [...result.entries, ...entries.value];
     previousCursor.value = result.previousCursor;
     await nextTick();
@@ -375,6 +510,13 @@ const loadPrevious = async (): Promise<void> => {
       }
     }
   } catch (value) {
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter
+    ) {
+      return;
+    }
     if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
       await refreshCurrent();
     } else {
@@ -455,18 +597,72 @@ const togglePin = async (): Promise<void> => {
 const openCreatePlaylist = (targetPath: string, recursive: boolean): void => {
   createTargetPath.value = targetPath;
   createRecursive.value = recursive;
+  createTargetTrack.value = null;
+  playlistPickerOpen.value = true;
+  if (!playlistStore.initialized) {
+    void playlistStore.load().catch((value) =>
+      toast.error(value instanceof Error ? value.message : String(value)),
+    );
+  }
+};
+
+const openContainerTrackPlaylist = (track: Track, containerPath: string): void => {
+  createTargetPath.value = containerPath;
+  createRecursive.value = false;
+  createTargetTrack.value = {
+    containerPath,
+    trackId: track.id,
+    title: track.title,
+  };
+  playlistPickerOpen.value = true;
+  if (!playlistStore.initialized) {
+    void playlistStore.load().catch((value) =>
+      toast.error(value instanceof Error ? value.message : String(value)),
+    );
+  }
+};
+
+const openPlaylistCreate = (): void => {
+  playlistPickerOpen.value = false;
   createOpen.value = true;
+};
+
+const addPlaylistTarget = async (playlistId: string): Promise<number> => {
+  const trackTarget = createTargetTrack.value;
+  const result = trackTarget
+    ? await folderBrowserClient.addContainerTrackToPlaylist(
+        playlistId,
+        trackTarget.containerPath,
+        trackTarget.trackId,
+      )
+    : await folderBrowserClient.addToPlaylist(
+        playlistId,
+        createTargetPath.value,
+        createRecursive.value,
+      );
+  await playlistStore.load();
+  return result.added;
+};
+
+const handlePlaylistPick = async (playlistId: string): Promise<void> => {
+  if (!createTargetPath.value || playlistSubmitting.value) return;
+  playlistSubmitting.value = true;
+  try {
+    const added = await addPlaylistTarget(playlistId);
+    toast.success(t("collection.tracksAdded", { count: added }));
+    playlistPickerOpen.value = false;
+  } catch (value) {
+    toast.error(value instanceof Error ? value.message : String(value));
+  } finally {
+    playlistSubmitting.value = false;
+  }
 };
 
 const handleCreated = async (playlistId: string): Promise<void> => {
   if (!createTargetPath.value) return;
   try {
-    const result = await folderBrowserClient.addToPlaylist(
-      playlistId,
-      createTargetPath.value,
-      createRecursive.value,
-    );
-    toast.success(t("collection.tracksAdded", { count: result.added }));
+    const added = await addPlaylistTarget(playlistId);
+    toast.success(t("collection.tracksAdded", { count: added }));
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   }
@@ -479,18 +675,8 @@ const folderMenuItems = computed<DropdownMenuItem[]>(() => [
     icon: IconShuffle,
   },
   {
-    key: "playCurrent",
-    label: t("folder.playCurrentOnly"),
-    icon: IconPlay,
-  },
-  {
     key: "playNext",
     label: t("folder.playNext"),
-    icon: IconListEnd,
-  },
-  {
-    key: "playNextCurrent",
-    label: t("folder.playNextCurrentOnly"),
     icon: IconListEnd,
   },
   {
@@ -499,24 +685,27 @@ const folderMenuItems = computed<DropdownMenuItem[]>(() => [
     icon: IconListMusic,
   },
   {
-    key: "queueCurrent",
-    label: t("folder.queueCurrentOnly"),
-    icon: IconListMusic,
-  },
-  {
     key: "playlist",
-    label: t("collection.create", { type: t("collection.playlist") }),
+    label: t("folder.addToPlaylist"),
     icon: IconListPlus,
   },
   {
-    key: "playlistCurrent",
-    label: t("folder.playlistCurrentOnly"),
-    icon: IconListPlus,
+    key: "currentOnly",
+    label: t("folder.currentOnly"),
+    icon: IconFolder,
+    separator: true,
+    children: [
+      { key: "playCurrent", label: t("folder.play"), icon: IconPlay },
+      { key: "playNextCurrent", label: t("folder.playNext"), icon: IconListEnd },
+      { key: "queueCurrent", label: t("folder.queue"), icon: IconListMusic },
+      { key: "playlistCurrent", label: t("folder.addToPlaylist"), icon: IconListPlus },
+    ],
   },
   {
     key: "rescan",
     label: t("folder.rescan"),
     icon: IconRefreshCw,
+    separator: true,
   },
   {
     key: currentPinned.value ? "unpin" : "pin",
@@ -543,36 +732,28 @@ const entryMenu = (entry: FolderBrowseEntry): DropdownMenuItem[] => {
   const directory = entry.kind === "directory";
   const pinned = directory && pins.value.some((item) => item.path === entry.path);
   return [
-    { key: "play", label: t("common.play"), icon: IconPlay },
+    { key: "play", label: t("folder.play"), icon: IconPlay },
     ...(directory ? [{ key: "shuffle", label: t("folder.shuffle"), icon: IconShuffle }] : []),
     { key: "playNext", label: t("folder.playNext"), icon: IconListEnd },
     { key: "queue", label: t("folder.queue"), icon: IconListMusic },
     {
       key: "playlist",
-      label: t("collection.create", { type: t("collection.playlist") }),
+      label: t("folder.addToPlaylist"),
       icon: IconListPlus,
     },
     ...(directory
       ? [
           {
-            key: "playCurrent",
-            label: t("folder.playCurrentOnly"),
-            icon: IconPlay,
-          },
-          {
-            key: "playNextCurrent",
-            label: t("folder.playNextCurrentOnly"),
-            icon: IconListEnd,
-          },
-          {
-            key: "queueCurrent",
-            label: t("folder.queueCurrentOnly"),
-            icon: IconListMusic,
-          },
-          {
-            key: "playlistCurrent",
-            label: t("folder.playlistCurrentOnly"),
-            icon: IconListPlus,
+            key: "currentOnly",
+            label: t("folder.currentOnly"),
+            icon: IconFolder,
+            separator: true,
+            children: [
+              { key: "playCurrent", label: t("folder.play"), icon: IconPlay },
+              { key: "playNextCurrent", label: t("folder.playNext"), icon: IconListEnd },
+              { key: "queueCurrent", label: t("folder.queue"), icon: IconListMusic },
+              { key: "playlistCurrent", label: t("folder.addToPlaylist"), icon: IconListPlus },
+            ],
           },
           {
             key: pinned ? "unpin" : "pin",
@@ -685,6 +866,27 @@ const loadMoreSearch = async (): Promise<void> => {
 
 watch(searchQuery, (value) => void performSearch(value));
 
+const performFilter = useDebounceFn((value: string) => {
+  if (!currentPath.value || value.trim() === loadedFilter.value) return;
+  void loadCurrent(undefined, false);
+}, 200);
+
+watch(
+  filterQuery,
+  (value) => {
+    if (ignoreFilterReload || !currentPath.value) return;
+    folderFilters.set(currentPath.value, value);
+    void performFilter(value);
+  },
+  { flush: "sync" },
+);
+
+const restoreFolderFilter = (path: string): void => {
+  ignoreFilterReload = true;
+  filterQuery.value = path ? (folderFilters.get(path) ?? "") : "";
+  ignoreFilterReload = false;
+};
+
 const saveViewerState = (): void => {
   const material = viewerMaterial.value;
   if (!material) return;
@@ -733,7 +935,8 @@ watch(viewerOpen, (open) => {
 
 watch(
   currentPath,
-  () => {
+  (path) => {
+    restoreFolderFilter(path);
     void loadCurrent();
   },
   { immediate: true },
@@ -752,6 +955,8 @@ const refreshOnRevision = useDebounceFn(() => {
 }, 250);
 
 onMounted(async () => {
+  const savedViewMode = window.sessionStorage.getItem("atom-folder-view-mode");
+  if (savedViewMode === "grid" || savedViewMode === "list") folderViewMode.value = savedViewMode;
   try {
     scanProgress.value = await folderBrowserClient.scanProgress();
   } catch {
@@ -767,12 +972,16 @@ onMounted(async () => {
   unsubscribeRoots = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
     void loadRoots();
     if (!currentPath.value) return;
-    if (!data.paths.some((root) => pathWithinRoot(currentPath.value, root))) {
+    if (!data.paths.some((root) => folderPathWithinRoot(currentPath.value, root))) {
       void router.replace({ name: "folders" });
       return;
     }
     if (!loading.value) void refreshCurrent();
   });
+});
+
+watch(folderViewMode, (value) => {
+  window.sessionStorage.setItem("atom-folder-view-mode", value);
 });
 
 onBeforeUnmount(() => {
@@ -794,6 +1003,7 @@ onBeforeUnmount(() => {
       <div class="flex flex-wrap items-center gap-3 pt-2">
         <h1 class="text-3xl font-bold text-on-surface">{{ t("folder.label") }}</h1>
         <SInput
+          v-if="!currentPath"
           v-model="searchQuery"
           :placeholder="t('folder.searchPlaceholder')"
           clearable
@@ -854,14 +1064,27 @@ onBeforeUnmount(() => {
             </SButton>
           </template>
         </SDropdownMenu>
-        <div class="min-w-0 flex-1 sm:pl-2">
-          <div class="line-clamp-2 break-words text-sm font-medium">
-            {{ currentPath.split(/[/\\]/).filter(Boolean).pop() || currentPath }}
-          </div>
-          <div class="truncate text-xs text-on-surface-variant/50" :title="currentPath">
-            {{ currentPath }}
-          </div>
-        </div>
+        <SInput
+          v-model="filterQuery"
+          :placeholder="t('folder.filterPlaceholder')"
+          clearable
+          round
+          class="ml-auto w-full sm:w-72"
+        >
+          <template #prefix><IconSearch class="size-4 opacity-50" /></template>
+        </SInput>
+        <SButton
+          variant="secondary"
+          circle
+          size="small"
+          :title="t(folderViewMode === 'list' ? 'folder.gridView' : 'folder.listView')"
+          @click="folderViewMode = folderViewMode === 'list' ? 'grid' : 'list'"
+        >
+          <template #icon>
+            <IconLayoutGrid v-if="folderViewMode === 'list'" />
+            <IconList v-else />
+          </template>
+        </SButton>
         <div
           v-if="scanCoversCurrent && scanProgress"
           class="text-xs tabular-nums text-on-surface-variant/60"
@@ -872,7 +1095,10 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="min-h-0 flex-1">
-      <div v-if="searchQuery.trim()" class="h-full min-h-0 overflow-y-auto px-5 pb-5">
+      <div
+        v-if="!currentPath && searchQuery.trim()"
+        class="h-full min-h-0 overflow-y-auto px-5 pb-5"
+      >
         <div class="mb-3 text-sm font-medium text-on-surface-variant">
           {{ t("folder.searchResults") }}
         </div>
@@ -1011,6 +1237,53 @@ onBeforeUnmount(() => {
             <span class="tabular-nums font-normal opacity-60">{{ item.count }}</span>
           </div>
 
+          <section v-else-if="item.kind === 'directory-grid'" class="px-5 py-2">
+            <div
+              class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+            >
+              <div
+                v-for="entry in item.entries"
+                :key="entry.path"
+                class="group relative min-w-0 rounded-xl border border-solid border-primary/10 bg-surface-panel transition-colors hover:bg-primary/6"
+              >
+                <button class="block w-full min-w-0 p-3 text-left" @click="activateEntry(entry)">
+                  <div
+                    class="relative mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-primary/8 text-primary"
+                  >
+                    <IconFolder class="size-12 opacity-80" />
+                    <img
+                      v-if="!directoryThumbnailFailures.has(entry.path)"
+                      :src="folderBrowserClient.directoryThumbnailUrl(entry.path)"
+                      :alt="entry.name"
+                      class="absolute inset-0 size-full object-cover"
+                      loading="lazy"
+                      @error="markDirectoryThumbnailFailed(entry.path)"
+                    />
+                  </div>
+                  <div class="line-clamp-2 min-h-10 break-words text-sm font-medium">
+                    {{ entry.name }}
+                  </div>
+                </button>
+                <SDropdownMenu
+                  :items="entryMenu(entry)"
+                  align="end"
+                  @select="(key: string) => handleEntryMenu(entry, key)"
+                >
+                  <template #trigger>
+                    <SButton
+                      variant="secondary"
+                      circle
+                      size="small"
+                      class="absolute right-2 top-2 opacity-90"
+                    >
+                      <template #icon><IconEllipsis /></template>
+                    </SButton>
+                  </template>
+                </SDropdownMenu>
+              </div>
+            </div>
+          </section>
+
           <div
             v-else-if="item.kind === 'container-track'"
             class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors"
@@ -1038,11 +1311,14 @@ onBeforeUnmount(() => {
               :items="[
                 { key: 'playNext', label: t('folder.playNext'), icon: IconListEnd },
                 { key: 'queue', label: t('folder.queue'), icon: IconListMusic },
+                { key: 'playlist', label: t('folder.addToPlaylist'), icon: IconListPlus },
               ]"
               align="end"
               @select="
                 (key: string) =>
-                  playContainerTrack(item.track, key === 'playNext' ? 'play-next' : 'queue')
+                  key === 'playlist'
+                    ? openContainerTrackPlaylist(item.track, item.containerPath)
+                    : playContainerTrack(item.track, key === 'playNext' ? 'play-next' : 'queue')
               "
             >
               <template #trigger>
@@ -1142,7 +1418,9 @@ onBeforeUnmount(() => {
         <template #empty>
           <div class="text-center text-on-surface-variant/50">
             <IconMusic class="mx-auto mb-3 size-10 opacity-30" />
-            <div class="text-sm">{{ t("folder.empty") }}</div>
+            <div class="text-sm">
+              {{ filterQuery.trim() ? t("folder.filterEmpty") : t("folder.empty") }}
+            </div>
           </div>
         </template>
 
@@ -1157,10 +1435,49 @@ onBeforeUnmount(() => {
       </SVirtualList>
     </div>
 
+    <SDialog
+      v-model:open="playlistPickerOpen"
+      :title="t('collection.addTo', { type: t('collection.playlist') })"
+      width="420px"
+    >
+      <div class="flex max-h-96 flex-col overflow-y-auto">
+        <button
+          class="flex items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-on-surface/5"
+          @click="openPlaylistCreate"
+        >
+          <div
+            class="flex size-12 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"
+          >
+            <IconListPlus class="size-5" />
+          </div>
+          <span class="text-sm text-on-surface">
+            {{ t("collection.create", { type: t("collection.playlist") }) }}
+          </span>
+        </button>
+        <button
+          v-for="item in playlistStore.localPlaylists"
+          :key="item.id"
+          class="flex items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-on-surface/5"
+          :class="playlistSubmitting ? 'pointer-events-none opacity-50' : ''"
+          @click="handlePlaylistPick(item.id)"
+        >
+          <SImg :src="item.cover" :alt="item.title" class="size-12 shrink-0 rounded-md" />
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm text-on-surface">{{ item.title }}</div>
+            <div class="text-xs tabular-nums text-on-surface-variant/60">
+              {{ t("common.totalSongs", { count: item.trackCount }) }}
+            </div>
+          </div>
+        </button>
+      </div>
+    </SDialog>
+
     <PlaylistCreateDialog
       v-model:open="createOpen"
       mode="local"
-      :initial-name="createTargetPath.split(/[/\\]/).filter(Boolean).pop()"
+      :initial-name="
+        createTargetTrack?.title || createTargetPath.split(/[/\\]/).filter(Boolean).pop()
+      "
       @created="handleCreated"
     />
 

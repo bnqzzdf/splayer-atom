@@ -127,6 +127,131 @@ fn scan_nonexistent_directory_reports_unavailable() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn scan_skips_symlink_targets_outside_configured_root() {
+    use std::os::unix::fs::symlink;
+
+    let root = unique_temp_dir("symlink-root");
+    let outside = unique_temp_dir("symlink-outside");
+    write_test_wav(&outside.join("outside.wav"));
+    symlink(&outside, root.join("external")).expect("failed to create symlink");
+
+    let sink = EventSink::default();
+    let callback = |event: ScanEvent| sink.0.lock().unwrap().push(event);
+    let cancel = AtomicBool::new(false);
+
+    audio_engine_core::scanner::scan_directories(
+        &[root.to_string_lossy().into_owned()],
+        None,
+        None,
+        true,
+        &cancel,
+        &callback,
+    );
+
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_dir_all(&outside);
+
+    let events = sink.take_events();
+    let done = events
+        .iter()
+        .find_map(|event| match event {
+            ScanEvent::Done { scanned, total, .. } => Some((*scanned, *total)),
+            _ => None,
+        })
+        .expect("missing done event");
+    assert_eq!(done, (0, 0));
+}
+
+#[cfg(unix)]
+#[test]
+fn scan_allows_configured_root_itself_to_be_a_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let real_root = unique_temp_dir("symlink-configured-real");
+    let alias_parent = unique_temp_dir("symlink-configured-alias");
+    let alias = alias_parent.join("music");
+    write_test_wav(&real_root.join("inside.wav"));
+    symlink(&real_root, &alias).expect("failed to create configured root symlink");
+
+    let sink = EventSink::default();
+    let callback = |event: ScanEvent| sink.0.lock().unwrap().push(event);
+    let cancel = AtomicBool::new(false);
+
+    audio_engine_core::scanner::scan_directories(
+        &[alias.to_string_lossy().into_owned()],
+        None,
+        None,
+        true,
+        &cancel,
+        &callback,
+    );
+
+    let _ = fs::remove_dir_all(&alias_parent);
+    let _ = fs::remove_dir_all(&real_root);
+
+    let events = sink.take_events();
+    let done = events
+        .iter()
+        .find_map(|event| match event {
+            ScanEvent::Done { scanned, total, .. } => Some((*scanned, *total)),
+            _ => None,
+        })
+        .expect("missing done event");
+    assert_eq!(done, (1, 1));
+}
+
+#[cfg(unix)]
+#[test]
+fn broken_internal_symlink_does_not_trigger_removal() {
+    use std::os::unix::fs::symlink;
+
+    let root = unique_temp_dir("broken-symlink-root");
+    let target = root.join("target");
+    fs::create_dir_all(&target).expect("failed to create symlink target");
+    let link = root.join("linked");
+    symlink(&target, &link).expect("failed to create symlink");
+    let previous_path = link.join("track.wav");
+    fs::remove_dir_all(&target).expect("failed to remove symlink target");
+
+    let records = vec![FileRecord {
+        path: previous_path.to_string_lossy().into_owned(),
+        mtime: 1,
+        size: 1,
+        cover_path: None,
+        force_probe: false,
+    }];
+    let sink = EventSink::default();
+    let callback = |event: ScanEvent| sink.0.lock().unwrap().push(event);
+    let cancel = AtomicBool::new(false);
+
+    audio_engine_core::scanner::scan_directories(
+        &[root.to_string_lossy().into_owned()],
+        None,
+        Some(&records),
+        true,
+        &cancel,
+        &callback,
+    );
+
+    let _ = fs::remove_dir_all(&root);
+    let events = sink.take_events();
+    let done = events
+        .iter()
+        .find_map(|event| match event {
+            ScanEvent::Done {
+                removed_paths,
+                unavailable_dirs,
+                ..
+            } => Some((removed_paths, unavailable_dirs)),
+            _ => None,
+        })
+        .expect("missing done event");
+    assert!(done.0.is_empty());
+    assert_eq!(done.1.len(), 1);
+}
+
 #[test]
 fn scan_cancelled_during_walk_phase_stops_early() {
     let dir = unique_temp_dir("cancelled");

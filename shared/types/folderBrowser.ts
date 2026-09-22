@@ -120,6 +120,12 @@ export interface FolderPlaylistRequest extends FolderActionRequest {
   playlistId: string;
 }
 
+export interface FolderPlaylistTrackRequest {
+  playlistId: string;
+  containerPath: string;
+  trackId: string;
+}
+
 export interface FolderPlaylistResult extends FolderActionResult {
   added: number;
 }

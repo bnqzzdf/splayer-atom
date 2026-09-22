@@ -36,11 +36,14 @@ test("Folder media allowlist stays locked to the native scanner allowlist", asyn
 test("Folder Browser browses live media/materials without a completed scan", async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), "splayer-folder-browser-data-"));
   const root = mkdtempSync(path.join(tmpdir(), "splayer-folder-browser-root-"));
+  const outsideRoot = mkdtempSync(path.join(tmpdir(), "splayer-folder-browser-outside-"));
+  const aliasParent = mkdtempSync(path.join(tmpdir(), "splayer-folder-browser-alias-"));
   const previousDataDir = process.env.ATOM_DATA_DIR;
   process.env.ATOM_DATA_DIR = dataDir;
 
   const subfolder = path.join(root, "A very long album folder name");
   mkdirSync(subfolder);
+  const subfolderCover = path.join(subfolder, "Cover.png");
   const indexed = path.join(root, "01 Indexed.flac");
   const loose = path.join(root, "02 Loose.flac");
   const whole = path.join(root, "whole.flac");
@@ -60,16 +63,35 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   const cueActionBacking = path.join(cueActionDir, "whole.flac");
   const cueActionCue = path.join(cueActionDir, "album.cue");
   const ordering = path.join(root, "ordering");
+  const canonicalArtworkDir = path.join(root, "Canonical Artwork");
   const orderingCd1 = path.join(ordering, "CD1");
   const orderingCd2 = path.join(ordering, "CD2");
   mkdirSync(orderingCd1, { recursive: true });
   mkdirSync(orderingCd2, { recursive: true });
+  mkdirSync(canonicalArtworkDir);
+  const canonicalArtworkTrack = path.join(canonicalArtworkDir, "01.flac");
+  const cacheDir = path.join(dataDir, "cache");
+  const cachedCanonicalCover = path.join(cacheDir, "covers", "canonical.jpg");
+  mkdirSync(path.dirname(cachedCanonicalCover), { recursive: true });
+  writeFileSync(cachedCanonicalCover, "cached-cover");
   const ordering02 = path.join(ordering, "02.flac");
   const ordering10 = path.join(ordering, "10.flac");
   const orderingCd1Track = path.join(orderingCd1, "01.flac");
   const orderingCd2Track = path.join(orderingCd2, "01.flac");
+  const outsideTrack = path.join(outsideRoot, "outside.flac");
+  const outsideLog = path.join(outsideRoot, "Outside.log");
+  const outsideDirectoryLink = path.join(root, "External Link");
+  const outsideFileLink = path.join(root, "External.log");
+  const rootAlias = path.join(aliasParent, "music");
 
   writeFileSync(indexed, "not-a-real-flac");
+  writeFileSync(
+    subfolderCover,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9ZQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
   writeFileSync(loose, "not-a-real-flac");
   writeFileSync(whole, "not-a-real-flac");
   writeFileSync(invalidBacking, "not-a-real-flac");
@@ -107,7 +129,13 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   writeFileSync(ordering10, "10");
   writeFileSync(orderingCd1Track, "cd1");
   writeFileSync(orderingCd2Track, "cd2");
+  writeFileSync(canonicalArtworkTrack, "canonical");
+  writeFileSync(outsideTrack, "outside");
+  writeFileSync(outsideLog, "outside");
   symlinkSync(ordering, path.join(orderingCd2, "back-to-ordering"), "dir");
+  symlinkSync(outsideRoot, outsideDirectoryLink, "dir");
+  symlinkSync(outsideLog, outsideFileLink, "file");
+  symlinkSync(root, rootAlias, "dir");
 
   const database = await import("@main/database");
   const { store } = await import("@main/store");
@@ -118,7 +146,9 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     database.initDatabase();
     store.set("library.scanDirs", [root]);
     store.set("library.pinnedFolders", []);
+    store.set("cache.dir", cacheDir);
     const indexedStat = statSync(indexed);
+    const canonicalArtworkStat = statSync(canonicalArtworkTrack);
     const cueActionStat = statSync(cueActionCue);
     const cueActionBackingStat = statSync(cueActionBacking);
     database.upsertTracks([
@@ -161,6 +191,17 @@ test("Folder Browser browses live media/materials without a completed scan", asy
         mtime: cueActionStat.mtimeMs,
         ctime: cueActionStat.ctimeMs,
       },
+      {
+        id: "canonical-artwork-track",
+        path: canonicalArtworkTrack,
+        title: "Canonical Artwork",
+        artists: [],
+        duration: 1000,
+        cover: "cache://covers/canonical.jpg",
+        fileSize: canonicalArtworkStat.size,
+        mtime: canonicalArtworkStat.mtimeMs,
+        ctime: canonicalArtworkStat.ctimeMs,
+      },
     ]);
 
     const page = await folder.browseFolder(root, undefined, 100);
@@ -168,6 +209,17 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.equal(page.root, path.resolve(root));
     assert.equal(page.parent, null);
     assert.ok(page.entries.some((entry) => entry.kind === "directory" && entry.path === subfolder));
+    assert.equal(
+      page.entries.some((entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink),
+      false,
+      "browse must not expose symlinks whose real target escapes the configured root",
+    );
+    assert.equal(await folder.resolveFolderDirectoryArtworkPath(subfolder), subfolderCover);
+    assert.equal(
+      await folder.resolveFolderDirectoryArtworkPath(canonicalArtworkDir),
+      cachedCanonicalCover,
+      "grid artwork may reuse one reliable canonical local cover without probing media",
+    );
     assert.ok(
       page.entries.some(
         (entry) =>
@@ -236,6 +288,22 @@ test("Folder Browser browses live media/materials without a completed scan", asy
       false,
       "Folder actions must not enqueue a CUE backing file beside its virtual tracks",
     );
+    const playlists = await import("@main/database/playlists");
+    const singleTrackPlaylist = playlists.createPlaylist({
+      type: "local",
+      title: "Single virtual track",
+    });
+    const addSingleTrack = await folder.addContainerTrackToPlaylist(
+      singleTrackPlaylist.id,
+      cueActionCue,
+      "cue-track-2",
+    );
+    assert.equal(addSingleTrack.added, 1);
+    assert.deepEqual(
+      playlists.getPlaylist(singleTrackPlaylist.id)?.tracks.map((track) => track.id),
+      ["cue-track-2"],
+      "Folder container track playlist action must canonicalize and add only the selected split",
+    );
 
     const first = await folder.browseFolder(root, undefined, 2);
     assert.equal(first.entries.length, 2);
@@ -260,6 +328,24 @@ test("Folder Browser browses live media/materials without a completed scan", asy
 
     const search = await folder.searchFolders("very long");
     assert.ok(search.data.some((entry) => entry.kind === "directory" && entry.path === subfolder));
+    const escapedSearch = await folder.searchFolders("external");
+    assert.equal(
+      escapedSearch.data.some((entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink),
+      false,
+      "Folder Search must not traverse or expose out-of-root symlink targets",
+    );
+    await assert.rejects(
+      () => folder.resolveFolderPlaybackTracks(outsideDirectoryLink, true),
+      /FOLDER_PATH_OUTSIDE_LIBRARY_ROOT/,
+    );
+    await assert.rejects(
+      () => folder.pinFolder(outsideDirectoryLink),
+      /FOLDER_PATH_OUTSIDE_LIBRARY_ROOT/,
+    );
+    await assert.rejects(
+      () => folder.readFolderTextMaterial(outsideFileLink),
+      /FOLDER_PATH_OUTSIDE_LIBRARY_ROOT/,
+    );
 
     const currentOnly = await folder.resolveFolderPlaybackTracks(ordering, false);
     assert.deepEqual(
@@ -297,6 +383,24 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     const massiveFocused = await folder.browseFolder(massive, undefined, 200, focusTarget);
     assert.ok(massiveFocused.entries.some((entry) => entry.path === focusTarget));
     assert.ok(massiveFocused.previousCursor);
+    const filteredMassive = await folder.browseFolder(
+      massive,
+      undefined,
+      20,
+      undefined,
+      "0551",
+    );
+    assert.equal(filteredMassive.counts.media, 1);
+    assert.deepEqual(
+      filteredMassive.entries.map((entry) => entry.path),
+      [focusTarget],
+      "current-folder filter must match entries beyond the first unfiltered browse page",
+    );
+    await assert.rejects(
+      () => folder.browseFolder(massive, massivePage.nextCursor, 20, undefined, "0551"),
+      /FOLDER_CURSOR_INVALID/,
+      "browse cursor must stay bound to the filter that created it",
+    );
     const searchPageOne = await folder.searchFolders("mass-item", undefined, 100);
     assert.equal(searchPageOne.data.length, 100);
     assert.ok(searchPageOne.nextCursor);
@@ -391,6 +495,14 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     );
     assert.notEqual(duplicateRoots[0]?.path, duplicateRoots[1]?.path);
 
+    store.set("library.scanDirs", [rootAlias]);
+    const aliasPage = await folder.browseFolder(rootAlias, undefined, 20);
+    assert.equal(aliasPage.unavailable, false);
+    assert.ok(
+      aliasPage.entries.some((entry) => entry.path === path.join(rootAlias, "02 Loose.flac")),
+      "configured root itself may be a symlink while staying the logical Folder identity",
+    );
+
     const offlineRoot = path.join(root, "Offline root");
     store.set("library.scanDirs", [offlineRoot]);
     const offlineRoots = await folder.listFolderRoots();
@@ -424,5 +536,7 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     else process.env.ATOM_DATA_DIR = previousDataDir;
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
+    rmSync(outsideRoot, { recursive: true, force: true });
+    rmSync(aliasParent, { recursive: true, force: true });
   }
 });

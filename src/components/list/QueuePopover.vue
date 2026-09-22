@@ -14,6 +14,7 @@ const {
   formatArtists,
   playAt,
   removeAt,
+  openContainingFolder,
   clearConfirmOpen,
   clearAll,
   scrollToCurrent,
@@ -29,6 +30,10 @@ const onPlay = (index: number): void => {
 const onClear = (): void => {
   clearAll();
   emit("close");
+};
+
+const onOpenContainingFolder = async (track: Track): Promise<void> => {
+  if (await openContainingFolder(track)) emit("close");
 };
 </script>
 
@@ -101,6 +106,17 @@ const onClear = (): void => {
                   {{ formatArtists(item.artists) }}
                 </div>
               </div>
+              <SButton
+                v-if="item.source === 'local' && (item.path || item.cuePath)"
+                variant="ghost"
+                circle
+                size="tiny"
+                :title="t('folder.openContaining')"
+                class="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                @click.stop="onOpenContainingFolder(item)"
+              >
+                <template #icon><IconLucideFolderOpen /></template>
+              </SButton>
               <SButton
                 variant="ghost"
                 circle

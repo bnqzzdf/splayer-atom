@@ -123,6 +123,12 @@ are in the [development guide](./atom-development.md).
       queue, SongList, playlist/album/artist, collection and history surfaces; offline roots,
       symlinks, long names, large directories, scan-time enrichment, and route restoration must
       meet the documented acceptance criteria; remove the old full-tree projection after migration.
+      Core/Web implementation is now present on the Folder Browser feature branch, including
+      paged direct-child filtering, list/grid presentation with lazy directory artwork, pinned
+      folders/search/material viewers, shared containing-folder actions, single CUE/SACD split
+      playlist insertion, realpath-bounded symlink handling shared with the native scanner, and
+      anchor-based large-directory navigation restoration. Keep this item open until manual
+      browser/NAS/USB acceptance and final merge are complete.
 - [ ] Validate multiple simultaneous Web Controls connecting/disconnecting/reconnecting to one Core.
 - [ ] Validate long-running Web Control use with playback continuing correctly across browser
       refreshes and reconnects.

@@ -6,6 +6,7 @@ import { useStatusStore } from "@/stores/status";
 import { useMediaStore } from "@/stores/media";
 import { useThemeStore } from "@/stores/theme";
 import { clearQueue, queue, queueLength } from "@/stores/queue";
+import { useTrackMenu } from "@/composables/useTrackMenu";
 import * as player from "@/core/player";
 
 export interface UseQueuePanelOptions {
@@ -20,6 +21,10 @@ export const useQueuePanel = (options: UseQueuePanelOptions) => {
   const { t } = useI18n();
   const statusStore = useStatusStore();
   const mediaStore = useMediaStore();
+  const menuTrack = shallowRef<Track | null>(null);
+  const { openContainingFolder: openMenuTrackContainingFolder } = useTrackMenu(menuTrack, {
+    hidePlayActions: true,
+  });
 
   /** 拼接艺术家名称 */
   const formatArtists = (artists: Track["artists"]): string => {
@@ -35,6 +40,11 @@ export const useQueuePanel = (options: UseQueuePanelOptions) => {
   /** 移除单首 */
   const removeAt = (index: number): void => {
     player.removeFromQueue(index);
+  };
+
+  const openContainingFolder = async (track: Track): Promise<boolean> => {
+    menuTrack.value = track;
+    return openMenuTrackContainingFolder();
   };
 
   const clearConfirmOpen = ref(false);
@@ -64,6 +74,7 @@ export const useQueuePanel = (options: UseQueuePanelOptions) => {
     formatArtists,
     playAt,
     removeAt,
+    openContainingFolder,
     clearConfirmOpen,
     clearAll,
     scrollToCurrent,

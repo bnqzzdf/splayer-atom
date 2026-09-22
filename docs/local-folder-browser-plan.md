@@ -704,6 +704,7 @@ GET  /library/folders/roots
 GET  /library/folders/browse?path=...&filter=...&cursor=...&limit=...
 GET  /library/folders/container?path=...
 GET  /library/folders/material?path=...
+GET  /library/folders/directory/thumbnail?path=...
 GET  /library/folders/search?q=...&cursor=...&limit=...
 GET  /library/folders/pins
 
@@ -713,6 +714,7 @@ POST /library/folders/play
 POST /library/folders/play-next
 POST /library/folders/queue
 POST /library/folders/playlist
+POST /library/folders/playlist-track
 POST /library/folders/pins
 DELETE /library/folders/pins
 ```
@@ -723,6 +725,11 @@ navigation target for a local Track and must hide CUE/SACD physical-path parsing
 `material` represents a validated Folder-domain read of one supported supplementary material; the
 implementation may use a separate thumbnail/content route or reference form where that fits the
 existing asset-serving architecture better.
+`directory/thumbnail` lazily resolves one child-directory card image from preferred local
+cover/front/folder artwork or an already-canonical local cover, then returns only a bounded
+thumbnail. `playlist-track` is the narrow CUE/SACD split mutation used when a user adds one
+expanded virtual track to a local playlist: Core canonicalizes the container and persists only the
+selected stable Track id.
 
 `browse` is paginated/cursor-based from the start. Its optional `filter` is applied to the current
 directory's direct children **before** pagination and never descends into child directories. A

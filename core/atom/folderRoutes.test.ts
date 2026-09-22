@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -14,9 +14,22 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
   const pdf = path.join(root, "Booklet.pdf");
   const textFile = path.join(root, "Rip.log");
   const outsidePdf = path.join(outside, "secret.pdf");
+  const albumDir = path.join(root, "Album");
+  const emptyDir = path.join(root, "Empty");
+  const outsideLink = path.join(root, "Outside Link");
+  mkdirSync(albumDir);
+  mkdirSync(emptyDir);
+  symlinkSync(outside, outsideLink, "dir");
   writeFileSync(pdf, "%PDF-1.7\n0123456789");
   writeFileSync(textFile, "Exact Audio Copy\nOK\n");
   writeFileSync(outsidePdf, "%PDF-1.7\noutside");
+  writeFileSync(
+    path.join(albumDir, "Folder.png"),
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl9ZQAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
 
   const database = await import("@main/database");
   const { store } = await import("@main/store");
@@ -45,6 +58,37 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
     };
     assert.ok(browse.entries.some((entry) => entry.kind === "material" && entry.path === pdf));
     assert.ok(browse.entries.some((entry) => entry.kind === "material" && entry.path === textFile));
+
+    const filteredBrowseResponse = await app.request(
+      `http://folder.test/library/folders/browse?path=${encodeURIComponent(root)}&filter=booklet`,
+    );
+    assert.equal(filteredBrowseResponse.status, 200);
+    const filteredBrowse = (await filteredBrowseResponse.json()) as {
+      entries: Array<{ path: string }>;
+    };
+    assert.deepEqual(filteredBrowse.entries.map((entry) => entry.path), [pdf]);
+
+    const emptyDirectoryThumb = await app.request(
+      `http://folder.test/library/folders/directory/thumbnail?path=${encodeURIComponent(emptyDir)}`,
+    );
+    assert.equal(emptyDirectoryThumb.status, 404);
+
+    const outsideDirectoryThumb = await app.request(
+      `http://folder.test/library/folders/directory/thumbnail?path=${encodeURIComponent(outside)}`,
+    );
+    assert.equal(outsideDirectoryThumb.status, 403);
+
+    const escapedBrowse = await app.request(
+      `http://folder.test/library/folders/browse?path=${encodeURIComponent(outsideLink)}`,
+    );
+    assert.equal(escapedBrowse.status, 403);
+
+    const escapedScan = await app.request("http://folder.test/library/folders/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: outsideLink, incremental: true }),
+    });
+    assert.equal(escapedScan.status, 403);
 
     const rangeResponse = await app.request(
       `http://folder.test/library/folders/material?path=${encodeURIComponent(pdf)}`,

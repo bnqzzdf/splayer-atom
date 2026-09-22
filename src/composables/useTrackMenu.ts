@@ -233,6 +233,27 @@ export const useTrackMenu = (
 
   const items = computed<DropdownMenuItem[]>(() => controlActionsToMenuItems(actions.value));
 
+  const openContainingFolder = async (): Promise<boolean> => {
+    const current = track.value;
+    if (!current) return false;
+    try {
+      const target = await folderBrowserClient.location(current);
+      await router.push({
+        name: "folders",
+        query: {
+          path: target.path,
+          ...(target.containerPath ? { container: target.containerPath } : {}),
+          ...(target.focusTrackId ? { focus: target.focusTrackId } : {}),
+          ...(target.focusPath ? { focusPath: target.focusPath } : {}),
+        },
+      });
+      return true;
+    } catch {
+      toast.error(t("folder.openContainingFailed"));
+      return false;
+    }
+  };
+
   const handleSelect = async (key: string): Promise<void> => {
     const current = track.value;
     if (!current) return;
@@ -284,20 +305,7 @@ export const useTrackMenu = (
           await copy((current.cueAudioPath ?? current.path)!);
         break;
       case "openContainingFolder": {
-        try {
-          const target = await folderBrowserClient.location(current);
-          await router.push({
-            name: "folders",
-            query: {
-              path: target.path,
-              ...(target.containerPath ? { container: target.containerPath } : {}),
-              ...(target.focusTrackId ? { focus: target.focusTrackId } : {}),
-              ...(target.focusPath ? { focusPath: target.focusPath } : {}),
-            },
-          });
-        } catch {
-          toast.error(t("folder.openContainingFailed"));
-        }
+        await openContainingFolder();
         break;
       }
       case "removeFromCollection":
@@ -330,5 +338,5 @@ export const useTrackMenu = (
     }
   };
 
-  return { actions, items, handleSelect };
+  return { actions, items, handleSelect, openContainingFolder };
 };

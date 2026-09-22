@@ -5,20 +5,23 @@ import { Hono } from "hono";
 import type {
   FolderActionRequest,
   FolderPlaylistRequest,
+  FolderPlaylistTrackRequest,
   FolderScanRequest,
 } from "@shared/types/folderBrowser";
 import type { Track } from "@shared/types/player";
 import {
+  addContainerTrackToPlaylist,
   addFolderToPlaylist,
+  authorizeFolderPath,
   browseFolder,
   getFolderMaterial,
   listFolderRoots,
   listPinnedFolders,
+  makeFolderDirectoryThumbnail,
   makeFolderMaterialThumbnail,
   openFolderContainer,
   pinFolder,
   readFolderTextMaterial,
-  resolveFolderPath,
   resolveTrackFolderLocation,
   runFolderAction,
   searchFolders,
@@ -143,6 +146,7 @@ export const buildFolderRoutes = (): Hono => {
           c.req.query("cursor"),
           boundedInt(c.req.query("limit"), 200, 1, 500),
           c.req.query("focus"),
+          c.req.query("filter"),
         ),
       );
     } catch (error) {
@@ -207,7 +211,7 @@ export const buildFolderRoutes = (): Hono => {
     }
     if (isScanning()) return c.json({ error: "scan_already_running" }, 409);
     try {
-      const scope = resolveFolderPath(body.path);
+      const scope = await authorizeFolderPath(body.path);
       const started = startScan([scope.path], body.incremental);
       return started ? c.json({ ok: true }) : c.json({ error: "scan_already_running" }, 409);
     } catch (error) {
@@ -260,6 +264,25 @@ export const buildFolderRoutes = (): Hono => {
     }
   });
 
+  api.post("/library/folders/playlist-track", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as FolderPlaylistTrackRequest | null;
+    if (
+      !body ||
+      typeof body.playlistId !== "string" ||
+      typeof body.containerPath !== "string" ||
+      typeof body.trackId !== "string"
+    ) {
+      return c.json({ error: "folder_playlist_track_request_invalid" }, 400);
+    }
+    try {
+      return c.json(
+        await addContainerTrackToPlaylist(body.playlistId, body.containerPath, body.trackId),
+      );
+    } catch (error) {
+      return errorResponse(c, error);
+    }
+  });
+
   api.get("/library/folders/material/text", async (c) => {
     const input = c.req.query("path") ?? "";
     if (!input) return c.json({ error: "path_required" }, 400);
@@ -275,6 +298,23 @@ export const buildFolderRoutes = (): Hono => {
     if (!input) return c.json({ error: "path_required" }, 400);
     try {
       const bytes = await makeFolderMaterialThumbnail(input);
+      return new Response(Uint8Array.from(bytes).buffer, {
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "private, max-age=300",
+        },
+      });
+    } catch (error) {
+      return errorResponse(c, error);
+    }
+  });
+
+  api.get("/library/folders/directory/thumbnail", async (c) => {
+    const input = c.req.query("path") ?? "";
+    if (!input) return c.json({ error: "path_required" }, 400);
+    try {
+      const bytes = await makeFolderDirectoryThumbnail(input);
+      if (!bytes) return c.body(null, 404);
       return new Response(Uint8Array.from(bytes).buffer, {
         headers: {
           "Content-Type": "image/jpeg",

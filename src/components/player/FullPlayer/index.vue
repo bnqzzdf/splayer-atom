@@ -12,6 +12,7 @@ import { useImmersiveMode } from "@/composables/useImmersiveMode";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { useProgressLyric } from "@/composables/useProgressLyric";
 import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
+import { useTrackMenu } from "@/composables/useTrackMenu";
 import Lyrics from "@/components/player/Lyrics/index.vue";
 import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
@@ -191,6 +192,14 @@ const {
   openPicker,
 } = usePlaylistPicker();
 
+const { openContainingFolder: openDisplayTrackContainingFolderAction } = useTrackMenu(displayTrack, {
+  hidePlayActions: true,
+});
+
+const openDisplayTrackContainingFolder = async (): Promise<void> => {
+  if (await openDisplayTrackContainingFolderAction()) collapse();
+};
+
 const lyricToggleDisabled = computed(() => !hasLyric.value || fullscreenCover.value);
 const lyricToggleActive = computed(
   () => showLyric.value && hasLyric.value && !status.fullQueueOpen && !fullscreenCover.value,
@@ -360,7 +369,6 @@ const showComments = (): void => {
             <!-- 歌词区域 -->
             <div
               class="lyric-area relative flex-1 min-h-0"
-              @click="isMobile && (showLyric = false)"
               :style="{
                 fontSize: lyricFontSize,
                 fontWeight: String(settings.lyric.fontWeight),
@@ -371,6 +379,7 @@ const showComments = (): void => {
                 '--lyric-font-latin': settings.lyric.fontFamilyLatin || undefined,
                 mixBlendMode: settings.lyric.lyricBlendMode,
               }"
+              @click="isMobile && (showLyric = false)"
             >
               <AMLLLyrics
                 v-if="lyricMounted && hasLyric && settings.lyric.engine === 'amll'"
@@ -514,6 +523,17 @@ const showComments = (): void => {
               @click="displayTrack && openPicker([displayTrack])"
             >
               <template #icon><IconLucideListPlus /></template>
+            </SButton>
+            <SButton
+              v-if="displayTrack?.source === 'local' && (displayTrack.path || displayTrack.cuePath)"
+              type="cover"
+              variant="ghost"
+              size="large"
+              circle
+              :title="t('folder.openContaining')"
+              @click="openDisplayTrackContainingFolder"
+            >
+              <template #icon><IconLucideFolderOpen /></template>
             </SButton>
             <SDropdownMenu
               v-if="canDownload"
@@ -672,6 +692,17 @@ const showComments = (): void => {
                 @click="displayTrack && openPicker([displayTrack])"
               >
                 <template #icon><IconLucideListPlus class="size-4" /></template>
+              </SButton>
+              <SButton
+                v-if="displayTrack?.source === 'local' && (displayTrack.path || displayTrack.cuePath)"
+                type="cover"
+                variant="ghost"
+                size="small"
+                circle
+                :title="t('folder.openContaining')"
+                @click="openDisplayTrackContainingFolder"
+              >
+                <template #icon><IconLucideFolderOpen class="size-4" /></template>
               </SButton>
               <SDropdownMenu
                 v-if="canDownload"

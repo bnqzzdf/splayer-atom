@@ -80,6 +80,7 @@ declare module 'vue' {
     IconLucideEye: typeof import('~icons/lucide/eye')['default']
     IconLucideEyeOff: typeof import('~icons/lucide/eye-off')['default']
     IconLucideFlame: typeof import('~icons/lucide/flame')['default']
+    IconLucideFolderOpen: typeof import('~icons/lucide/folder-open')['default']
     IconLucideGithub: typeof import('~icons/lucide/github')['default']
     IconLucideGlobe2: typeof import('~icons/lucide/globe2')['default']
     IconLucideGripVertical: typeof import('~icons/lucide/grip-vertical')['default']

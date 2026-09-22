@@ -4,6 +4,7 @@
 //! 支持增量扫描：比对文件 mtime/size 跳过未变化的文件。
 //! 使用 FFmpeg 提取元数据，无需额外依赖 lofty。
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -509,12 +510,48 @@ pub fn scan_directories(
             unavailable_dirs.push(dir.clone());
             continue;
         }
-        let mut had_traversal_error = false;
-        for entry in WalkDir::new(dir).follow_links(true) {
+        let real_root = match fs::canonicalize(dir_path) {
+            Ok(path) => path,
+            Err(error) => {
+                warn!(directory = dir, error = %error, "无法解析扫描根目录真实路径");
+                unavailable_dirs.push(dir.clone());
+                continue;
+            }
+        };
+        let had_traversal_error = Cell::new(false);
+        let walker = WalkDir::new(dir)
+            .follow_links(true)
+            .into_iter()
+            .filter_entry(|entry| {
+                if !entry.path_is_symlink() {
+                    return true;
+                }
+                match fs::canonicalize(entry.path()) {
+                    Ok(target) if target.starts_with(&real_root) => true,
+                    Ok(target) => {
+                        debug!(
+                            path = %entry.path().display(),
+                            target = %target.display(),
+                            "跳过指向扫描根目录外部的软链"
+                        );
+                        false
+                    }
+                    Err(error) => {
+                        had_traversal_error.set(true);
+                        debug!(
+                            path = %entry.path().display(),
+                            error = %error,
+                            "跳过无法解析的软链"
+                        );
+                        false
+                    }
+                }
+            });
+        for entry in walker {
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(error) => {
-                    had_traversal_error = true;
+                    had_traversal_error.set(true);
                     warn!(directory = dir, error = %error, "目录遍历不完整，本轮不计算该目录下的删除项");
                     continue;
                 }
@@ -532,7 +569,7 @@ pub fn scan_directories(
             }
             let path_str = path.to_string_lossy().into_owned();
             let Some((mtime, ctime, size)) = file_stat(path) else {
-                had_traversal_error = true;
+                had_traversal_error.set(true);
                 warn!(path = %path.display(), "无法读取文件状态，本轮不计算所属目录下的删除项");
                 continue;
             };
@@ -561,7 +598,7 @@ pub fn scan_directories(
             }
             audio_files.push((path_str, mtime, ctime, size, directory_cover));
         }
-        if had_traversal_error {
+        if had_traversal_error.get() {
             unavailable_dirs.push(dir.clone());
         }
     }

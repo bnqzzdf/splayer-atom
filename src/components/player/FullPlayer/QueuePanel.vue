@@ -3,7 +3,7 @@ import type { Track } from "@shared/types/player";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { useQueuePanel } from "@/composables/useQueuePanel";
 
-defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: [] }>();
 
 const { t } = useI18n();
 const listRef = shallowRef<SVirtualListExposed | null>(null);
@@ -14,10 +14,17 @@ const {
   formatArtists,
   playAt,
   removeAt,
+  openContainingFolder,
   clearConfirmOpen,
   clearAll,
   scrollToCurrent,
 } = useQueuePanel({ listRef });
+
+const onOpenContainingFolder = async (track: Track): Promise<void> => {
+  if (!(await openContainingFolder(track))) return;
+  emit("close");
+  statusStore.isPlayerExpanded = false;
+};
 </script>
 
 <template>
@@ -104,6 +111,18 @@ const {
                   {{ formatArtists(item.artists) }}
                 </div>
               </div>
+              <SButton
+                v-if="item.source === 'local' && (item.path || item.cuePath)"
+                type="cover"
+                variant="ghost"
+                circle
+                size="tiny"
+                :title="t('folder.openContaining')"
+                class="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                @click.stop="onOpenContainingFolder(item)"
+              >
+                <template #icon><IconLucideFolderOpen /></template>
+              </SButton>
               <SButton
                 type="cover"
                 variant="ghost"
