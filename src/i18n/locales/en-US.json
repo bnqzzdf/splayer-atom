@@ -1849,6 +1849,7 @@
     "PROVIDER_UNAVAILABLE": "No source is currently available for this track on that platform",
     "PROVIDER_LOGIN_REQUIRED": "Sign in to {platform} before playing this track",
     "SUBSCRIBE_LOGIN_REQUIRED": "Sign in to NetEase Cloud Music before saving playlists, albums or artists",
+    "SUBSCRIBE_REJECTED": "NetEase Cloud Music rejected this save action (server-side risk control or rate limit). Verify the state in the NetEase client later",
     "SCAN_NO_DIRS": "No scan directories configured",
     "SCAN_DIR_EXISTS": "Directory already exists",
     "SCAN_DIR_NOT_FOUND": "Directory not found",

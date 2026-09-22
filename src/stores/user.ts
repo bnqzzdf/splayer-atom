@@ -583,27 +583,58 @@ export const useUserStore = defineStore(
       return false;
     };
 
+    /**
+     * 收藏类写操作的错误归一。
+     *
+     * 网易云对写操作的风控会回 405「操作过于频繁」（实测：账号已登录、取消订阅正常、
+     * 只有订阅被拒，换 weapi 通道也一样，属服务端风控），302「系统错误」同样语义不明。
+     * 这两种换成可读提示，避免用户只看到 "netease 405: ..." 这种原始报文。
+     */
+    const reportSubscribeFailure = (error: unknown): void => {
+      const raw = error instanceof Error ? error.message : String(error);
+      if (/405|操作过于频繁|302|系统错误|too frequent/i.test(raw)) {
+        toast.error(i18n.global.t("errors.SUBSCRIBE_REJECTED"));
+        return;
+      }
+      toast.error(raw || i18n.global.t("errors.UNKNOWN"));
+    };
+
     /** 订阅 / 取消订阅他人歌单 */
     const togglePlaylistSubscribe = async (
       playlistId: string,
       subscribe: boolean,
     ): Promise<void> => {
       if (!requireNeteaseLogin()) return;
-      await subscribePlaylist(playlistId, subscribe);
+      try {
+        await subscribePlaylist(playlistId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       await refreshPlaylists();
     };
 
     /** 收藏 / 取消收藏专辑 */
     const toggleAlbumSubscribe = async (albumId: string, subscribe: boolean): Promise<void> => {
       if (!requireNeteaseLogin()) return;
-      await subscribeAlbum(albumId, subscribe);
+      try {
+        await subscribeAlbum(albumId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       albums.value = await fetchUserAlbums();
     };
 
     /** 收藏 / 取消收藏歌手 */
     const toggleArtistSubscribe = async (artistId: string, subscribe: boolean): Promise<void> => {
       if (!requireNeteaseLogin()) return;
-      await subscribeArtist(artistId, subscribe);
+      try {
+        await subscribeArtist(artistId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       artists.value = await fetchUserArtists();
     };
 
