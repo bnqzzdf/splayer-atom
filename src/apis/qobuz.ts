@@ -46,8 +46,9 @@ export const qobuzCall = async <T = any>(
  * @param userAuthToken 用户认证 token
  */
 export const login = (userId: string, userAuthToken: string) =>
+  // userId 可留空：Core 会凭 token 反查真实用户，界面因此只需要粘贴 token
   qobuzCall<{ status: string; user?: { id: string; login: string } }>("auth_login", {
-    user_id: userId,
+    ...(userId.trim() ? { user_id: userId.trim() } : {}),
     user_auth_token: userAuthToken,
   });
 

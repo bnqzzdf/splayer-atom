@@ -2,8 +2,9 @@
 /**
  * 流媒体平台登录对话框（Qobuz / TIDAL）
  *
- * Qobuz：user_id + user_auth_token 凭据导入
- *   - 用户需从 play.qobuz.com F12 → Network → api.json → Query String Parameters 获取
+ * Qobuz：**只需粘贴 user_auth_token**（userId 由 Core 凭 token 反查，不必填）
+ *   - 取法：浏览器登录 play.qobuz.com → F12 Console → copy(localStorage.getItem('qobuz_user_auth_token'))
+ *   - 邮箱+密码不可用（实测 Qobuz 对该 app_id 连 user/login 都返回 401），故不暴露
  *   - 凭据由 Core 验证并持久化，Control 只读取 providerSessions 投影
  *
  * TIDAL：设备码授权（OAuth2 Device Code Flow）
@@ -14,6 +15,7 @@
  */
 
 import * as qobuzApi from "@/apis/qobuz";
+import { openExternal } from "@/utils/url";
 import * as tidalApi from "@/apis/tidal";
 import { toast } from "@/composables/useToast";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
@@ -64,7 +66,7 @@ watch(
 );
 watch(activeTab, (newTab) => emit("update:tab", newTab));
 
-// Qobuz 表单
+// Qobuz 表单（只粘 token；userId 由 Core 反查，保留 ref 仅用于传参签名）
 const qobuzUserId = ref("");
 const qobuzAuthToken = ref("");
 const qobuzLoading = ref(false);
@@ -127,12 +129,17 @@ onBeforeUnmount(() => {
   clearTidalPollTimer();
 });
 
+/** 在新标签/系统浏览器打开 Qobuz 网页播放器，便于用一行命令取 token */
+const openQobuzPlayer = (): void => {
+  void openExternal("https://play.qobuz.com");
+};
+
 /** Qobuz 登录 */
 const onQobuzLogin = async (): Promise<void> => {
   const userId = qobuzUserId.value.trim();
   const token = qobuzAuthToken.value.trim();
-  if (!userId || !token) {
-    toast.error("请填写 user_id 和 user_auth_token");
+  if (!token) {
+    toast.error("请粘贴 user_auth_token");
     return;
   }
   qobuzLoading.value = true;
@@ -398,19 +405,11 @@ const onOpenUpdate = (value: boolean): void => {
           <!-- 登录表单 -->
           <template v-else>
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant">User ID</label>
-              <SInput
-                v-model="qobuzUserId"
-                placeholder="Qobuz 用户 ID（一串数字）"
-                :disabled="qobuzLoading"
-              />
-            </div>
-            <div class="flex flex-col gap-1.5">
               <label class="text-xs text-on-surface-variant">User Auth Token</label>
               <SInput
                 v-model="qobuzAuthToken"
                 type="password"
-                placeholder="Qobuz 认证 Token"
+                placeholder="粘贴 Qobuz user_auth_token（只需这一项）"
                 :disabled="qobuzLoading"
               />
             </div>
@@ -420,11 +419,30 @@ const onOpenUpdate = (value: boolean): void => {
             <div
               class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
             >
-              <p class="mb-1 font-medium text-on-surface">如何获取凭证？</p>
-              <p>1. 浏览器登录 play.qobuz.com</p>
-              <p>2. F12 打开开发者工具 → Network</p>
-              <p>3. 播放任意曲目，找到 api.json 请求</p>
-              <p>4. Query String Parameters 中复制 user_id 和 user_auth_token</p>
+              <p class="mb-1 font-medium text-on-surface">如何获取 token？（30 秒）</p>
+              <p>1. 点下面按钮打开并登录 play.qobuz.com</p>
+              <p>
+                2. F12 →
+                <span class="text-on-surface">Console</span>
+                标签（不是 Network）
+              </p>
+              <p>3. 粘贴并回车：</p>
+              <code
+                class="my-1 block select-all break-all rounded bg-on-surface/8 px-2 py-1 font-mono text-[11px] text-on-surface"
+              >
+                copy(localStorage.getItem('qobuz_user_auth_token'))
+              </code>
+              <p>4. 回到这里直接 Ctrl+V（已复制到剪贴板）</p>
+              <p class="mt-1 opacity-70">无需再翻 Network 请求头，也无需填 user_id。</p>
+              <SButton
+                variant="secondary"
+                size="small"
+                class="mt-2"
+                :disabled="qobuzLoading"
+                @click="openQobuzPlayer"
+              >
+                打开 Qobuz 网页播放器
+              </SButton>
             </div>
           </template>
         </div>
