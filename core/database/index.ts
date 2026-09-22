@@ -61,6 +61,12 @@ export const initDatabase = (): void => {
     CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
     CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album);
 
+    CREATE TABLE IF NOT EXISTS library_likes (
+      track_id TEXT PRIMARY KEY,
+      liked_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_library_likes_at ON library_likes(liked_at DESC);
+
     CREATE TABLE IF NOT EXISTS account_sessions (
       platform TEXT PRIMARY KEY,
       cookies TEXT NOT NULL DEFAULT '{}',

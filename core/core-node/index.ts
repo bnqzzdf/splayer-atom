@@ -39,6 +39,7 @@ const start = async (): Promise<void> => {
     { pluginRegistry },
     { registerPluginControlEvents },
     listenbrainz,
+    { streamingControl },
   ] = await Promise.all([
     import("@main/utils/logger"),
     import("@main/database"),
@@ -51,6 +52,7 @@ const start = async (): Promise<void> => {
     import("@main/plugins/registry"),
     import("@main/services/pluginControl"),
     import("@main/services/listenbrainz"),
+    import("@main/services/streaming/control"),
   ]);
 
   initLogger();
@@ -68,6 +70,9 @@ const start = async (): Promise<void> => {
   if (!status.listening) {
     throw new Error(status.error?.message ?? "Atom Core HTTP/WS server failed to start");
   }
+  void streamingControl
+    .restoreActiveConnection()
+    .catch((error) => coreLog.warn("恢复流媒体服务器连接失败", error));
 
   const shutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) return;

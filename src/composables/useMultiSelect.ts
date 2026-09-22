@@ -2,7 +2,6 @@ import type { Ref } from "vue";
 import type { PlaybackContext, Track, TrackSource } from "@shared/types/player";
 import type { CollectionType } from "@/types/collection";
 import { usePlaylistStore } from "@/stores/playlist";
-import { useLibraryStore } from "@/stores/library";
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
 import { useDownload } from "@/composables/useDownload";
@@ -32,7 +31,6 @@ export interface MultiSelectOptions {
 export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions) => {
   const { t } = useI18n();
   const playlistStore = usePlaylistStore();
-  const libraryStore = useLibraryStore();
   const userStore = useUserStore();
   const { enqueueMany } = useDownload();
 
@@ -102,7 +100,7 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
     return options.collectionType.value ? (map[options.collectionType.value] ?? "") : "";
   });
 
-  type DeleteAction = "remove" | "file" | "cloud";
+  type DeleteAction = "remove" | "cloud";
   const deleteConfirmOpen = ref(false);
   const pendingDeleteTracks = shallowRef<Track[]>([]);
   const pendingDeleteAction = ref<DeleteAction>("remove");
@@ -118,13 +116,7 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
     const tracks = pendingDeleteTracks.value;
     const ids = tracks.map((track) => track.id);
     try {
-      if (pendingDeleteAction.value === "file") {
-        const paths = tracks.map((t) => t.path).filter((p): p is string => !!p);
-        if (paths.length > 0) {
-          await libraryStore.deleteTracks(paths);
-          await player.purgeDeletedTracks(ids);
-        }
-      } else if (pendingDeleteAction.value === "cloud") {
+      if (pendingDeleteAction.value === "cloud") {
         await userStore.removeCloudTracks(ids);
       } else if (options.collectionId.value) {
         if (options.source.value === "local") {
@@ -148,7 +140,6 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
 
   /** 确认弹窗标题 */
   const deleteDialogTitle = computed(() => {
-    if (pendingDeleteAction.value === "file") return t("songList.delete.fileTitle");
     if (pendingDeleteAction.value === "cloud") return t("cloud.removeTitle");
     return t("collection.removeFrom", { type: collectionTypeLabel.value });
   });
@@ -159,15 +150,11 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
     const type = collectionTypeLabel.value;
     if (count === 1) {
       const title = pendingDeleteTracks.value[0].title;
-      if (pendingDeleteAction.value === "file") {
-        return t("songList.delete.fileConfirmOne", { title });
-      }
       if (pendingDeleteAction.value === "cloud") {
         return t("cloud.removeConfirmOne", { title });
       }
       return t("songList.delete.removeConfirmOne", { title, type });
     }
-    if (pendingDeleteAction.value === "file") return t("songList.delete.fileConfirm", { count });
     if (pendingDeleteAction.value === "cloud") return t("cloud.removeConfirm", { count });
     return t("songList.delete.removeConfirm", { count, type });
   });
@@ -181,10 +168,6 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
 
   const batchRemove = (): void => {
     requestDelete(selectedItems.value, "remove");
-  };
-
-  const batchDelete = (): void => {
-    requestDelete(selectedItems.value, "file");
   };
 
   const batchRemoveFromCloud = (): void => {
@@ -228,7 +211,6 @@ export const useMultiSelect = (items: Ref<Track[]>, options: MultiSelectOptions)
     // 批量操作
     addToQueue,
     batchRemove,
-    batchDelete,
     batchRemoveFromCloud,
     batchDownload,
   };

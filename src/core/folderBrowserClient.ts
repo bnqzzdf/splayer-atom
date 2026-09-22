@@ -1,5 +1,6 @@
 import type {
   FolderActionResult,
+  FolderBatchTarget,
   FolderBrowsePage,
   FolderContainerResult,
   FolderNavigationTarget,
@@ -107,6 +108,14 @@ export const folderBrowserClient = {
     return request(`/library/folders/${route}`, json({ path, recursive }));
   },
 
+  batchPlay: (
+    mode: "play" | "play-next" | "queue",
+    targets: FolderBatchTarget[],
+  ): Promise<FolderActionResult> => {
+    const route = mode === "play" ? "play" : mode === "play-next" ? "play-next" : "queue";
+    return request(`/library/folders/batch/${route}`, json({ targets }));
+  },
+
   addToPlaylist: (
     playlistId: string,
     path: string,
@@ -120,6 +129,12 @@ export const folderBrowserClient = {
     trackId: string,
   ): Promise<FolderPlaylistResult> =>
     request("/library/folders/playlist-track", json({ playlistId, containerPath, trackId })),
+
+  addBatchToPlaylist: (
+    playlistId: string,
+    targets: FolderBatchTarget[],
+  ): Promise<FolderPlaylistResult> =>
+    request("/library/folders/batch/playlist", json({ playlistId, targets })),
 
   readText: (path: string): Promise<FolderTextMaterial> =>
     request(`/library/folders/material/text?path=${encodeURIComponent(path)}`),

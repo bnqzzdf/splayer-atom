@@ -34,7 +34,8 @@ const check = () => {
   const container = containerRef.value;
   const text = textRef.value;
   if (!container || !text) return;
-  const overflow = text.scrollWidth > container.clientWidth;
+  // DOM 尺寸会被取整，留出 1px 避免刚好放得下时误触发滚动。
+  const overflow = text.scrollWidth > container.clientWidth + 1;
   isOverflowing.value = overflow;
   if (overflow) {
     animDuration.value = `${text.scrollWidth / props.speed}s`;
@@ -59,7 +60,10 @@ onUnmounted(() => {
   <div
     ref="containerRef"
     class="overflow-hidden min-w-0 text-left"
-    :class="[fit && !isOverflowing ? 'max-w-full' : 'w-full', isOverflowing && mask && 's-marquee-mask']"
+    :class="[
+      fit && !isOverflowing ? 'w-fit max-w-full' : 'w-full',
+      isOverflowing && mask && 's-marquee-mask',
+    ]"
     :style="{
       '--marquee-duration': animDuration,
       '--marquee-delay': `${delay}ms`,

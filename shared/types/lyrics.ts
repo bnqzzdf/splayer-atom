@@ -30,6 +30,18 @@ export type LyricData = {
   platform?: Platform;
 } | null;
 
+/** 歌词偏移按来源隔离；在线歌词再按平台区分，格式升级沿用同一偏移。 */
+export const lyricOffsetSourceKey = (source: LyricData): string => {
+  if (!source) return "";
+  return source.source === "online" && source.platform
+    ? `online:${source.platform}`
+    : source.source;
+};
+
+/** 判断两个歌词来源是否共享同一份偏移。 */
+export const isSameLyricOffsetSource = (left: LyricData, right: LyricData): boolean =>
+  lyricOffsetSourceKey(left) === lyricOffsetSourceKey(right);
+
 /** 歌词时间片段 */
 export interface LyricSpan {
   /** 起始时间（毫秒） */

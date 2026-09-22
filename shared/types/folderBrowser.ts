@@ -126,6 +126,18 @@ export interface FolderPlaylistTrackRequest {
   trackId: string;
 }
 
+export type FolderBatchTarget =
+  | { kind: "path"; path: string }
+  | { kind: "container-track"; containerPath: string; trackId: string };
+
+export interface FolderBatchActionRequest {
+  targets: FolderBatchTarget[];
+}
+
+export interface FolderBatchPlaylistRequest extends FolderBatchActionRequest {
+  playlistId: string;
+}
+
 export interface FolderPlaylistResult extends FolderActionResult {
   added: number;
 }

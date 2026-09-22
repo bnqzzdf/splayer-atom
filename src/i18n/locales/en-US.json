@@ -539,7 +539,6 @@
       "copyPath": "Copy File Path",
       "editTags": "Edit Metadata",
       "download": "Download to Core",
-      "deleteFile": "Delete File",
       "searchSame": "Search by Name",
       "more": "More",
       "copyTitle": "Copy Title",
@@ -556,10 +555,7 @@
     },
     "delete": {
       "removeConfirmOne": "Remove \"{title}\" from {type}?",
-      "removeConfirm": "Remove {count} songs from {type}?",
-      "fileTitle": "Delete File",
-      "fileConfirmOne": "Permanently delete \"{title}\" from disk? This cannot be undone",
-      "fileConfirm": "Permanently delete {count} files from disk? This cannot be undone"
+      "removeConfirm": "Remove {count} songs from {type}?"
     },
     "toast": {
       "addedToNext": "Added to play next",
@@ -656,9 +652,6 @@
     "retry": "Retry",
     "openFolder": "Show in folder",
     "remove": "Remove",
-    "deleteFile": "Delete file",
-    "deleteConfirmTitle": "Delete downloaded file",
-    "deleteConfirmContent": "This permanently deletes the song file from disk and cannot be undone. Delete it?",
     "tagWarning": "Failed to write tags; file saved",
     "resolveFailed": "Cannot download to Core: {title}",
     "alreadyQueued": "Already in the Core download queue",

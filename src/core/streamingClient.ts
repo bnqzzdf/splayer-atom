@@ -1,6 +1,7 @@
 import type { Album, Artist, Playlist, Track } from "@shared/types/player";
 import type {
   StreamingConnectResult,
+  StreamingConfigSnapshot,
   StreamingLibrarySnapshot,
   StreamingPingResult,
   StreamingSearchResult,
@@ -45,8 +46,7 @@ const mapSearch = (result: StreamingSearchResult): StreamingSearchResult => ({
 
 /** Web Control 的 Streaming Core Protocol client；不暴露最终 playable URL。 */
 export const streamingClient = {
-  loadServers: (): Promise<{ servers: StreamingServerConfig[]; activeServerId: string | null }> =>
-    request("/streaming/config"),
+  loadServers: (): Promise<StreamingConfigSnapshot> => request("/streaming/config"),
   addServer: (input: StreamingServerInput): Promise<StreamingServerConfig> =>
     request("/streaming/server", { method: "POST", body: JSON.stringify(input) }),
   updateServer: (serverId: string, input: StreamingServerInput): Promise<StreamingServerConfig> =>
@@ -57,12 +57,11 @@ export const streamingClient = {
   removeServer: async (serverId: string): Promise<void> => {
     await request(`/streaming/server/${encodeURIComponent(serverId)}`, { method: "DELETE" });
   },
-  setActiveServer: async (serverId: string | null): Promise<void> => {
-    await request("/streaming/active", {
+  setActiveServer: (serverId: string | null): Promise<StreamingConfigSnapshot> =>
+    request("/streaming/active", {
       method: "POST",
       body: JSON.stringify({ serverId }),
-    });
-  },
+    }),
   testConnection: (input: StreamingServerInput, serverId?: string): Promise<StreamingPingResult> =>
     request("/streaming/test", {
       method: "POST",
@@ -119,4 +118,6 @@ export const streamingClient = {
     ).lyric,
   onLibraryUpdated: (callback: (serverId: string) => void): (() => void) =>
     subscribeCoreControlEvent("streamingLibraryUpdated", ({ serverId }) => callback(serverId)),
+  onConfigUpdated: (callback: (snapshot: StreamingConfigSnapshot) => void): (() => void) =>
+    subscribeCoreControlEvent("streamingConfigUpdated", callback),
 };

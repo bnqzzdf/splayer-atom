@@ -23,6 +23,11 @@ import {
   removePlaylistTracks,
   updatePlaylist,
 } from "@main/database/playlists";
+import {
+  getLibraryLikedTrackIds,
+  importLibraryLikedTrackIds,
+  setLibraryTrackLiked,
+} from "@main/database/libraryLikes";
 import { fetchArtistAvatar, prefetchArtistAvatars } from "@main/apis/musicbrainz";
 import type {
   LegacyPlaylistRecord,
@@ -31,13 +36,12 @@ import type {
 } from "@shared/types/playlist";
 import type { TagEditRequest } from "@shared/types/tagEditor";
 import { getPlayer } from "@main/services/engine";
-import * as nowPlaying from "@main/services/nowPlaying";
 import { cancelScan, getScanProgress, isScanning, startScan } from "@main/services/scanner";
 import { resolveCoreDirectory } from "@main/services/coreFilesystem";
 import { removePinsUnderRoot } from "@main/services/folderBrowser";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { publishLibraryRevision } from "@main/services/libraryRevision";
-import { deleteLibraryFiles, readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
+import { readLibraryTags, writeLibraryTags } from "@main/services/libraryFiles";
 import { store } from "@main/store";
 
 const errorMessage = (error: unknown): string =>
@@ -68,16 +72,6 @@ const page = <T>(items: T[], offset: number, limit: number): { data: T[]; total:
  */
 export const buildAtomCompatRoutes = (): Hono => {
   const api = new Hono();
-
-  api.get("/lyrics/current", (c) => {
-    const snapshot = nowPlaying.snapshot();
-    return c.json({
-      trackId: snapshot.track?.id ?? null,
-      lines: snapshot.lyric ?? [],
-      source: snapshot.source,
-      offsetMs: snapshot.lyricOffsetMs ?? 0,
-    });
-  });
 
   api.get("/library/tracks", (c) => {
     try {
@@ -186,6 +180,39 @@ export const buildAtomCompatRoutes = (): Hono => {
 
   api.get("/library/scan-dirs", (c) => c.json({ data: store.get("library.scanDirs") }));
 
+  const publishLibraryLikes = (): string[] => {
+    const ids = getLibraryLikedTrackIds();
+    publishCoreControlEvent({ type: "libraryLikesChanged", data: { ids } });
+    return ids;
+  };
+
+  api.get("/library/liked", (c) => c.json({ data: getLibraryLikedTrackIds() }));
+
+  api.post("/library/liked", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      trackId?: unknown;
+      liked?: unknown;
+    } | null;
+    if (typeof body?.trackId !== "string" || typeof body.liked !== "boolean") {
+      return c.json({ success: false, error: "trackId_and_liked_required" }, 400);
+    }
+    try {
+      setLibraryTrackLiked(body.trackId, body.liked);
+      return c.json({ success: true, data: publishLibraryLikes() });
+    } catch (error) {
+      return c.json({ success: false, error: errorMessage(error) }, 400);
+    }
+  });
+
+  api.post("/library/liked/import", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { trackIds?: unknown } | null;
+    if (!Array.isArray(body?.trackIds) || !body.trackIds.every((id) => typeof id === "string")) {
+      return c.json({ success: false, error: "trackIds_string_array_required" }, 400);
+    }
+    importLibraryLikedTrackIds(body.trackIds);
+    return c.json({ success: true, data: publishLibraryLikes() });
+  });
+
   api.post("/library/scan-dirs", async (c) => {
     const body = (await c.req.json().catch(() => null)) as { dirs?: unknown } | null;
     if (!Array.isArray(body?.dirs) || !body.dirs.every((dir) => typeof dir === "string")) {
@@ -233,6 +260,7 @@ export const buildAtomCompatRoutes = (): Hono => {
     removePinsUnderRoot(dir);
     deleteTracksByDir(dir);
     publishLibraryRevision();
+    publishLibraryLikes();
     return c.json({ success: true });
   });
 
@@ -264,18 +292,6 @@ export const buildAtomCompatRoutes = (): Hono => {
         success: true,
         data: await writeLibraryTags(body.edits as TagEditRequest[]),
       });
-    } catch (error) {
-      return c.json({ success: false, error: errorMessage(error) }, 400);
-    }
-  });
-
-  api.delete("/library/files", async (c) => {
-    const body = (await c.req.json().catch(() => null)) as { paths?: unknown } | null;
-    if (!Array.isArray(body?.paths) || !body.paths.every((item) => typeof item === "string")) {
-      return c.json({ success: false, error: "paths_string_array_required" }, 400);
-    }
-    try {
-      return c.json({ success: true, data: await deleteLibraryFiles(body.paths) });
     } catch (error) {
       return c.json({ success: false, error: errorMessage(error) }, 400);
     }

@@ -389,21 +389,6 @@ onMounted(() => {
         />
       </div>
     </SContextMenu>
-    <!-- 自定义侧边栏入口（展开状态与抽屉模式下可见） -->
-    <div
-      v-if="!isCollapsed"
-      class="px-3 py-2 shrink-0 border-t border-t-solid border-t-primary/10 flex items-center justify-between text-xs text-on-surface-variant/70"
-    >
-      <SButton
-        variant="text"
-        size="small"
-        class="text-xs"
-        @click="settingsDialog.show('appearance', 'sidebarCustomize')"
-      >
-        <template #icon><IconLucideSettings2 class="size-3.5" /></template>
-        {{ t("nav.menu.customizeSidebar") }}
-      </SButton>
-    </div>
     <!-- 新建歌单 -->
     <PlaylistCreateDialog
       v-model:open="createDialogOpen"

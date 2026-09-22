@@ -530,15 +530,10 @@ const loadIndex = async (
     active = index >= 0;
     if (mediaInfo.quality) item.track = { ...item.track, quality: mediaInfo.quality };
     const duration = Math.max(item.track.duration || 0, mediaInfo.duration);
-    nowPlaying.update({ ...item.track, duration }, [], null);
+    const detail = mediaInfo.quality ? { quality: mediaInfo.quality, externalLyrics: [] } : null;
+    nowPlaying.update({ ...item.track, duration }, detail);
     publish();
-    publishTrackLoaded(
-      item,
-      resolved.source,
-      autoPlay,
-      mediaInfo.quality ? { quality: mediaInfo.quality, externalLyrics: [] } : undefined,
-      mediaInfo,
-    );
+    publishTrackLoaded(item, resolved.source, autoPlay, detail ?? undefined, mediaInfo);
     if (autoPlay) await playUpnpOutput();
     else publishUpnpObservedStatus();
     scheduleNextPlaybackPreload();
@@ -593,7 +588,7 @@ const loadIndex = async (
   const duration = Math.max(loadedTrack.duration || 0, result.data.mediaInfo.duration);
   // 成功加载后的 session publish 必须晚于 NowPlaying 提交：Control 即使漏掉一次
   // trackLoaded，也能用 session.current 与 /now-playing 做一致性恢复。
-  nowPlaying.update({ ...loadedTrack, duration }, [], null);
+  nowPlaying.update({ ...loadedTrack, duration }, result.data.detail);
   nowPlaying.onPosition(0, autoPlay);
   nowPlaying.onPlayStateChange(autoPlay ? "playing" : "paused");
   publish();
@@ -1242,7 +1237,7 @@ const commitGaplessSessionProjection = (
   }
   active = index >= 0;
   sourceRecoveryAttempts = 0;
-  nowPlaying.update({ ...track, duration }, [], null);
+  nowPlaying.update({ ...track, duration }, detail ?? null);
   nowPlaying.onPosition(0, true);
   nowPlaying.onPlayStateChange("playing");
   publish();

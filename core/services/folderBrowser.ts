@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Dirent } from "node:fs";
 import type {
   FolderActionResult,
+  FolderBatchTarget,
   FolderBrowseEntry,
   FolderBrowsePage,
   FolderContainerResult,
@@ -1026,6 +1027,66 @@ export const runFolderAction = async (
   return { count: items.length, failed: resolved.failed };
 };
 
+const resolveFolderBatchTargets = async (
+  targets: FolderBatchTarget[],
+  canonicalize: boolean,
+): Promise<{ tracks: Track[]; failed: string[] }> => {
+  const tracks: Track[] = [];
+  const failed: string[] = [];
+  const seen = new Set<string>();
+  for (const target of targets) {
+    try {
+      let resolvedTracks: Track[];
+      if (target.kind === "path") {
+        const resolved = await resolveActionTracks(target.path, {
+          recursive: false,
+          canonicalize,
+        });
+        resolvedTracks = resolved.tracks;
+        failed.push(...resolved.failed);
+      } else {
+        const containerTracks = canonicalize
+          ? await canonicalizeContainer(target.containerPath)
+          : (await openFolderContainer(target.containerPath)).tracks;
+        const track = containerTracks.find((item) => item.id === target.trackId);
+        if (!track) {
+          failed.push(`${target.containerPath}#${target.trackId}`);
+          continue;
+        }
+        resolvedTracks = [track];
+      }
+      for (const track of resolvedTracks) {
+        if (seen.has(track.id)) continue;
+        seen.add(track.id);
+        tracks.push(track);
+      }
+    } catch {
+      failed.push(
+        target.kind === "path"
+          ? target.path
+          : `${target.containerPath}#${target.trackId}`,
+      );
+    }
+  }
+  return { tracks, failed };
+};
+
+export const runFolderBatchAction = async (
+  mode: "play" | "play-next" | "queue",
+  targets: FolderBatchTarget[],
+): Promise<FolderActionResult> => {
+  const resolved = await resolveFolderBatchTargets(targets, false);
+  const items = queueItems(resolved.tracks);
+  if (items.length === 0) return { count: 0, failed: resolved.failed };
+  if (mode === "play") await replaceQueue(items, 0, true);
+  else if (mode === "queue") appendQueue(items);
+  else {
+    const session = getPlaybackSession();
+    insertQueue(items, Math.max(0, session.index + 1));
+  }
+  return { count: items.length, failed: resolved.failed };
+};
+
 export const addFolderToPlaylist = async (
   playlistId: string,
   input: string,
@@ -1051,6 +1112,19 @@ export const addContainerTrackToPlaylist = async (
   if (!track) throw new Error("FOLDER_CONTAINER_TRACK_NOT_FOUND");
   const added = addPlaylistTracks(playlistId, [track.id]);
   return { count: 1, failed: [], added };
+};
+
+export const addFolderBatchToPlaylist = async (
+  playlistId: string,
+  targets: FolderBatchTarget[],
+): Promise<{ count: number; failed: string[]; added: number }> => {
+  const resolved = await resolveFolderBatchTargets(targets, true);
+  if (resolved.tracks.length > 0) publishLibraryRevision();
+  const added = addPlaylistTracks(
+    playlistId,
+    resolved.tracks.map((track) => track.id),
+  );
+  return { count: resolved.tracks.length, failed: resolved.failed, added };
 };
 
 export const resolveTrackFolderLocation = (track: Track): FolderNavigationTarget => {

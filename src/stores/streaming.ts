@@ -1,5 +1,6 @@
 import type { Album, Artist, Playlist, Track } from "@shared/types/player";
 import type {
+  StreamingConnectionStatus,
   StreamingErrorCode,
   StreamingPingResult,
   StreamingSearchResult,
@@ -15,11 +16,7 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 当前激活服务器 ID */
   const activeServerId = ref<string | null>(null);
   /** 连接状态（仅运行时） */
-  const connectionStatus = ref<{
-    connected: boolean;
-    error?: string;
-    errorCode?: StreamingErrorCode;
-  }>({ connected: false });
+  const connectionStatus = ref<StreamingConnectionStatus>({ connected: false });
   /** 是否正在等待首个媒体库快照 */
   const loading = ref(false);
 
@@ -37,6 +34,16 @@ export const useStreamingStore = defineStore("streaming", () => {
   );
   const hasServer = computed(() => servers.value.length > 0);
   const isConnected = computed(() => connectionStatus.value.connected);
+
+  const applyConfig = (snapshot: {
+    servers: StreamingServerConfig[];
+    activeServerId: string | null;
+    connectionStatus: StreamingConnectionStatus;
+  }): void => {
+    servers.value = snapshot.servers;
+    activeServerId.value = snapshot.activeServerId;
+    connectionStatus.value = snapshot.connectionStatus;
+  };
 
   /** 清空当前服务器的内存列表 */
   const clearMemoryLists = (): void => {
@@ -160,12 +167,11 @@ export const useStreamingStore = defineStore("streaming", () => {
    */
   const setActiveServer = async (id: string | null): Promise<void> => {
     if (id !== activeServerId.value) {
-      activeServerId.value = id;
-      connectionStatus.value = { connected: false };
       clearMemoryLists();
-      await streamingClient.setActiveServer(id);
+      const snapshot = await streamingClient.setActiveServer(id);
+      applyConfig(snapshot);
     }
-    if (!id) return;
+    if (!id || connectionStatus.value.connected) return;
     await connectToServer(id);
   };
 
@@ -270,14 +276,17 @@ export const useStreamingStore = defineStore("streaming", () => {
       await loadLibrarySnapshot(serverId);
       if (serverId === activeServerId.value) loading.value = false;
     });
+    streamingClient.onConfigUpdated((snapshot) => {
+      const changedActive = snapshot.activeServerId !== activeServerId.value;
+      if (changedActive) clearMemoryLists();
+      applyConfig(snapshot);
+    });
     const result = await streamingClient.loadServers();
-    servers.value = result.servers;
-    activeServerId.value = result.activeServerId;
+    applyConfig(result);
     if (activeServerId.value && !servers.value.find((s) => s.id === activeServerId.value)) {
       activeServerId.value = null;
     }
     initialized = true;
-    if (activeServerId.value) void connectToServer(activeServerId.value);
   };
 
   return {

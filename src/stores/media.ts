@@ -1,5 +1,6 @@
 import type { MediaInfo, PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import type { LyricData, LyricFormat, LyricInput, LyricLine } from "@shared/types/lyrics";
+import { isSameLyricOffsetSource } from "@shared/types/lyrics";
 import { findLyricIndex } from "@shared/utils/lyric";
 import { useSettingsStore } from "@/stores/settings";
 import { watchLyricPreference } from "@/services/lyric/loader";
@@ -10,6 +11,7 @@ import { applyLyricExclude } from "@/utils/lyric/lyricStripper";
 import { normalizeLyricLines } from "@/utils/lyric/normalize";
 import { applyProfanityUncensor } from "@/utils/preset/profanity";
 import { nowPlayingClient } from "@/core/nowPlayingClient";
+import { useStatusStore } from "@/stores/status";
 
 export const useMediaStore = defineStore("media", () => {
   watchLyricPreference();
@@ -44,17 +46,26 @@ export const useMediaStore = defineStore("media", () => {
   /** 当前歌词文件制作者列表 */
   const lyricAuthors = ref<string[]>([]);
 
-  /** 临时同步 renderer 解析后的歌词 presentation；当前 Track 仍由 Core playback lifecycle 持有。 */
-  const syncToMain = (): void => {
-    try {
-      const payload = {
-        lyric: toRaw(parsedLyric.value),
-        source: activeLyric.value ? toRaw(activeLyric.value) : null,
-      };
-      nowPlayingClient.updateLyrics(payload);
-    } catch (error) {
-      console.error("[media] syncToMain failed", error);
+  /** 歌词源变化时从 Core 读取该来源独立的时间偏移；旧请求不得覆盖新曲/新来源。 */
+  let lyricOffsetGeneration = 0;
+  const syncLyricOffset = (source: LyricData): void => {
+    const generation = ++lyricOffsetGeneration;
+    const currentTrackId = track.value?.id;
+    const status = useStatusStore();
+    if (!currentTrackId || !source) {
+      status.lyricOffsetMs = 0;
+      return;
     }
+    void nowPlayingClient
+      .getLyricOffset(currentTrackId, source)
+      .then((offsetMs) => {
+        if (generation !== lyricOffsetGeneration) return;
+        if (track.value?.id !== currentTrackId) return;
+        if (!isSameLyricOffsetSource(activeLyric.value, source)) return;
+        status.lyricOffsetMs = offsetMs;
+        lyricIndex.value = findLyricIndex(parsedLyric.value, status.position + offsetMs, -1);
+      })
+      .catch((error) => console.error("[media] lyric offset load failed", error));
   };
 
   /**
@@ -128,7 +139,8 @@ export const useMediaStore = defineStore("media", () => {
     lyricAuthors.value = [];
     lyricIndex.value = -1;
     lyricLoading.value = true;
-    syncToMain();
+    lyricOffsetGeneration++;
+    useStatusStore().lyricOffsetMs = 0;
   };
 
   // 监听歌词文本处理设置变化并重新解析当前歌词
@@ -177,7 +189,7 @@ export const useMediaStore = defineStore("media", () => {
       hasContent && source && input ? extractLyricAuthors(input.content, source.format) : [];
     lyricIndex.value = -1;
     lyricLoading.value = false;
-    syncToMain();
+    syncLyricOffset(activeLyric.value);
     return hasContent;
   };
 
@@ -200,7 +212,8 @@ export const useMediaStore = defineStore("media", () => {
     lyricAuthors.value = [];
     lyricLoading.value = false;
     lyricIndex.value = -1;
-    syncToMain();
+    lyricOffsetGeneration++;
+    useStatusStore().lyricOffsetMs = 0;
   };
 
   return {
