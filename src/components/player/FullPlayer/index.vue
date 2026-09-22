@@ -214,6 +214,11 @@ const toggleLyric = (): void => {
   }
 };
 
+const onCoverContainerClick = (): void => {
+  if (!isMobile.value || !hasLyric.value) return;
+  showLyric.value = true;
+};
+
 const showComments = (): void => {
   if (displayTrack.value) status.showComments(displayTrack.value);
 };
@@ -305,15 +310,20 @@ const showComments = (): void => {
           <!-- 封面与歌曲信息 -->
           <div
             v-if="!fullscreenCover"
-            class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)] [-webkit-tap-highlight-color:transparent]"
             :class="[
-              isMobile && (status.fullQueueOpen || mobileLyricActive) ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100',
+              isMobile && (status.fullQueueOpen || mobileLyricActive)
+                ? 'opacity-0 pointer-events-none invisible z-0 scale-95'
+                : 'opacity-100 pointer-events-auto visible z-10 scale-100',
+              'md:opacity-100 md:pointer-events-auto md:visible md:z-10 md:scale-100',
               isMobile ? 'px-4' : 'px-12',
+              isMobile && hasLyric ? 'cursor-pointer' : '',
             ]"
             :style="{
               width: isMobile ? '100%' : coverWidth,
               transform: !isMobile && coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
             }"
+            @click="onCoverContainerClick"
           >
             <!-- 移动端纵向紧凑视图 -->
             <div
@@ -351,8 +361,8 @@ const showComments = (): void => {
             class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
               (isMobile && !mobileLyricActive) || coverCentered || status.fullQueueOpen
-                ? 'opacity-0 pointer-events-none'
-                : 'opacity-100',
+                ? 'opacity-0 pointer-events-none invisible z-0'
+                : 'opacity-100 pointer-events-auto visible z-10',
             ]"
             :style="{
               width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
@@ -459,7 +469,9 @@ const showComments = (): void => {
           <div
             class="absolute inset-y-0 right-0 px-2 md:pl-4 md:py-6 flex items-center"
             :class="[
-              status.fullQueueOpen ? '' : 'opacity-0 pointer-events-none',
+              status.fullQueueOpen
+                ? 'opacity-100 pointer-events-auto visible z-20'
+                : 'opacity-0 pointer-events-none invisible z-0',
             ]"
             :style="{
               width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,

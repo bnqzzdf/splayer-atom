@@ -169,6 +169,7 @@ const alignItems = computed(() => {
         <template #trigger>
           <span
             class="inline-flex items-center gap-1 leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30 cursor-pointer transition-colors hover:border-cover/60"
+            @click.stop
           >
             <IconSpLossless v-if="showLosslessIcon" class="text-[1.4em] -my-[0.4em]" />
             {{ qualityLabel }}
@@ -216,6 +217,7 @@ const alignItems = computed(() => {
         <template #trigger>
           <span
             class="inline-flex items-center justify-center leading-none px-1.5 py-1.2 rounded-md border border-solid border-cover/30 cursor-pointer transition-colors hover:border-cover/60"
+            @click.stop
           >
             {{ lyricLabel }}
           </span>
@@ -232,7 +234,7 @@ const alignItems = computed(() => {
               :class="
                 isArtistLinkable(artist) ? 'cursor-pointer transition-colors hover:text-cover' : ''
               "
-              @click="goToResource(artistTarget(artist))"
+              @click="isArtistLinkable(artist) ? ($event.stopPropagation(), goToResource(artistTarget(artist))) : undefined"
             >
               {{ artist.name }}
             </span>
@@ -248,7 +250,7 @@ const alignItems = computed(() => {
       <span
         class="truncate"
         :class="isAlbumLinkable ? 'cursor-pointer transition-colors hover:text-cover' : ''"
-        @click="goToResource(albumTarget)"
+        @click="isAlbumLinkable ? ($event.stopPropagation(), goToResource(albumTarget)) : undefined"
       >
         {{ albumText }}
       </span>
@@ -262,7 +264,7 @@ const alignItems = computed(() => {
       <span
         class="truncate"
         :class="isPlaybackSourceLinkable ? 'cursor-pointer transition-colors hover:text-cover' : ''"
-        @click="goToResource(playbackSourceTarget)"
+        @click="isPlaybackSourceLinkable ? ($event.stopPropagation(), goToResource(playbackSourceTarget)) : undefined"
       >
         {{ playbackSourceText }}
       </span>
