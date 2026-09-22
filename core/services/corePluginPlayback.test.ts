@@ -127,3 +127,24 @@ test("QM 未登录时给「需要登录」而不是「需要会员」", () => {
   assert.match(qm, /getProviderSessions\(\)\.qqmusic\.authenticated/);
   assert.match(qm, /ErrorCode\.PROVIDER_LOGIN_REQUIRED/);
 });
+
+test("KG hi-res 收敛到无损档，避免拿到 mp3 被 strict 输出拒绝", () => {
+  const map = resolverSource
+    .split("const KUGOU_LEVEL: Record<PluginQuality, string> = {")[1]
+    ?.split("};")[0];
+  assert.ok(map, "KUGOU_LEVEL 应当存在");
+  assert.match(map, /"hi-res": "lossless"/);
+  assert.doesNotMatch(map, /"hi-res": "hi-res"/);
+});
+
+test("输出格式约束不要被误报成网络错误", () => {
+  const mapper = resolverSource
+    .split("export const playbackSourceErrorCode = (error: unknown): ErrorCode => {")[1]
+    ?.split("};")[0];
+  assert.ok(mapper, "playbackSourceErrorCode 应当存在");
+  assert.match(mapper, /ErrorCode\.OUTPUT_FORMAT_UNSUPPORTED/);
+  // 必须排在通用网络判定之前，否则会被 NETWORK_ERROR 抢走
+  const fmtIdx = mapper.indexOf("OUTPUT_FORMAT_UNSUPPORTED");
+  const netIdx = mapper.indexOf("ErrorCode.NETWORK_TIMEOUT");
+  assert.ok(fmtIdx >= 0 && netIdx > fmtIdx, "格式约束判定必须在网络判定之前");
+});

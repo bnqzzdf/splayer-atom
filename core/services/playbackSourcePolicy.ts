@@ -42,6 +42,7 @@ const SKIPPABLE_PLAYBACK_ERRORS = new Set<string>([
   ErrorCode.PROVIDER_TRIAL_DISABLED,
   ErrorCode.PROVIDER_UNAVAILABLE,
   ErrorCode.PROVIDER_LOGIN_REQUIRED,
+  ErrorCode.OUTPUT_FORMAT_UNSUPPORTED,
 ]);
 
 /** 单曲级失败可由 Core 有界跳过；设备类/全局错误必须留给用户处理。 */

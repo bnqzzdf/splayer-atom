@@ -56,6 +56,9 @@ export enum ErrorCode {
   PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE",
   /** 需要先登录该在线平台（QM/KG 未登录时取不到直链） */
   PROVIDER_LOGIN_REQUIRED = "PROVIDER_LOGIN_REQUIRED",
+  // 输出侧格式约束
+  /** 已取到音源，但当前输出不接受它的格式（例如 Diretta strict Source Direct 只吃无损 PCM） */
+  OUTPUT_FORMAT_UNSUPPORTED = "OUTPUT_FORMAT_UNSUPPORTED",
 
   // 标签编辑相关
   /** 读取文件标签失败 */

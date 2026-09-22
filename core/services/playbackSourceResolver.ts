@@ -79,6 +79,15 @@ const sourceError = (code: ErrorCode, message: string, cause?: unknown): Playbac
 export const playbackSourceErrorCode = (error: unknown): ErrorCode => {
   if (error instanceof PlaybackSourceError) return error.code;
   const message = error instanceof Error ? error.message : String(error);
+  // 输出侧格式约束要单独识别：它既不是网络问题也不是解析问题，
+  // 归到 NETWORK_ERROR 会让用户去查网络，完全误导。
+  if (
+    /strict Source Direct|只接受 lossless integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
+      message,
+    )
+  ) {
+    return ErrorCode.OUTPUT_FORMAT_UNSUPPORTED;
+  }
   if (/timeout|ETIMEDOUT|AbortError/i.test(message)) return ErrorCode.NETWORK_TIMEOUT;
   if (/fetch|network|ECONN|ENOTFOUND|EHOST|socket/i.test(message)) return ErrorCode.NETWORK_ERROR;
   return ErrorCode.URL_RESOLVE_FAILED;
@@ -230,13 +239,24 @@ const QQMUSIC_LEVEL: Record<PluginQuality, string> = {
   "hi-res": "hi-res",
 };
 
-/** Atom 音质档位 → 酷狗 /v5/url 的 quality 参数 */
+/**
+ * Atom 音质档位 → 酷狗 /v5/url 的 quality 参数。
+ *
+ * 注意 hi-res **不能**映射到酷狗的 `high` 档：实测同一首歌
+ * `quality=high` 返回的是 **mp3**，而 `quality=flac` 才返回 **flac**。
+ * `high` 在酷狗是「最高可用」而非「无损」，对没有真 hi-res 的曲子会给出有损音源，
+ * 在 Diretta strict Source Direct 这类只吃无损 PCM 的输出上会直接加载失败。
+ * 因此这里把 hi-res 收敛到 flac，先保证无损；确实拿不到无损时由
+ * 模块自身的降档链给 320/128，并由 OUTPUT_FORMAT_UNSUPPORTED 给出准确原因。
+ */
 const KUGOU_LEVEL: Record<PluginQuality, string> = {
   lq: "lq",
   sq: "sq",
   hq: "hq",
   lossless: "lossless",
-  "hi-res": "hi-res",
+  // 关键：不要用 "hi-res"，它会被模块映射到酷狗的 `high` 档，而 `high` 是
+  // 「最高可用」不是「无损」——实测同一首歌 high→mp3、flac→flac。
+  "hi-res": "lossless",
 };
 
 /** 比「解析失败」更有信息量的权益类错误；原生解析给出的这些原因要保留。 */
