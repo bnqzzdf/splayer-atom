@@ -55,6 +55,7 @@ describe("isSkippablePlaybackError", () => {
       ErrorCode.PROVIDER_PURCHASE_REQUIRED,
       ErrorCode.PROVIDER_TRIAL_DISABLED,
       ErrorCode.PROVIDER_UNAVAILABLE,
+      ErrorCode.PROVIDER_LOGIN_REQUIRED,
     ]) {
       assert.equal(isSkippablePlaybackError(code), true);
     }

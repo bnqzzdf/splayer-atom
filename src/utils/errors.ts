@@ -28,6 +28,7 @@ const SKIPPABLE_ERRORS = new Set<string>([
   ErrorCode.PROVIDER_PURCHASE_REQUIRED,
   ErrorCode.PROVIDER_TRIAL_DISABLED,
   ErrorCode.PROVIDER_UNAVAILABLE,
+  ErrorCode.PROVIDER_LOGIN_REQUIRED,
 ]);
 
 /** 需要用 dialog 强提示的严重错误（阻断性，用户必须介入） */

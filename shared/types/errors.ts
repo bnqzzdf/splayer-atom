@@ -54,6 +54,8 @@ export enum ErrorCode {
   PROVIDER_TRIAL_DISABLED = "PROVIDER_TRIAL_DISABLED",
   /** 该平台暂无可用音源（无版权 / 已下架等） */
   PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE",
+  /** 需要先登录该在线平台（QM/KG 未登录时取不到直链） */
+  PROVIDER_LOGIN_REQUIRED = "PROVIDER_LOGIN_REQUIRED",
 
   // 标签编辑相关
   /** 读取文件标签失败 */

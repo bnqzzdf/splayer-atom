@@ -1835,6 +1835,8 @@
     "PROVIDER_PURCHASE_REQUIRED": "该歌曲需要单独购买数字单曲或专辑",
     "PROVIDER_TRIAL_DISABLED": "该歌曲仅提供试听，请在设置中允许试听播放",
     "PROVIDER_UNAVAILABLE": "该歌曲在该平台暂无可用音源",
+    "PROVIDER_LOGIN_REQUIRED": "需要先登录{platform}账号才能播放该歌曲",
+    "SUBSCRIBE_LOGIN_REQUIRED": "请先登录网易云账号，再收藏歌单 / 专辑 / 歌手",
     "SCAN_NO_DIRS": "未配置扫描目录",
     "SCAN_DIR_EXISTS": "该目录已存在",
     "SCAN_DIR_NOT_FOUND": "目录不存在",

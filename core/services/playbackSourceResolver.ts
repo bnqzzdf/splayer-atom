@@ -10,6 +10,9 @@ import {
   pluginUnavailableErrorCode,
 } from "@main/services/playbackSourcePolicy";
 import { callNetease } from "@main/apis/netease";
+import { callQQMusic } from "@main/apis/qqmusic";
+import { callKugou } from "@main/apis/kugou";
+import { getProviderSessions } from "@main/services/providerApi";
 import { callQobuz } from "@main/apis/qobuz";
 import { callTidal } from "@main/apis/tidal";
 import { store } from "@main/store";
@@ -218,6 +221,156 @@ const resolvePluginCompatibility = async (
   );
 };
 
+/** Atom 音质档位 → QQ音乐 vkey 的 level 参数（模块内部即按这些 level 选模板） */
+const QQMUSIC_LEVEL: Record<PluginQuality, string> = {
+  lq: "lq",
+  sq: "sq",
+  hq: "hq",
+  lossless: "lossless",
+  "hi-res": "hi-res",
+};
+
+/** Atom 音质档位 → 酷狗 /v5/url 的 quality 参数 */
+const KUGOU_LEVEL: Record<PluginQuality, string> = {
+  lq: "lq",
+  sq: "sq",
+  hq: "hq",
+  lossless: "lossless",
+  "hi-res": "hi-res",
+};
+
+/** 比「解析失败」更有信息量的权益类错误；原生解析给出的这些原因要保留。 */
+const INFORMATIVE_SOURCE_ERRORS: ReadonlySet<ErrorCode> = new Set([
+  ErrorCode.PROVIDER_LOGIN_REQUIRED,
+  ErrorCode.PROVIDER_VIP_REQUIRED,
+  ErrorCode.PROVIDER_PURCHASE_REQUIRED,
+  ErrorCode.PROVIDER_TRIAL_DISABLED,
+  ErrorCode.PROVIDER_UNAVAILABLE,
+]);
+
+interface QQMusicSongUrlBody {
+  code?: number;
+  message?: string;
+  data?: Array<{ url?: string; level?: string; format?: string }>;
+}
+
+interface KugouSongUrlBody {
+  code?: number;
+  message?: string;
+  data?: { url?: string };
+}
+
+/**
+ * 用 Core 自己的 QQ音乐 vkey 模块解析直链。
+ *
+ * 未登录时 QM 一律拿不到 purl（模块返回 403），这时给「需要登录」而不是
+ * 「需要会员」——否则用户会去查会员，实际问题是没有登录。
+ */
+const resolveQQMusic = async (
+  track: Track,
+  quality: PluginQuality,
+  cacheKey: string | null,
+): Promise<ResolvedPlaybackSource> => {
+  const body = (await callQQMusic("song_url", {
+    mid: track.id,
+    mediaMid: track.mediaId,
+    level: QQMUSIC_LEVEL[quality],
+  })) as QQMusicSongUrlBody;
+
+  const item = body?.data?.[0];
+  if (typeof item?.url === "string" && item.url) {
+    return {
+      source: item.url,
+      provider: "official",
+      format: item.format,
+      cacheAfterLoad: cacheAfterLoad(track, cacheKey, item.url),
+    };
+  }
+
+  if (!getProviderSessions().qqmusic.authenticated) {
+    throw sourceError(ErrorCode.PROVIDER_LOGIN_REQUIRED, `QQ Music login required: ${track.id}`);
+  }
+  const code = classifyPluginFailureMessage(body?.message) ?? ErrorCode.PROVIDER_UNAVAILABLE;
+  throw sourceError(code, `QQ Music track unavailable: ${track.id} (${body?.code ?? "?"})`);
+};
+
+/**
+ * 用 Core 自己的酷狗 /v5/url 模块解析直链。
+ *
+ * 分两步：先按账号权益取整曲；取不到再退到「免费段」。
+ * 注意免费段实测只有约 1MB（约 24 秒），是**试听片段**而不是整曲，
+ * 因此必须按 trial 处理并遵守 `player.allowTrialPlay`，不能当整曲喂给播放器。
+ */
+const resolveKugou = async (
+  track: Track,
+  quality: PluginQuality,
+  cacheKey: string | null,
+): Promise<ResolvedPlaybackSource> => {
+  const params = {
+    hash: track.id,
+    audioId: track.extId,
+    albumId: track.album?.id,
+    level: KUGOU_LEVEL[quality],
+  };
+
+  let body = (await callKugou("song_url", params)) as KugouSongUrlBody;
+  let url = typeof body?.data?.url === "string" ? body.data.url : "";
+  let trial = false;
+
+  if (!url) {
+    body = (await callKugou("song_url", { ...params, freePart: true })) as KugouSongUrlBody;
+    url = typeof body?.data?.url === "string" ? body.data.url : "";
+    trial = Boolean(url);
+  }
+
+  if (!url) {
+    const code = classifyPluginFailureMessage(body?.message) ?? ErrorCode.PROVIDER_UNAVAILABLE;
+    throw sourceError(code, `Kugou track unavailable: ${track.id} (${body?.code ?? "?"})`);
+  }
+  if (trial && store.get("player.allowTrialPlay") !== true) {
+    throw sourceError(ErrorCode.PROVIDER_TRIAL_DISABLED, `Kugou trial disabled: ${track.id}`);
+  }
+
+  return {
+    source: url,
+    provider: trial ? "trial" : "official",
+    cacheAfterLoad: trial ? undefined : cacheAfterLoad(track, cacheKey, url),
+  };
+};
+
+/**
+ * QM / KG 音源解析：**先用 Core 原生模块，失败再退到继承的 musicUrl 插件**。
+ *
+ * 为什么原生优先：这两个平台的 vkey / url 模块 Core 里本来就有，不需要用户装插件；
+ * 之前只走插件路径，导致「一个插件都没装」的机器上点播放直接报
+ * 「未找到支持该平台的插件」——而搜索是好的，看起来像播放坏了。
+ *
+ * 插件仍然保留为兜底（登录态更好或原生拿不到时它可能成功）。
+ */
+const resolveInheritedOnline = async (
+  track: Track,
+  quality: PluginQuality,
+  cacheKey: string | null,
+): Promise<ResolvedPlaybackSource> => {
+  let nativeError: unknown = null;
+  try {
+    return track.source === "qqmusic"
+      ? await resolveQQMusic(track, quality, cacheKey)
+      : await resolveKugou(track, quality, cacheKey);
+  } catch (error) {
+    nativeError = error;
+  }
+
+  try {
+    return await resolvePluginCompatibility(track, quality, cacheKey);
+  } catch (pluginError) {
+    // 原生给出了精确的权益原因就保留它；插件的「找不到插件」没有信息量。
+    const nativeCode = nativeError instanceof PlaybackSourceError ? nativeError.code : null;
+    if (nativeError && nativeCode && INFORMATIVE_SOURCE_ERRORS.has(nativeCode)) throw nativeError;
+    throw pluginError;
+  }
+};
+
 const resolveNetease = async (
   track: Track,
   quality: PluginQuality,
@@ -402,7 +555,7 @@ export const resolveDownloadSource = async (
     return { source: resolved.source, format: resolved.format, size: resolved.size };
   }
   if (track.source === "qqmusic" || track.source === "kugou") {
-    return { source: (await resolvePluginCompatibility(track, quality, null)).source };
+    return { source: (await resolveInheritedOnline(track, quality, null)).source };
   }
   throw sourceError(ErrorCode.NO_PLUGIN_AVAILABLE, `No Core download resolver for ${track.source}`);
 };
@@ -430,7 +583,7 @@ export const resolvePlaybackSource = async (track: Track): Promise<ResolvedPlayb
   if (track.source === "qobuz") return resolveQobuz(track, quality, cacheKey);
   if (track.source === "tidal") return resolveTidal(track, quality, cacheKey);
   if (track.source === "qqmusic" || track.source === "kugou") {
-    return resolvePluginCompatibility(track, quality, cacheKey);
+    return resolveInheritedOnline(track, quality, cacheKey);
   }
 
   throw sourceError(ErrorCode.NO_PLUGIN_AVAILABLE, `No Core source resolver for ${track.source}`);

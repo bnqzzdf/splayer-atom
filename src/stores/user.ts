@@ -31,6 +31,8 @@ import { subscribeAlbum } from "@/apis/album/netease";
 import { subscribeArtist } from "@/apis/artist/netease";
 import { fetchUserCloud, deleteCloudSongs } from "@/apis/cloud/netease";
 import { useProviderSessionsStore } from "./providerSessions";
+import { toast } from "@/composables/useToast";
+import i18n from "@/i18n";
 
 /** 登录 cookie 保活间隔 */
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -567,23 +569,40 @@ export const useUserStore = defineStore(
       await refreshPlaylists();
     };
 
+    /**
+     * 收藏类写操作的前置校验。
+     *
+     * 网易云的「订阅歌单 / 收藏专辑 / 收藏歌手」都必须登录；未登录直接调接口时
+     * 服务端只会回一个语义不明的错误（实测 302「系统错误」，连续重试后变成
+     * 405「操作过于频繁」），用户根本看不出真正原因。这里先拦下来给明确提示。
+     * @returns 是否已登录、可以继续调用
+     */
+    const requireNeteaseLogin = (): boolean => {
+      if (isLoggedIn.value) return true;
+      toast.error(i18n.global.t("errors.SUBSCRIBE_LOGIN_REQUIRED"));
+      return false;
+    };
+
     /** 订阅 / 取消订阅他人歌单 */
     const togglePlaylistSubscribe = async (
       playlistId: string,
       subscribe: boolean,
     ): Promise<void> => {
+      if (!requireNeteaseLogin()) return;
       await subscribePlaylist(playlistId, subscribe);
       await refreshPlaylists();
     };
 
     /** 收藏 / 取消收藏专辑 */
     const toggleAlbumSubscribe = async (albumId: string, subscribe: boolean): Promise<void> => {
+      if (!requireNeteaseLogin()) return;
       await subscribeAlbum(albumId, subscribe);
       albums.value = await fetchUserAlbums();
     };
 
     /** 收藏 / 取消收藏歌手 */
     const toggleArtistSubscribe = async (artistId: string, subscribe: boolean): Promise<void> => {
+      if (!requireNeteaseLogin()) return;
       await subscribeArtist(artistId, subscribe);
       artists.value = await fetchUserArtists();
     };
