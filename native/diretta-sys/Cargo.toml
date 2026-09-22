@@ -1,0 +1,14 @@
+[package]
+name = "diretta-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["SPlayer Team"]
+description = "SPlayer Atom strict Source Direct C++ bridge for the Diretta Host SDK"
+links = "atom_diretta"
+
+[features]
+default = []
+sdk = []
+
+[build-dependencies]
+cc = "1.2.58"

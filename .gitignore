@@ -1,0 +1,38 @@
+node_modules
+dist
+out
+build
+.DS_Store
+.eslintcache
+.claude
+.agents
+# 本地代理历史记录
+/history/
+docs/superpowers
+docs/.vitepress/cache
+docs/.vitepress/.temp
+docs/.vitepress/dist
+skills-lock.json
+*.log*
+.vscode/settings.json
+.idea
+
+# planning-with-files 本地工作记忆
+/task_plan.md
+/findings.md
+/progress.md
+
+# Rust build artifacts
+**/target
+native/*/*.node
+native/*/*.tmp
+native/*/*.swp
+# native/*/index.d.ts
+package-lock.json
+
+# Code signing certificates
+*.pfx
+*.p12
+
+# Headless 运行数据（数据库等，禁止入库）
+.dbg/

@@ -1,0 +1,133 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const managerSource = readFileSync(new URL("./downloadManager.ts", import.meta.url), "utf8");
+const resolverSource = readFileSync(
+  new URL("./playbackSourceResolver.ts", import.meta.url),
+  "utf8",
+);
+const coreNodeSource = readFileSync(new URL("../core-node/index.ts", import.meta.url), "utf8");
+const routesSource = readFileSync(new URL("../atom/headless/routes.ts", import.meta.url), "utf8");
+const downloadClientSource = readFileSync(
+  new URL("../../src/core/downloadClient.ts", import.meta.url),
+  "utf8",
+);
+const downloadTypesSource = readFileSync(
+  new URL("../../shared/types/download.ts", import.meta.url),
+  "utf8",
+);
+const downloadStoreSource = readFileSync(
+  new URL("../../src/stores/download.ts", import.meta.url),
+  "utf8",
+);
+const downloadDirSource = readFileSync(
+  new URL("../../src/components/settings/custom/DownloadDirConfig.vue", import.meta.url),
+  "utf8",
+);
+const downloadComposableSource = readFileSync(
+  new URL("../../src/composables/useDownload.ts", import.meta.url),
+  "utf8",
+);
+const collectionPageSource = readFileSync(
+  new URL("../../src/pages/Collection.vue", import.meta.url),
+  "utf8",
+);
+
+test("Core download queue resolves sources without a renderer round-trip", () => {
+  assert.match(managerSource, /resolveDownloadSource\(/);
+  assert.doesNotMatch(managerSource, /broadcast\("download:resolve"/);
+  assert.doesNotMatch(managerSource, /waitForResolution|resolutionGates/);
+  assert.doesNotMatch(managerSource, /submitResolution|failResolution/);
+  assert.doesNotMatch(managerSource, /from "electron"/);
+  assert.match(managerSource, /publishCoreControlEvent\(\{ type: "downloadState", data: task \}\)/);
+  assert.match(
+    managerSource,
+    /publishCoreControlEvent\(\{ type: "downloadProgress", data: progress \}\)/,
+  );
+  assert.match(managerSource, /export const shutdown/);
+});
+
+test("Core download source resolution reuses existing provider and plugin seams", () => {
+  const downloadSection = resolverSource.split("export const resolveDownloadSource")[1] ?? "";
+  assert.match(downloadSection, /resolveNeteaseDownload\(track, quality, usePlaybackForDownload\)/);
+  assert.match(downloadSection, /resolveStreaming\(track, null\)/);
+  assert.match(downloadSection, /resolveQobuz\(track, quality, null\)/);
+  assert.match(downloadSection, /resolveTidal\(track, quality, null\)/);
+  assert.match(downloadSection, /resolvePluginCompatibility\(track, quality, null\)/);
+  assert.match(resolverSource, /callNetease\("song_download_url"/);
+  assert.match(resolverSource, /callNetease\("song_url"/);
+});
+
+test("Node Core owns download runtime initialization", () => {
+  assert.match(coreNodeSource, /import\("@main\/services\/downloadManager"\)/);
+  assert.match(coreNodeSource, /await downloadManager\.init\(\)/);
+});
+
+test("Web Control exposes real Core download queue management", () => {
+  for (const route of [
+    "/download/tasks",
+    "/download/dir",
+    "/download/reset-dir",
+    "/download/start",
+    "/download/start-many",
+    "/download/cancel",
+    "/download/remove",
+    "/download/clear-finished",
+  ]) {
+    assert.match(routesSource, new RegExp(route.replaceAll("/", "\\/")));
+  }
+  assert.match(downloadClientSource, /request<EnqueueResult>\("\/download\/start"/);
+  assert.match(downloadClientSource, /request<DownloadTask\[]>\("\/download\/tasks"\)/);
+  assert.match(downloadStoreSource, /subscribeCoreControlEvent\("downloadState", applyTask\)/);
+  assert.match(
+    downloadStoreSource,
+    /subscribeCoreControlEvent\("downloadProgress", applyProgress\)/,
+  );
+});
+
+test("obsolete renderer download-resolution protocol is absent", () => {
+  assert.doesNotMatch(
+    downloadTypesSource,
+    /download:resolve|download:resolution|download:resolveFailed/,
+  );
+  assert.doesNotMatch(downloadTypesSource, /submitResolution|failResolution|onResolve/);
+  assert.doesNotMatch(downloadTypesSource, /DownloadResolution|DownloadResolvePayload/);
+});
+
+test("Web Download requests use one Core client and Core directory picker", () => {
+  assert.match(downloadTypesSource, /destination: "core"/);
+  assert.match(downloadComposableSource, /destination: "core"/);
+  assert.match(routesSource, /request\.destination === "core"/);
+  assert.match(downloadStoreSource, /downloadClient\.list\(\)/);
+  assert.match(downloadStoreSource, /downloadClient\.cancel\(taskId\)/);
+  assert.match(downloadComposableSource, /downloadClient\.start\(req\)/);
+  assert.match(downloadComposableSource, /downloadClient\.startMany\(requests\)/);
+  assert.match(downloadDirSource, /downloadClient\.getDir\(\)/);
+  assert.match(downloadDirSource, /downloadClient\.setDir\(selectedDir\)/);
+  assert.match(downloadDirSource, /CoreDirectoryPicker/);
+  assert.doesNotMatch(downloadDirSource, /window\.api|hasHostCapability|isWebRemote/);
+  assert.doesNotMatch(downloadStoreSource, /window\.api\.download\./);
+  assert.doesNotMatch(downloadComposableSource, /window\.api\.download\./);
+});
+
+test("Album download reuses the Core batch queue for all managed online providers", () => {
+  assert.match(collectionPageSource, /buildDownloadQualityItems/);
+  assert.match(collectionPageSource, /enqueueDownloads\(collection\.value\.tracks/);
+  assert.match(collectionPageSource, /visible: type === "album" && source !== "local"/);
+  assert.match(downloadComposableSource, /downloadClient\.startMany\(requests\)/);
+});
+
+test("Download jobs capture Control lyric preferences before entering Core", () => {
+  assert.doesNotMatch(downloadStoreSource, /initDownloadResolver/);
+  assert.match(downloadComposableSource, /prepareDownloadLyrics\(req\)/);
+  assert.match(downloadComposableSource, /const req = await prepareRequest\(track, opts\)/);
+  assert.match(downloadComposableSource, /crypto\.getRandomValues\(new Uint8Array\(16\)\)/);
+  assert.match(downloadComposableSource, /toast\.error\(t\("download\.enqueueFailed"\)\)/);
+});
+
+test("Web uses the Core directory browser instead of a browser-local picker or explorer", () => {
+  assert.match(downloadDirSource, /CoreDirectoryPicker/);
+  assert.match(downloadDirSource, /downloadClient\.setDir\(selectedDir\)/);
+  assert.doesNotMatch(downloadDirSource, /showInExplorer|nativeFileDialogs|hostFileExplorer/);
+});

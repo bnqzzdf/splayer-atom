@@ -1,0 +1,24 @@
+{
+  "include": ["vite.config.ts", "vitest.config.*", "core/**/*", "scripts/**/*", "shared/**/*"],
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.node.tsbuildinfo",
+    "paths": {
+      "@main/*": ["./core/*"],
+      "@shared/*": ["./shared/*"],
+      "@splayer/audio-engine": ["./native/audio-engine"]
+    }
+  }
+}

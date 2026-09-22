@@ -1,0 +1,160 @@
+/**
+ * 非响应式播放时间源
+ *
+ * 进度条等低频 UI 仍从 status store 读取
+ *
+ * 主进程推送位置时调用 setCurrentTime 更新
+ * 高频组件在自己的 RAF 循环中调用 getCurrentTime 读取
+ */
+
+import { useStatusStore } from "@/stores/status";
+
+/** 当前播放位置（毫秒） */
+let currentTimeMs = 0;
+
+/** 总时长（毫秒） */
+let totalDurationMs = 0;
+
+/** 上次同步的本地时间戳 */
+let lastSyncAt = 0;
+
+/** 是否已同步过（lastSyncAt 有效）。不能以 lastSyncAt > 0 判断：mock 墙钟从 0 起点时恒为假 */
+let hasSynced = false;
+
+/** 是否正在播放 */
+let playing = false;
+
+/** 是否正在 seek（暂停插值，固定在 seek 目标位置） */
+let seeking = false;
+
+/**
+ * 播放态切换后，下一帧权威位置强制重锚
+ */
+let resyncPending = false;
+
+/**
+ * 当前播放速度倍率（用于把墙钟插值换算到源时间）
+ * 变速时 1ms 墙钟 = speed ms 源时间
+ */
+let speed = 1.0;
+
+/**
+ * 主进程推送位置与本地插值之间的容差（毫秒）
+ * 偏差小于此值视作 IPC 延迟 / 解码抖动，保留插值避免可见跳跃；
+ * 大于此值视作真实跳变（漏拦截的 seek、跳曲等），直接采用推送值
+ */
+const SYNC_TOLERANCE_MS = 1000;
+
+/**
+ * 小幅偏差时向推送位置收敛的比例
+ */
+const SYNC_CONVERGE_RATE = 0.2;
+
+/** 是否正在播放 */
+export const isPlaying = (): boolean => {
+  try {
+    const status = useStatusStore();
+    return status.isPlaying || playing;
+  } catch {
+    return playing;
+  }
+};
+
+/** 获取当前播放位置（毫秒），播放中按 speed 插值，seek 中冻结 */
+export const getCurrentTime = (): number => {
+  const isCurrentlyPlaying = isPlaying();
+  let baseMs = currentTimeMs;
+  try {
+    const status = useStatusStore();
+    if (status.position > 0 && Math.abs(status.position - currentTimeMs) > 2000) {
+      baseMs = status.position;
+      currentTimeMs = baseMs;
+    }
+  } catch {}
+  if (!isCurrentlyPlaying || seeking) return baseMs;
+  // 从未同步过位置时不做插值，避免以页面加载以来的墙钟偏移产生巨大跳变
+  const elapsed = hasSynced ? performance.now() - lastSyncAt : 0;
+  const maxDur = totalDurationMs > 0 ? totalDurationMs : Number.MAX_SAFE_INTEGER;
+  return Math.min(baseMs + elapsed * speed, maxDur);
+};
+
+/** 获取总时长（毫秒） */
+export const getDuration = (): number => {
+  if (totalDurationMs > 0) return totalDurationMs;
+  try {
+    return useStatusStore().duration;
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * 同步主进程推送的位置
+ * @param ms 主进程推送的位置（毫秒）
+ * @param options.force 强制采用 ms（如 load 重置、seek 跳转）
+ * @returns 实际生效的位置
+ */
+export const setCurrentTime = (ms: number, options: { force?: boolean } = {}): number => {
+  if (!options.force && !resyncPending && !seeking && totalDurationMs > 0) {
+    const interpolated = getCurrentTime();
+    if (Math.abs(interpolated - ms) < SYNC_TOLERANCE_MS) {
+      currentTimeMs = interpolated + (ms - interpolated) * SYNC_CONVERGE_RATE;
+      lastSyncAt = performance.now();
+      hasSynced = true;
+      return currentTimeMs;
+    }
+  }
+  resyncPending = false;
+  currentTimeMs = ms;
+  lastSyncAt = performance.now();
+  hasSynced = true;
+  return ms;
+};
+
+/** 进入 seek 状态，冻结插值 */
+export const setSeeking = (value: boolean): void => {
+  seeking = value;
+  if (!value) lastSyncAt = performance.now();
+};
+
+/** 同步时长 */
+export const setDuration = (ms: number): void => {
+  totalDurationMs = ms;
+};
+
+/** 同步播放状态 */
+export const setPlaying = (value: boolean): void => {
+  if (value === playing) return;
+  // 暂停：冻结到当前可见位置
+  if (!value) currentTimeMs = getCurrentTime();
+  lastSyncAt = performance.now();
+  playing = value;
+  // 切换后用引擎随后上报的真实位置重锚
+  resyncPending = true;
+};
+
+/**
+ * 同步播放速度
+ * @param value - 播放速度
+ *
+ * 切速度瞬间，先按旧 speed 把可见位置推到 now，再切，避免视觉跳变
+ */
+export const setSpeed = (value: number): void => {
+  if (value === speed) return;
+  if (playing && !seeking) {
+    currentTimeMs = getCurrentTime();
+    lastSyncAt = performance.now();
+  }
+  speed = value;
+};
+
+/** 重置位置/时长/播放标志 */
+export const reset = (): void => {
+  currentTimeMs = 0;
+  totalDurationMs = 0;
+  lastSyncAt = 0;
+  hasSynced = false;
+  playing = false;
+  seeking = false;
+  resyncPending = false;
+};

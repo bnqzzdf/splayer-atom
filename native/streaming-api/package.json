@@ -1,0 +1,14 @@
+{
+  "name": "streaming-api",
+  "version": "0.1.0",
+  "main": "streaming-api.node",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "streaming-api",
+    "triples": {}
+  },
+  "scripts": {
+    "build": "napi build --release --no-const-enum",
+    "build:debug": "napi build --no-const-enum"
+  }
+}

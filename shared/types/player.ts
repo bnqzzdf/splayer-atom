@@ -1,0 +1,437 @@
+import type { LyricFormat } from "./lyrics";
+import type { Platform } from "./platform";
+import type { PersonalFmOptions } from "./personalFm";
+
+/** 播放器状态 */
+export type PlayerState = "idle" | "loading" | "playing" | "paused" | "stopped";
+
+/** 循环模式：默认播放到队列末尾后停止 */
+export type RepeatMode = "off" | "list" | "one";
+
+/** 随机模式 */
+export type ShuffleMode = "off" | "on";
+
+/** 歌曲来源：本地 / 流媒体 / 在线平台 */
+export type TrackSource = "local" | "streaming" | Platform;
+
+/** 播放来源类型 */
+export type PlaybackOriginType = "track" | "playlist" | "album" | "artist" | "radio" | "page";
+
+/** 本次播放的来源上下文 */
+export interface PlaybackContext {
+  /** 平台资源所属来源 */
+  provider?: TrackSource;
+  /** 来源资源或页面标识 */
+  originId: string;
+  /** 来源资源类型 */
+  originType: PlaybackOriginType;
+  /** 来源资源名称 */
+  originName?: string;
+}
+
+/** 歌手 */
+export interface Artist {
+  id?: string;
+  name: string;
+  avatar?: string;
+  /** 名下专辑数 */
+  albumCount?: number;
+}
+
+/** 专辑 */
+export interface Album {
+  id?: string;
+  name: string;
+  /** 封面 URL */
+  cover?: string;
+  /** 专辑歌手字符串 */
+  artist?: string;
+  /** 曲目数 */
+  trackCount?: number;
+  /** 发行年份 */
+  year?: number;
+}
+
+/** 歌单 */
+export interface Playlist {
+  id?: string;
+  name: string;
+  cover?: string;
+  description?: string;
+  trackCount?: number;
+  /** 创建者 */
+  owner?: string;
+}
+
+/** 音质信息 */
+export interface AudioQuality {
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+  bitRate: number;
+  codec: string;
+}
+
+/**
+ * 付费标记，遵循网易云 fee 规范
+ * - 0: 免费
+ * - 1: VIP
+ * - 4: 需购买（数字专辑等）
+ * - 8: 受限音质
+ */
+export type TrackFee = 0 | 1 | 4 | 8;
+
+/** 歌曲信息 */
+export interface Track {
+  /** 平台 id */
+  id: string;
+  /** 平台二级 id */
+  extId?: string;
+  /** 平台媒体文件 id */
+  mediaId?: string;
+  /** 歌曲来源 */
+  source: TrackSource;
+  /** 本地路径 */
+  path?: string;
+  /** CUE 文件路径 */
+  cuePath?: string;
+  /** CUE 分轨对应的真实音频路径 */
+  cueAudioPath?: string;
+  /** CUE 分轨开始时间（毫秒） */
+  cueStartMs?: number;
+  /** CUE 分轨结束时间（毫秒） */
+  cueEndMs?: number;
+  /** CUE INDEX 01 的原始 75fps 整数帧位置 */
+  cueStartFrame75?: number;
+  /** 下一条 INDEX 01 的原始 75fps 整数帧位置；最后一轨省略并播放到物理 EOF */
+  cueEndFrame75?: number;
+  /** 流媒体服务器实例 ID（仅 source==='streaming'） */
+  serverId?: string;
+  /** 流媒体服务器原生 ID（仅 source==='streaming'） */
+  originalId?: string;
+  /** 标题 */
+  title: string;
+  /** 注释/副标题 */
+  comment?: string;
+  /** 歌手 */
+  artists: Artist[];
+  /** 专辑 */
+  album?: Album;
+  /** 曲目编号 */
+  track?: number;
+  /** 碟片编号 */
+  disc?: number;
+  /** 时长（毫秒） */
+  duration: number;
+  /** 封面 */
+  cover?: string;
+  /** 原始封面 */
+  coverOriginal?: string;
+  /** 文件大小（字节） */
+  fileSize?: number;
+  /** 修改时间（Unix ms） */
+  mtime?: number;
+  /** 创建时间（Unix ms） */
+  ctime?: number;
+  /** 音质信息 */
+  quality?: AudioQuality;
+  /** 付费标记 */
+  fee?: TrackFee;
+  /** 云盘歌曲 */
+  cloud?: boolean;
+}
+
+/** 播放队列项，将曲目元数据与本次播放上下文分离 */
+export interface PlaybackQueueItem {
+  track: Track;
+  context?: PlaybackContext;
+}
+
+/** 歌曲详细信息 */
+export interface TrackDetail {
+  quality: AudioQuality;
+  embeddedLyric?: string;
+  /** 外部歌词文件列表 */
+  externalLyrics: { format: LyricFormat; path: string }[];
+}
+
+/** 播放器加载后从音频流提取出的可覆盖元数据 */
+export interface MediaInfo {
+  /** 标题 */
+  title?: string;
+  /** 歌手 */
+  artists?: Artist[];
+  /** 专辑 */
+  album?: Album;
+  /** 时长（毫秒） */
+  duration: number;
+  /** 缩略封面（cache:// URL 或 base64） */
+  cover?: string;
+  /** 音质信息 */
+  quality?: AudioQuality;
+}
+
+/** 播放器加载后返回的完整数据 */
+export interface LoadResult {
+  detail: TrackDetail;
+  /** 引擎从音频流提取的元数据，用于 enrich 渲染层已持有的 Track */
+  mediaInfo: MediaInfo;
+}
+
+/** player:load 的可选参数 */
+export interface LoadOptions {
+  /** 是否自动播放，默认 true */
+  autoPlay?: boolean;
+  /**
+   * 渲染层下发的权威 Track 元数据，用于 SMTC/托盘/窗口标题。
+   * streaming/online 源应当下发；本地源缺省时主进程回退到引擎解析的 tag。
+   */
+  meta?: Track;
+  /** 本次播放的来源上下文 */
+  context?: PlaybackContext;
+}
+
+/** Core 持有的定时关闭运行时状态；不跨进程重启持久化。 */
+export interface PlaybackAutoCloseSnapshot {
+  enabled: boolean;
+  duration: number;
+  endTime: number;
+  waitSongEnd: boolean;
+  pendingStopOnEnd: boolean;
+}
+
+/** Core 播放会话模式；FM 只改变 canonical Track 的产生方式，不改变 Output 链路。 */
+export type PlaybackSessionMode = "queue" | "personalFm";
+
+/** 主进程权威播放会话快照 */
+export interface PlaybackSessionSnapshot {
+  active: boolean;
+  mode: PlaybackSessionMode;
+  /** FM 模式的 Core-owned 推荐参数；普通 queue 模式为空。 */
+  personalFmOptions?: PersonalFmOptions;
+  queue: PlaybackQueueItem[];
+  originalQueue: PlaybackQueueItem[] | null;
+  index: number;
+  current: Track | null;
+  repeat: RepeatMode;
+  shuffle: ShuffleMode;
+  /** 旧 Core/Control 兼容时可缺省；当前 Atom Core 始终返回。 */
+  autoClose?: PlaybackAutoCloseSnapshot;
+}
+
+/** 播放器状态快照 */
+export type PlayerOutputPath = "exact-pcm" | "native-dsd" | "decoded-pcm" | "processed-pcm" | null;
+
+export interface PlayerOutputStatus {
+  /** Core 当前实际选择的 canonical output id。 */
+  deviceId: string | null;
+  /** native 当前真正运行的数据路径；空闲/远端输出时为空。 */
+  path: PlayerOutputPath;
+  /** Core 从实际 path、输出身份与唯一 ALSA 偏好纯派生的样本处理能力。 */
+  sampleProcessingAvailable: boolean;
+}
+
+export interface PlayerStatus {
+  state: PlayerState;
+  position: number;
+  duration: number;
+  volume: number;
+  speed: number;
+  isFinished: boolean;
+  output: PlayerOutputStatus;
+}
+
+/** 音频输出设备 */
+export interface AudioDevice {
+  /** 稳定输出 ID；本地 ALSA 使用 `alsa:hw:CARD=<id>,DEV=<n>`。 */
+  id: string;
+  /** 显示名，可能重复、可被用户改名，仅用于展示 */
+  name: string;
+  /** Diretta Target 被发现时使用的本机网络接口名。 */
+  interfaceName?: string;
+  /** Headless 本地 ALSA 不维护桌面默认设备；保留字段仅兼容统一输出展示模型。 */
+  isDefault: boolean;
+}
+
+/** 主进程推送给渲染进程的播放事件 */
+export type PlayerEvent =
+  | { type: "status"; data: PlayerStatus }
+  | {
+      type: "trackLoaded";
+      data: {
+        track: Track;
+        context?: PlaybackContext;
+        source: string;
+        autoPlay: boolean;
+        detail?: TrackDetail;
+        mediaInfo?: MediaInfo;
+      };
+    }
+  | { type: "position"; data: { position: number; duration: number } }
+  | { type: "seek"; data: { position: number } }
+  | { type: "ended" }
+  | { type: "directTrackBoundary"; data: { duration: number; generation: number } }
+  | { type: "processedTrackBoundary"; data: { duration: number; generation: number } }
+  | { type: "sourceError" }
+  | { type: "play" }
+  | { type: "pause" }
+  | { type: "next" }
+  | { type: "prev" }
+  | { type: "playTrack"; data: { track: Track } }
+  | { type: "setShuffle"; data: { mode: ShuffleMode } }
+  | { type: "setRepeat"; data: { mode: RepeatMode } }
+  | { type: "addToQueue"; data: { tracks: Track[]; position: "next" | "end" } }
+  | { type: "toggleLike" }
+  | { type: "error"; data: { error: string } }
+  | { type: "deviceChanged"; data: { defaultDevice: string | null } }
+  | { type: "session"; data: PlaybackSessionSnapshot };
+
+/** IPC 响应包装 */
+export interface IpcResponse<T = void> {
+  success: boolean;
+  data?: T;
+  /** 错误码（对应 ErrorCode 枚举） */
+  error?: string;
+}
+
+/** Diretta 下一首 staging 结果 */
+export interface DirectStageResult {
+  staged: boolean;
+  /** 本地音源提前探测到的 detail；只读 metadata，不进入 normal playback pipeline */
+  detail?: TrackDetail;
+  /** 本地音源提前探测到的展示元数据；用于 gapless 边界补齐轻量队列 Track。 */
+  mediaInfo?: MediaInfo;
+}
+
+/** 播放器 API */
+export interface PlayerApi {
+  /** 加载音频（本地路径或网络地址）。可选下发权威 meta 用于 SMTC/托盘 */
+  load: (source: string, options?: LoadOptions) => Promise<IpcResponse<LoadResult>>;
+  /** 恢复播放 */
+  play: () => Promise<IpcResponse>;
+  /** 暂停播放 */
+  pause: () => Promise<IpcResponse>;
+  /** 停止播放 */
+  stop: () => Promise<IpcResponse>;
+  /** 跳转到指定位置（毫秒） */
+  seek: (positionMs: number) => Promise<IpcResponse>;
+  /** 获取主进程权威播放会话 */
+  getSession: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** fresh resolve 并热替换当前 canonical Track，保留 Core 捕获的进度/播放态 */
+  reloadSessionCurrent: (forcePlay?: boolean) => Promise<IpcResponse<boolean>>;
+  /** 一次性迁移旧 renderer IndexedDB 队列 */
+  migrateLegacySessionQueue: (
+    items: PlaybackQueueItem[],
+    originalItems: PlaybackQueueItem[] | null,
+    index: number,
+    repeat: RepeatMode,
+    shuffle: ShuffleMode,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 替换主进程权威队列 */
+  replaceSessionQueue: (
+    items: PlaybackQueueItem[],
+    startIndex?: number,
+    autoPlay?: boolean,
+    loadCurrent?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 向权威队列末尾追加 */
+  appendSessionQueue: (items: PlaybackQueueItem[]) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 向权威队列指定位置插入 */
+  insertSessionQueue: (
+    items: PlaybackQueueItem[],
+    index: number,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移除权威队列指定位置 */
+  removeSessionQueueIndex: (
+    index: number,
+    loadCurrent?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 选择权威队列指定位置 */
+  selectSessionIndex: (
+    index: number,
+    loadCurrent?: boolean,
+    autoPlay?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 按权威会话规则推进下一首 */
+  nextSession: (loadCurrent?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 按权威会话规则返回上一首 */
+  prevSession: (loadCurrent?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 更新权威队列指定项目 */
+  updateSessionQueueItem: (
+    index: number,
+    item: PlaybackQueueItem,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移动权威队列项目 */
+  moveSessionQueue: (
+    fromIndex: number,
+    toIndex: number,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 移除指定流媒体服务器的权威队列项目 */
+  removeSessionServerTracks: (serverId: string) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 更新权威队列中的曲目元数据 */
+  updateSessionQueueTracks: (tracks: Track[]) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 清空权威队列 */
+  clearSessionQueue: (stop?: boolean) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 设置权威会话循环模式 */
+  setSessionRepeat: (mode: RepeatMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 设置权威会话随机模式 */
+  setSessionShuffle: (mode: ShuffleMode) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 进入 Core-owned 私人 FM；推荐池转为 authoritative canonical queue。 */
+  startPersonalFm: (
+    options?: PersonalFmOptions,
+    autoPlay?: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 私人 FM 减少推荐并由 Core 直接推进。 */
+  dislikePersonalFm: (playedSec?: number) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 启动或更新 Core 定时关闭 */
+  setSessionAutoClose: (
+    durationMin: number,
+    waitSongEnd: boolean,
+  ) => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 取消 Core 定时关闭 */
+  cancelSessionAutoClose: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
+  /** 设置音量（0.0 ~ 1.0） */
+  setVolume: (volume: number) => Promise<IpcResponse>;
+  /** 设置输出设备切换时暂停播放 */
+  setPauseOnDeviceSwitch: (enabled: boolean) => Promise<IpcResponse>;
+  /** 获取当前音量 */
+  getVolume: () => Promise<IpcResponse<number>>;
+  /** 获取播放状态快照 */
+  getStatus: () => Promise<IpcResponse<PlayerStatus>>;
+  /** 设置渐入渐出时长（毫秒） */
+  setFadeDuration: (ms: number) => Promise<IpcResponse>;
+  /** 获取渐入渐出时长（毫秒） */
+  getFadeDuration: () => Promise<IpcResponse<number>>;
+  /** 获取原始高清封面（base64 data URL） */
+  getCoverRaw: () => Promise<IpcResponse<string | null>>;
+  /** 读取外部歌词文件内容 */
+  readLyricFile: (filePath: string) => Promise<IpcResponse<string>>;
+  /** 重建音频输出设备 */
+  reinit: () => Promise<IpcResponse>;
+  /** 设置音量均衡 */
+  setNormalizationEnabled: (enabled: boolean) => Promise<IpcResponse>;
+  /** 启用/禁用 10 频段均衡器 */
+  setEqualizerEnabled: (enabled: boolean) => Promise<IpcResponse>;
+  /** 更新均衡器各频段增益（dB 数组，长度 10） */
+  setEqualizerBands: (gainsDb: number[]) => Promise<IpcResponse>;
+  /** 设置前级增益（dB） */
+  setPreampGain: (preampDb: number) => Promise<IpcResponse>;
+  /** 设置播放速度（0.5 ~ 2.0） */
+  setSpeed: (speed: number) => Promise<IpcResponse>;
+  /** 设置音调偏移（半音 -12 ~ 12） */
+  setPitch: (semitones: number) => Promise<IpcResponse>;
+  /** 设置"音调同步"开关（true = 变速保音调） */
+  setPitchSync: (sync: boolean) => Promise<IpcResponse>;
+  /** 获取所有音频输出设备 */
+  getOutputDevices: () => Promise<IpcResponse<AudioDevice[]>>;
+  /** 异步扫描 Diretta Target */
+  scanDirettaDevices: () => Promise<IpcResponse<AudioDevice[]>>;
+  /** 切换输出设备（null 表示取消选择） */
+  setOutputDevice: (deviceId: string | null) => Promise<IpcResponse>;
+  /** 获取当前选择的输出设备 ID（null = 尚未选择） */
+  getSelectedDeviceName: () => Promise<IpcResponse<string | null>>;
+  /** 广播播放控制事件 */
+  dispatch: (type: string) => void;
+  /** 订阅播放事件 */
+  onEvent: (callback: (event: PlayerEvent) => void) => () => void;
+}

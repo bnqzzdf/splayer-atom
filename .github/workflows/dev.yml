@@ -1,0 +1,78 @@
+# Dev 分支 Linux Core + Web Control 验证与产物构建
+name: Build Dev
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - "core/**"
+      - "src/**"
+      - "native/**"
+      - "shared/**"
+      - "public/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - ".github/workflows/dev.yml"
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 24.18.0
+
+jobs:
+  linux-core:
+    name: Linux x86-64 Core + Web Control
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libasound2-dev pkg-config clang libarchive-tools
+
+      - name: Remove local npm mirror config
+        run: rm -f .npmrc
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build Core and Web Control
+        run: pnpm build
+
+      - name: Build system-runtime artifact
+        run: pnpm package:core
+
+      - name: Upload Linux Core artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: splayer-atom-core-system-linux-x64
+          path: out/splayer-atom-core-*-system-linux-x64.tar.gz

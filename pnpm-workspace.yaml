@@ -1,0 +1,12 @@
+packages: []
+minimumReleaseAge: 4320
+allowBuilds:
+  "@parcel/watcher": false
+  better-sqlite3: true
+  esbuild: true
+  vue-demi: true
+minimumReleaseAgeExclude:
+  - esbuild@0.28.2
+  - "@esbuild/*"
+  - baseline-browser-mapping@2.11.13
+  - browserslist@4.28.8

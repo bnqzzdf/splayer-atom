@@ -1,0 +1,163 @@
+<script setup lang="ts">
+import type { Artist } from "@shared/types/player";
+import { useStatusStore } from "@/stores/status";
+import { useMediaStore } from "@/stores/media";
+import { useSettingsStore } from "@/stores/settings";
+import { navigateToArtist } from "@/utils/navigate";
+import { getValidArtists } from "@shared/utils/track";
+import { getLyricLineText } from "@shared/utils/lyric";
+
+withDefaults(
+  defineProps<{
+    /** 紧凑模式 */
+    compact?: boolean;
+  }>(),
+  { compact: false },
+);
+
+const status = useStatusStore();
+const media = useMediaStore();
+const settings = useSettingsStore();
+const { isPlayerExpanded, isPlaying, trackLoading } = storeToRefs(status);
+const hasTrack = computed(() => media.track !== null);
+/** 加载阶段仅用于播放栏反馈目标曲；media.track 仍保持 Core 已实际加载成功的曲目。 */
+const displayTrack = computed(() =>
+  trackLoading.value ? (status.currentTrack ?? media.track) : media.track,
+);
+
+/** 仅有实际曲目时允许展开全屏播放器。 */
+const expandPlayer = (): void => {
+  if (hasTrack.value) isPlayerExpanded.value = true;
+};
+
+/** 当前歌曲中可展示的歌手 */
+const artists = computed(() => getValidArtists(displayTrack.value?.artists));
+
+/** 主歌词行 */
+const mainLines = computed(() => media.parsedLyric.filter((l) => !l.isBG));
+
+/** 当前播放栏歌词 */
+const currentBarLyric = computed(() => {
+  if (
+    trackLoading.value ||
+    !settings.player.showLyricInBar ||
+    !isPlaying.value ||
+    media.lyricIndex < 0 ||
+    !mainLines.value.length
+  )
+    return null;
+  const currentMs = media.parsedLyric[media.lyricIndex]?.startTime ?? 0;
+  const line = mainLines.value.findLast((l) => l.startTime <= currentMs) ?? mainLines.value[0];
+  const text = getLyricLineText(line);
+  return {
+    key: `${line.startTime}:${text}`,
+    text: line.translatedLyric ? `${text}（${line.translatedLyric}）` : text,
+  };
+});
+
+/** 歌手是否可跳转：非本地需有真实 id */
+const isArtistLinkable = (artist: Artist): boolean => {
+  if (trackLoading.value) return false;
+  if (!artist.name) return false;
+  const source = displayTrack.value?.source;
+  if (source && source !== "local") return !!artist.id;
+  return true;
+};
+</script>
+
+<template>
+  <div class="flex items-center min-w-0" :class="compact ? 'gap-2' : 'gap-3'">
+    <!-- 封面 -->
+    <div
+      class="relative shrink-0 rounded-lg overflow-hidden"
+      :class="[
+        compact ? 'size-10 shadow-sm' : 'size-14',
+        hasTrack ? 'cursor-pointer group' : 'opacity-55',
+      ]"
+      @click="expandPlayer"
+    >
+      <SImg :src="displayTrack?.cover" class="size-full" />
+      <div
+        v-if="hasTrack"
+        class="absolute inset-0 z-10 flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors duration-200"
+      >
+        <IconLucideChevronUp
+          class="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          :class="compact ? 'size-4.5' : 'size-6'"
+        />
+      </div>
+    </div>
+    <!-- 歌曲信息 -->
+    <Transition name="slide-left" mode="out-in">
+      <div v-if="displayTrack" :key="displayTrack.id" class="min-w-0 flex-1">
+        <div class="flex items-center gap-1 min-w-0">
+          <SMarquee
+            fit
+            class="min-w-0"
+            :class="
+              compact ? 'font-medium text-sm leading-tight' : 'font-bold text-base leading-snug'
+            "
+          >
+            {{ displayTrack.title }}
+          </SMarquee>
+          <slot v-if="!trackLoading" name="title-trailing" />
+        </div>
+        <Transition name="slide-up" mode="out-in">
+          <div
+            v-if="trackLoading"
+            key="preparing-audio"
+            class="text-on-surface-variant truncate"
+            :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
+          >
+            {{ $t("player.preparingAudio") }}
+          </div>
+          <div v-else-if="currentBarLyric" :key="currentBarLyric.key" class="min-w-0">
+            <SMarquee
+              class="text-on-surface-variant"
+              :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
+            >
+              {{ currentBarLyric.text }}
+            </SMarquee>
+          </div>
+          <div
+            v-else
+            key="artist"
+            class="text-on-surface-variant truncate"
+            :class="compact ? 'text-xs leading-tight mt-0.5' : 'text-sm mt-1'"
+          >
+            <template v-if="artists.length">
+              <template v-for="(artist, i) in artists" :key="artist.id ?? i">
+                <span
+                  :class="
+                    isArtistLinkable(artist)
+                      ? 'cursor-pointer transition-opacity hover:opacity-70'
+                      : ''
+                  "
+                  @click.stop="
+                    isArtistLinkable(artist) &&
+                    navigateToArtist(artist.name, {
+                      source: displayTrack?.source,
+                      artistId: artist.id,
+                    })
+                  "
+                >
+                  {{ artist.name }}
+                </span>
+                <span v-if="i < artists.length - 1" class="mx-0.5 opacity-50">/</span>
+              </template>
+            </template>
+            <span v-else class="opacity-50">{{ $t("playlist.unknownArtist") }}</span>
+          </div>
+        </Transition>
+      </div>
+      <div
+        v-else
+        key="not-playing"
+        class="min-w-0 flex-1 text-on-surface-variant"
+        :class="compact ? 'text-sm' : 'text-base font-medium'"
+      >
+        {{ $t("player.notPlaying") }}
+      </div>
+    </Transition>
+  </div>
+</template>

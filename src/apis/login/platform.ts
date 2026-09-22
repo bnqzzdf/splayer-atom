@@ -1,0 +1,57 @@
+import type { Platform, PlatformProfile } from "@shared/types/platform";
+import { fetchQobuzLoginStatus, logoutQobuz } from "./qobuz";
+import { fetchTidalLoginStatus, logoutTidal } from "./tidal";
+
+export type QrLoginState = "expired" | "waiting" | "scanned" | "success";
+
+export interface QrLoginAdapter {
+  create: () => Promise<{ key: string; content: string }>;
+  check: (key: string) => Promise<{
+    state: QrLoginState;
+    nickname?: string;
+    avatarUrl?: string;
+  }>;
+}
+
+export interface QrLoginOption {
+  key: string;
+  labelKey: string;
+  adapter: QrLoginAdapter;
+}
+
+export interface PlatformAccountAdapter {
+  displayName: string;
+  userIdLabel: string;
+  fetchProfile: () => Promise<PlatformProfile | null>;
+  logout: () => Promise<void>;
+  openWebLogin?: () => Promise<boolean>;
+  setCookie?: (cookie: string) => Promise<boolean>;
+  qrLogin?: QrLoginAdapter;
+  qrLoginOptions?: QrLoginOption[];
+}
+
+const adapters: Partial<Record<Platform, PlatformAccountAdapter>> = {
+  qobuz: {
+    displayName: "Qobuz",
+    userIdLabel: "ID",
+    fetchProfile: fetchQobuzLoginStatus,
+    logout: logoutQobuz,
+  },
+  tidal: {
+    displayName: "TIDAL",
+    userIdLabel: "ID",
+    fetchProfile: fetchTidalLoginStatus,
+    logout: logoutTidal,
+  },
+};
+
+/**
+ * 获取平台账号适配器
+ * @param platform - 音乐平台
+ * @returns 平台账号适配器
+ */
+export const getPlatformAccountAdapter = (platform: Platform): PlatformAccountAdapter => {
+  const adapter = adapters[platform];
+  if (!adapter) throw new Error(`平台暂不支持账号连接: ${platform}`);
+  return adapter;
+};

@@ -1,0 +1,134 @@
+import type { Track } from "@shared/types/player";
+import type { DownloadRequest, DownloadTagOptions, DownloadTask } from "@shared/types/download";
+import { QUALITY_LABELS, type QualityLevel } from "@/utils/quality";
+import { useSettingsStore } from "@/stores/settings";
+import { toast } from "@/composables/useToast";
+import { prepareDownloadLyrics } from "@/services/download/resolver";
+import { downloadClient } from "@/core/downloadClient";
+
+/** 下载选项 */
+interface EnqueueOptions {
+  /** 临时音质，覆盖设置 */
+  quality?: QualityLevel;
+  /** 复用已有任务 id（重试） */
+  taskId?: string;
+}
+
+interface EnqueueManyOptions {
+  /** 批量下载时统一使用的音质 */
+  quality?: QualityLevel;
+}
+
+/** 可下载音质档位（展示顺序） */
+const DOWNLOAD_QUALITY_LEVELS: QualityLevel[] = ["hi-res", "lossless", "hq", "sq", "lq"];
+
+/** 生成下载任务 UUID；LAN HTTP 下 randomUUID 不可用时回退到 getRandomValues。 */
+export const createDownloadTaskId = (): string => {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+/**
+ * 构建下载音质菜单项
+ * @param defaultLabel - 「跟随默认」项文案
+ * @param keyPrefix - key 前缀；右键菜单用 "download:" 做路由，空音质表示默认
+ */
+export const buildDownloadQualityItems = (
+  defaultLabel: string,
+  keyPrefix = "",
+): { key: string; label: string }[] => [
+  { key: keyPrefix, label: defaultLabel },
+  ...DOWNLOAD_QUALITY_LEVELS.map((quality) => ({
+    key: `${keyPrefix}${quality}`,
+    label: QUALITY_LABELS[quality],
+  })),
+];
+
+export const useDownload = () => {
+  const { t } = useI18n();
+
+  /**
+   * 构建不含网络解析的下载请求
+   * @returns 本地曲目返回 null
+   */
+  const prepareRequest = async (
+    track: Track,
+    opts: EnqueueOptions,
+  ): Promise<DownloadRequest | null> => {
+    if (track.source === "local") return null;
+    const download = useSettingsStore().system.download;
+    const level = opts.quality ?? download.quality;
+    const tagOptions: DownloadTagOptions = {
+      embedCover: download.embedCover,
+      embedMeta: download.embedMeta,
+      embedLyric: download.embedLyric,
+      writeLrc: download.writeLrc,
+      saveTtml: download.saveTtml,
+    };
+    const req: DownloadRequest = {
+      destination: "core",
+      taskId: opts.taskId ?? createDownloadTaskId(),
+      track,
+      qualityLevel: level,
+      coverUrl: track.coverOriginal ?? track.cover,
+      tagOptions,
+      usePlaybackForDownload: download.usePlaybackForDownload,
+      lyricFileFormat: download.lyricFileFormat,
+    };
+    Object.assign(req, await prepareDownloadLyrics(req));
+    return req;
+  };
+
+  /**
+   * 单曲下载（不等待完成）
+   * @returns 是否成功入队
+   */
+  const enqueue = async (track: Track, opts: EnqueueOptions = {}): Promise<boolean> => {
+    try {
+      const req = await prepareRequest(track, opts);
+      if (!req) return false;
+      const res = opts.taskId ? await downloadClient.retry(req) : await downloadClient.start(req);
+      if (!res.ok) {
+        toast.warning(
+          res.reason === "downloaded"
+            ? t("download.alreadyDownloaded")
+            : t("download.alreadyQueued"),
+        );
+        return false;
+      }
+      if (opts.taskId === undefined) toast.success(t("download.started", { title: track.title }));
+      return true;
+    } catch (error) {
+      console.warn("[download] enqueue failed:", error);
+      toast.error(t("download.enqueueFailed"));
+      return false;
+    }
+  };
+
+  /** 批量下载 */
+  const enqueueMany = async (tracks: Track[], opts: EnqueueManyOptions = {}): Promise<void> => {
+    try {
+      const requests: DownloadRequest[] = [];
+      for (const track of tracks) {
+        const req = await prepareRequest(track, { quality: opts.quality });
+        if (req) requests.push(req);
+      }
+      const results = await downloadClient.startMany(requests);
+      const count = results.filter((result) => result?.ok).length;
+      if (count > 0) toast.success(t("download.enqueued", { count }));
+    } catch (error) {
+      console.warn("[download] batch enqueue failed:", error);
+      toast.error(t("download.enqueueFailed"));
+    }
+  };
+
+  /** 重试：用任务保存的完整 Track 重新入队（复用 taskId） */
+  const retry = (task: DownloadTask): Promise<boolean> =>
+    enqueue(task.track, { quality: task.qualityLevel, taskId: task.taskId });
+
+  return { enqueue, enqueueMany, retry };
+};

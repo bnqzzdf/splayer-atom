@@ -1,0 +1,35 @@
+[package]
+name = "audio-engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["core-audio"]
+core-audio = []
+diretta = ["audio-engine-core/diretta"]
+
+[dependencies]
+audio-engine-core = { path = "../audio-engine-core", default-features = false, features = ["napi"] }
+napi = { version = "3.12.1", features = ["napi9", "serde-json", "tokio_rt"] }
+napi-derive = "3.6.3"
+ffmpeg_audio = { version = "0.3.1", default-features = false, features = [
+  "http",
+  "tracing",
+] }
+parking_lot = "0.12"
+anyhow = "1"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt"] }
+
+[build-dependencies]
+napi-build = "2.4.1"
+
+[dev-dependencies]
+base64 = "0.22.1"
+httpmock = "0.8.3"
+
+[lints]
+workspace = true
