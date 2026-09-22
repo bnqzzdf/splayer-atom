@@ -135,7 +135,7 @@ const playerBarInnerClass = computed(() => {
     <div class="flex-1 flex flex-col min-w-0 min-h-0" :class="mainMarginClass">
       <!-- 顶部导航 -->
       <header
-        class="shrink-0 flex items-center px-3"
+        class="shrink-0 flex items-center px-3 min-w-0"
         :class="isMobile ? 'h-14 border-b border-b-solid border-b-primary/10' : 'h-16'"
       >
         <NavHeader />

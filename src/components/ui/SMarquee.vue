@@ -58,7 +58,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="containerRef"
-    class="overflow-hidden"
+    class="overflow-hidden min-w-0 text-left"
     :class="[fit ? 'max-w-full' : 'w-full', isOverflowing && mask && 's-marquee-mask']"
     :style="{
       '--marquee-duration': animDuration,
@@ -68,7 +68,7 @@ onUnmounted(() => {
     }"
   >
     <div
-      class="inline-flex whitespace-nowrap min-w-full will-change-transform"
+      class="inline-flex whitespace-nowrap min-w-full will-change-transform justify-start"
       :class="isOverflowing && 's-marquee-scrolling'"
     >
       <span ref="textRef" class="inline-flex items-center whitespace-nowrap shrink-0">
