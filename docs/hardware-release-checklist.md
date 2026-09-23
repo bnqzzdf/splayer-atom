@@ -44,8 +44,9 @@ HTTP 400。随后从停止状态重新加载同一 FLAC 为 Processed，seek 到
 重新播放后 seek 到 60 秒再次失败。响应均为
 `[Other] processed playback 缺少已协商 ALSA 输出`，播放器转为 paused、位置归零、
 output path 清空。同期 Core 日志出现 `native outputFailed, playback paused for explicit recovery`。
-该复现覆盖了用户试听记录中尚未暴露的失败路径。`c3e135ab` 已修复软件路径，仍需在
-包含修复的包上重新验收，不能将 Processed seek 列为无条件通过。
+该复现覆盖了用户试听记录中尚未暴露的失败路径。`c3e135ab` 修复后，已在包含修复的
+`3e420f78` 包上完成 FC4 复验；见 [2026-09-23 记录](./alsa-acceptance-2026-09-23.md)。
+本段失败仍是旧包 `cecee166` 的历史结果，不代表后续发布候选的验收。
 
 两轮测试结束均恢复原队列、Direct 模式及原 FC4 输出，保持停止，设备 PCM 状态为 `closed`。
 原始快照、检查结果及复现响应保存在测试主机 `/tmp/atom-alsa-live-20260922/`；
@@ -54,7 +55,7 @@ output path 清空。同期 Core 日志出现 `native outputFailed, playback pau
 
 同日后续验证已完成 USB 提交数据逐字节比较、Diretta 往返切换、播放中重启/SIGTERM、
 FC4 断开重连及 clean artifact smoke，并发现重启后直接 Play 不加载队列的问题。
-该软件问题同样已在 `c3e135ab` 修复，修复包的实机结果尚待记录。
+该软件问题同样已在 `c3e135ab` 修复，并在 `3e420f78` 包上完成 FC4 复验。
 完整范围、结果、包/音源 hash 和证据边界见
 [2026-09-22 ALSA 与发布包实测](./alsa-acceptance-2026-09-22.md)。
 

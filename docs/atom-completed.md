@@ -32,9 +32,10 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   systemd restart, SIGTERM and artifact WebSocket reconnection passed in their recorded scope.
   The clean Diretta archive matched all 220 installed non-data files and passed extracted-artifact
   smoke. See the [2026-09-22 record](./alsa-acceptance-2026-09-22.md).
-- `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Their
-  real-device retest remains open. The [ALSA plan](./alsa-output-plan.md) records the structural
-  runtime/buffering work still needed.
+- `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Both
+  passed FC4 retest on installed clean artifact `3e420f78`; see the
+  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The [ALSA plan](./alsa-output-plan.md)
+  records the structural runtime/buffering work still needed.
 - UPnP shares Core queue, source and cache flow; its CUE/SACD materialization is isolated from
   Direct/normal playback. The [UPnP plan](./upnp-output-plan.md) records AudioSys playback,
   extraction comparison and initial long-run evidence, as well as the outstanding stability gate.
