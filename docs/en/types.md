@@ -37,7 +37,7 @@ The `track` payload for [`trackChange`](/en/plugins/control#playback-events) and
 
 ### TrackSource
 
-`"local"`, `"streaming"`, or one of the built-in platforms: `"netease"`, `"qqmusic"`, and `"kugou"`. Plugin source keys are not stored as `TrackSource`.
+`"local"`, `"streaming"`, or one of the built-in platforms: `"netease"`, `"qqmusic"`, `"kugou"`, `"qobuz"`, and `"tidal"`. Plugin source keys are not stored as `TrackSource`.
 
 ### TrackFee
 

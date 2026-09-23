@@ -1,9 +1,10 @@
 # SPlayer Atom Live Provider Acceptance
 
-本文定义 Netease 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
+本文定义 Netease、QM、KG、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 
-状态（仓库记录，2026-09-23）：Core/Web 的 Netease/TIDAL 接入已存在，UPnP 方案记录了
-两者的部分真实在线播放；本文件尚无覆盖以下完整矩阵的候选包验收结果，
+状态（仓库记录，2026-09-23）：Core/Web 已接入五个平台；QM/KG 扫码、Cookie、搜索、详情和 Core 音源路径，以及 Qobuz 浏览器 OAuth 和仅 token 登录已实现。
+这些新路径尚未针对本仓库候选包完成真实账号验收。Debian 11 两种模式的产物启动验收不等于平台账号或音频硬件验收。UPnP 方案记录了 Netease/TIDAL 的部分真实在线播放；
+本文件尚无覆盖以下完整矩阵的候选包验收结果，
 仍见 [Roadmap](./atom-roadmap.md)。
 
 ## 1. 通用前置条件
@@ -39,7 +40,22 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 - ALSA 与 Diretta 各验证一次；Diretta 在线输入先 exact-byte materialize，且 DAC/Target 指示与源格式一致。
 - scrobble/play statistics 在真实播放结束后由 Core 持久化一次，不因 Control 数量重复。
 
-## 3. TIDAL
+## 3. QM / KG
+
+- 分别验证扫码、手动 Cookie、重启后会话投影与登出；Web Control 不持久化凭据，状态投影不包含 Cookie。
+- 匿名搜索的单曲、专辑、歌手、歌单及详情分页返回正确的 canonical Track。
+- 已登录账号分别验证整曲直链、质量档位和三首队列连续播放；无插件时走 Core 音源解析，有插件时验证兜底。
+- 无权益与试听片段给出对应原因；未允许试听时不得把片段当整曲播放或缓存。
+- ALSA 与 Diretta 各验证可用的无损曲目，记录实际音源格式和输出结果。
+
+## 4. Qobuz
+
+- 从另一台 Web Control 设备发起浏览器授权，验证回调可到达 Core 动态端口、随机路径与 state 校验、会话自动更新；重复发起、取消、超时后回调监听关闭。
+- 粘贴 token 入口仍可用，且只给 token 时能从服务端确认用户身份。
+- search → detail → queue → playback 使用真实账号结果；试听片段遵守试听设置。
+- ALSA 与 Diretta 各验证可用的无损曲目及三首队列连续播放。
+
+## 5. TIDAL
 
 - 真实账号 session、subscription/quality entitlement 由 Core 保存，并能正确同步到 Web Control。
 - search → detail → queue → playback 全链路使用真实结果。
@@ -48,10 +64,10 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 - JSON/BTS、DASH 分别覆盖真实 ALSA；产品支持的 lossless/hi-res 路径再覆盖 Diretta。
 - entitlement、区域或 manifest 限制必须明确报告，不允许静默降低为另一路径并标记通过。
 
-## 4. 记录模板
+## 6. 记录模板
 
 ```text
-Provider: Netease | TIDAL
+Provider: Netease | QM | KG | Qobuz | TIDAL
 Result: PASS | FAIL | BLOCKED
 Date/timezone / operator:
 

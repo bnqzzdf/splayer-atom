@@ -43,18 +43,20 @@ Qobuz Web Player bundle 会随版本变化，不能依赖固定 bundle URL。当
 - 显式 `QOBUZ_APP_ID` / `QOBUZ_APP_SECRET` 可作为运行环境覆盖；
 - 动态发现失败时只使用仓库中的兼容参数，不从任意 bundle 字符串猜 secret。
 
-### 1.3 用户登录态归 Node Core
+### 1.3 登录流程与 Core 会话
 
-Rust `QobuzClient` 可以在一次调用中持有 `user_auth_token` / `user_id`，但它们来自 Node Core 注入。长期持久化和 token-free session projection 由 `core/apis/qobuz/auth.ts` 管理。
+Web Control 的首选入口是浏览器 OAuth：Rust `auth_oauth_start` 先启动一次性回调监听，使用 Core 可从浏览器访问的主机名、动态端口、随机回调路径和 state 生成授权 URL；`auth_oauth_await` 等待授权码、兑换 token 并查询用户。新的授权会取消旧监听，监听也有超时。跨机登录时浏览器须能访问 Core 的回调端口。手动入口只需 `user_auth_token`，Rust 通过 `user/get` 验证并获取用户 ID；邮箱密码入口未在 Web Control 暴露。
+
+Rust `QobuzClient` 可以在一次调用中持有 `user_auth_token` / `user_id`，但它们来自 Node Core 注入。`core/apis/qobuz/auth.ts` 将登录结果写入 Core 的 `0600` 凭据文件，`/providers/sessions` 只投影不含 token 的状态。当前 Core secret codec 只做 Base64 编码，不提供静态加密。
 
 ```text
-Node Core SecretStore/session
+Node Core credential file / session
         -> per-call auth context
         -> Rust QobuzClient
         -> remote API
 ```
 
-Rust 不创建独立 account store，不发布 Core provider session event。
+Rust 不创建独立 account store，不发布 Core provider session event。上述流程的真实账号验收仍按[平台验收记录](./live-provider-acceptance.md)执行。
 
 ### 1.4 播放源
 

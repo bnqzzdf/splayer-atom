@@ -44,10 +44,14 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 
 ## Providers, Web and lyrics
 
-- Netease and Qobuz Core session/resolver plus Web integration are present. `streaming-api`
-  implements Qobuz protocol and TIDAL auth/request/manifest/DASH; Core integrates TIDAL JSON/BTS
-  and DASH materialization. Selected real Netease/TIDAL UPnP online paths were recorded in the
-  [UPnP plan](./upnp-output-plan.md). Netease/TIDAL acceptance still follows the roadmap.
+- Core exposes credential-free session projections and provider capabilities for Netease, QQ Music,
+  Kugou, Qobuz and TIDAL. QM/KG have Core-backed QR/manual Cookie login, search and collection
+  pages, and Core source resolution with a plugin fallback. Qobuz has browser OAuth with a
+  one-time callback listener and token-only login; Core persists the resulting session.
+  `streaming-api` implements Qobuz protocol and TIDAL auth/request/manifest/DASH; Core integrates
+  TIDAL JSON/BTS and DASH materialization. Selected real Netease/TIDAL UPnP online paths were
+  recorded in the [UPnP plan](./upnp-output-plan.md). Full real-account acceptance for all five
+  providers still follows the roadmap.
 - Web Control exposes library, playlist, queue, playback, downloads, statistics, cache,
   providers, settings and plugins. The Core-owned Folder Browser now provides paged browsing,
   unscanned media and CUE/SACD access, scoped scan, pinned folders, search/filter, materials,
@@ -65,6 +69,11 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 - Runtime compatibility checks, reference Node runtime, system/bundled variants and Linux CI
   packaging are in place. Staging checks native loading, plugin-host, HTTP/WS/Web startup and
   termination. Diretta packaging validates the required SDK; filenames include version and date.
+- The Debian 11 bundled builder now selects an explicit no-Diretta or SDK 150 Diretta variant and
+  checks native glibc requirements and artifact capabilities. On 2026-09-23, no-Diretta and
+  Diretta v3 packages passed container builds and extracted-artifact smoke; all three packaged
+  native modules required at most glibc 2.30. This was a dirty-tree software run, with no
+  Diretta hardware result or v2/v4 build in that record.
 - Durable `data/`, migration backup, upgrade and rollback procedures are documented in
   [Core deployment](./core-deployment.md). A complete install/upgrade/rollback run on a fixed
   final candidate remains an open release gate.

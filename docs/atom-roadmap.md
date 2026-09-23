@@ -5,7 +5,9 @@
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
 ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
 Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
-tree. Confirmed milestones are in [Atom Completed](./atom-completed.md).
+tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
+bundled packages can be built with or without Diretta. Confirmed implementation milestones are in
+[Atom Completed](./atom-completed.md).
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -47,8 +49,10 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 ### Providers and Web Control
 
 - [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
-      for Netease and TIDAL on the intended artifact. Existing UPnP notes verify selected real
-      Netease/TIDAL online paths; they do not document the complete provider matrices.
+      for Netease, QM, KG, Qobuz and TIDAL on the intended artifact. The QM/KG product paths and
+      Qobuz browser OAuth/token-only login are implemented but have no real-account acceptance run
+      for this tree. Existing UPnP notes verify selected real Netease/TIDAL online paths, not
+      complete provider matrices.
 - [ ] Add a bounded real-token ListenBrainz acceptance record for Now Playing, permanent listens,
       401/429 handling, offline retry and restart. The current code implements these paths, but
       the former completion checkbox had no corresponding run record in the repository.
@@ -68,7 +72,10 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
       [hardware checklist](./hardware-release-checklist.md) and
       [deployment checklist](./core-deployment.md) on that same candidate, including install,
       upgrade and rollback. The `cecee166` archive passed file comparison and extracted-artifact
-      smoke, but its observed seek/restart failures prevent closing final acceptance.
+      smoke, but its observed seek/restart failures prevent closing final acceptance. Debian 11
+      bundled builds without Diretta and with SDK 150 Diretta v3 passed build/artifact smoke on
+      2026-09-23 from a dirty working tree; they are not clean release candidates or hardware
+      acceptance. v2/v4 remain selectable but have not been built in this record.
 - [ ] After those gates pass, prepare the stable release with artifact commit, hash, capabilities
       and acceptance results recorded.
 
@@ -76,8 +83,8 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
 2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Complete Netease/TIDAL, ListenBrainz, Folder Browser, responsive Web and long-running
-   multi-Control acceptance.
+3. Complete all five provider matrices, ListenBrainz, Folder Browser, responsive Web and
+   long-running multi-Control acceptance.
 4. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
 
 ## Product scope

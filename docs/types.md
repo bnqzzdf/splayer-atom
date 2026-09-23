@@ -37,7 +37,7 @@
 
 ### TrackSource
 
-歌曲来源：`"local"`（本地文件）、`"streaming"`（流媒体服务器），或内置在线平台 `"netease"`、`"qqmusic"`、`"kugou"`。插件自己的 source key 不会写入 `TrackSource`。
+歌曲来源：`"local"`（本地文件）、`"streaming"`（流媒体服务器），或内置在线平台 `"netease"`、`"qqmusic"`、`"kugou"`、`"qobuz"`、`"tidal"`。插件自己的 source key 不会写入 `TrackSource`。
 
 ### TrackFee
 

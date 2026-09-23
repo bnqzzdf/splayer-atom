@@ -24,7 +24,7 @@ SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览�
 
 ## 在线服务
 
-Atom 支持 Netease、Qobuz 与 TIDAL。登录信息保存在 Core 中，Web Control 只显示登录状态，不会把账号 token 暴露给浏览器页面。
+Atom 已接入 Netease、QQ 音乐（QM）、酷狗（KG）、Qobuz 与 TIDAL。QM/KG 支持扫码和手动 Cookie 登录；Qobuz 支持浏览器授权，也可手动粘贴 token。Core 保存登录信息并向 Web Control 投影不含凭据的登录状态；手动登录时，输入的 Cookie 或 token 会暂时经过浏览器表单。上述平台的完整真实账号播放验收仍在[路线图](/atom-roadmap)中。
 
 自建媒体服务见 [流媒体服务](/streaming)。
 
