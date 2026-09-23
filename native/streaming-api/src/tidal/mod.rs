@@ -3,6 +3,7 @@ pub mod artist;
 pub mod auth;
 pub mod config;
 pub mod dash;
+pub mod discover;
 pub mod pkce;
 pub mod playlist;
 pub mod search;
