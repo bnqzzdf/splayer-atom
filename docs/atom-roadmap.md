@@ -11,8 +11,10 @@ This roadmap tracks remaining work and acceptance. Code establishes whether a pa
 hardware, real-account, browser and release acceptance require a recorded run. The
 [2026-09-22 ALSA record](./alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
 the [2026-09-23 FC4 retest](./alsa-acceptance-2026-09-23.md) covers the two fixes in installed
-artifact commit `3e420f78`. Identify each new artifact by its recorded Git commit, not by the
-package version alone.
+artifact commit `3e420f78`. A later [local-module ALSA retest](./alsa-gap-fixes-2026-09-23.md)
+covers source changes through `53284360`; it is not an installed Core artifact. The no-hardware-pause
+fallback branch changed in `53284360` still has software verification only.
+Identify each new artifact by its recorded Git commit, not by the package version alone.
 
 Lasting constraints are in `AGENTS.md`; workflows are in the
 [development guide](./atom-development.md).
@@ -23,10 +25,15 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 - [ ] Finish the [ALSA output plan](./alsa-output-plan.md) runtime/buffering work. Direct and
       Processed now share one player runtime ownership slot, and Processed final gain, limiting,
-      packing and buffer growth have moved to the DSP producer. The ALSA mode-specific writer
-      loops and remaining plan acceptance still need convergence and clean-artifact validation.
-      A [local release-module smoke](./alsa-runtime-smoke-2026-09-23.md) passed Processed seek and
-      Direct playback on FC4; it is narrower than the final device/format matrix.
+      packing and buffer growth have moved to the DSP producer. Track-tail decode errors,
+      Processed tempo latency/tail accounting, terminal drain and staged-track limiter history
+      have fixes in the current tree. Decoded/DSP queue blocks and buffer pools now have size
+      limits; pause fallback drain uses runtime cancellation. The
+      [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short Processed pitch/speed
+      playback, pitch/speed seek and Direct basic playback. The ALSA mode-specific writer loops, complete
+      upstream allocation budget, parameter-version tracking and remaining plan acceptance still
+      need convergence and clean-artifact validation. Pause fallback cancellation still needs a
+      device without hardware pause for validation.
 - [ ] Obtain final-device ALSA bit-test or digital-capture evidence and complete the remaining
       device/format matrix. Existing PCM/DSD USB submission comparisons establish byte equality
       at that layer, not the DAC's final digital output.

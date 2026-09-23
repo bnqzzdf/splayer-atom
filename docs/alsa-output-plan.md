@@ -11,10 +11,13 @@ writer 取消路径及重启后直接 Play 已在包含修复的 `3e420f78` 包�
 详见 [2026-09-23 记录](./alsa-acceptance-2026-09-23.md)；旧包失败保留在
 [2026-09-22 记录](./alsa-acceptance-2026-09-22.md)。
 当前源码把 Direct/Processed 收到同一个 player runtime 所有权槽，Processed 最终增益、
-limiter、打包与缓冲扩容已移到 DSP producer；ALSA 模式各自的 writer loop、进一步的
-缓冲/时间线收口和 clean artifact 全矩阵验收仍待完成。新实现的本地 release 模块
-已在 FC4 上通过 Processed seek 与 Direct 基础播放的
-[局部实机 smoke](./alsa-runtime-smoke-2026-09-23.md)。
+limiter、打包与缓冲扩容已移到 DSP producer。`123cbdac` 修正曲尾解码失败分类；
+`37aee7a1` 补齐 tempo 延迟与 EOF 尾部的源时间记账、曲终 drain 和下一首 limiter 重置。
+`9e76bfa2` 限制队列单块和缓冲池容量；`53284360` 让无硬件暂停时的 drain 随 runtime
+取消，但尚无对应设备实测。新的本地 release 模块在 FC4 上通过短曲变调/变速曲终、
+Processed seek 与 Direct 基础播放，详见 [局部修复复测](./alsa-gap-fixes-2026-09-23.md)。
+ALSA 模式各自的 writer loop、上游临时分配的完整字节预算、完整参数版本与 clean artifact
+全矩阵验收仍待完成。
 已取得 PCM/DSD 在 USB 驱动提交层的独立逐字节一致性证据，并通过 clean artifact smoke、
 播放中重启/SIGTERM、FC4 断开重连和 Diretta 往返切换；最终设备 bitstream 与完整发布验收
 仍未完成。范围详见上述两次实测记录。

@@ -770,7 +770,7 @@ impl InnerPlayer {
     }
 
     /// 设置音调偏移（半音，自动 clamp 到 [-12, 12]）。
-    /// sync=ON 时立即下发；sync=OFF 时只更新内部值，不影响声音
+    /// sync=ON 时在下一个 DSP 块生效；sync=OFF 时只保存参数，不影响声音
     pub fn set_pitch(&mut self, semitones: i8) -> Result<()> {
         if semitones != 0 {
             self.reject_direct_sample_change("调整音调")?;

@@ -26,7 +26,7 @@ pub enum PlayerEvent {
 /// 事件发射器类型（跨线程安全）
 pub type EventEmitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
-/// 根据解码结束原因与当前位置决定对外完成事件
+/// 根据解码结束原因决定对外完成事件
 pub(super) fn playback_completion_event(shared: &Shared) -> PlayerEvent {
     if shared.is_decode_failed() {
         PlayerEvent::SourceError
