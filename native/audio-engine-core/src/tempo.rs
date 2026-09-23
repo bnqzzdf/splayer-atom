@@ -28,6 +28,12 @@ pub struct StretchProcessor {
     pitch_sync: bool,
     /// 当前已下发到 stretch 的有效 transpose（用于减少冗余的 set 调用）
     applied_transpose: f32,
+    active: bool,
+    discard_frames: usize,
+    target_output_frames: f64,
+    requested_frames: usize,
+    emitted_frames: usize,
+    last_process_speed: f32,
 }
 
 impl StretchProcessor {
@@ -42,6 +48,12 @@ impl StretchProcessor {
             pitch_semitones: 0,
             pitch_sync: true,
             applied_transpose: 0.0,
+            active: false,
+            discard_frames: 0,
+            target_output_frames: 0.0,
+            requested_frames: 0,
+            emitted_frames: 0,
+            last_process_speed: 1.0,
         }
     }
 
@@ -53,6 +65,7 @@ impl StretchProcessor {
         self.sample_rate = sample_rate;
         self.channels = channels;
         self.stretch = Stretch::preset_default(u32::from(channels), sample_rate);
+        self.clear_stream_state();
         // 新内核 transpose 归零，强制按当前参数重新下发
         self.applied_transpose = 0.0;
         self.sync_transpose_to_stretch();
@@ -86,27 +99,17 @@ impl StretchProcessor {
     pub fn set_speed(&mut self, speed: f32) {
         let v = if speed.is_finite() { speed } else { 1.0 };
         self.speed = v.clamp(0.5, 2.0);
-        // sync=OFF 时 transpose 跟着 speed 变
-        if !self.pitch_sync {
-            self.sync_transpose_to_stretch();
-        }
     }
 
     /// 设置音调偏移（半音），自动 clamp 到 [-12, 12]。
-    /// sync=OFF 时只更新内部值不下发，等切回 sync=ON 时生效。
+    /// sync=OFF 时只保存参数，等切回 sync=ON 时在 DSP 块边界生效。
     pub fn set_pitch(&mut self, semitones: i8) {
         self.pitch_semitones = semitones.clamp(-12, 12);
-        // sync=ON 时 pitch 独立调，立即下发
-        if self.pitch_sync {
-            self.sync_transpose_to_stretch();
-        }
     }
 
-    /// 切换"音调同步"开关，立即按新公式重算 transpose 并下发
+    /// 切换"音调同步"开关，下一个 DSP 块按新公式更新 transpose
     pub fn set_pitch_sync(&mut self, sync: bool) {
         self.pitch_sync = sync;
-        // 切模式后 effective_transpose 公式变了，强制刷新
-        self.sync_transpose_to_stretch();
     }
 
     pub fn speed(&self) -> f32 {
@@ -121,9 +124,33 @@ impl StretchProcessor {
         self.pitch_sync
     }
 
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+
     /// 切歌 / seek 时重置处理器状态，避免拼接处出现瞬态
     pub fn reset(&mut self) {
         self.stretch.reset();
+        self.clear_stream_state();
+    }
+
+    fn clear_stream_state(&mut self) {
+        self.active = false;
+        self.discard_frames = 0;
+        self.target_output_frames = 0.0;
+        self.requested_frames = 0;
+        self.emitted_frames = 0;
+        self.last_process_speed = 1.0;
+    }
+
+    pub fn has_pending_output(&self) -> bool {
+        self.active
+    }
+
+    pub fn planned_frames(&self, input_samples: usize) -> usize {
+        let input_frames = input_samples / usize::from(self.channels);
+        (self.target_output_frames + input_frames as f64 / f64::from(self.speed)).round() as usize
+            - self.requested_frames
     }
 
     /// 处理一块交错 f32 样本，写入 `output`。
@@ -144,14 +171,60 @@ impl StretchProcessor {
         }
 
         // 输出帧数 = 输入帧数 / speed（speed > 1 → 输出更短即更快）
-        let output_frames = ((input_frames as f32) / self.speed).round() as usize;
-        if output_frames == 0 {
-            return;
+        let output_frames = self.planned_frames(input.len());
+        if !self.active {
+            self.active = true;
+            // reset 后的处理时间位于首样本之前；丢掉预热输出，在 EOF 补回等长尾部。
+            self.discard_frames = self.stretch.output_latency()
+                + ((self.stretch.input_latency() as f64) / f64::from(self.speed)).ceil() as usize;
         }
+        // 控制线程只改请求值；算法参数在当前 DSP 块边界生效。
+        self.sync_transpose_to_stretch();
+        self.last_process_speed = self.speed;
+        self.target_output_frames += input_frames as f64 / f64::from(self.speed);
+        self.requested_frames = self.requested_frames.saturating_add(output_frames);
 
         let start = output.len();
         output.resize(start + output_frames * channels, 0.0);
         self.stretch.process(input, &mut output[start..]);
+        let discard = self.discard_frames.min(output_frames);
+        if discard > 0 {
+            output.copy_within(start + discard * channels.., start);
+            output.truncate(start + (output_frames - discard) * channels);
+            self.discard_frames -= discard;
+        }
+        self.emitted_frames += output_frames - discard;
+    }
+
+    /// 用静音推进输入窗口，并取回被算法延迟的有效曲尾。
+    pub fn finish(&mut self, output: &mut Vec<f32>) {
+        output.clear();
+        if !self.active {
+            return;
+        }
+        let channels = usize::from(self.channels);
+        let input_latency = self.stretch.input_latency();
+        let padding_frames =
+            ((input_latency as f64) / f64::from(self.last_process_speed)).ceil() as usize;
+        let padding = vec![0.0; input_latency * channels];
+        output.resize(padding_frames * channels, 0.0);
+        self.stretch.process(&padding, output.as_mut_slice());
+        let needed = self
+            .discard_frames
+            .saturating_add(self.requested_frames - self.emitted_frames)
+            .saturating_sub(padding_frames);
+        let flush_frames = self.stretch.output_latency().max(needed);
+        let start = output.len();
+        output.resize(start + flush_frames * channels, 0.0);
+        self.stretch.flush(&mut output[start..]);
+
+        let discard = self.discard_frames.min(output.len() / channels);
+        output.copy_within(discard * channels.., 0);
+        output.truncate((output.len() / channels - discard) * channels);
+        let remaining = self.requested_frames - self.emitted_frames;
+        output.truncate(remaining * channels);
+        self.stretch.reset();
+        self.clear_stream_state();
     }
 }
 
@@ -198,5 +271,48 @@ mod tests {
 
         assert_eq!(p.channels, 6);
         assert_eq!(p.sample_rate, 96_000);
+    }
+
+    #[test]
+    fn pitch_shift_keeps_short_track_tail_and_exact_output_length() {
+        let mut p = StretchProcessor::new(2, 48_000);
+        p.set_pitch(5);
+        let mut input = vec![0.0_f32; 4_800 * 2];
+        for frame in (0..1_000).chain(3_800..4_800) {
+            let sample = (frame as f32 * 0.13).sin() * 0.5;
+            input[frame * 2] = sample;
+            input[frame * 2 + 1] = sample;
+        }
+
+        let mut output = Vec::new();
+        for chunk in input.chunks(512) {
+            p.process(chunk, &mut output);
+        }
+        let before_finish = output.len();
+        let mut tail = Vec::new();
+        p.finish(&mut tail);
+        assert!(before_finish < input.len());
+        assert!(tail.iter().any(|sample| sample.abs() > 0.01));
+        output.extend_from_slice(&tail);
+        assert_eq!(output.len(), input.len());
+        assert!(output[..1_000 * 2].iter().any(|sample| sample.abs() > 0.01));
+        assert!(output[3_800 * 2..].iter().any(|sample| sample.abs() > 0.01));
+    }
+
+    #[test]
+    fn fractional_speed_does_not_accumulate_chunk_rounding_drift() {
+        let mut p = StretchProcessor::new(2, 48_000);
+        p.set_speed(1.15);
+        let input = vec![0.1_f32; 257 * 2];
+        let mut output = Vec::new();
+        for _ in 0..128 {
+            p.process(&input, &mut output);
+        }
+        let mut tail = Vec::new();
+        p.finish(&mut tail);
+        output.extend_from_slice(&tail);
+
+        let expected_frames = (257.0_f64 * 128.0 / 1.15_f64).round() as usize;
+        assert_eq!(output.len(), expected_frames * 2);
     }
 }

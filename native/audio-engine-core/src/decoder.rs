@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -373,41 +374,137 @@ fn process_audio_chunk(
     equalizer: &Mutex<Equalizer>,
     tempo: &Mutex<StretchProcessor>,
     tempo_scratch: &mut Vec<f32>,
-) -> AudioChunk {
+    tempo_map: &mut TempoSourceMap,
+) -> (Option<AudioChunk>, AudioChunk) {
     if chunk.player_samples.is_empty() {
-        return chunk;
+        return (None, chunk);
     }
 
     equalizer
         .lock()
         .process_interleaved(&mut chunk.player_samples);
-    if tempo.lock().is_bypass() {
-        return chunk;
+    let mut processor = tempo.lock();
+    let tail = if processor.has_pending_output() && processor.is_bypass() {
+        processor.finish(tempo_scratch);
+        let source_sample_count = tempo_map
+            .consume(tempo_scratch.len() / usize::from(processor.channels()))
+            + tempo_map.take_pending();
+        Some(AudioChunk {
+            player_samples: std::mem::take(tempo_scratch),
+            source_sample_count,
+            track_boundary: None,
+        })
+    } else {
+        None
+    };
+    if processor.is_bypass() {
+        return (tail, chunk);
     }
 
+    tempo_map.push(
+        processor.planned_frames(chunk.player_samples.len()),
+        chunk.source_sample_count,
+    );
     tempo_scratch.clear();
-    tempo.lock().process(&chunk.player_samples, tempo_scratch);
+    processor.process(&chunk.player_samples, tempo_scratch);
+    chunk.source_sample_count =
+        tempo_map.consume(tempo_scratch.len() / usize::from(processor.channels()));
     std::mem::swap(&mut chunk.player_samples, tempo_scratch);
-    chunk
+    (tail, chunk)
+}
+
+struct TempoSourceSegment {
+    output_frames: usize,
+    source_samples: u64,
+    consumed_frames: usize,
+    credited_samples: u64,
+}
+
+#[derive(Default)]
+struct TempoSourceMap {
+    segments: VecDeque<TempoSourceSegment>,
+    pending_source_samples: u64,
+}
+
+impl TempoSourceMap {
+    fn push(&mut self, output_frames: usize, source_samples: u64) {
+        if output_frames == 0 {
+            self.pending_source_samples += source_samples;
+            return;
+        }
+        self.segments.push_back(TempoSourceSegment {
+            output_frames,
+            source_samples: source_samples + std::mem::take(&mut self.pending_source_samples),
+            consumed_frames: 0,
+            credited_samples: 0,
+        });
+    }
+
+    fn take_pending(&mut self) -> u64 {
+        std::mem::take(&mut self.pending_source_samples)
+    }
+
+    fn consume(&mut self, mut frames: usize) -> u64 {
+        let mut credited = 0;
+        while frames > 0 {
+            let segment = self.segments.front_mut().expect("tempo 输出超过输入映射");
+            let take = frames.min(segment.output_frames - segment.consumed_frames);
+            segment.consumed_frames += take;
+            let next = (u128::from(segment.source_samples) * segment.consumed_frames as u128
+                / segment.output_frames as u128) as u64;
+            credited += next - segment.credited_samples;
+            segment.credited_samples = next;
+            frames -= take;
+            if segment.consumed_frames == segment.output_frames {
+                self.segments.pop_front();
+            }
+        }
+        credited
+    }
 }
 
 fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<StretchProcessor>) {
     let mut tempo_scratch = shared.take_player_buffer();
     let format = shared.processed_format();
     let mut limiter = OutputLimiter::new();
+    let mut tempo_map = TempoSourceMap::default();
+    let mut prepare_failed = false;
     while let Some(chunk) = shared.pop_decoded() {
-        let chunk = process_audio_chunk(chunk, equalizer, tempo, &mut tempo_scratch);
-        match prepare_chunk(chunk, shared, format, &mut limiter) {
-            Ok(prepared) => shared.push_output(prepared),
-            Err(error) => {
-                warn!(%error, "ALSA processed PCM 准备输出块失败");
-                shared.mark_decode_failed();
-                break;
+        let (tail, chunk) =
+            process_audio_chunk(chunk, equalizer, tempo, &mut tempo_scratch, &mut tempo_map);
+        for chunk in tail.into_iter().chain(std::iter::once(chunk)) {
+            match prepare_chunk(chunk, shared, format, &mut limiter) {
+                Ok(prepared) => shared.push_output(prepared),
+                Err(error) => {
+                    warn!(%error, "ALSA processed PCM 准备输出块失败");
+                    shared.mark_decode_failed();
+                    prepare_failed = true;
+                    break;
+                }
             }
         }
-        if shared.is_stopping() {
+        if shared.is_stopping() || prepare_failed {
             break;
         }
+    }
+    if !shared.is_stopping() && !prepare_failed && tempo.lock().has_pending_output() {
+        tempo.lock().finish(&mut tempo_scratch);
+        let source_sample_count = tempo_map
+            .consume(tempo_scratch.len() / usize::from(shared.channels()))
+            + tempo_map.take_pending();
+        let tail = AudioChunk {
+            player_samples: std::mem::take(&mut tempo_scratch),
+            source_sample_count,
+            track_boundary: None,
+        };
+        match prepare_chunk(tail, shared, format, &mut limiter) {
+            Ok(prepared) => shared.push_output(prepared),
+            Err(error) => {
+                warn!(%error, "ALSA processed PCM 准备 tempo 曲尾失败");
+                shared.mark_decode_failed();
+            }
+        }
+        debug_assert!(tempo_map.segments.is_empty());
     }
     shared.recycle_player_buffer(tempo_scratch);
 }
@@ -681,7 +778,7 @@ mod tests {
         let tempo = Mutex::new(StretchProcessor::new(2, 48_000));
         let mut scratch = Vec::new();
 
-        let processed = process_audio_chunk(
+        let (_, processed) = process_audio_chunk(
             AudioChunk {
                 player_samples: vec![0.8, -0.8],
                 source_sample_count: 2,
@@ -690,6 +787,7 @@ mod tests {
             &equalizer,
             &tempo,
             &mut scratch,
+            &mut TempoSourceMap::default(),
         );
 
         assert!(processed
@@ -699,14 +797,14 @@ mod tests {
     }
 
     #[test]
-    fn tempo_changes_output_length_but_preserves_source_count() {
+    fn tempo_delays_source_credit_until_audio_can_play() {
         let equalizer = Mutex::new(Equalizer::new(48_000, 2));
         let tempo = Mutex::new(StretchProcessor::new(2, 48_000));
         tempo.lock().set_speed(2.0);
         let mut scratch = Vec::new();
         let input = vec![0.1; 4096];
 
-        let processed = process_audio_chunk(
+        let (_, processed) = process_audio_chunk(
             AudioChunk {
                 source_sample_count: input.len() as u64,
                 player_samples: input,
@@ -715,10 +813,114 @@ mod tests {
             &equalizer,
             &tempo,
             &mut scratch,
+            &mut TempoSourceMap::default(),
         );
 
-        assert_eq!(processed.source_sample_count, 4096);
-        assert_eq!(processed.player_samples.len(), 2048);
+        assert!(processed.source_sample_count < 4096);
+        assert!(processed.player_samples.len() < 2048);
+    }
+
+    #[test]
+    fn tempo_source_map_credits_each_speed_segment_at_its_output_boundary() {
+        let mut map = TempoSourceMap::default();
+        map.push(100, 200);
+        map.push(50, 200);
+
+        assert_eq!(map.consume(80), 160);
+        assert_eq!(map.consume(40), 120);
+        assert_eq!(map.consume(30), 120);
+        assert!(map.segments.is_empty());
+    }
+
+    #[test]
+    fn switching_tempo_to_bypass_drains_old_audio_before_new_chunk() {
+        let equalizer = Mutex::new(Equalizer::new(48_000, 2));
+        let tempo = Mutex::new(StretchProcessor::new(2, 48_000));
+        let mut scratch = Vec::new();
+        let mut map = TempoSourceMap::default();
+        tempo.lock().set_speed(2.0);
+        let (tail, first) = process_audio_chunk(
+            AudioChunk {
+                player_samples: vec![0.2; 8_192],
+                source_sample_count: 8_192,
+                track_boundary: None,
+            },
+            &equalizer,
+            &tempo,
+            &mut scratch,
+            &mut map,
+        );
+        assert!(tail.is_none());
+
+        tempo.lock().set_speed(1.0);
+        let (tail, second) = process_audio_chunk(
+            AudioChunk {
+                player_samples: vec![0.4; 2_048],
+                source_sample_count: 2_048,
+                track_boundary: None,
+            },
+            &equalizer,
+            &tempo,
+            &mut scratch,
+            &mut map,
+        );
+        let tail = tail.expect("切回旁路前应排空旧 tempo 曲尾");
+        assert_eq!(
+            first.player_samples.len() + tail.player_samples.len(),
+            4_096
+        );
+        assert_eq!(first.source_sample_count + tail.source_sample_count, 8_192);
+        assert_eq!(second.player_samples.len(), 2_048);
+        assert_eq!(second.source_sample_count, 2_048);
+        assert!(map.segments.is_empty());
+    }
+
+    #[test]
+    fn dsp_emits_short_pitch_shift_tail_before_eof() {
+        let shared = Shared::new(48_000, 2);
+        let equalizer = Arc::new(Mutex::new(Equalizer::new(48_000, 2)));
+        let tempo = Arc::new(Mutex::new(StretchProcessor::new(2, 48_000)));
+        tempo.lock().set_pitch(5);
+        let mut samples = vec![0.0_f32; 4_800 * 2];
+        for frame in 3_800..4_800 {
+            let sample = (frame as f32 * 0.13).sin() * 0.5;
+            samples[frame * 2] = sample;
+            samples[frame * 2 + 1] = sample;
+        }
+        let source_samples = samples.len() as u64;
+        for part in samples.chunks(512) {
+            shared.push(AudioChunk {
+                player_samples: part.to_vec(),
+                source_sample_count: part.len() as u64,
+                track_boundary: None,
+            });
+        }
+        shared.mark_eof();
+        // DSP 输出队列只有 4 块；消费线程与 producer 并行，验证真实背压路径。
+        let worker_shared = Arc::clone(&shared);
+        let worker = std::thread::spawn(move || run_dsp_safely(worker_shared, equalizer, tempo));
+        let mut frames = 0;
+        let mut credited = 0;
+        let mut audible_tail = false;
+        loop {
+            match shared.try_pop() {
+                crate::shared::PopResult::Chunk(chunk) => {
+                    frames += chunk.frames;
+                    credited += chunk.source_sample_count;
+                    if frames > 3_800 {
+                        audible_tail |= chunk.bytes.chunks_exact(4).any(|bytes| {
+                            f32::from_le_bytes(bytes.try_into().unwrap()).abs() > 0.01
+                        });
+                    }
+                }
+                crate::shared::PopResult::Pending => std::thread::yield_now(),
+                crate::shared::PopResult::Finished => break,
+            }
+        }
+        worker.join().unwrap();
+        assert_eq!(frames, 4_800);
+        assert_eq!(credited, source_samples);
+        assert!(audible_tail);
     }
 
     #[test]

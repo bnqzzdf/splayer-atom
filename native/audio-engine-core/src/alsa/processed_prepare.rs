@@ -71,6 +71,10 @@ pub fn prepare_chunk(
     format: AlsaPcmFormat,
     limiter: &mut OutputLimiter,
 ) -> Result<PreparedPcmChunk> {
+    if chunk.track_boundary.is_some() {
+        // staged 曲目沿用同一 writer，但下一首不能继承上一首的限幅历史。
+        limiter.reset();
+    }
     let channels = usize::from(shared.channels());
     ensure!(
         chunk.player_samples.len().is_multiple_of(channels),
@@ -175,5 +179,31 @@ mod tests {
         apply_final_processing(&mut next, 1.0, 2, false, &mut limiter);
         assert_eq!(next, [0.5, -0.5]);
         assert!((limiter.gain - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn staged_track_does_not_inherit_previous_limiter_gain() {
+        let shared = Shared::new(48_000, 2);
+        shared.configure_processed_output(AlsaPcmFormat::F32Le, 1.0, true);
+        let mut limiter = OutputLimiter::new();
+        let first = AudioChunk {
+            player_samples: vec![2.0, -2.0],
+            source_sample_count: 2,
+            track_boundary: None,
+        };
+        prepare_chunk(first, &shared, AlsaPcmFormat::F32Le, &mut limiter).unwrap();
+        assert!(limiter.gain < 1.0);
+
+        let next = AudioChunk {
+            player_samples: vec![0.5, -0.5],
+            source_sample_count: 2,
+            track_boundary: Some(ProcessedTrackBoundary {
+                generation: 2,
+                duration_micros: 1_000_000,
+            }),
+        };
+        let prepared = prepare_chunk(next, &shared, AlsaPcmFormat::F32Le, &mut limiter).unwrap();
+        let left = f32::from_le_bytes(prepared.bytes[0..4].try_into().unwrap());
+        assert!((left - 0.5).abs() < 1e-6);
     }
 }

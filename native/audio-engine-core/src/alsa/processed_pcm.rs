@@ -301,6 +301,7 @@ fn run_writer(
                     &mut timeline,
                     &mut pending_track_boundaries,
                     cancel,
+                    true,
                 )?;
                 if pending_source_samples > 0 {
                     shared.set_consumed_samples(
@@ -356,6 +357,7 @@ fn handle_command(
                     timeline,
                     pending_track_boundaries,
                     &AtomicBool::new(false),
+                    false,
                 )?;
                 let played_source_samples = timeline.reset_after_clean_drain();
                 shared.set_consumed_samples(played_source_samples);
@@ -432,6 +434,7 @@ fn drain_stream(
     timeline: &mut PlayedTimeline,
     pending_track_boundaries: &mut VecDeque<PendingTrackBoundary>,
     cancel: &AtomicBool,
+    terminal_eof: bool,
 ) -> Result<()> {
     if timeline.submitted_frames == 0 {
         return Ok(());
@@ -445,21 +448,34 @@ fn drain_stream(
             !cancel.load(Ordering::Acquire),
             "ALSA processed drain 已取消"
         );
+        if terminal_eof && terminal_drain_state_is_complete(writer.state()) {
+            complete_drain(shared, timeline, pending_track_boundaries);
+            return Ok(());
+        }
         match writer.drain_once() {
             Ok(()) => {
-                let source_samples = timeline.played_to(timeline.submitted_frames);
-                shared.set_consumed_samples(source_samples);
-                commit_track_boundaries_by_frame(
-                    shared,
-                    pending_track_boundaries,
-                    timeline.submitted_frames,
-                );
+                complete_drain(shared, timeline, pending_track_boundaries);
+                return Ok(());
+            }
+            Err(error) if terminal_eof && terminal_drain_xrun_is_complete(error.errno()) => {
+                complete_drain(shared, timeline, pending_track_boundaries);
                 return Ok(());
             }
             Err(error) if matches!(error.errno(), libc::EAGAIN | libc::EINTR) => {
-                update_played(writer, shared, timeline, pending_track_boundaries)?;
+                if !terminal_eof {
+                    update_played(writer, shared, timeline, pending_track_boundaries)?;
+                }
                 ensure!(Instant::now() < deadline, "ALSA processed drain 超时");
-                let _ = writer.wait(100)?;
+                match writer.wait(100) {
+                    Ok(_) => {}
+                    Err(_error)
+                        if terminal_eof && terminal_drain_state_is_complete(writer.state()) =>
+                    {
+                        complete_drain(shared, timeline, pending_track_boundaries);
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error),
+                }
             }
             Err(error) => {
                 return Err(anyhow::anyhow!(error).context("ALSA processed drain 失败"));
@@ -468,9 +484,37 @@ fn drain_stream(
     }
 }
 
+fn terminal_drain_xrun_is_complete(errno: i32) -> bool {
+    errno == libc::EPIPE
+}
+
+fn terminal_drain_state_is_complete(state: State) -> bool {
+    matches!(state, State::Setup | State::XRun)
+}
+
+fn complete_drain(
+    shared: &Shared,
+    timeline: &mut PlayedTimeline,
+    pending_track_boundaries: &mut VecDeque<PendingTrackBoundary>,
+) {
+    let source_samples = timeline.played_to(timeline.submitted_frames);
+    shared.set_consumed_samples(source_samples);
+    commit_track_boundaries_by_frame(shared, pending_track_boundaries, timeline.submitted_frames);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn processed_terminal_eof_accepts_hardware_queue_becoming_empty() {
+        assert!(terminal_drain_xrun_is_complete(libc::EPIPE));
+        assert!(terminal_drain_state_is_complete(State::XRun));
+        assert!(terminal_drain_state_is_complete(State::Setup));
+        assert!(!terminal_drain_xrun_is_complete(libc::ENODEV));
+        assert!(!terminal_drain_xrun_is_complete(libc::ESTRPIPE));
+        assert!(!terminal_drain_state_is_complete(State::Prepared));
+    }
 
     #[test]
     fn timeline_maps_tempo_changed_output_frames_back_to_source_samples() {
