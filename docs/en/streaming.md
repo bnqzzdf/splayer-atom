@@ -22,7 +22,7 @@ In addition to local music and online providers, SPlayer Atom Core can connect t
 You can configure and switch between multiple servers. Browsing data is cached locally for faster subsequent access.
 
 ::: tip Credential security
-The main process prefers the operating system's `safeStorage` to encrypt server credentials locally. `accessToken` and `userId` are not persisted and are acquired again on each connection. If secure storage is unavailable, the app logs a warning and stores the password as Base64. Base64 is not encryption, so use this fallback only on a trusted device and user account.
+Core stores the server password in a credential file with `0600` permissions. The current Base64 encoding is not encryption. Web Control receives server settings without the password. Protect the Core host and its data directory.
 :::
 
 ## Troubleshooting
