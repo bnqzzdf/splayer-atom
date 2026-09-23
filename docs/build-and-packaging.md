@@ -83,6 +83,25 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 
 SDK release 必须匹配仓库固定版本；缺失或不匹配会在 staging 前失败。SDK 本体不进入 artifact。
 
+## Debian 11 bundled package
+
+Debian 11 构建在容器内使用 glibc 2.31。默认不包含 Diretta：
+
+```bash
+pnpm package:core:debian11 --without-diretta
+```
+
+包含 Diretta 时，提供 SDK 150 路径并选择目标 CPU 变体：
+
+```bash
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+  pnpm package:core:debian11 --with-diretta --diretta-variant=v3
+```
+
+`v2`、`v3`、`v4` 对应 SDK 的 x86-64 库变体。构建时只读挂载 SDK，不把 SDK 文件放入产物。脚本会检查 native addon 的 glibc 版本、Diretta 能力位和产物启动。两种模式分别保留为
+`out/*-debian11-without-diretta.tar.gz` 和 `out/*-debian11-with-diretta-<variant>.tar.gz`。
+Diretta SDK 150 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本仓库兼容层提供。
+
 ## Artifact smoke
 
 `scripts/atom/build-core-system.ts` 在正式构建链中会执行 staging 与最终 artifact 检查。检查包含：
@@ -97,8 +116,8 @@ SDK release 必须匹配仓库固定版本；缺失或不匹配会在 staging �
 
 ## CI
 
-`.github/workflows/dev.yml` 使用固定的 `ubuntu-24.04` Linux x86-64 环境构建 Core/Web，
-使用 Node `24.18.0` 与 Rust stable。正式发布包统一从固定构建环境生成。
+`.github/workflows/dev.yml` 在 `ubuntu-24.04` Linux x86-64 环境中使用 Node `24.18.0`
+与 Rust stable 构建 Core/Web。Debian 11 容器是单独的打包环境；发布时应记录实际使用的构建环境、源码提交与产物 hash。
 
 ## 发布前门禁
 

@@ -4,6 +4,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DIRETTA_SDK_ROOT");
     println!("cargo:rerun-if-env-changed=DIRETTA_CPU_VARIANT");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
+    println!("cargo:rerun-if-changed=src/glibc_compat.c");
 
     if env::var_os("CARGO_FEATURE_SDK").is_none() {
         return;
@@ -77,6 +78,11 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", libstdcxx_dir.display());
     println!("cargo:rustc-link-lib=static={host_lib}");
     println!("cargo:rustc-link-lib=static={acqua_lib}");
+    // ACQUA 引用的旧 glibc 兼容符号必须排在 ACQUA 静态库之后链接。
+    cc::Build::new()
+        .file("src/glibc_compat.c")
+        .flag_if_supported("-fPIC")
+        .compile("atom_glibc_compat");
     println!("cargo:rustc-link-lib=static=stdc++");
     println!("cargo:rustc-link-arg=-Wl,-Bsymbolic");
     println!("cargo:rustc-link-lib=dylib=pthread");

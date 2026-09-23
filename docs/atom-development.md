@@ -100,7 +100,11 @@ Linux live Diretta connection/playback validation runs the Host process as root.
 ```bash
 pnpm package:core
 pnpm package:core:bundled
+pnpm package:core:debian11 --without-diretta
 ```
+
+The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4` with SDK 150 set
+through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-bundled-build).
 
 Validate the final Linux x86-64 `tar.gz`, including runtime metadata, native addon loading, Web root,
 HTTP/WS endpoints, plugin-host IPC, startup, and termination. Real ALSA/Diretta/PCM/Native-DSD/UPnP

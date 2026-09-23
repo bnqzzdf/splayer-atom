@@ -36,6 +36,28 @@ must specify it explicitly; it is not silently defaulted to `v2`.
 
 The SDK remains external and is not bundled.
 
+## Debian 11 bundled build
+
+The Debian 11 builder uses glibc 2.31 and can package either capability set:
+
+```bash
+pnpm package:core:debian11 --without-diretta
+
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+  pnpm package:core:debian11 --with-diretta --diretta-variant=v3
+```
+
+The first mode is the default. The second mode mounts SDK 150 read-only and uses its selected
+`v2`, `v3`, or `v4` x86-64 libraries. The build checks the packaged native modules against glibc
+2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 150's
+ACQUA library receives the required old-glibc integer parsing compatibility symbols at link time;
+the SDK files are not packaged. Mode-specific copies are retained as
+`*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz`.
+
+On 2026-09-23, no-Diretta and Diretta v3 packages passed software smoke from a dirty working tree.
+This does not establish a clean release artifact or Diretta Target playback; v2/v4 were not built
+in that run.
+
 ## system-runtime
 
 ```bash

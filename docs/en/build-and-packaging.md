@@ -35,11 +35,23 @@ pnpm package:core:bundled
 
 For a glibc-compatible bundled artifact, use the pinned Debian 11 builder. It keeps
 `node_modules` and the pnpm store in Docker volumes, rebuilds `better-sqlite3` inside Debian 11,
-and rejects native artifacts requiring newer than glibc 2.31:
+and rejects native artifacts requiring newer than glibc 2.31. The default has no Diretta:
 
 ```bash
-pnpm package:core:debian11
+pnpm package:core:debian11 --without-diretta
 ```
+
+To include Diretta, supply SDK 150 and select an x86-64 library variant (`v2`, `v3`, or `v4`):
+
+```bash
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+  pnpm package:core:debian11 --with-diretta --diretta-variant=v3
+```
+
+The SDK is mounted read-only and is not packaged. The builder checks native glibc requirements,
+Diretta capability metadata, and startup of the extracted artifact. It retains separate
+`*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz` copies.
+SDK 150's ACQUA library uses an old-glibc compatibility shim for integer parsing.
 
 The builder uses the Tsinghua Debian main/updates mirrors and a fixed Debian security snapshot for
 explicit package installation only. It does not install or enable unattended security updates.
@@ -78,9 +90,9 @@ The SDK itself is not bundled.
 
 ## CI and gates
 
-`.github/workflows/dev.yml` builds Core/Web in a pinned `ubuntu-24.04` Linux x86-64 environment
-with Node `24.18.0` and Rust stable. Formal release packages are produced from that fixed build
-environment.
+`.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.18.0`
+and Rust stable. The Debian 11 container is a separate packaging environment. Record the actual
+build environment, source commit, and artifact hash for a release.
 
 Recommended release gates:
 
