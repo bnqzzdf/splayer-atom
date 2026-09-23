@@ -13,7 +13,7 @@ hardware, real-account, browser and release acceptance require a recorded run. T
 the [2026-09-23 FC4 retest](./alsa-acceptance-2026-09-23.md) covers the two fixes in installed
 artifact commit `3e420f78`. A later [local-module ALSA retest](./alsa-gap-fixes-2026-09-23.md)
 covers source changes through `53284360`; it is not an installed Core artifact. The no-hardware-pause
-fallback branch changed in `53284360` still has software verification only.
+fallback branch is retained for devices that need it and has software verification only.
 Identify each new artifact by its recorded Git commit, not by the package version alone.
 
 Lasting constraints are in `AGENTS.md`; workflows are in the
@@ -23,20 +23,18 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### ALSA and output
 
-- [ ] Finish the [ALSA output plan](./alsa-output-plan.md) runtime/buffering work. Direct and
-      Processed now share one player runtime ownership slot, and Processed final gain, limiting,
-      packing and buffer growth have moved to the DSP producer. Track-tail decode errors,
-      Processed tempo latency/tail accounting, terminal drain and staged-track limiter history
-      have fixes in the current tree. Decoded/DSP queue blocks and buffer pools now have size
-      limits; pause fallback drain uses runtime cancellation. The
-      [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short Processed pitch/speed
-      playback, pitch/speed seek and Direct basic playback. The ALSA mode-specific writer loops, complete
-      upstream allocation budget, parameter-version tracking and remaining plan acceptance still
-      need convergence and clean-artifact validation. Pause fallback cancellation still needs a
-      device without hardware pause for validation.
-- [ ] Obtain final-device ALSA bit-test or digital-capture evidence and complete the remaining
-      device/format matrix. Existing PCM/DSD USB submission comparisons establish byte equality
-      at that layer, not the DAC's final digital output.
+- [ ] Validate the [ALSA output plan](./alsa-output-plan.md) changes in a clean candidate Core
+      artifact. The [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short
+      Processed pitch/speed playback, pitch/speed seek and Direct basic playback. Check the
+      supported modes, formats, transitions and resource trend on that candidate; investigate
+      a specific failure if observed. Shared `AlsaFrameWriter`, single runtime ownership and
+      bounded decoded/DSP queues are implemented. Separate mode control loops, parameter-version
+      tracking and an arbitrary cap on one upstream decoder frame are not acceptance gates.
+- [ ] Complete target-device ALSA format and lifecycle checks on the clean candidate. Independent
+      PCM/DSD comparisons already establish exact data at the USB submission layer. Final DAC
+      bit-test or digital capture is needed only for a device-specific end-to-end claim; the
+      product's software guarantee ends at the ALSA HW submission boundary. A device without
+      hardware pause is needed only to claim its fallback path has been verified on that device.
 - [ ] Repeat UPnP hardware checks on the release candidate. The 2026-09-22 FC4 run discovered no
       renderer; earlier AudioSys checks covered common formats, CUE, SACD, DSD and output switching.
       The media listener passed 100 repeated aborted pulls on 2026-09-23, but no AudioSys Renderer
@@ -76,8 +74,8 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ## Current priorities
 
-1. Finish the remaining ALSA runtime/buffering work and validate it on a new hardware artifact.
-2. Close final-device ALSA and outstanding UPnP/Diretta CUE hardware acceptance.
+1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
+2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
 3. Complete Netease/TIDAL, ListenBrainz, Folder Browser, responsive Web and long-running
    multi-Control acceptance.
 4. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.

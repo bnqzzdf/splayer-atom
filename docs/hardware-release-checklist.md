@@ -1,6 +1,7 @@
 # SPlayer Atom Hardware Release Checklist
 
-本文只记录真实音频主机的手工验收步骤。源码构建、fixture、fake ALSA/Diretta 与 final-artifact smoke 不能替代真实 DAC、Diretta Target 或 bitstream 证据。
+本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
+实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。
 
 ## 当前已取得的开发期实机证据
 
@@ -20,7 +21,9 @@ ALSA HW 双模式实现另有开发期实机记录，用户于 2026-09-22 确认
 - 通过 `/proc/asound/.../stream0` 对比音源与声卡输出参数，确认采样率、比特率一致。
 
 这完成了上述范围的开发期试听、参数核对与生命周期验收；参数一致不等于有效 PCM 样本或
-DSD 逻辑位序列已逐位比较，独立 ALSA bitstream 证据和最终发布包验收仍单独记录。
+DSD 逻辑位序列已逐位比较。后续独立 USB 驱动提交层比对已记录在
+[ALSA 验收记录](./alsa-acceptance-2026-09-22.md)；最终发布包仍需单独验收。该层证据
+支撑软件输出保证，不代表 DAC 端数字输出已逐位验证。
 
 ### 2026-09-22 本机自动化实测补充
 

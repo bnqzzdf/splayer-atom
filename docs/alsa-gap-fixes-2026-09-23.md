@@ -3,7 +3,7 @@
 本次修复源码提交为 `123cbdac`（曲尾解码失败分类）、`37aee7a1`（Processed tempo、
 limiter 与曲终 drain）、`9e76bfa2`（队列/缓冲池界限）和 `53284360`（暂停 drain 取消）。
 FC4 运行验证使用包含上述四项修复的本地 release native 模块；构建时仅有文档及注释
-未提交。这不是 clean Core 安装包，也不替代最终设备 bitstream 验收。
+未提交。这不是 clean Core 安装包，也不证明 DAC 端 bit-perfect。
 
 ## 修复与软件验证
 
@@ -41,6 +41,6 @@ native 模块打开 `alsa:hw:CARD=FC4,DEV=0`。0.6 秒、44.1 kHz、16-bit stere
 - 测试退出释放临时输出后，Core 恢复 FC4 Direct 单曲暂停、2961 ms、`exact-pcm`。
 
 短曲信号的首尾非零和总输出帧数由 DSP 单测验证；本次 FC4 记录的是事件、进度与输出
-可用性，没有数字回录，不能据此宣称 DAC 端尾音逐样本正确。ALSA writer loop 收口、
-上游单次解码/处理临时分配的完整字节预算、完整参数版本、无硬件暂停设备的取消实测、
-clean artifact 全矩阵和最终设备证据仍未完成。
+可用性，没有数字回录，不能据此宣称 DAC 端尾音逐样本正确。后续实际工作是用 clean
+Core artifact 核对目标设备的模式、格式、生命周期和资源趋势；只有观察到内存异常时才追查
+上游单次分配。无硬件暂停 fallback 与 DAC 端 bit-perfect 均按对应设备和声明范围验收。

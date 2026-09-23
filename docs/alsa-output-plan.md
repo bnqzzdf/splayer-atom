@@ -16,11 +16,13 @@ limiter、打包与缓冲扩容已移到 DSP producer。`123cbdac` 修正曲尾�
 `9e76bfa2` 限制队列单块和缓冲池容量；`53284360` 让无硬件暂停时的 drain 随 runtime
 取消，但尚无对应设备实测。新的本地 release 模块在 FC4 上通过短曲变调/变速曲终、
 Processed seek 与 Direct 基础播放，详见 [局部修复复测](./alsa-gap-fixes-2026-09-23.md)。
-ALSA 模式各自的 writer loop、上游临时分配的完整字节预算、完整参数版本与 clean artifact
-全矩阵验收仍待完成。
+三条模式路径共用 `AlsaFrameWriter` 的提交、短写和取消逻辑；各自控制循环处理不同源语义，
+不以合并循环作为验收目标。已对解码/DSP 队列和复用池设界限；没有上游临时分配异常证据，
+不追加全路径字节预算或参数版本机制。clean artifact 的功能回归仍待完成。
 已取得 PCM/DSD 在 USB 驱动提交层的独立逐字节一致性证据，并通过 clean artifact smoke、
-播放中重启/SIGTERM、FC4 断开重连和 Diretta 往返切换；最终设备 bitstream 与完整发布验收
-仍未完成。范围详见上述两次实测记录。
+播放中重启/SIGTERM、FC4 断开重连和 Diretta 往返切换；完整发布验收仍未完成。
+最终设备 bitstream 测试仅用于设备级端到端声明，不是本方案的软件直通完成条件。
+范围详见上述两次实测记录。
 完成情况由 [Roadmap](./atom-roadmap.md) 维护。
 本文按一个完整目标设计，不拆成先发布 PCM、以后补 DSD 或长期保留旧后端的交付批次。
 
@@ -47,8 +49,9 @@ Linux x86-64 Core 只保留一个 ALSA HW 后端，在其上游显式选择音�
 direct 下允许原采样率解码和必要量化，以保留此前确认的播放支持，但没有 bit-perfect 徽标；
 模式选择器的按需说明写明这个范围，不要求在播放区域逐曲显示技术说明。
 
-两种模式共用同一设备身份、硬件协商、writer、缓冲所有权与播放生命周期；不能构建第二
-ALSA 后端或 Core 播放器。只打开用户选择的 HW 端点，不跟随桌面默认，不接管系统 mixer。
+两种模式共用同一设备身份、硬件协商、写入原语与播放器所有权；控制循环可按 PCM、DSD、
+Processed 的实际差异分别实现，不能构建第二 ALSA 后端或 Core 播放器。只打开用户选择的
+HW 端点，不跟随桌面默认，不接管系统 mixer。
 Core 继续唯一拥有队列、音源、缓存、预加载、重试、跳过、统计、模式与 DSP 设置。Web
 只发送高层命令、消费权威状态；Diretta 保持 strict Source Direct，UPnP 保持现有独立分支。
 
@@ -292,9 +295,9 @@ EQ/preamp → tempo/pitch → 必要的输出 rate 适配 → 软件音量/静�
 这条策略。输出选择可按实际硬件精度量化，仍不借 ALSA plug 隐藏转换。
 
 所有实例按源/设备 rate 与真实声道数配置；多声道算法不支持时明确报错，不只处理前两个
-声道或静默下混。参数更新通过完整且有版本的快照到块边界生效，不在每样本处理中获取
-Core/player 锁。切歌、seek 和重开重置所属效果历史，EOF 正确排空 tempo/resampler
-尾部；保留其必要状态直到有效输出完全排空。
+声道或静默下混。参数更新在 DSP 块边界生效，不在每样本处理中获取 Core/player 锁；
+当前没有对外展示参数版本，不为此增加版本协议。切歌、seek 和重开重置所属效果历史；
+EOF 正确排空 tempo/resampler 尾部，并保留其必要状态直到有效输出完全排空。
 
 同格式连续播放可复用流和需要连续运行的处理状态，但归一化的曲目增益与元数据在对应
 样本边界切换。fade 仅用于现有启停行为，不增加交叉混音；紧急 stop/取消仍立即 drop。
@@ -353,7 +356,7 @@ consumed frame；track boundary 在取块时切换。ALSA `writei` 可以只接�
   实际接受数量。取消前先让 writer 停止引用，再归还/析构块，禁止跨 generation 悬空引用。
 - 整数 pack/DSD 位序适配/浮点量化在 producer 或有界准备阶段完成。writer 仅等待、提交
   已备数据、推进计数、处理轻量命令；不解码、分配、获取 player 大锁或进行发现与日志 I/O。
-- processed 的 DSP 与 fade 也只在 producer 中执行；块携带模式/参数版本和媒体时间映射。
+- processed 的 DSP 与 fade 也只在 producer 中执行；块携带媒体时间与曲目边界映射。
   不能把保存 DSP 参数的锁带进 writer；有界预处理量同时约束参数生效延迟。
 - ring slot 释放只代表可以复用内存；不得同时把它解释为已由 DAC 播放。
 - `Pending`、真实 EOF、解码失败、取消必须是不同结果；`None` 不能同时承担这些语义。
@@ -378,8 +381,8 @@ staging 带入的 track generation 与边界记录在输出时间线上。只有
 “按正常结束处理”容错来掩盖错误。
 
 processed 在其间还有 tempo/resampler 的有效尾部排空阶段；结束事件与曲目边界要计入
-处理延迟。处理参数版本只有对应样本进入实际播放区间后才称为“正在生效”，此前可展示
-已接受/待应用；量化/保护等不能错误继承上一首诊断。统计仍按媒体时间和实际播放状态计算。
+处理延迟。当前界面不声明某次参数更新已在 DAC 侧生效；量化/保护等不能错误继承
+上一首诊断。统计仍按媒体时间和实际播放状态计算。
 
 ### 6.3 操作语义
 
@@ -633,10 +636,11 @@ Core 已保存配置，不创建一个无人消费的后台 DSP 线程。
 不允许而失败。插件与通用 settings 入口同样走这道实时检查。Core/native 最后一道校验
 独立于 Web；不能仅依赖按钮 disabled。
 
-在 processed 中，参数由 Core/native 接受后形成处理图内部的完整参数快照，并在块边界
-原子替换；这里的参数版本只用于音频线程内部一致性，不进入控制协议。失败不能只把勾选
-留在 UI。直通/远端状态的 `volume=1`、`speed=1` 表示本地无增益/变速，
-不覆盖保存的 processed 参数，也不代表 DAC 实际音量。processed 状态返回实际生效值。
+在 processed 中，各条参数命令按 Core 执行顺序更新，DSP 在后续块边界读取当前值；
+不同命令之间允许存在中间状态，不为未提供的多参数事务添加快照或版本机制。失败不能只把
+勾选留在 UI。直通/远端状态的 `volume=1`、`speed=1` 表示本地无增益/变速，
+不覆盖保存的 processed 参数，也不代表 DAC 实际音量。processed 状态返回已接受的当前设置，
+不声明具体哪一帧已在 DAC 侧应用。
 
 删除的仅为默认设备/watcher 和旧输出专属 N-API 接口；保留 DSP setter/getter 并修改实现。
 同步更新生成类型、协议版本/能力、错误映射和插件文档；插件失败进入诊断，不吞掉异常。
@@ -702,7 +706,7 @@ direct 导致软件音量失效。已有 Diretta/UPnP 选择不改变，只初�
 - direct 整数 PCM/DSD 满足精确样本测试；direct 有损不显示直通图标；processed
   无论是否启用效果均不显示直通，Native DSD 在 processed 下明确拒绝。
 - 分别验证 EQ、归一化/ReplayGain、软件音量/静音、fade、变速/变调、削波保护的实际
-  输出效果和参数版本；确认没有双重增益、漏做保护或无法旁路的隐藏 limiter。
+  输出效果及播放中参数修改；确认没有双重增益、漏做保护或无法旁路的隐藏 limiter。
 - 验证 processed 设备 rate 适配、DSP 延迟、tempo 尾部、变速过程中 seek/媒体时间、
   gapless 曲目边界和统计；direct 不能调用处理 resampler。
 - processed gapless 还要验证：stale async stage 不复活、full load 不等待旧网络 stage、
@@ -740,14 +744,15 @@ ListenBrainz、Web 多客户端与插件错误。旧日志中的 CPAL/普通路�
 ### 11.4 实机证据
 
 完整记录模式、源 hash、构建 commit/artifact hash、内核/驱动、DAC、HW ID、协商 format/rate/
-channels/sbits、XRUN/中断次数和测试结果。覆盖设备实际支持的常见 PCM rate/位深/声道，
-以及目标设备支持的最高 PCM/Native DSD rate；不预先把 Diretta 的 768 kHz/DSD512 实绩
-当成 ALSA 实绩。
+channels/sbits、XRUN/中断次数和测试结果。覆盖目标设备实际使用的 PCM/Native DSD
+组合与切换；未测组合如实标为未验证，不把设备规格表的所有档位设为发布前置条件，
+也不把 Diretta 的 768 kHz/DSD512 实绩当成 ALSA 实绩。
 
-direct PCM 使用数字回录或设备 bit-test；DSD 使用能验证逻辑位序列的链路。对齐固定延迟后比较
-有效数据，另外检测遗漏、重复和切歌边界，不能用简单 hash 忽略尾帧丢失。
-`hw_params`、DAC 面板、loopback 和模拟录音分别只能证明其覆盖的层次，不能替代最终设备
-的 bitstream 证据。缺少可验证设备时记为 BLOCKED，不把“听起来正常”记为 bit-perfect。
+软件直通验收比较解码后的有效 PCM 样本或 DSD 逻辑位序列与 ALSA HW 提交数据，覆盖
+首尾、seek 和切歌边界；现有 USB 驱动提交层证据只能证明到该层。`hw_params`、DAC 面板、
+loopback 和模拟录音各自只证明其覆盖范围。若要声明某台 DAC 的端到端 bit-perfect，
+再用数字回录、设备 bit-test 或可验证 DSD 逻辑位序列的链路做独立设备验收；没有该证据
+时不作此声明，也不因此阻塞软件路径发布。
 
 实机还需覆盖短曲尾部排空、暂停/恢复、快速 seek、同格式无缝、变格式锁定、PCM/DSD 混播、
 设备占用/拔插、systemd stop/restart/SIGTERM 与过夜循环。检查首尾截断、爆音、错误恢复、
@@ -770,8 +775,8 @@ direct PCM 使用数字回录或设备 bit-test；DSD 使用能验证逻辑位�
   DSP 算法/必要依赖、元数据、reader和 UPnP 提取保留且有明确模式/消费者。
 - 普通与 Diretta 构建通过，共享改造不破坏 Diretta strict 行为，也不将 ALSA 的 DSP
   开关应用于 Diretta/UPnP。
-- direct 取得独立 ALSA bitstream 证据，两模式完成长期/生命周期/切换验收；已有普通
-  ALSA 播放记录只作历史基线，不继承为新路径的验收结果。
+- direct 在 ALSA HW 提交层取得独立精确样本/DSD 逻辑位证据，两模式完成生命周期/切换
+  验收；已有普通 ALSA 播放记录只作历史基线，不继承为新路径的验收结果。
 
 不以发布时限缩减这些条件，也不以永久保留旧后端替代完成新实现。实施中若发现本方案与
 已接受产品要求冲突，应修订设计和 Roadmap；保留 DSP 功能不意味着保留旧 CPAL 播放器。
