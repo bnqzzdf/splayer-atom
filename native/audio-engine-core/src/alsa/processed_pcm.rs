@@ -211,6 +211,7 @@ fn run_writer(
                 &mut pending_track_boundaries,
                 &mut playing,
                 &mut hardware_paused,
+                cancel,
             )? {
                 return Ok(());
             }
@@ -225,6 +226,7 @@ fn run_writer(
                 &mut pending_track_boundaries,
                 &mut playing,
                 &mut hardware_paused,
+                cancel,
             )? {
                 return Ok(());
             }
@@ -325,6 +327,7 @@ fn handle_command(
     pending_track_boundaries: &mut VecDeque<PendingTrackBoundary>,
     playing: &mut bool,
     hardware_paused: &mut bool,
+    cancel: &AtomicBool,
 ) -> Result<bool> {
     match command {
         WriterCommand::Play(response) => {
@@ -356,7 +359,7 @@ fn handle_command(
                     shared,
                     timeline,
                     pending_track_boundaries,
-                    &AtomicBool::new(false),
+                    cancel,
                     false,
                 )?;
                 let played_source_samples = timeline.reset_after_clean_drain();

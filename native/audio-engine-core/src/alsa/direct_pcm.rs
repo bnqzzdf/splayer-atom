@@ -364,6 +364,11 @@ impl AlsaDirectPcmConnection {
                     writer_cancel.as_ref(),
                     command_rx,
                 ) {
+                    if writer_cancel.load(Ordering::Acquire) {
+                        writer_state.stopped.store(true, Ordering::Release);
+                        writer_state.playing.store(false, Ordering::Release);
+                        return;
+                    }
                     warn!("ALSA direct PCM writer failed: {error:#}");
                     // producer 已明确标记 source failure 时不要再覆盖成设备故障。
                     if !writer_state.source_failed.load(Ordering::Acquire) {
@@ -729,6 +734,7 @@ fn run_writer(
                 &mut hardware_paused,
                 &mut pending_boundaries,
                 &input,
+                cancel,
             )? {
                 return Ok(());
             }
@@ -744,6 +750,7 @@ fn run_writer(
                 &mut hardware_paused,
                 &mut pending_boundaries,
                 &input,
+                cancel,
             )? {
                 return Ok(());
             }
@@ -802,6 +809,7 @@ fn handle_command(
     hardware_paused: &mut bool,
     pending_boundaries: &mut VecDeque<PendingBoundary>,
     input: &PcmInput,
+    cancel: &AtomicBool,
 ) -> Result<bool> {
     match command {
         WriterCommand::Play(response) => {
@@ -838,7 +846,7 @@ fn handle_command(
                 *hardware_paused = true;
                 Ok(())
             } else {
-                drain_to_pause(writer, state, pending_boundaries)
+                drain_to_pause(writer, state, pending_boundaries, cancel)
             };
             if result.is_ok() {
                 *playing = false;
@@ -887,14 +895,9 @@ fn drain_to_pause(
     writer: &AlsaFrameWriter,
     state: &AlsaDirectPcmState,
     pending_boundaries: &mut VecDeque<PendingBoundary>,
+    cancel: &AtomicBool,
 ) -> Result<()> {
-    drain_pcm(
-        writer,
-        state,
-        pending_boundaries,
-        &AtomicBool::new(false),
-        false,
-    )?;
+    drain_pcm(writer, state, pending_boundaries, cancel, false)?;
     writer.prepare()
 }
 
