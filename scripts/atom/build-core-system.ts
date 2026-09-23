@@ -6,6 +6,7 @@ import {
   coreArtifactFileName,
   readCoreReleaseMetadata,
   resolveCoreBuildDate,
+  resolveCoreBuildTime,
 } from "./core-artifact-name";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -17,7 +18,9 @@ if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
 const release = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
-const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate };
+// 打包时刻一次性决定并下发，保证 stage 与 check 两步算出的产物名一致（秒级不会再漂）
+const buildTime = resolveCoreBuildTime();
+const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate, ATOM_BUILD_TIME: buildTime };
 
 if (process.versions.node !== CORE_NODE_REFERENCE) {
   throw new Error(
@@ -62,5 +65,5 @@ run("验收最终 tar artifact", bin("tsx"), [
 ]);
 
 console.log(
-  `[CoreBuild] PASS ${path.join(root, "out", coreArtifactFileName(bundleNode, release.version, buildDate))}`,
+  `[CoreBuild] PASS ${path.join(root, "out", coreArtifactFileName(bundleNode, release.version, buildDate, buildTime))}`,
 );

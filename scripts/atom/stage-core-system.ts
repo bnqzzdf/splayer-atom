@@ -21,6 +21,7 @@ import {
   formatCoreBuildDate,
   readCoreReleaseMetadata,
   resolveCoreBuildDate,
+  resolveCoreBuildTime,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 import { resolveSourceIdentity, sourceIdentityFailureMessage } from "./sourceIdentity";
@@ -39,6 +40,7 @@ const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
+const buildTime = resolveCoreBuildTime();
 
 /**
  * 归档内文件时间戳锚定到「打包日 00:00 UTC」。
@@ -271,7 +273,7 @@ if (archive) {
   const archiveFile = path.join(
     root,
     "out",
-    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate),
+    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate, buildTime),
   );
   rmSync(archiveFile, { force: true });
   const tar = spawnSync(

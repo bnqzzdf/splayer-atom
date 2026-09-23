@@ -9,8 +9,8 @@ SPlayer Atom 只发布 Linux x86-64 Core，不提供 Desktop 安装包。
 正式 artifact 有两种部署变体：
 
 ```text
-splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 - **system-runtime**：使用系统 Node `>=22.19.0`；

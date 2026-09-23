@@ -92,7 +92,8 @@ run_docker run --rm \
       *) echo "[Debian11] 拒绝超过 glibc 2.31 的 better-sqlite3: $sqlite_glibc" >&2; exit 1 ;;
     esac
 
-    archive=$(node -e "const runtime = require(\"./out/core-system/runtime.json\"); const date = runtime.buildDate.replace(/-/g, \"\"); process.stdout.write([\"out/splayer-atom-core\", runtime.atomVersion, date, \"bundled-linux-x64.tar.gz\"].join(\"-\"))")
+    # 产物名带打包时刻（YYYYMMDD-HHMMSS），无法从 runtime.json 重建，直接取 out/ 下最新的那个
+    archive=$(ls -t out/splayer-atom-core-*-bundled-linux-x64.tar.gz 2>/dev/null | head -1)
     test -f "$archive"
     sha256sum "$archive"
     echo "[Debian11] PASS $archive"

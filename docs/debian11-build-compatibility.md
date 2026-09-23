@@ -9,11 +9,11 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 产物文件 | `splayer-atom-core-1.1.0-20260923-bundled-linux-x64.tar.gz` |
-| SHA256 | `03e63f03ee8b42f0b3f7d79c889a1eedfe730615cb613b750e4e5709b796e7cb` |
-| 大小 | 56,841,530 字节 |
-| atomCommit | `8cd2e2a6b52688acbb6d7c221a8daeda4efeab08` |
-| sourceDirty | `true`（含本次未提交的 Qobuz OAuth 改动） |
+| 产物文件 | `splayer-atom-core-1.1.0-20260923-150342-bundled-linux-x64.tar.gz` |
+| SHA256 | `b5ae8529430cc6d5a027ca41127eb31750f06f559961337b824dd1b8770bb231` |
+| 大小 | 56,837,764 字节 |
+| atomCommit | `07c2442d5f688fcf9e5050ca6bce9879f855abcb` |
+| sourceDirty | `false`（改动已提交为 `07c2442`） |
 | Diretta CPU 变体 | `v3` |
 | Node 参考版本 | 24.18.0 |
 | 构建日期 | 2026-09-23 |
