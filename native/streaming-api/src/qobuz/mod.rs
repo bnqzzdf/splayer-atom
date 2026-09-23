@@ -4,6 +4,7 @@ pub mod auth;
 pub mod auth_oauth;
 pub mod config;
 pub mod credentials;
+pub mod discover;
 pub mod playlist;
 pub mod search;
 pub mod song_url;

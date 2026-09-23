@@ -49,6 +49,10 @@ async fn call_qobuz(
         "user_getFavorites" | "favorites" => client.user_get_favorites(&params).await,
         "favorite_create" => client.favorite_create(&params).await,
         "favorite_delete" => client.favorite_delete(&params).await,
+        // 首页（发现页）与分类导航
+        "discover_index" | "home" => client.discover_index(&params).await,
+        "discover_section" => client.discover_section(&params).await,
+        "genre_list" | "genres" => client.genre_list(&params).await,
         _ => Err(StreamingError::InvalidParam(format!(
             "Unsupported Qobuz API: {action}",
         ))),
@@ -136,6 +140,10 @@ async fn call_tidal_with_client(
         "playlist_get" | "playlist" => client.playlist_get(&params).await,
         "playlist_getTracks" => client.playlist_get_tracks(&params).await,
         "user_getFavorites" | "favorites" => client.user_get_favorites(&params).await,
+        // 首页（pages）与分类导航
+        "pages_home" | "home" => client.pages_home(&params).await,
+        "pages_get" => client.pages_get(&params).await,
+        "genres" | "genre_list" => client.genres(&params).await,
         _ => Err(StreamingError::InvalidParam(format!(
             "Unsupported TIDAL API: {action}",
         ))),
