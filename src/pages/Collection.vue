@@ -5,6 +5,7 @@ import { createControlAction, type ControlAction } from "@/actions/model";
 import { controlActionsToMenuItems } from "@/actions/menu";
 import { loadCollection as loadCollectionService } from "@/services/collection";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
+import { htmlToText } from "@/utils/format/html";
 import { useCopyText } from "@/composables/useCopyText";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
@@ -48,6 +49,14 @@ let loadAbort: AbortController | null = null;
 const collapsed = ref(false);
 /** 简介弹窗 */
 const descriptionOpen = ref(false);
+
+/**
+ * 简介正文。
+ *
+ * 各平台（Qobuz/TIDAL/网易云）的 description 可能带 HTML 标签，
+ * 渲染侧统一转成纯文本——既保留段落结构，又不引入 v-html 的注入面。
+ */
+const descriptionText = computed(() => htmlToText(collection.value?.description));
 
 /** 滚动超过阈值折叠 */
 const handleListScroll = (event: Event) => {
@@ -384,7 +393,7 @@ onBeforeUnmount(() => {
               <div class="overflow-hidden flex flex-col gap-2">
                 <!-- 简介 -->
                 <SButton
-                  v-if="collection.description"
+                  v-if="descriptionText"
                   variant="text"
                   size="auto"
                   block
@@ -396,7 +405,7 @@ onBeforeUnmount(() => {
                   <span
                     class="min-w-0 truncate text-on-surface-variant/70 transition-colors duration-200 group-hover:text-on-surface-variant group-focus-visible:text-on-surface-variant"
                   >
-                    {{ collection.description }}
+                    {{ descriptionText }}
                   </span>
                 </SButton>
                 <p v-else class="text-sm text-on-surface-variant/70 truncate">
@@ -559,7 +568,7 @@ onBeforeUnmount(() => {
       width="min(520px, calc(100vw - 40px))"
     >
       <p class="whitespace-pre-wrap break-words leading-6 text-on-surface-variant">
-        {{ collection?.description }}
+        {{ descriptionText }}
       </p>
     </SDialog>
     <!-- 编辑弹窗 -->

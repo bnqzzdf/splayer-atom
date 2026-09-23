@@ -274,6 +274,9 @@ const load = async (): Promise<void> => {
   }
   loading.value = true;
   error.value = "";
+  // 先清空上一个平台的内容与分类，避免加载失败时残留另一平台的分类栏
+  sections.value = [];
+  genres.value = [];
   try {
     const genreParam = activeGenre.value || undefined;
     if (platform.value === "qobuz") {
@@ -294,6 +297,7 @@ const load = async (): Promise<void> => {
     if (!sections.value.length) error.value = t("platformHome.empty");
   } catch (err) {
     sections.value = [];
+    genres.value = [];
     error.value = err instanceof Error ? err.message : t("platformHome.loadFailed");
   } finally {
     loading.value = false;
