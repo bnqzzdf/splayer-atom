@@ -83,18 +83,22 @@ test(
     };
 
     try {
-      await new Promise<void>((resolve) => {
-        const request = http.get(resource.url, (response) => {
-          response.once("data", () => {
-            response.destroy();
-            resolve();
+      for (let index = 0; index < 100; index += 1) {
+        await new Promise<void>((resolve) => {
+          const request = http.get(resource.url, (response) => {
+            response.once("data", () => {
+              response.destroy();
+              resolve();
+            });
+            response.once("error", () => resolve());
           });
-          response.once("error", () => resolve());
+          request.once("error", () => resolve());
         });
-        request.once("error", () => resolve());
-      });
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      assert.equal(await countOpenHandles(), 0);
+        if ((index + 1) % 20 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          assert.equal(await countOpenHandles(), 0, `第 ${index + 1} 次取消后残留媒体文件 FD`);
+        }
+      }
     } finally {
       await releaseMediaResource(resource);
       await shutdownUpnpMedia();

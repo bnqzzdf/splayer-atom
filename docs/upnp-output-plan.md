@@ -3,8 +3,9 @@
 状态（当前代码，2026-09-23）：`core/atom/upnp/` 的 discovery、transport、
 output、media 模块及 Core 播放接入已实现；CUE/SACD/DSD 的软件对照和部分
 AudioSys 实机结果见第 12 节。首次混合长播暴露的 media stream FD 泄漏已有
-`stream.pipeline()` 修复和 30 次强制 reload 验证；第二轮持续长播、最终
-兼容矩阵与发布包复验尚无完成记录。
+`stream.pipeline()` 修复和 30 次强制 reload 验证。2026-09-23 本地回归扩大到
+100 次连续提前断开，每 20 次确认该媒体文件 FD 为 0，全部通过；当前无法提供
+AudioSys Renderer，第二轮真机持续长播、最终兼容矩阵与发布包复验仍开放。
 
 日期：2026-09-07。
 
@@ -420,7 +421,10 @@ logical DSD sequence 全轨逐声道一致；DST 另以两张不同真实 ISO �
 功能上无 playback/UPnP/DST 错误，但暴露 AudioSys 提前断开原始 DSF HTTP 请求时 `ReadStream` FD 每轮
 泄漏 1 个。media listener 已改用 `stream.pipeline()`，新增 Renderer abort 后 FD 必须关闭的回归，并在修复
 artifact 上连续 30 次原始 DSF 强制 reload 验证残留目标 FD=0、总 FD 回落到 41。第二轮长播的
-持续运行结果尚未记录；在再次确认 FD/socket/temp/RSS 不随轮数增长前不关闭最终稳定性门禁。
+持续运行结果尚未记录。2026-09-23 在无 AudioSys 的本机环境中，`media.test.ts`
+模拟 Renderer 连续 100 次开始拉取后提前断开，每 20 次均确认原始 DSF 文件 FD 回落到 0；
+这是 media HTTP 资源回收的压力回归，不包含真实 Renderer 的混合队列、socket/temp/RSS
+长时趋势。在再次确认真实长播期间 FD/socket/temp/RSS 不随轮数增长前不关闭最终稳定性门禁。
 
 真实 Renderer 能接收资源不等于 DAC bit-perfect。最终兼容矩阵分开记录：Core byte/sample/DSD
 序列保持、Renderer 接受的容器/rate，以及有测量条件时的实际 DAC 输出结果。

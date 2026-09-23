@@ -10,8 +10,9 @@ tree. Confirmed milestones are in [Atom Completed](./atom-completed.md).
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
 [2026-09-22 ALSA record](./alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
-fixes in later commits are not retroactively covered. Identify each new artifact by its recorded
-Git commit, not by the package version alone.
+the [2026-09-23 FC4 retest](./alsa-acceptance-2026-09-23.md) covers the two fixes in installed
+artifact commit `3e420f78`. Identify each new artifact by its recorded Git commit, not by the
+package version alone.
 
 Lasting constraints are in `AGENTS.md`; workflows are in the
 [development guide](./atom-development.md).
@@ -20,20 +21,20 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### ALSA and output
 
-- [ ] Retest Processed PCM seek and restart-to-play on FC4 with an artifact containing `c3e135ab`.
-      That commit fixes writer cancellation reported as `outputFailed` and reloads the restored
-      queue when `play()` sees an idle native runtime. Both failures were reproduced on
-      `cecee166`; no later real-device result is recorded.
 - [ ] Finish the [ALSA output plan](./alsa-output-plan.md) runtime/buffering work. Direct and
-      Processed still have separate native lifecycle orchestration; Processed final gain, limiting,
-      packing and buffer resizing still occur in the writer.
+      Processed now share one player runtime ownership slot, and Processed final gain, limiting,
+      packing and buffer growth have moved to the DSP producer. The ALSA mode-specific writer
+      loops and remaining plan acceptance still need convergence and clean-artifact validation.
+      A [local release-module smoke](./alsa-runtime-smoke-2026-09-23.md) passed Processed seek and
+      Direct playback on FC4; it is narrower than the final device/format matrix.
 - [ ] Obtain final-device ALSA bit-test or digital-capture evidence and complete the remaining
       device/format matrix. Existing PCM/DSD USB submission comparisons establish byte equality
       at that layer, not the DAC's final digital output.
 - [ ] Repeat UPnP hardware checks on the release candidate. The 2026-09-22 FC4 run discovered no
       renderer; earlier AudioSys checks covered common formats, CUE, SACD, DSD and output switching.
-      Finish the second long-run resource check in the [UPnP plan](./upnp-output-plan.md) and
-      record the final compatibility matrix.
+      The media listener passed 100 repeated aborted pulls on 2026-09-23, but no AudioSys Renderer
+      is currently available. Finish the second real-renderer long-run resource check in the
+      [UPnP plan](./upnp-output-plan.md) and record the final compatibility matrix.
 - [ ] Complete real Diretta CUE gapless acceptance in the
       [Direct CUE plan](./direct-cue-gapless-plan.md), including adjacent PCM/DSD segments, seek,
       queue changes and long-running boundary behavior.
@@ -68,7 +69,7 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ## Current priorities
 
-1. Retest the two ALSA fixes on hardware and finish the remaining ALSA runtime/buffering work.
+1. Finish the remaining ALSA runtime/buffering work and validate it on a new hardware artifact.
 2. Close final-device ALSA and outstanding UPnP/Diretta CUE hardware acceptance.
 3. Complete Netease/TIDAL, ListenBrainz, Folder Browser, responsive Web and long-running
    multi-Control acceptance.
