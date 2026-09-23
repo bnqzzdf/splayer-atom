@@ -20,7 +20,10 @@ reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls-native-roots",
 ] }
 urlencoding = "2"
-tokio = { version = "1", features = ["time", "sync", "fs", "io-util"] }
+# `macros` 是 auth_oauth 里 `tokio::select!` 需要的（用于「新登录叫停旧监听」）。
+# 注意：dev-dependencies 也开了 macros，所以只跑 `cargo test` 无法暴露它缺失——
+# 必须用 `cargo build --release`（不带 dev-deps）验证生产 feature 集。
+tokio = { version = "1", features = ["time", "sync", "fs", "io-util", "net", "macros"] }
 base64 = "0.22"
 regex = "1"
 napi = { workspace = true, features = ["napi9", "serde-json", "tokio_rt"] }

@@ -47,6 +47,11 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
   // 2026-09 起 Qobuz 只支持粘贴 token：界面不再要求 user_id，并给出 Console 一行命令
   assert.ok(streamingLoginSource.includes("copy(localStorage.getItem('qobuz_user_auth_token'))"));
   assert.doesNotMatch(streamingLoginSource, /Query String Parameters 中复制 user_id/);
+  // 一键 OAuth：主按钮走原生本地回调，粘贴 token 降级为兜底，两条路都在
+  assert.match(streamingLoginSource, /qobuzApi\.oauthStart\(\)/);
+  assert.match(streamingLoginSource, /qobuzApi\.oauthAwait\(\)/);
+  assert.match(streamingLoginSource, /用浏览器登录 Qobuz/);
+  assert.match(streamingLoginSource, /openExternal\(start\.url\)/);
   assert.match(streamingLoginSource, /tidalApi\.authAuthorize\(\)/);
   assert.match(streamingLoginSource, /tidalApi\.authExchange\(code, state\)/);
   assert.match(streamingLoginSource, /tidalApi\.authDeviceAuthorization/);

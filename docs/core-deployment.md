@@ -10,6 +10,43 @@ This document describes the Linux x86-64 system-runtime and bundled-runtime depl
 - Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
 - The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
 
+## glibc and distro compatibility (Debian 11)
+
+This artifact is built inside a **Debian 11 (bullseye) container with glibc 2.31**, and the
+build gates on it: if any native component requires a symbol newer than `GLIBC_2.31`, the
+build aborts instead of shipping an incompatible artifact.
+
+Measured requirements of the shipped native components:
+
+| Component | Highest required glibc symbol |
+| --- | --- |
+| `native/audio-engine.node` | `GLIBC_2.30` |
+| `native/streaming-api.node` | `GLIBC_2.30` |
+| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | `GLIBC_2.29` |
+
+**The artifact therefore runs on any glibc >= 2.30 x86-64 Linux — Debian 11 and newer.**
+
+### Diretta SDK and the glibc floor
+
+Diretta SDK 150 ships prebuilt `ACQUA` libraries compiled against glibc >= 2.38: they
+reference the C23 integer parsers `__isoc23_strtol` / `__isoc23_strtoll`, which libc only
+provides from glibc 2.38 onward. Linking them on Debian 11 previously produced an
+`audio-engine.node` that failed to load with `undefined symbol: __isoc23_strtol`.
+
+`native/diretta-sys/src/glibc_compat.c` supplies **weak** fallbacks that forward to the
+standard `strtol` / `strtoll` when glibc < 2.38, which lets Diretta support and Debian 11
+compatibility coexist. The reasoning:
+
+- The only SDK objects referencing those symbols are `IPAddress.o` and `FileInf.o` —
+  configuration and IP-address parsing, not audio processing. They parse dotted-decimal
+  addresses and plain decimals, never C23's `0b` binary prefix, so forwarding is equivalent
+  on those call sites.
+- Because the definitions are weak and the file is compiled out entirely on glibc >= 2.38,
+  there is no conflict with modern libc versions.
+
+If Diretta later publishes ACQUA libraries built against an older glibc, this shim should
+be removed.
+
 ## Installation layout
 
 The extracted `core-system` directory is the installation root:

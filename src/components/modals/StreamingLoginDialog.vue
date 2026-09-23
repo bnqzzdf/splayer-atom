@@ -2,8 +2,10 @@
 /**
  * 流媒体平台登录对话框（Qobuz / TIDAL）
  *
- * Qobuz：**只需粘贴 user_auth_token**（userId 由 Core 凭 token 反查，不必填）
- *   - 取法：浏览器登录 play.qobuz.com → F12 Console → copy(localStorage.getItem('qobuz_user_auth_token'))
+ * Qobuz：**一键浏览器登录**（推荐）
+ *   - 原生层在 127.0.0.1 起一次性回调监听 → 打开官方授权页 → 用户正常登录
+ *   - 授权码由本地回调收下并兑换 token，用户不需要 Console / F12 / 复制粘贴
+ *   - 兜底仍保留「粘贴 user_auth_token」：非订阅、受限网络或 redirect 被拒时可用
  *   - 邮箱+密码不可用（实测 Qobuz 对该 app_id 连 user/login 都返回 401），故不暴露
  *   - 凭据由 Core 验证并持久化，Control 只读取 providerSessions 投影
  *
@@ -66,10 +68,19 @@ watch(
 );
 watch(activeTab, (newTab) => emit("update:tab", newTab));
 
-// Qobuz 表单（只粘 token；userId 由 Core 反查，保留 ref 仅用于传参签名）
+// Qobuz 表单（主路径是一键 OAuth；token 粘贴作为兜底）
 const qobuzUserId = ref("");
 const qobuzAuthToken = ref("");
 const qobuzLoading = ref(false);
+
+/**
+ * Qobuz 一键 OAuth 状态。
+ * `waiting` 期间原生层正在等浏览器回调（上限 180 秒），界面只展示提示。
+ */
+const qobuzOauthStatus = ref<"idle" | "waiting" | "success" | "error">("idle");
+const qobuzOauthMessage = ref<string>("");
+/** 兜底的粘贴 token 表单默认折叠，避免抢主路径的注意力 */
+const qobuzAdvancedOpen = ref(false);
 
 // TIDAL 设备码授权状态
 const tidalClientId = ref("");
@@ -118,6 +129,8 @@ watch(
     });
     qobuzUserId.value = "";
     qobuzAuthToken.value = "";
+    qobuzOauthStatus.value = "idle";
+    qobuzOauthMessage.value = "";
     // 保留最近一次的 deviceInfo 但重置轮询状态
     tidalPollStatus.value = "idle";
     tidalPollMessage.value = "";
@@ -134,7 +147,49 @@ const openQobuzPlayer = (): void => {
   void openExternal("https://play.qobuz.com");
 };
 
-/** Qobuz 登录 */
+/** 一键 OAuth 提示的语义化样式 */
+const qobuzOauthType = computed<"info" | "success" | "error">(() => {
+  if (qobuzOauthStatus.value === "success") return "success";
+  if (qobuzOauthStatus.value === "error") return "error";
+  return "info";
+});
+
+/**
+ * Qobuz 一键浏览器登录。
+ *
+ * 顺序很重要：先让原生层起好回调监听再打开浏览器，
+ * 否则用户可能在监听就绪前就完成了跳转。
+ *
+ * 回调地址必须用**浏览器能访问到的 Core 地址**（`location.hostname`）：
+ * 授权页是在用户 PC 上打开的，写 127.0.0.1 会指向那台 PC，回调回不到设备。
+ */
+const onQobuzBrowserLogin = async (): Promise<void> => {
+  qobuzOauthStatus.value = "waiting";
+  qobuzOauthMessage.value = "正在打开 Qobuz 授权页…";
+  try {
+    const start = await qobuzApi.oauthStart(window.location.hostname);
+    if (!start?.url) throw new Error("未能获取 Qobuz 授权地址");
+
+    openExternal(start.url);
+    qobuzOauthMessage.value =
+      "已打开浏览器，请在 Qobuz 页面登录并授权；完成后本窗口会自动更新，无需返回复制任何东西。";
+
+    // 原生侧会阻塞到回调到达、用户取消或 180 秒超时。
+    await qobuzApi.oauthAwait();
+
+    await providerSessions.refresh();
+    qobuzOauthStatus.value = "success";
+    qobuzOauthMessage.value = "登录成功";
+    toast.success("Qobuz 登录成功");
+    setTimeout(() => emit("update:open", false), 800);
+  } catch (err) {
+    qobuzOauthStatus.value = "error";
+    qobuzOauthMessage.value = err instanceof Error ? err.message : "Qobuz 浏览器登录失败";
+    toast.error(qobuzOauthMessage.value);
+  }
+};
+
+/** Qobuz 登录（兜底：粘贴 user_auth_token） */
 const onQobuzLogin = async (): Promise<void> => {
   const userId = qobuzUserId.value.trim();
   const token = qobuzAuthToken.value.trim();
@@ -404,46 +459,77 @@ const onOpenUpdate = (value: boolean): void => {
 
           <!-- 登录表单 -->
           <template v-else>
-            <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-on-surface-variant">User Auth Token</label>
-              <SInput
-                v-model="qobuzAuthToken"
-                type="password"
-                placeholder="粘贴 Qobuz user_auth_token（只需这一项）"
-                :disabled="qobuzLoading"
-              />
-            </div>
-            <SButton :loading="qobuzLoading" type="primary" @click="onQobuzLogin">
-              验证并连接
-            </SButton>
-            <div
-              class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+            <!-- 主路径：一键浏览器登录 -->
+            <SButton
+              :loading="qobuzOauthStatus === 'waiting'"
+              type="primary"
+              :disabled="qobuzLoading"
+              @click="onQobuzBrowserLogin"
             >
-              <p class="mb-1 font-medium text-on-surface">如何获取 token？（30 秒）</p>
-              <p>1. 点下面按钮打开并登录 play.qobuz.com</p>
-              <p>
-                2. F12 →
-                <span class="text-on-surface">Console</span>
-                标签（不是 Network）
-              </p>
-              <p>3. 粘贴并回车：</p>
-              <code
-                class="my-1 block select-all break-all rounded bg-on-surface/8 px-2 py-1 font-mono text-[11px] text-on-surface"
-              >
-                copy(localStorage.getItem('qobuz_user_auth_token'))
-              </code>
-              <p>4. 回到这里直接 Ctrl+V（已复制到剪贴板）</p>
-              <p class="mt-1 opacity-70">无需再翻 Network 请求头，也无需填 user_id。</p>
-              <SButton
-                variant="secondary"
-                size="small"
-                class="mt-2"
-                :disabled="qobuzLoading"
-                @click="openQobuzPlayer"
-              >
-                打开 Qobuz 网页播放器
+              用浏览器登录 Qobuz
+            </SButton>
+            <p class="text-xs leading-relaxed text-on-surface-variant">
+              会打开官方授权页；登录完成后自动回到这里，不需要 Console 或复制粘贴。
+            </p>
+            <SAlert v-if="qobuzOauthStatus !== 'idle'" :type="qobuzOauthType">
+              {{ qobuzOauthMessage }}
+            </SAlert>
+
+            <!-- 兜底：粘贴 token（非订阅、受限网络或 redirect 被拒时仍可用） -->
+            <button
+              type="button"
+              class="flex items-center gap-1 self-start text-xs text-on-surface-variant transition-colors hover:text-on-surface"
+              @click="qobuzAdvancedOpen = !qobuzAdvancedOpen"
+            >
+              <IconLucideChevronDown
+                class="size-3.5 transition-transform"
+                :class="qobuzAdvancedOpen ? 'rotate-180' : ''"
+              />
+              改用粘贴 Token 登录
+            </button>
+
+            <template v-if="qobuzAdvancedOpen">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-on-surface-variant">User Auth Token</label>
+                <SInput
+                  v-model="qobuzAuthToken"
+                  type="password"
+                  placeholder="粘贴 Qobuz user_auth_token（只需这一项）"
+                  :disabled="qobuzLoading"
+                />
+              </div>
+              <SButton :loading="qobuzLoading" variant="secondary" @click="onQobuzLogin">
+                验证并连接
               </SButton>
-            </div>
+              <div
+                class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+              >
+                <p class="mb-1 font-medium text-on-surface">如何获取 token？（30 秒）</p>
+                <p>1. 点下面按钮打开并登录 play.qobuz.com</p>
+                <p>
+                  2. F12 →
+                  <span class="text-on-surface">Console</span>
+                  标签（不是 Network）
+                </p>
+                <p>3. 粘贴并回车：</p>
+                <code
+                  class="my-1 block select-all break-all rounded bg-on-surface/8 px-2 py-1 font-mono text-[11px] text-on-surface"
+                >
+                  copy(localStorage.getItem('qobuz_user_auth_token'))
+                </code>
+                <p>4. 回到这里直接 Ctrl+V（已复制到剪贴板）</p>
+                <p class="mt-1 opacity-70">无需再翻 Network 请求头，也无需填 user_id。</p>
+                <SButton
+                  variant="secondary"
+                  size="small"
+                  class="mt-2"
+                  :disabled="qobuzLoading"
+                  @click="openQobuzPlayer"
+                >
+                  打开 Qobuz 网页播放器
+                </SButton>
+              </div>
+            </template>
           </template>
         </div>
       </template>

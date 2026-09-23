@@ -35,6 +35,9 @@ async fn call_qobuz(
 
     match action {
         "auth_login" | "login" => client.auth_login(&params).await,
+        // 一键 OAuth：起本地回调监听 → 等浏览器回跳 → 兑换 token。
+        "auth_oauth_start" | "oauth_start" => client.auth_oauth_start(&params).await,
+        "auth_oauth_await" | "oauth_await" => client.auth_oauth_await(&params).await,
         "auth_status" | "status" | "user_detail" => client.auth_status().await,
         "auth_logout" | "logout" => client.auth_logout().await,
         "catalog_search" | "search" => client.catalog_search(&params).await,

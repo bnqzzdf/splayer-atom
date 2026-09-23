@@ -4,6 +4,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DIRETTA_SDK_ROOT");
     println!("cargo:rerun-if-env-changed=DIRETTA_CPU_VARIANT");
     println!("cargo:rerun-if-changed=src/bridge.cpp");
+    println!("cargo:rerun-if-changed=src/glibc_compat.c");
 
     if env::var_os("CARGO_FEATURE_SDK").is_none() {
         return;
@@ -60,6 +61,13 @@ fn main() {
         .parent()
         .expect("libstdc++.a path does not have a parent directory");
     bridge.compile("atom_diretta_bridge");
+
+    // glibc < 2.38 兼容层：ACQUA 预编译库引用了 C23 的 __isoc23_strtol/strtoll。
+    // 在 glibc >= 2.38 平台上本文件条件编译为空，不会引入任何符号。
+    cc::Build::new()
+        .file("src/glibc_compat.c")
+        .flag_if_supported("-fPIC")
+        .compile("atom_glibc_compat");
 
     let (host_lib, acqua_lib): (String, String) = if target_arch == "aarch64" {
         (
