@@ -2,6 +2,8 @@ import type { TrackSource } from "@shared/types/player";
 import type { CollectionType } from "@/types/collection";
 import { loadLocalCollection } from "./local";
 import { loadNeteaseCollection } from "./netease";
+import { loadQQMusicCollection } from "./qqmusic";
+import { loadKugouCollection } from "./kugou";
 import { loadQobuzCollection } from "./qobuz";
 import { loadTidalCollection } from "./tidal";
 import { loadStreamingCollection } from "./streaming";
@@ -18,6 +20,8 @@ export const loadCollection = async (
   if (source === "local") return loadLocalCollection(type, id, options);
   if (source === "streaming") return loadStreamingCollection(type, id, options);
   if (source === "netease") return loadNeteaseCollection(type, id, options);
+  if (source === "qqmusic") return loadQQMusicCollection(type, id, options);
+  if (source === "kugou") return loadKugouCollection(type, id, options);
   if (source === "qobuz") return loadQobuzCollection(type, id, options);
   if (source === "tidal") return loadTidalCollection(type, id, options);
   options.onUpdate(null);

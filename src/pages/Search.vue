@@ -12,8 +12,10 @@ import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import IconLucideLogIn from "~icons/lucide/log-in";
 import { useStatusStore } from "@/stores/status";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { useCoreCapabilitiesStore } from "@/stores/coreCapabilities";
 import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { libraryClient } from "@/core/libraryClient";
 
 const { t } = useI18n();
@@ -21,9 +23,8 @@ const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
 const providerSessions = useProviderSessionsStore();
+const coreCapabilities = useCoreCapabilitiesStore();
 const streaming = useStreamingStore();
-const atomSearchPlatforms = new Set<Platform>(["netease", "qobuz", "tidal"]);
-if (!atomSearchPlatforms.has(status.searchPlatform)) status.searchPlatform = "netease";
 void streaming.init();
 
 type SearchSource = Platform | "local" | "streaming";
@@ -52,15 +53,28 @@ const tabs = computed(() => {
   return items;
 });
 
-/** NCM 搜索允许匿名使用；Qobuz/TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
+/** NCM / QM / KG 搜索允许匿名使用；Qobuz / TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
+const ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
+  "netease",
+  "qqmusic",
+  "kugou",
+]);
+
+/**
+ * 平台是否可作为搜索来源。
+ *
+ * 先看 Core 是否声明了该平台能力位（不含该平台的 Core 不应出现它的入口），
+ * 再看登录态（匿名平台始终可用，其余需已认证）。
+ */
 const isSearchPlatformAvailable = (platform: Platform): boolean =>
-  platform === "netease" ||
-  ((platform === "qobuz" || platform === "tidal") && providerSessions.isAuthenticated(platform));
+  coreCapabilities.supportsPlatform(platform) &&
+  (ANONYMOUS_SEARCH_PLATFORMS.has(platform) || providerSessions.isAuthenticated(platform));
 
 const platformTabs = computed(() => {
-  const online = ALL_PLATFORMS.filter(
-    (key) => atomSearchPlatforms.has(key) && isSearchPlatformAvailable(key),
-  ).map((key) => ({ key, label: PLATFORM_SHORT_NAME[key] }));
+  const online = ALL_PLATFORMS.filter(isSearchPlatformAvailable).map((key) => ({
+    key,
+    label: PLATFORM_SHORT_NAME[key],
+  }));
   const mediaSource = streaming.activeServer
     ? [{ key: "streaming", label: t("search.source.streaming") }]
     : [];
@@ -70,16 +84,18 @@ const platformTabs = computed(() => {
 watch(
   () =>
     [
+      searchSource.value,
       providerSessions.initialized,
+      coreCapabilities.initialized,
       providerSessions.sessions.qobuz.authenticated,
       providerSessions.sessions.tidal.authenticated,
     ] as const,
-  ([initialized]) => {
-    if (!initialized) return;
-    const source = searchSource.value;
-    if ((source === "qobuz" || source === "tidal") && !providerSessions.isAuthenticated(source)) {
-      searchSource.value = "local";
-    }
+  ([source, sessionsReady, capabilitiesReady]) => {
+    if (source === "local" || source === "streaming") return;
+    // 两份投影都就绪后才判定：未就绪时保持现状，避免把可用平台误退回本地；
+    // 就绪后同时覆盖「用户选了不可用平台」与「能力位/登录态后到」两种情形。
+    if (!sessionsReady || !capabilitiesReady) return;
+    if (!isSearchPlatformAvailable(source)) searchSource.value = "local";
   },
   { immediate: true },
 );
@@ -369,7 +385,14 @@ const isAuthError = computed(() => {
 const loginDialogOpen = ref(false);
 const loginDialogTab = ref<"qobuz" | "tidal">("qobuz");
 
+/** QM / KG 的登录入口在设置面板的「在线平台账号」区，搜索页不再另开登录弹窗。 */
+const ACCOUNT_SETTINGS_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(["qqmusic", "kugou"]);
+
 const openLoginModal = (): void => {
+  if (ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)) {
+    useSettingsDialog().show("network");
+    return;
+  }
   if (status.searchPlatform === "tidal") {
     loginDialogTab.value = "tidal";
   } else {
@@ -435,32 +458,21 @@ const onLoginDialogClose = (open: boolean): void => {
           <IconLucideLogIn class="size-8" />
         </div>
         <div class="text-base font-semibold text-on-surface mb-1">
-          {{
-            (status.searchPlatform === "tidal"
-              ? "TIDAL"
-              : status.searchPlatform === "qobuz"
-                ? "Qobuz"
-                : status.searchPlatform.toUpperCase()) + " 尚未登录"
-          }}
+          {{ PLATFORM_SHORT_NAME[status.searchPlatform] }} 尚未登录
         </div>
         <div class="text-xs text-on-surface-variant/80 mb-5 leading-relaxed">
           {{
             status.searchPlatform === "tidal"
               ? "搜索与播放 TIDAL 曲目需要先绑定授权您的 TIDAL 账号"
-              : "搜索与播放该平台曲目需要先登录账号"
+              : ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)
+                ? "搜索与播放该平台曲目需要先在「设置 → 在线平台账号」中登录"
+                : "搜索与播放该平台曲目需要先登录账号"
           }}
         </div>
         <div class="flex items-center gap-3">
           <SButton type="primary" size="medium" @click="openLoginModal">
             <template #icon><IconLucideLogIn class="size-4" /></template>
-            登录
-            {{
-              status.searchPlatform === "tidal"
-                ? "TIDAL"
-                : status.searchPlatform === "qobuz"
-                  ? "Qobuz"
-                  : status.searchPlatform.toUpperCase()
-            }}
+            登录 {{ PLATFORM_SHORT_NAME[status.searchPlatform] }}
           </SButton>
           <SButton variant="secondary" size="medium" @click="onRetry">
             <template #icon><IconLucideRotateCw class="size-4" /></template>

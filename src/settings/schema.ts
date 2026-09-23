@@ -17,6 +17,32 @@ const providerAccountsSection: SettingSection = {
   id: "providerAccounts",
   items: [
     {
+      key: "qqmusicAccount",
+      type: "custom",
+      component: PlatformAccount,
+      componentProps: { platform: "qqmusic" },
+      fullWidth: true,
+      keywords: [
+        "QM",
+        "QQ音乐",
+        "settings.platformLogin.loginQr",
+        "settings.platformLogin.manualCookie",
+      ],
+    },
+    {
+      key: "kugouAccount",
+      type: "custom",
+      component: PlatformAccount,
+      componentProps: { platform: "kugou" },
+      fullWidth: true,
+      keywords: [
+        "KG",
+        "酷狗",
+        "settings.platformLogin.loginQr",
+        "settings.platformLogin.manualCookie",
+      ],
+    },
+    {
       key: "qobuzAccount",
       type: "custom",
       component: PlatformAccount,

@@ -13,6 +13,7 @@ import type {
   HostApi,
   MusicUrlReq,
   MusicUrlRes,
+  MusicUrlUnavailableReason,
   PluginAction,
   PluginQuality,
   PluginUpdateInfo,
@@ -55,6 +56,25 @@ const mapLxQualityToHost = (q: string): PluginQuality | null =>
   LX_TO_HOST_QUALITY[String(q).toLowerCase()] ?? null;
 
 const mapHostQualityToLx = (q: PluginQuality): string => HOST_TO_LX_QUALITY[q] ?? "320k";
+
+/**
+ * 归一插件上报的不可用原因。
+ *
+ * 上游 lx 协议没有这个字段，所以只在脚本**主动**给出时采用；别名做一次收敛，
+ * 认不出来的值一律返回 null，交给 Core 按错误文案兜底归类。
+ */
+const normalizeUnavailableReason = (value: unknown): MusicUrlUnavailableReason | null => {
+  if (typeof value !== "string") return null;
+  const key = value.trim().toLowerCase();
+  if (!key) return null;
+  if (["vip", "vip_required", "member", "member_only", "need_vip"].includes(key)) return "vip";
+  if (["purchase", "buy", "paid", "album", "need_purchase"].includes(key)) return "purchase";
+  if (["trial", "free_trial", "trial_only", "try"].includes(key)) return "trial";
+  if (["unavailable", "no_copyright", "copyright", "offline", "not_available"].includes(key)) {
+    return "unavailable";
+  }
+  return null;
+};
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -505,11 +525,20 @@ export const installLxShim = (
         musicInfo: normalizeLxMusicInfo(reqObj.musicInfo, source),
       };
       const raw = await Promise.resolve(requestHandler({ source, action, info }));
-      // 严格归一为 { url }，避免脚本回包夹带闭包/Proxy 导致 postMessage 克隆失败
+      // 严格归一为**原始值**字段，避免脚本回包夹带闭包/Proxy 导致 postMessage 克隆失败。
       if (typeof raw === "string") return { url: raw } as MusicUrlRes;
       if (raw && typeof raw === "object") {
-        const url = (raw as Record<string, unknown>).url;
-        if (typeof url === "string") return { url } as MusicUrlRes;
+        const record = raw as Record<string, unknown>;
+        const url = record.url;
+        if (typeof url === "string") {
+          const reason = normalizeUnavailableReason(record.reason);
+          const trial = typeof record.trial === "boolean" ? record.trial : undefined;
+          return {
+            url,
+            ...(reason ? { reason } : {}),
+            ...(trial === undefined ? {} : { trial }),
+          } as MusicUrlRes;
+        }
       }
       throw Object.assign(new Error("lx plugin returned invalid musicUrl result"), {
         code: "PLUGIN_INVALID_RESULT",

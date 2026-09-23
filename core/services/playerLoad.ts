@@ -61,6 +61,18 @@ const isNativeNetworkError = (error: unknown): boolean =>
   String(error).includes("[NetworkUnreachable]");
 const isNativeCancelledError = (error: unknown): boolean => String(error).includes("[Cancelled]");
 
+/**
+ * 原生报「当前输出不接受该音源格式」。
+ *
+ * 典型是 Diretta strict Source Direct 只吃无损整数 PCM：音源本身拿到了，
+ * 是输出侧拒绝。这类失败与网络无关，必须与 NETWORK_ERROR 区分开——
+ * 否则用户会照着「请检查网络」去查一个根本不存在的网络问题。
+ */
+const isNativeOutputFormatError = (error: unknown): boolean =>
+  /strict Source Direct|只接受 lossless integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
+    String(error),
+  );
+
 /** 根据原生错误特征和音源类型分类。 */
 const classifyLoadError = (error: unknown, source: string): ErrorCode => {
   const msg = error instanceof Error ? error.message : String(error);
@@ -69,6 +81,10 @@ const classifyLoadError = (error: unknown, source: string): ErrorCode => {
     return ErrorCode.DEVICE_NOT_FOUND;
   }
   if (isNativeSourceNotFoundError(error)) return ErrorCode.FILE_NOT_FOUND;
+  // 输出格式约束要排在「http 源就算网络错误」之前：
+  // 原来只要 source 是 http(s)，任何加载失败都被判成 NETWORK_ERROR，
+  // 于是 Qobuz/TIDAL 的格式与权益问题全都显示成「请检查网络」。
+  if (isNativeOutputFormatError(error)) return ErrorCode.OUTPUT_FORMAT_UNSUPPORTED;
   if (isNativeNetworkError(error) || /^https?:\/\//i.test(source)) return ErrorCode.NETWORK_ERROR;
   return ErrorCode.FILE_DECODE_ERROR;
 };

@@ -4,6 +4,8 @@ import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 
 const EMPTY_SESSIONS: ProviderSessionsSnapshot = {
   netease: { authenticated: false },
+  qqmusic: { authenticated: false },
+  kugou: { authenticated: false },
   qobuz: { authenticated: false },
   tidal: { authenticated: false },
 };

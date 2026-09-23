@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { useDataStore } from "@/stores/data";
 import { useStatusStore } from "@/stores/status";
+import { useCoreCapabilitiesStore } from "@/stores/coreCapabilities";
 import { getHotSearches, type HotSearchItem } from "@/apis/search/hot";
 import { getSearchSuggest, type SuggestData, type SuggestSimpleItem } from "@/apis/search/suggest";
 import { songsByIds as getNeteaseSongsByIds } from "@/apis/song/netease";
 import { formatCompact } from "@/utils/format";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import { parseMusicLink, type LinkType } from "@/utils/link";
-import type { TrackSource } from "@shared/types/player";
+import type { Platform } from "@shared/types/platform";
+import type { Track, TrackSource } from "@shared/types/player";
 import * as player from "@/core/player";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideUser from "~icons/lucide/user";
@@ -18,6 +20,7 @@ const { t, locale } = useI18n();
 const router = useRouter();
 const data = useDataStore();
 const status = useStatusStore();
+const coreCapabilities = useCoreCapabilitiesStore();
 
 /** 弹窗开关挂在 status store，便于快捷键打开 */
 const dialogOpen = computed({
@@ -31,12 +34,21 @@ const trimmedQuery = computed(() => searchQuery.value.trim());
 /** 音乐链接检测 */
 const parsedLink = computed(() => parseMusicLink(trimmedQuery.value));
 
+/**
+ * 热搜与建议跟随用户偏好的在线平台。
+ *
+ * Core 未声明该平台能力位时退回网易云，避免问一个必然失败的平台要内容。
+ */
+const activePlatform = computed<Platform>(() =>
+  coreCapabilities.supportsPlatform(status.searchPlatform) ? status.searchPlatform : "netease",
+);
+
 /** 热搜结果 */
 const hotItems = ref<HotSearchItem[]>([]);
 
 const loadHot = async (): Promise<void> => {
   try {
-    hotItems.value = await getHotSearches();
+    hotItems.value = await getHotSearches(activePlatform.value);
   } catch (err) {
     console.warn("[NavSearch] hot search failed:", err);
     hotItems.value = [];
@@ -44,12 +56,18 @@ const loadHot = async (): Promise<void> => {
 };
 
 /** 搜索建议 */
-const EMPTY_SUGGEST: SuggestData = { songs: [], albums: [], artists: [], playlists: [] };
+const EMPTY_SUGGEST: SuggestData = {
+  songs: [],
+  albums: [],
+  artists: [],
+  playlists: [],
+  platform: "netease",
+};
 const suggest = ref<SuggestData>({ ...EMPTY_SUGGEST });
 
 const loadSuggest = useDebounceFn(async (keyword: string) => {
   try {
-    suggest.value = await getSearchSuggest(keyword);
+    suggest.value = await getSearchSuggest(keyword, activePlatform.value);
   } catch (err) {
     console.warn("[NavSearch] suggest failed:", err);
   }
@@ -57,42 +75,57 @@ const loadSuggest = useDebounceFn(async (keyword: string) => {
 
 type SuggestKind = "song" | "artist" | "album" | "playlist";
 
+/** 界面用建议条目：在通用形状上补一个「平台已给出 Track」的可选通道。 */
+interface SuggestEntry extends SuggestSimpleItem {
+  track?: Track;
+}
+
 /**
  * 建议分类配置
  */
-const suggestSections = computed(() => {
-  const data = suggest.value;
-  return [
-    {
-      kind: "song" as SuggestKind,
-      icon: IconLucideMusic,
-      label: t("search.tabs.songs"),
-      items: data.songs.map<SuggestSimpleItem>((song) => ({
-        id: song.id,
-        name: song.name,
-        subtitle: [song.artist, song.album].filter(Boolean).join(" · ") || undefined,
-      })),
-    },
-    {
-      kind: "artist" as SuggestKind,
-      icon: IconLucideUser,
-      label: t("search.tabs.artists"),
-      items: data.artists,
-    },
-    {
-      kind: "album" as SuggestKind,
-      icon: IconLucideDisc,
-      label: t("search.tabs.albums"),
-      items: data.albums,
-    },
-    {
-      kind: "playlist" as SuggestKind,
-      icon: IconLucideListMusic,
-      label: t("search.tabs.playlists"),
-      items: data.playlists,
-    },
-  ].filter((sec) => sec.items.length > 0);
-});
+const suggestSections = computed(
+  (): Array<{
+    kind: SuggestKind;
+    icon: unknown;
+    label: string;
+    items: SuggestEntry[];
+  }> => {
+    const current = suggest.value;
+    const fallbackSource = current.platform;
+    return [
+      {
+        kind: "song" as SuggestKind,
+        icon: IconLucideMusic,
+        label: t("search.tabs.songs"),
+        items: current.songs.map<SuggestEntry>((song) => ({
+          id: song.id,
+          name: song.name,
+          subtitle: [song.artist, song.album].filter(Boolean).join(" · ") || undefined,
+          source: song.source ?? fallbackSource,
+          track: song.track,
+        })),
+      },
+      {
+        kind: "artist" as SuggestKind,
+        icon: IconLucideUser,
+        label: t("search.tabs.artists"),
+        items: current.artists,
+      },
+      {
+        kind: "album" as SuggestKind,
+        icon: IconLucideDisc,
+        label: t("search.tabs.albums"),
+        items: current.albums,
+      },
+      {
+        kind: "playlist" as SuggestKind,
+        icon: IconLucideListMusic,
+        label: t("search.tabs.playlists"),
+        items: current.playlists,
+      },
+    ].filter((sec) => sec.items.length > 0);
+  },
+);
 
 /** 跳转到搜索页 */
 const submit = (raw: string): void => {
@@ -111,7 +144,8 @@ const onClearHistory = (): void => data.clearSearchHistory();
 /**
  * 建议点击
  * @param kind - 建议类型
- * @param id - 歌曲 id
+ * @param id - 资源 id
+ * @param source - 该建议所属平台
  * @param name - 名称
  */
 const navigateToResource = async (
@@ -123,12 +157,7 @@ const navigateToResource = async (
   dialogOpen.value = false;
   switch (kind) {
     case "song":
-      try {
-        const [track] = await getNeteaseSongsByIds([Number(id)]);
-        if (track) await player.playNow(track);
-      } catch (err) {
-        console.warn("[NavSearch] play song failed:", err);
-      }
+      await playNeteaseSong(id);
       break;
     case "artist":
       navigateToArtist(name, { source, artistId: id });
@@ -142,9 +171,42 @@ const navigateToResource = async (
   }
 };
 
-const onPickSuggest = (kind: SuggestKind, id: number, name: string): void => {
+/** 按网易云 id 解析并播放（仅用于解析到的音乐链接，建议条目自带 Track 时走 playSuggestSong）。 */
+const playNeteaseSong = async (id: string): Promise<void> => {
+  try {
+    const [track] = await getNeteaseSongsByIds([Number(id)]);
+    if (track) await player.playNow(track);
+  } catch (err) {
+    console.warn("[NavSearch] play song failed:", err);
+  }
+};
+
+/**
+ * 建议歌曲点击
+ *
+ * 平台已把 canonical Track 一起给出时直接播放（QQ音乐走这条），
+ * 否则按网易云 id 解析——不再假定所有建议都来自网易云。
+ */
+const playSuggestSong = async (entry: SuggestEntry): Promise<void> => {
+  if (entry.track) {
+    try {
+      await player.playNow(entry.track);
+    } catch (err) {
+      console.warn("[NavSearch] play suggested song failed:", err);
+    }
+    return;
+  }
+  await playNeteaseSong(entry.id);
+};
+
+const onPickSuggest = (kind: SuggestKind, entry: SuggestEntry): void => {
   if (trimmedQuery.value) data.addSearchHistory(trimmedQuery.value);
-  navigateToResource(kind, String(id), "netease", name);
+  if (kind === "song") {
+    dialogOpen.value = false;
+    void playSuggestSong(entry);
+    return;
+  }
+  navigateToResource(kind, entry.id, entry.source ?? suggest.value.platform, entry.name);
 };
 
 /** 音乐链接点击 */
@@ -181,7 +243,7 @@ const keyboardItems = computed(() => {
       for (const entry of sec.items) {
         items.push({
           id: `${sec.kind}-${entry.id}`,
-          action: () => onPickSuggest(sec.kind, entry.id, entry.name),
+          action: () => onPickSuggest(sec.kind, entry),
         });
       }
     }
@@ -253,6 +315,17 @@ watch(trimmedQuery, (kw, prev) => {
     // 进入搜索建议
     if (!prev) bodyHeight.value = 0;
     loadSuggest(kw);
+  }
+});
+
+/** 平台偏好变化时重取内容：热搜/建议都是平台相关的。 */
+watch(activePlatform, () => {
+  if (trimmedQuery.value) {
+    suggest.value = { ...EMPTY_SUGGEST };
+    loadSuggest(trimmedQuery.value);
+  } else {
+    hotItems.value = [];
+    void loadHot();
   }
 });
 
@@ -357,7 +430,7 @@ onMounted(() => {
                 class="min-w-0 flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-on-surface/5 transition-colors duration-200"
                 :class="{ 'bg-on-surface/5': isActive(`${sec.kind}-${entry.id}`) }"
                 :data-search-id="`${sec.kind}-${entry.id}`"
-                @click="onPickSuggest(sec.kind, entry.id, entry.name)"
+                @click="onPickSuggest(sec.kind, entry)"
               >
                 <div class="flex-1 min-w-0 flex flex-col leading-tight">
                   <span class="truncate text-sm text-on-surface">{{ entry.name }}</span>

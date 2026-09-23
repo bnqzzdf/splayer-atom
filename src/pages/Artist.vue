@@ -6,8 +6,7 @@ import { controlActionsToMenuItems } from "@/actions/menu";
 import { useSettingsStore } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
-import { loadArtist as loadArtistService } from "@/services/artistLoader";
-import { fetchArtistSongs } from "@/apis/artist/netease";
+import { loadArtist as loadArtistService, type ArtistPagination } from "@/services/artistLoader";
 import { navigateToAlbum } from "@/utils/navigate";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
@@ -45,6 +44,8 @@ let loadAbort: AbortController | null = null;
 /** 是否还有更多 */
 const hasMoreSongs = ref(false);
 const loadingMore = ref(false);
+/** 当前来源的触底分页描述；由来源自己持有平台细节，页面不感知平台 */
+const pagination = ref<ArtistPagination | null>(null);
 
 /** 在线头像未到位时，用任一曲目的封面顶替 */
 const fallbackTrackCover = computed(() => artist.value?.tracks.find((t) => t.cover)?.cover);
@@ -70,19 +71,20 @@ const loadArtist = async (): Promise<void> => {
   loading.value = true;
   error.value = "";
   hasMoreSongs.value = false;
+  pagination.value = null;
 
   try {
-    await loadArtistService(source, id, {
+    const page = await loadArtistService(source, id, {
       fallbackName: typeof route.query.name === "string" ? route.query.name : undefined,
       signal: myAbort.signal,
       onUpdate: (next) => {
         if (myAbort.signal.aborted) return;
         artist.value = next;
-        if (next && source === "netease" && next.tracks.length >= 50) {
-          hasMoreSongs.value = true;
-        }
       },
     });
+    if (myAbort.signal.aborted) return;
+    pagination.value = page;
+    hasMoreSongs.value = page?.hasMore === true;
   } catch (err) {
     if (myAbort.signal.aborted) return;
     error.value = err instanceof Error ? err.message : String(err);
@@ -93,11 +95,12 @@ const loadArtist = async (): Promise<void> => {
 
 /** 触底加载 */
 const onReachBottom = async (): Promise<void> => {
-  if (source !== "netease" || !hasMoreSongs.value || loadingMore.value || !artist.value) return;
+  const page = pagination.value;
+  if (!page?.hasMore || !hasMoreSongs.value || loadingMore.value || !artist.value) return;
   const current = artist.value;
   loadingMore.value = true;
   try {
-    const { tracks, more } = await fetchArtistSongs(decodeURIComponent(id), current.tracks.length);
+    const { tracks, more } = await page.loadMore(current.tracks.length, 50);
     if (loadAbort?.signal.aborted || artist.value?.id !== current.id) return;
     if (tracks.length === 0) {
       hasMoreSongs.value = false;

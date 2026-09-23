@@ -35,11 +35,12 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
   assert.match(platformAccountSource, /useProviderSessionsStore\(\)/);
   assert.match(platformAccountSource, /providerSessions\.sessions\[props\.platform\]/);
   assert.match(platformAccountSource, /providerClient\.clearSession\(props\.platform\)/);
-  assert.match(platformAccountSource, /single-platform="props\.platform"/);
-  assert.doesNotMatch(
+  assert.match(
     platformAccountSource,
-    /useDataStore|getPlatformAccountAdapter|localStorage|sessionStorage/,
+    /:single-platform="props\.platform === 'tidal' \? 'tidal' : 'qobuz'"/,
   );
+  assert.match(platformAccountSource, /getPlatformAccountAdapter\(props\.platform\)/);
+  assert.ok(streamingLoginSource.includes("copy(localStorage.getItem('qobuz_user_auth_token'))"));
 
   assert.match(streamingLoginSource, /useProviderSessionsStore\(\)/);
   assert.match(streamingLoginSource, /qobuzApi\.login\(userId, token\)/);
@@ -78,15 +79,20 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
   );
 });
 
-test("formal Settings hide frozen QQ Music and Kugou account product surfaces", () => {
+test("formal Settings expose QQ Music and Kugou account rows on the provider surface", () => {
   assert.doesNotMatch(otherSettingsSource, /PlatformAccount|qqmusic|kugou|kugouLoginVersion/);
   assert.doesNotMatch(otherSettingsSource, /id: "platformLogin"|id: "platformConfig"/);
-  assert.doesNotMatch(settingsSchemaSource, /componentProps: \{ platform: "qqmusic" \}/);
-  assert.doesNotMatch(settingsSchemaSource, /componentProps: \{ platform: "kugou" \}/);
 
-  assert.match(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \["netease", "qobuz", "tidal"\]/);
-  assert.doesNotMatch(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \[[^\]]*qqmusic/);
-  assert.doesNotMatch(sharedApisSource, /MANAGED_PROVIDER_PLATFORMS = \[[^\]]*kugou/);
+  // QM / KG 走账号式行（Cookie + 扫码），与 Qobuz / TIDAL 的托管式行共用同一个 PlatformAccount。
+  assert.match(settingsSchemaSource, /componentProps: \{ platform: "qqmusic" \}/);
+  assert.match(settingsSchemaSource, /componentProps: \{ platform: "kugou" \}/);
+  assert.match(settingsSchemaSource, /key: "qqmusicAccount"/);
+  assert.match(settingsSchemaSource, /key: "kugouAccount"/);
+
+  assert.match(
+    sharedApisSource,
+    /MANAGED_PROVIDER_PLATFORMS = \[\s*"netease",\s*"qqmusic",\s*"kugou",\s*"qobuz",\s*"tidal",?\s*\]/,
+  );
 });
 
 test("Web provider surface exposes only Atom-managed providers", () => {

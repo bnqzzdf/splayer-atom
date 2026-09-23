@@ -29,18 +29,20 @@ const streamingStoreSource = readFileSync(
   "utf8",
 );
 
-test("Atom formal renderer exposes only managed online search providers", () => {
+test("Atom formal renderer exposes every Core-managed online search provider", () => {
+  // NCM / QM / KG 匿名可用；Qobuz / TIDAL 需要 Core 会话已认证。
   assert.match(
     searchPageSource,
-    /atomSearchPlatforms = new Set<Platform>\(\["netease", "qobuz", "tidal"\]\)/,
+    /ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>\(\[[\s\S]{0,160}?\]\)/,
   );
-  assert.match(searchPageSource, /atomSearchPlatforms\.has\(status\.searchPlatform\)/);
   assert.match(
     searchPageSource,
-    /atomSearchPlatforms\.has\(key\) && isSearchPlatformAvailable\(key\)/,
+    /ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>\(\[[\s\S]{0,160}"qqmusic"[\s\S]{0,40}"kugou"/,
   );
+  assert.match(searchPageSource, /ALL_PLATFORMS\.filter\(isSearchPlatformAvailable\)/);
   assert.match(searchPageSource, /providerSessions\.isAuthenticated\(platform\)/);
   assert.match(searchPageSource, /providerSessions\.initialized/);
+  assert.doesNotMatch(searchPageSource, /atomSearchPlatforms/);
   assert.match(providerSessionsSource, /const initialized = ref\(false\)/);
   assert.doesNotMatch(
     searchPageSource,
@@ -48,7 +50,25 @@ test("Atom formal renderer exposes only managed online search providers", () => 
   );
   assert.match(statusStoreSource, /searchPlatform = ref<Platform>\("netease"\)/);
 
-  assert.doesNotMatch(searchApiSource, /\.\/qqmusic|\.\/kugou/);
+  // 搜索分发必须真正接到 QM / KG 适配器，而不是抛 "not yet supported"。
+  assert.match(searchApiSource, /import \* as qqmusic from "\.\/qqmusic"/);
+  assert.match(searchApiSource, /import \* as kugou from "\.\/kugou"/);
+  assert.match(
+    searchApiSource,
+    /if \(platform === "qqmusic"\) return qqmusic\.songs\(keyword, offset, limit\)/,
+  );
+  assert.match(
+    searchApiSource,
+    /if \(platform === "kugou"\) return kugou\.songs\(keyword, offset, limit\)/,
+  );
+  assert.match(
+    searchApiSource,
+    /if \(platform === "qqmusic"\) return qqmusic\.playlists\(keyword, offset, limit\)/,
+  );
+  assert.match(
+    searchApiSource,
+    /if \(platform === "kugou"\) return kugou\.albums\(keyword, offset, limit\)/,
+  );
   assert.match(pluginPlaybackSource, /qqmusic: "tx"/);
   assert.match(pluginPlaybackSource, /kugou: "kg"/);
 });
@@ -73,7 +93,7 @@ test("Media source search reuses the Core streaming search projection", () => {
   assert.match(searchPageSource, /response\.playlists\.map/);
   assert.match(searchPageSource, /source: searchSource, name: item\.title/);
   assert.match(streamingStoreSource, /streamingClient\.search\(activeServerId\.value, query\)/);
-  assert.doesNotMatch(searchPageSource, /atomSearchPlatforms = new Set<Platform>\([^\n]*streaming/);
+  assert.doesNotMatch(searchPageSource, /ANONYMOUS_SEARCH_PLATFORMS[\s\S]{0,160}"streaming"/);
 });
 
 test("Web Netease account pages reuse the shared Core provider surface", () => {

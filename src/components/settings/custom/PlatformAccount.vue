@@ -1,23 +1,45 @@
 <script setup lang="ts">
 import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
+import QrLoginPanel from "@/components/modals/QrLoginPanel.vue";
+import LoginCookieDialog from "@/components/modals/LoginCookieDialog.vue";
 import { toast } from "@/composables/useToast";
 import { providerClient } from "@/core/providerClient";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { getPlatformAccountAdapter, type QrLoginAdapter } from "@/apis/login/platform";
+import type { Platform, PlatformProfile } from "@shared/types/platform";
 
-const props = defineProps<{ platform: "qobuz" | "tidal" }>();
+/**
+ * 在线平台账号行。
+ *
+ * 两种形态：
+ * - 托管式（Qobuz / TIDAL）：登录态由 Core 的 provider session 投影，弹窗内做网页/设备授权。
+ * - 账号式（QM / KG）：adapter 提供 profile / Cookie / 扫码，扫码走 Core 的 login_qr_* 模块。
+ */
+const props = defineProps<{ platform: Platform }>();
+
 const { t } = useI18n();
 const providerSessions = useProviderSessionsStore();
 
-const dialogOpen = ref(false);
-const disconnecting = ref(false);
+const isStreaming = computed(() => props.platform === "qobuz" || props.platform === "tidal");
+const isAccount = computed(() => props.platform === "qqmusic" || props.platform === "kugou");
 
-const platformName = computed(() => (props.platform === "qobuz" ? "Qobuz" : "TIDAL"));
+/** adapter 注册表当前只覆盖 QM/KG/Qobuz/TIDAL。 */
+const adapter = computed(() =>
+  isAccount.value ? getPlatformAccountAdapter(props.platform) : null,
+);
+
+const platformName = computed(() => {
+  if (props.platform === "qobuz") return "Qobuz";
+  if (props.platform === "tidal") return "TIDAL";
+  return adapter.value?.displayName ?? props.platform;
+});
+
 const session = computed(() => providerSessions.sessions[props.platform]);
 const accountName = computed(
   () => session.value.username || session.value.userId || platformName.value,
 );
 
-const refresh = async (): Promise<void> => {
+const refreshSession = async (): Promise<void> => {
   try {
     await providerSessions.refresh();
   } catch (error) {
@@ -25,12 +47,16 @@ const refresh = async (): Promise<void> => {
   }
 };
 
+/** ---------- 托管式（Qobuz / TIDAL） ---------- */
+const dialogOpen = ref(false);
+const disconnecting = ref(false);
+
 const disconnect = async (): Promise<void> => {
   if (disconnecting.value) return;
   disconnecting.value = true;
   try {
     await providerClient.clearSession(props.platform);
-    await refresh();
+    await refreshSession();
     toast.success(t("settings.platformLogin.toast.logoutDone", { name: platformName.value }));
   } catch (error) {
     console.error(`[provider-account] ${props.platform} disconnect failed`, error);
@@ -41,8 +67,84 @@ const disconnect = async (): Promise<void> => {
 };
 
 watch(dialogOpen, (open) => {
-  if (!open) void refresh();
+  if (!open) void refreshSession();
 });
+
+/** ---------- 账号式（QM / KG） ---------- */
+const profile = ref<PlatformProfile | null>(null);
+const qrModalOpen = ref(false);
+const cookieModalOpen = ref(false);
+const confirmOpen = ref(false);
+const selectedQrKey = ref("qq");
+
+const qrOptions = computed(() => adapter.value?.qrLoginOptions ?? []);
+
+const activeQrAdapter = computed<QrLoginAdapter | null>(() => {
+  const options = qrOptions.value;
+  if (options.length > 0) {
+    return (options.find((o) => o.key === selectedQrKey.value) ?? options[0]).adapter;
+  }
+  return adapter.value?.qrLogin ?? null;
+});
+
+const currentQrTitle = computed(() => {
+  const options = qrOptions.value;
+  if (options.length === 0) return "";
+  const hit = options.find((o) => o.key === selectedQrKey.value) ?? options[0];
+  return t(hit.labelKey);
+});
+
+const refreshProfile = async (): Promise<void> => {
+  if (!adapter.value) return;
+  try {
+    profile.value = await adapter.value.fetchProfile();
+  } catch (error) {
+    console.warn(`[platform-account] ${props.platform} fetch profile failed`, error);
+    profile.value = null;
+  }
+};
+
+watch(
+  () => `${props.platform}:${String(session.value.authenticated)}`,
+  () => {
+    if (isAccount.value) void refreshProfile();
+  },
+  { immediate: true },
+);
+
+const openQrModal = (key?: string): void => {
+  if (key) selectedQrKey.value = key;
+  else if (qrOptions.value.length > 0) selectedQrKey.value = qrOptions.value[0].key;
+  qrModalOpen.value = true;
+};
+
+const handleQrSuccess = async (): Promise<void> => {
+  await refreshSession();
+  await refreshProfile();
+  qrModalOpen.value = false;
+  toast.success(
+    t("settings.platformLogin.toast.loginSuccess", {
+      name: platformName.value,
+      user: profile.value?.nickname || accountName.value,
+    }),
+  );
+};
+
+const handleLogout = async (): Promise<void> => {
+  confirmOpen.value = false;
+  if (!adapter.value) return;
+  try {
+    await adapter.value.logout();
+    profile.value = null;
+    await refreshSession();
+    toast.success(t("settings.platformLogin.toast.logoutDone", { name: platformName.value }));
+  } catch (error) {
+    console.error(`[platform-account] ${props.platform} logout failed`, error);
+    toast.error(t("settings.platformLogin.toast.logoutFailed", { name: platformName.value }));
+  }
+};
+
+const loggedIn = computed(() => session.value.authenticated);
 </script>
 
 <template>
@@ -50,7 +152,19 @@ watch(dialogOpen, (open) => {
     class="flex items-center justify-between gap-4 rounded-xl bg-surface-panel border border-solid border-outline-variant/15 px-4 py-3.5"
   >
     <div class="flex items-center gap-3 min-w-0 flex-1">
+      <span
+        v-if="isAccount && profile?.avatarUrl"
+        class="size-10 rounded-full overflow-hidden bg-on-surface/10 flex items-center justify-center shrink-0 border border-solid border-outline-variant/20"
+      >
+        <img
+          :src="profile.avatarUrl"
+          alt="avatar"
+          class="size-full object-cover"
+          referrerpolicy="no-referrer"
+        />
+      </span>
       <div
+        v-else
         class="size-10 rounded-xl bg-on-surface/6 flex items-center justify-center text-on-surface-variant shrink-0"
       >
         <IconLucideMusic class="size-5" />
@@ -60,44 +174,150 @@ watch(dialogOpen, (open) => {
           <STag size="small">{{ platformName }}</STag>
           <span class="truncate">
             {{
-              session.authenticated
-                ? accountName
-                : t("settings.platformLogin.title", { name: platformName })
+              loggedIn && isAccount && profile?.nickname
+                ? profile.nickname
+                : loggedIn
+                  ? accountName
+                  : t("settings.platformLogin.title", { name: platformName })
             }}
           </span>
+          <STag v-if="isAccount && profile?.isVip" size="small" round>VIP</STag>
         </div>
         <div class="text-sm text-on-surface-variant/70 mt-0.5 truncate">
-          {{
-            session.authenticated
-              ? t("settings.platformLogin.connected")
-              : t("settings.platformLogin.desc")
-          }}
+          <template v-if="loggedIn">
+            <template v-if="isAccount && adapter">
+              {{ adapter.userIdLabel }}: {{ profile?.userId }}
+            </template>
+            <template v-else>{{ t("settings.platformLogin.connected") }}</template>
+          </template>
+          <template v-else>{{ t("settings.platformLogin.desc") }}</template>
         </div>
       </div>
     </div>
 
     <div class="shrink-0 flex items-center gap-2">
-      <SButton
-        v-if="session.authenticated"
-        variant="secondary"
-        size="small"
-        type="error"
-        :loading="disconnecting"
-        @click="disconnect"
-      >
-        <template #icon><IconLucideUnplug class="size-4" /></template>
-        {{ t("settings.platformLogin.disconnect") }}
-      </SButton>
-      <SButton v-else variant="secondary" size="small" type="primary" @click="dialogOpen = true">
-        <template #icon><IconLucideLogIn class="size-4" /></template>
-        {{ t("settings.platformLogin.connect") }}
-      </SButton>
+      <template v-if="loggedIn">
+        <SButton
+          variant="secondary"
+          size="small"
+          type="error"
+          :loading="disconnecting"
+          @click="isAccount ? (confirmOpen = true) : disconnect()"
+        >
+          <template #icon><IconLucideUnplug class="size-4" /></template>
+          {{
+            isAccount ? t("settings.platformLogin.logout") : t("settings.platformLogin.disconnect")
+          }}
+        </SButton>
+      </template>
+      <template v-else>
+        <template v-if="isAccount && adapter">
+          <SButton
+            v-if="adapter.setCookie"
+            variant="secondary"
+            size="small"
+            @click="cookieModalOpen = true"
+          >
+            <template #icon><IconLucideKey class="size-3.5" /></template>
+            {{ t("settings.platformLogin.manualCookie") }}
+          </SButton>
+          <SDropdownMenu
+            v-if="qrOptions.length > 1"
+            :items="qrOptions.map((o) => ({ key: o.key, label: t(o.labelKey) }))"
+            @select="(key: string) => openQrModal(key)"
+          >
+            <template #trigger>
+              <SButton variant="secondary" size="small" type="primary">
+                <template #icon><IconLucideQrCode class="size-4" /></template>
+                {{ t("settings.platformLogin.loginQr") }}
+                <template #extra>
+                  <IconLucideChevronDown class="size-3.5 ml-0.5 opacity-70" />
+                </template>
+              </SButton>
+            </template>
+          </SDropdownMenu>
+          <SButton
+            v-else-if="activeQrAdapter"
+            variant="secondary"
+            size="small"
+            type="primary"
+            @click="openQrModal()"
+          >
+            <template #icon><IconLucideQrCode class="size-4" /></template>
+            {{ t("settings.platformLogin.loginQr") }}
+          </SButton>
+        </template>
+        <SButton v-else variant="secondary" size="small" type="primary" @click="dialogOpen = true">
+          <template #icon><IconLucideLogIn class="size-4" /></template>
+          {{ t("settings.platformLogin.connect") }}
+        </SButton>
+      </template>
     </div>
-
-    <StreamingLoginDialog
-      v-model:open="dialogOpen"
-      :tab="props.platform"
-      :single-platform="props.platform"
-    />
   </div>
+
+  <StreamingLoginDialog
+    v-if="isStreaming"
+    v-model:open="dialogOpen"
+    :tab="props.platform === 'tidal' ? 'tidal' : 'qobuz'"
+    :single-platform="props.platform === 'tidal' ? 'tidal' : 'qobuz'"
+  />
+
+  <SDialog v-if="activeQrAdapter" v-model:open="qrModalOpen" :closable="false" width="380px">
+    <div class="flex flex-col items-center gap-4 py-3">
+      <div class="flex flex-col items-center gap-2">
+        <SLogo :size="48" />
+        <div class="text-xl font-semibold text-on-surface">{{ platformName }}</div>
+        <div v-if="currentQrTitle" class="text-xs text-on-surface-variant font-medium">
+          {{ currentQrTitle }}
+        </div>
+      </div>
+      <QrLoginPanel
+        :key="`${props.platform}-${selectedQrKey}`"
+        class="mt-2"
+        :active="qrModalOpen"
+        :adapter="activeQrAdapter"
+        @success="handleQrSuccess"
+      />
+    </div>
+    <template #footer="{ close }">
+      <SButton variant="tertiary" class="mx-auto" @click="close">
+        <template #icon><IconLucideX /></template>
+        {{ t("common.cancel") }}
+      </SButton>
+    </template>
+  </SDialog>
+
+  <LoginCookieDialog
+    v-if="isAccount"
+    :open="cookieModalOpen"
+    :platform="props.platform"
+    @update:open="(v: boolean) => (cookieModalOpen = v)"
+    @success="
+      () => {
+        void refreshSession();
+        void refreshProfile();
+      }
+    "
+  />
+
+  <SDialog
+    v-model:open="confirmOpen"
+    :title="t('settings.platformLogin.logoutTitle', { name: platformName })"
+    width="400px"
+  >
+    <p class="text-sm text-on-surface-variant">
+      {{
+        t("settings.platformLogin.logoutConfirm", {
+          name: platformName,
+          user: profile?.nickname || "",
+        })
+      }}
+    </p>
+    <template #footer="{ close }">
+      <SButton variant="tertiary" @click="close">{{ t("common.cancel") }}</SButton>
+      <SButton variant="secondary" type="error" @click="handleLogout">
+        {{ t("common.confirm") }}
+      </SButton>
+    </template>
+  </SDialog>
 </template>

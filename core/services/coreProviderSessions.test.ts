@@ -11,6 +11,8 @@ const projectionStoreSource = read(
 );
 const userStoreSource = read(new URL("../../src/stores/user.ts", import.meta.url));
 const neteaseSource = read(new URL("../../src/apis/netease.ts", import.meta.url));
+const qqmusicSource = read(new URL("../../src/apis/qqmusic.ts", import.meta.url));
+const kugouSource = read(new URL("../../src/apis/kugou.ts", import.meta.url));
 const qobuzSource = read(new URL("../../src/apis/qobuz.ts", import.meta.url));
 const tidalSource = read(new URL("../../src/apis/tidal.ts", import.meta.url));
 const qobuzAuthSource = read(new URL("../apis/qobuz/auth.ts", import.meta.url));
@@ -50,12 +52,14 @@ test("Managed Provider requests and session projection use the Core Control tran
   assert.doesNotMatch(projectionStoreSource, /window\.api|ipcRenderer|electron/);
 });
 
-test("Atom-managed provider wrappers use Core Protocol and renderer has no QQ/Kugou provider facade", () => {
+test("Atom-managed provider wrappers use Core Protocol for every online platform", () => {
   assert.match(neteaseSource, /providerClient\.call\("netease", name, params\)/);
   assert.match(neteaseSource, /providerClient\.clearSession\("netease"\)/);
+  assert.match(qqmusicSource, /providerClient\.call\("qqmusic", name, params\)/);
+  assert.match(kugouSource, /providerClient\.call\("kugou", name, params\)/);
   assert.match(qobuzSource, /providerClient\.call\("qobuz", name, params\)/);
   assert.match(tidalSource, /providerClient\.call\("tidal", name, params\)/);
-  assert.match(cookieDialogSource, /providerClient\.setCookie\("netease", value\)/);
+  assert.match(cookieDialogSource, /providerClient\.setCookie\(props\.platform, value\)/);
   assert.match(providerClientSource, /ManagedProviderPlatform/);
   assert.doesNotMatch(providerClientSource, /qqmusic|kugou/);
 });

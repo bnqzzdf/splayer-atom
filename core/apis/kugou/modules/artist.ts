@@ -179,44 +179,56 @@ const artist: KGModule = async (params) => {
 
   const id = await resolveAuthorId(rawId);
   const clienttime = Math.floor(Date.now() / 1000);
+  // 触底分页：page/pagesize 由调用方给出；includeAlbums=false 时只取歌曲页，
+  // 避免每翻一页都重复拉一次歌手详情与专辑列表。
+  const page = Math.max(1, Number(params.page ?? 1) || 1);
+  const pagesize = Math.max(1, Number(params.pagesize ?? params.limit ?? 50) || 50);
+  const includeAlbums = params.includeAlbums !== false;
 
-  const [detailRes, songsRes, albumsRes] = await Promise.all([
-    kgGatewayRequest<{ data?: RawArtistDetail }>("/kmr/v3/author", {
-      method: "POST",
-      data: { author_id: id },
-      headers: { "x-router": "openapi.kugou.com", "kg-tid": "36" },
-    }),
-    kgGatewayRequest<{ data?: RawArtistAudio[]; total?: number }>("/kmr/v1/audio_group/author", {
+  const songsRequest = kgGatewayRequest<{ data?: RawArtistAudio[]; total?: number }>(
+    "/kmr/v1/audio_group/author",
+    {
       method: "POST",
       baseURL: "https://openapi.kugou.com",
       data: {
         author_id: id,
-        pagesize: 50,
-        page: 1,
+        pagesize,
+        page,
         sort: 1,
         area_code: "all",
         clienttime,
         key: signParamsKey(clienttime),
       },
       headers: { "x-router": "openapi.kugou.com", "kg-tid": "220" },
-    }),
-    kgGatewayRequest<{ data?: RawArtistAlbum[]; total?: number }>("/kmr/v1/author/albums", {
-      method: "POST",
-      data: {
-        author_id: id,
-        pagesize: 50,
-        page: 1,
-        sort: 3,
-        category: 1,
-        area_code: "all",
-      },
-      headers: { "x-router": "openapi.kugou.com", "kg-tid": "36" },
-    }),
-  ]);
+    },
+  );
 
-  const detail = detailRes.data ?? {};
+  const [detailRes, songsRes, albumsRes] = includeAlbums
+    ? await Promise.all([
+        kgGatewayRequest<{ data?: RawArtistDetail }>("/kmr/v3/author", {
+          method: "POST",
+          data: { author_id: id },
+          headers: { "x-router": "openapi.kugou.com", "kg-tid": "36" },
+        }),
+        songsRequest,
+        kgGatewayRequest<{ data?: RawArtistAlbum[]; total?: number }>("/kmr/v1/author/albums", {
+          method: "POST",
+          data: {
+            author_id: id,
+            pagesize: 50,
+            page: 1,
+            sort: 3,
+            category: 1,
+            area_code: "all",
+          },
+          headers: { "x-router": "openapi.kugou.com", "kg-tid": "36" },
+        }),
+      ])
+    : [null, await songsRequest, null];
+
+  const detail = detailRes?.data ?? {};
   const rawSongs = songsRes.data ?? [];
-  const rawAlbums = albumsRes.data ?? [];
+  const rawAlbums = albumsRes?.data ?? [];
 
   const avatar = fillCover(detail.sizable_avatar, 300);
   const songs = rawSongs.map((s) => normalizeArtistSong(s, id));
@@ -244,7 +256,7 @@ const artist: KGModule = async (params) => {
     cover: avatar,
     avatar,
     songCount: songsRes.total ?? songs.length,
-    albumCount: detail.album_count ?? albumsRes.total ?? albums.length,
+    albumCount: detail.album_count ?? albumsRes?.total ?? albums.length,
     fansCount: detail.fansnums,
     intro: introText,
   };

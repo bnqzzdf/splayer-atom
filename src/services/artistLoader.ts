@@ -2,11 +2,16 @@
  * 歌手页加载服务：按 source 派发到具体来源
  */
 
-import type { TrackSource } from "@shared/types/player";
+import type { Track, TrackSource } from "@shared/types/player";
 import type { ArtistProfile } from "@/types/artist";
 import { useLibraryStore } from "@/stores/library";
 import { useStreamingStore } from "@/stores/streaming";
-import { fetchArtist as fetchNeteaseArtist } from "@/apis/artist/netease";
+import {
+  fetchArtist as fetchNeteaseArtist,
+  fetchArtistSongs as fetchNeteaseArtistSongs,
+} from "@/apis/artist/netease";
+import { fetchQQMusicArtist, fetchQQMusicArtistSongs } from "@/apis/artist/qqmusic";
+import { fetchKugouArtist, fetchKugouArtistSongs } from "@/apis/artist/kugou";
 import { fetchArtist as fetchQobuzArtist } from "@/apis/artist/qobuz";
 import { fetchArtist as fetchTidalArtist } from "@/apis/artist/tidal";
 import { albumsToCoverItems } from "@/utils/format/coverItem";
@@ -22,37 +27,64 @@ export interface LoadArtistOptions {
 }
 
 /**
+ * 歌手页触底分页描述。
+ *
+ * 分页是**来源自己的能力**：歌手页只拿这一个描述去驱动触底加载，不感知平台。
+ * 首屏数量不足以判断是否还有更多时，`hasMore` 由来源按平台语义给出。
+ */
+export interface ArtistPagination {
+  hasMore: boolean;
+  loadMore: (offset: number, limit: number) => Promise<{ tracks: Track[]; more: boolean }>;
+}
+
+/** 首屏 50 首是各在线源的事实分页单位，少于它即可确定已经到底。 */
+const FIRST_PAGE_SIZE = 50;
+
+/** 首屏即为分页单位时的通用判定。 */
+const paginationFor = (
+  tracks: Track[],
+  loadMore: ArtistPagination["loadMore"],
+): ArtistPagination => ({ hasMore: tracks.length >= FIRST_PAGE_SIZE, loadMore });
+
+/**
  * 加载指定歌手
- * @param source - 来源：local / streaming / netease / qobuz / tidal
+ * @param source - 来源：local / streaming / netease / qqmusic / kugou / qobuz / tidal
  * @param id     歌手 id（route 原始字符串）
  * @param options 回调与中断信号
+ * @returns 该来源的分页描述；不支持分页的来源返回 null
  */
 export const loadArtist = async (
   source: TrackSource,
   id: string,
   options: LoadArtistOptions,
-): Promise<void> => {
+): Promise<ArtistPagination | null> => {
   if (source === "local") {
     await loadLocal(id, options);
-    return;
+    return null;
   }
   if (source === "streaming") {
     await loadStreaming(id, options);
-    return;
+    return null;
   }
   if (source === "netease") {
-    await loadNetease(id, options);
-    return;
+    return loadNetease(id, options);
+  }
+  if (source === "qqmusic") {
+    return loadQQMusic(id, options);
+  }
+  if (source === "kugou") {
+    return loadKugou(id, options);
   }
   if (source === "qobuz") {
     await loadQobuz(id, options);
-    return;
+    return null;
   }
   if (source === "tidal") {
     await loadTidal(id, options);
-    return;
+    return null;
   }
   options.onUpdate(null);
+  return null;
 };
 
 const loadLocal = async (id: string, options: LoadArtistOptions): Promise<void> => {
@@ -92,12 +124,16 @@ const loadStreaming = async (id: string, options: LoadArtistOptions): Promise<vo
   });
 };
 
-const loadNetease = async (id: string, options: LoadArtistOptions): Promise<void> => {
-  const result = await fetchNeteaseArtist(decodeURIComponent(id));
-  if (options.signal?.aborted) return;
+const loadNetease = async (
+  id: string,
+  options: LoadArtistOptions,
+): Promise<ArtistPagination | null> => {
+  const artistId = decodeURIComponent(id);
+  const result = await fetchNeteaseArtist(artistId);
+  if (options.signal?.aborted) return null;
   if (!result) {
     options.onUpdate(null);
-    return;
+    return null;
   }
   const albums = albumsToCoverItems(result.albums);
   options.onUpdate({
@@ -110,6 +146,35 @@ const loadNetease = async (id: string, options: LoadArtistOptions): Promise<void
     trackCount: result.tracks.length,
     albumCount: albums.length,
   });
+  return paginationFor(result.tracks, (offset, limit) =>
+    fetchNeteaseArtistSongs(artistId, offset, limit),
+  );
+};
+
+const loadQQMusic = async (
+  id: string,
+  options: LoadArtistOptions,
+): Promise<ArtistPagination | null> => {
+  const artistId = decodeURIComponent(id);
+  const profile = await fetchQQMusicArtist(artistId, options.fallbackName ?? artistId);
+  if (options.signal?.aborted) return null;
+  options.onUpdate(profile);
+  return paginationFor(profile.tracks, (offset, limit) =>
+    fetchQQMusicArtistSongs(artistId, offset, limit),
+  );
+};
+
+const loadKugou = async (
+  id: string,
+  options: LoadArtistOptions,
+): Promise<ArtistPagination | null> => {
+  const artistId = decodeURIComponent(id);
+  const profile = await fetchKugouArtist(artistId, options.fallbackName ?? artistId);
+  if (options.signal?.aborted) return null;
+  options.onUpdate(profile);
+  return paginationFor(profile.tracks, (offset, limit) =>
+    fetchKugouArtistSongs(artistId, offset, limit),
+  );
 };
 
 const loadQobuz = async (id: string, options: LoadArtistOptions): Promise<void> => {

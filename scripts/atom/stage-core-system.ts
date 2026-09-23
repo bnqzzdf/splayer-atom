@@ -15,6 +15,7 @@ import { CONFIG_SCHEMA_VERSION } from "../../core/atom/runtime/configSchema";
 import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
 import { DATABASE_SCHEMA_VERSION } from "../../core/database/migration";
 import { CORE_PROTOCOL_VERSION } from "../../shared/constants/coreProtocol";
+import { MANAGED_PROVIDER_PLATFORMS } from "../../shared/types/apis";
 import {
   coreArtifactFileName,
   formatCoreBuildDate,
@@ -202,9 +203,7 @@ writeFileSync(
         playback: true,
         download: true,
         diretta: nativeBuild.diretta === true,
-        netease: true,
-        qobuz: true,
-        tidal: true,
+        ...Object.fromEntries(MANAGED_PROVIDER_PLATFORMS.map((platform) => [platform, true])),
         remoteOutput: false,
       },
       diretta: nativeBuild.diretta === true,

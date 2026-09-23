@@ -1,20 +1,23 @@
 /**
  * QM 主进程服务
  *
- * 与 netease 不同之处：
- * - 无持久化 session（uid/sid 是匿名态，内存缓存 1h 足够）
- * - 无 cookie 登录态（播放 URL 由插件实现，不走账号）
- * - 走 fetch 原生 HTTP，无加密 body（靠 UA + comm 伪装）
+ * 搜索可匿名使用；扫码或 Cookie 登录态由 Core 持久化，播放直链由 Core 原生模块解析。
+ * 插件仅作为播放解析失败时的兜底。
  *
  * 统一入口：callQQMusic(name, params)
  */
 
 import { createHash } from "node:crypto";
 import { modules } from "./modules";
-import { clearQQMusicCookies, mergeQQMusicCookies } from "./core/request";
+import {
+  clearQQMusicCookies,
+  getQQMusicCookies,
+  getQQMusicUin,
+  mergeQQMusicCookies,
+} from "./core/request";
 import type { QMParams } from "./core/types";
 
-export { clearQQMusicCookies, mergeQQMusicCookies };
+export { clearQQMusicCookies, getQQMusicCookies, getQQMusicUin, mergeQQMusicCookies };
 
 /** 2 分钟响应缓存 */
 const DEFAULT_TTL = 2 * 60 * 1000;
