@@ -15,6 +15,8 @@ defineOptions({ name: "PlatformHome" });
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
+import { resolveQobuzCover } from "@/utils/format/qobuz";
+import { resolveTidalCover } from "@/utils/format/tidal";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideMusic from "~icons/lucide/music";
@@ -111,12 +113,13 @@ const toQobuzItem = (raw: unknown): HomeItem | null => {
     .map((a) => str(asRecord(a).name))
     .filter(Boolean)
     .join(", ");
-  const image = asRecord(item.image);
   return {
     id,
     title,
     subtitle: artists || str(item.description)?.slice(0, 48),
-    image: str(image.small) ?? str(image.thumbnail) ?? str(image.large),
+    // 复用 format/qobuz 的封面解析：它已覆盖专辑 {large,small} 与歌单 {covers:[...]}
+    // 两种结构，并统一走 /api/proxy/image。
+    image: resolveQobuzCover(item, 300),
     // 专辑带 track_count；歌单/其它走 playlist 详情页
     kind: item.track_count != null ? "album" : "playlist",
   };
@@ -134,13 +137,6 @@ const normalizeQobuz = (data: unknown): HomeSection[] => {
     .filter((section) => section.items.length > 0);
 };
 
-/** TIDAL 图片是 uuid，需要转成 resources.tidal.com 的路径 */
-const tidalImage = (raw: unknown, size = 320): string | undefined => {
-  const uuid = str(raw);
-  if (!uuid) return undefined;
-  return `https://resources.tidal.com/images/${uuid.replace(/-/g, "/")}/${size}x${size}.jpg`;
-};
-
 const tidalModuleTitle = (type: string): string => {
   const map: Record<string, string> = {
     ALBUM_LIST: "专辑推荐",
@@ -156,10 +152,9 @@ const tidalModuleTitle = (type: string): string => {
 /**
  * TIDAL 条目 → HomeItem。
  *
- * 取图要按类型找，字段位置不同：
- *   ALBUM_LIST / PLAYLIST_LIST → item.cover / item.image
- *   TRACK_LIST                 → item.album.cover（曲目自身没有封面）
- * 早期只看了前两种，导致 New Tracks / Spotlighted Uploads 这些曲目分区没有图。
+ * 封面字段按类型分布：歌单在 squareImage（其 image 是矩形编辑图，取 640 会 403）、
+ * 专辑在 cover、曲目在 album.cover。这里交给 format/tidal 的 resolveTidalCover，
+ * 它已实现该优先级并统一走 /api/proxy/image。
  */
 const toTidalItem = (raw: unknown, moduleType: string): HomeItem | null => {
   const item = asRecord(raw);
@@ -193,7 +188,11 @@ const toTidalItem = (raw: unknown, moduleType: string): HomeItem | null => {
     id: targetId,
     title,
     subtitle: artists || undefined,
-    image: tidalImage(item.image ?? item.cover ?? albumCover),
+    image: resolveTidalCover({
+      squareImage: item.squareImage as never,
+      image: item.image as never,
+      cover: (item.cover ?? albumCover) as never,
+    }),
     kind: targetKind,
   };
 };
