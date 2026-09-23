@@ -27,13 +27,8 @@ pub enum PlayerEvent {
 pub type EventEmitter = Arc<dyn Fn(PlayerEvent) + Send + Sync>;
 
 /// 根据解码结束原因与当前位置决定对外完成事件
-pub(super) fn playback_completion_event(
-    shared: &Shared,
-    duration: f64,
-    position: f64,
-) -> PlayerEvent {
-    let mid_stream = duration <= 0.0 || duration - position > 3.0;
-    if shared.is_decode_failed() && mid_stream {
+pub(super) fn playback_completion_event(shared: &Shared) -> PlayerEvent {
+    if shared.is_decode_failed() {
         PlayerEvent::SourceError
     } else {
         PlayerEvent::Ended

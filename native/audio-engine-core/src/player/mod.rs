@@ -828,35 +828,23 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
-    fn decode_failure_mid_stream_emits_source_error() {
+    fn decode_failure_emits_source_error() {
         let shared = Shared::new(48_000, 2);
         shared.mark_decode_failed();
 
         assert!(matches!(
-            playback_completion_event(&shared, 120.0, 30.0),
+            playback_completion_event(&shared),
             PlayerEvent::SourceError
         ));
     }
 
     #[test]
-    fn decode_failure_near_end_is_treated_as_ended() {
+    fn clean_eof_emits_ended() {
         let shared = Shared::new(48_000, 2);
-        shared.mark_decode_failed();
 
         assert!(matches!(
-            playback_completion_event(&shared, 120.0, 118.0),
+            playback_completion_event(&shared),
             PlayerEvent::Ended
-        ));
-    }
-
-    #[test]
-    fn unknown_duration_failure_emits_source_error() {
-        let shared = Shared::new(48_000, 2);
-        shared.mark_decode_failed();
-
-        assert!(matches!(
-            playback_completion_event(&shared, 0.0, 30.0),
-            PlayerEvent::SourceError
         ));
     }
 

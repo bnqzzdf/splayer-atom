@@ -192,11 +192,8 @@ impl InnerPlayer {
 
                 // 检测播放结束：all_consumed 表示输出回调已消费完所有数据
                 if shared.is_all_consumed() {
-                    // 解码因读取失败中止且距末尾尚远 → 音源失效，前端重新解析地址续播；
-                    // 距末尾 3s 内的失败按正常结束处理——Content-Length 偏大的转码源
-                    // 在曲尾必然提前 EOF，整曲重载只会带来一轮无意义抖动。
-                    // duration 未知（直播流等）时无"末尾"概念，失败一律上报
-                    cb(playback_completion_event(&shared, duration, position));
+                    // 读取失败即使发生在曲尾也不能伪装为自然结束；Core 决定后续恢复策略。
+                    cb(playback_completion_event(&shared));
                     cb(PlayerEvent::StateChanged {
                         state: PlayerState::Stopped,
                     });
