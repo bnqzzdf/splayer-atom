@@ -1754,8 +1754,14 @@
         "copyTitle": "复制云盘名称",
         "copyId": "复制云盘 ID",
         "copyUrl": "分享云盘链接"
+      },
+      "rank": {
+        "copyTitle": "榜单名称",
+        "copyId": "榜单 ID",
+        "copyUrl": "分享榜单链接"
       }
-    }
+    },
+    "rank": "榜单"
   },
   "artist": {
     "label": "艺术家",

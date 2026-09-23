@@ -1,11 +1,11 @@
 import type { CollectionType } from "@/types/collection";
 import { fetchKugouAlbum } from "@/apis/album/kugou";
-import { fetchKugouPlaylist } from "@/apis/playlist/kugou";
+import { fetchKugouPlaylist, fetchKugouRank } from "@/apis/playlist/kugou";
 import type { LoadCollectionOptions } from "./types";
 
 /**
- * 加载KG集合（专辑或歌单）
- * @param type - 集合类型（album 或 playlist）
+ * 加载KG集合（专辑 / 歌单 / 榜单）
+ * @param type - 集合类型（album / playlist / rank）
  * @param id - 集合 ID
  * @param options - 加载选项
  */
@@ -48,6 +48,23 @@ export const loadKugouCollection = async (
         creator: playlist.owner,
         tracks,
         trackCount: playlist.trackCount ?? tracks.length,
+      });
+    }
+    return;
+  }
+
+  if (type === "rank") {
+    const { rank, tracks } = await fetchKugouRank(originalId, fallbackName);
+    if (!options.signal?.aborted) {
+      options.onUpdate({
+        id: rank.id ?? originalId,
+        type,
+        source: "kugou",
+        title: rank.name,
+        cover: rank.cover,
+        description: rank.description,
+        tracks,
+        trackCount: rank.trackCount ?? tracks.length,
       });
     }
     return;

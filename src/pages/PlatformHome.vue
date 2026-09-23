@@ -1,23 +1,35 @@
 <script setup lang="ts">
 /**
- * 在线平台首页（Qobuz / TIDAL）
+ * 在线平台首页（Qobuz / TIDAL / QQ音乐 / 酷狗音乐）
  *
  * 只展示**已登录**的平台，每个平台按标签切换，内容为该平台的
  * 分类导航 + 官方首页分区（榜单/新发行/推荐歌单等）。
  *
- * 两个平台的数据结构完全不同，这里统一归一化成 HomeSection：
+ * 四类平台的数据结构完全不同，这里统一归一化成 HomeSection：
  *   Qobuz: { containers: { <key>: { data: { items } } } }
  *   TIDAL: { rows: [{ modules: [{ type, items }] }] }
+ *   QQ音乐: 榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
+ *   酷狗:   榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
  * 页面只渲染 HomeSection，不关心平台差异。
+ *
+ * QM/KG 的卡片指向「榜单」，点击后进入 collection 页的 rank 类型详情
+ * （services/collection/qqmusic|kugou 已支持 type === "rank"）。
  */
 defineOptions({ name: "PlatformHome" });
 
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
+import { fetchQQMusicToplist, type QMToplistGroup } from "@/apis/playlist/qqmusic";
+import { fetchKugouRankList, type KGRankGroup } from "@/apis/playlist/kugou";
 import { resolveQobuzCover } from "@/utils/format/qobuz";
 import { resolveTidalCover } from "@/utils/format/tidal";
-import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
+import {
+  navigateToAlbum,
+  navigateToArtist,
+  navigateToPlaylist,
+  navigateToRank,
+} from "@/utils/navigate";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
@@ -25,7 +37,17 @@ import IconLucideDisc3 from "~icons/lucide/disc-3";
 const { t } = useI18n();
 const providerSessions = useProviderSessionsStore();
 
-type Platform = "qobuz" | "tidal";
+type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou";
+
+/** 支持的平台顺序（也是标签顺序） */
+const ALL_PLATFORMS: Platform[] = ["qobuz", "tidal", "qqmusic", "kugou"];
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  qobuz: "Qobuz",
+  tidal: "TIDAL",
+  qqmusic: "QQ音乐",
+  kugou: "酷狗音乐",
+};
 
 /** 归一化后的首页条目 */
 interface HomeItem {
@@ -39,8 +61,11 @@ interface HomeItem {
    * `tag` 表示这是导航标签（如 Qobuz 的 playlists_tags：只有 id/name/slug，
    * 既没有封面也没有可打开的详情页），只做展示、不响应点击——
    * 早期把它当歌单处理，导致封面空白且点击请求 playlist_get 报 404。
+   *
+   * `rank` 表示平台官方榜单（QQ音乐 topid / 酷狗 rankid），
+   * 点击进入 collection 页的 rank 类型：展示该榜单的歌曲列表。
    */
-  kind: "album" | "playlist" | "track" | "artist" | "tag";
+  kind: "album" | "playlist" | "track" | "artist" | "tag" | "rank";
 }
 
 /** 归一化后的分区 */
@@ -68,14 +93,11 @@ const activeGenre = ref<string>("");
 
 /** 已登录的平台才显示标签 */
 const loggedInPlatforms = computed<Platform[]>(() =>
-  (["qobuz", "tidal"] as Platform[]).filter((p) => providerSessions.sessions[p]?.authenticated),
+  ALL_PLATFORMS.filter((p) => providerSessions.sessions[p]?.authenticated),
 );
 
 const platformTabs = computed(() =>
-  loggedInPlatforms.value.map((p) => ({
-    key: p,
-    label: p === "qobuz" ? "Qobuz" : "TIDAL",
-  })),
+  loggedInPlatforms.value.map((p) => ({ key: p, label: PLATFORM_LABELS[p] })),
 );
 
 /** 当前平台是否已登录 */
@@ -239,6 +261,49 @@ const normalizeTidal = (data: unknown): HomeSection[] => {
   return out;
 };
 
+/**
+ * QQ音乐榜单目录 → HomeSection。
+ *
+ * topList 接口已经返回每个榜单的头图（T003R500x500），所以卡片直接用榜单封面；
+ * 点进去才是该榜单的歌曲列表（collection/rank）。
+ */
+const normalizeQQMusic = (groups: QMToplistGroup[]): HomeSection[] =>
+  groups.map((group) => ({
+    key: `qm-${group.id}`,
+    title: group.name,
+    variant: "cards",
+    items: group.items.map((item) => ({
+      id: item.id,
+      title: item.name,
+      subtitle:
+        [item.total ? `${item.total} 首` : "", item.updateTime].filter(Boolean).join(" · ") ||
+        undefined,
+      image: item.cover || undefined,
+      kind: "rank",
+    })),
+  }));
+
+/** 酷狗榜单目录 → HomeSection（结构与 QM 一致，仅副标题信息不同） */
+const normalizeKugou = (groups: KGRankGroup[]): HomeSection[] =>
+  groups.map((group) => ({
+    key: `kg-${group.id}`,
+    title: group.name,
+    variant: "cards",
+    items: group.items.map((item) => ({
+      id: item.id,
+      title: item.name,
+      subtitle: item.updateFrequency || undefined,
+      image: item.cover || undefined,
+      kind: "rank",
+    })),
+  }));
+
+/** 榜单目录分组 → 分类导航项 */
+const groupsToGenres = (groups: Array<{ id: string; name: string }>): GenreItem[] =>
+  groups
+    .filter((group) => group.id && group.name)
+    .map((group) => ({ id: group.id, name: group.name }));
+
 const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
   if (p === "qobuz") {
     const items = asArray(asRecord(asRecord(data).genres).items);
@@ -277,6 +342,8 @@ const openItem = (item: HomeItem): void => {
     navigateToAlbum(item.title, { source, albumId: item.id });
   } else if (item.kind === "artist") {
     navigateToArtist(item.title, { source, artistId: item.id });
+  } else if (item.kind === "rank") {
+    navigateToRank(item.id, { source, name: item.title });
   } else {
     navigateToPlaylist(item.id, { source, name: item.title });
   }
@@ -305,13 +372,24 @@ const load = async (): Promise<void> => {
       ]);
       sections.value = normalizeQobuz(home);
       genres.value = genreData ? normalizeGenres("qobuz", genreData) : [];
-    } else {
+    } else if (platform.value === "tidal") {
       const [home, genreData] = await Promise.all([
         tidalApi.pagesHome(),
         tidalApi.genres().catch(() => []),
       ]);
       sections.value = normalizeTidal(home);
       genres.value = normalizeGenres("tidal", genreData);
+    } else if (platform.value === "qqmusic") {
+      // QM 的分类导航就是榜单分组，点击分组只过滤已拉取的目录，不再请求接口
+      const groups = await fetchQQMusicToplist();
+      const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
+      sections.value = normalizeQQMusic(visible);
+      genres.value = groupsToGenres(groups);
+    } else {
+      const groups = await fetchKugouRankList();
+      const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
+      sections.value = normalizeKugou(visible);
+      genres.value = groupsToGenres(groups);
     }
     if (!sections.value.length) error.value = t("platformHome.empty");
   } catch (err) {

@@ -1754,8 +1754,14 @@
         "copyTitle": "Copy Cloud Title",
         "copyId": "Copy Cloud ID",
         "copyUrl": "Share Cloud Link"
+      },
+      "rank": {
+        "copyTitle": "Copy Chart Title",
+        "copyId": "Copy Chart ID",
+        "copyUrl": "Share Chart Link"
       }
-    }
+    },
+    "rank": "Chart"
   },
   "artist": {
     "label": "Artists",
