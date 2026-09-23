@@ -148,3 +148,37 @@ export const favoriteCreate = (id: string, type: "track" | "album" | "artist") =
 /** 取消收藏 */
 export const favoriteDelete = (id: string, type: "track" | "album" | "artist") =>
   qobuzCall("favorite_delete", { id, type });
+
+// ============ 首页（发现页）与分类导航 ============
+
+/** Qobuz 首页分区容器（后端返回的 containers 键） */
+export type QobuzDiscoverContainer =
+  | "album_of_the_week"
+  | "ideal_discography"
+  | "most_streamed"
+  | "new_releases"
+  | "playlists"
+  | "playlists_tags"
+  | "press_awards"
+  | "qobuzissims"
+  | "recent_releases"
+  | "banners";
+
+/**
+ * 首页聚合：一次拿到所有分区。
+ *
+ * 返回 `{ containers: { <key>: { data: { items, has_more } } } }`，
+ * 由页面统一归一化后渲染。
+ */
+export const discoverIndex = (params?: { genre_id?: string; limit?: number; offset?: number }) =>
+  qobuzCall<{ containers?: Record<string, unknown> }>("discover_index", params);
+
+/** 分类（流派）导航：`{ genres: { items: [{id,name,slug,color}], total } }` */
+export const genreList = (params?: { locale?: string }) =>
+  qobuzCall<{ genres?: { items?: unknown[]; total?: number } }>("genre_list", params);
+
+/** 单个发现分区（在只需要一个分区时用） */
+export const discoverSection = (
+  section: QobuzDiscoverContainer,
+  params?: { genre_id?: string; limit?: number; offset?: number },
+) => qobuzCall("discover_section", { section, ...params });

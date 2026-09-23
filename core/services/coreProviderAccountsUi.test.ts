@@ -48,7 +48,8 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
   assert.ok(streamingLoginSource.includes("copy(localStorage.getItem('qobuz_user_auth_token'))"));
   assert.doesNotMatch(streamingLoginSource, /Query String Parameters 中复制 user_id/);
   // 一键 OAuth：主按钮走原生本地回调，粘贴 token 降级为兜底，两条路都在
-  assert.match(streamingLoginSource, /qobuzApi\.oauthStart\(\)/);
+  // oauthStart 必须带上浏览器所在 host：设备无图形浏览器，回调地址得是设备可达地址
+  assert.match(streamingLoginSource, /qobuzApi\.oauthStart\(window\.location\.hostname\)/);
   assert.match(streamingLoginSource, /qobuzApi\.oauthAwait\(\)/);
   assert.match(streamingLoginSource, /用浏览器登录 Qobuz/);
   assert.match(streamingLoginSource, /openExternal\(start\.url\)/);

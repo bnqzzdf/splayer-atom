@@ -21,10 +21,22 @@
       "subtitle": "Linux 音乐 Core 与 Web Control，完成几步设置即可开始使用",
       "start": "开始设置",
       "features": {
-        "local": { "title": "本地音乐库", "desc": "扫描本地目录，自动整理音乐库" },
-        "quality": { "title": "无损音质", "desc": "原生音频引擎，支持多种无损格式" },
-        "streaming": { "title": "流媒体服务器", "desc": "Subsonic / Jellyfin / Emby 等" },
-        "lyrics": { "title": "丰富歌词体验", "desc": "AMLL 逐字歌词、翻译、音译与时间偏移" }
+        "local": {
+          "title": "本地音乐库",
+          "desc": "扫描本地目录，自动整理音乐库"
+        },
+        "quality": {
+          "title": "无损音质",
+          "desc": "原生音频引擎，支持多种无损格式"
+        },
+        "streaming": {
+          "title": "流媒体服务器",
+          "desc": "Subsonic / Jellyfin / Emby 等"
+        },
+        "lyrics": {
+          "title": "丰富歌词体验",
+          "desc": "AMLL 逐字歌词、翻译、音译与时间偏移"
+        }
       }
     },
     "library": {
@@ -197,7 +209,8 @@
       "album": "前往专辑「{id}」",
       "artist": "前往歌手「{id}」",
       "playlist": "前往歌单「{id}」"
-    }
+    },
+    "platforms": "在线平台"
   },
   "recognition": {
     "title": "听歌识曲",
@@ -1526,9 +1539,18 @@
         "homepage": "主页"
       },
       "grant": {
-        "network": { "label": "联网", "desc": "插件可发起网络请求" },
-        "control": { "label": "控制", "desc": "插件可控制播放器" },
-        "ui": { "label": "界面", "desc": "插件可扩展或修改应用界面" }
+        "network": {
+          "label": "联网",
+          "desc": "插件可发起网络请求"
+        },
+        "control": {
+          "label": "控制",
+          "desc": "插件可控制播放器"
+        },
+        "ui": {
+          "label": "界面",
+          "desc": "插件可扩展或修改应用界面"
+        }
       }
     },
     "pluginManager": {
@@ -1868,5 +1890,10 @@
       "discNumber": "碟号",
       "lyrics": "内嵌歌词"
     }
+  },
+  "platformHome": {
+    "noPlatform": "尚未登录任何在线平台",
+    "empty": "该平台暂无首页内容",
+    "loadFailed": "首页加载失败"
   }
 }

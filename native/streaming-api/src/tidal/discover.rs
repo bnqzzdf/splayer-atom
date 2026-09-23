@@ -16,7 +16,9 @@ use crate::error::StreamingError;
 impl TidalClient {
     /// 首页分区：`pages/home`。
     ///
-    /// 可选参数 `locale`、`device_type`。返回原始 sections 结构。
+    /// `deviceType` 是**必填**参数（缺了会回 400 "deviceType missing"），
+    /// 因此这里给默认值 `DESKTOP`，调用方仍可覆盖。
+    /// 返回 `{ id, title, rows: [{ modules: [{ type, items }] }] }`。
     pub async fn pages_home(
         &self,
         params: &HashMap<String, Value>,
@@ -31,15 +33,15 @@ impl TidalClient {
         {
             req_params.insert("locale".to_string(), locale.to_string());
         }
-        if let Some(device_type) = params
+
+        let device_type = params
             .get("device_type")
             .or_else(|| params.get("deviceType"))
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
-        {
-            req_params.insert("deviceType".to_string(), device_type.to_string());
-        }
+            .unwrap_or("DESKTOP");
+        req_params.insert("deviceType".to_string(), device_type.to_string());
 
         self.request("pages/home", req_params, true).await
     }

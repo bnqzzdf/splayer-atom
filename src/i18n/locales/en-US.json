@@ -209,7 +209,8 @@
       "album": "Go to album [{id}]",
       "artist": "Go to artist [{id}]",
       "playlist": "Go to playlist [{id}]"
-    }
+    },
+    "platforms": "Online Platforms"
   },
   "recognition": {
     "title": "Music Recognition",
@@ -1538,9 +1539,18 @@
         "homepage": "Homepage"
       },
       "grant": {
-        "network": { "label": "Network", "desc": "Can make network requests" },
-        "control": { "label": "Control", "desc": "Can control the player" },
-        "ui": { "label": "Interface", "desc": "Can extend or modify the app interface" }
+        "network": {
+          "label": "Network",
+          "desc": "Can make network requests"
+        },
+        "control": {
+          "label": "Control",
+          "desc": "Can control the player"
+        },
+        "ui": {
+          "label": "Interface",
+          "desc": "Can extend or modify the app interface"
+        }
       }
     },
     "pluginManager": {
@@ -1880,5 +1890,10 @@
       "discNumber": "Disc No.",
       "lyrics": "Embedded Lyrics"
     }
+  },
+  "platformHome": {
+    "noPlatform": "No online platform is signed in",
+    "empty": "No home content available for this platform",
+    "loadFailed": "Failed to load the platform home"
   }
 }
