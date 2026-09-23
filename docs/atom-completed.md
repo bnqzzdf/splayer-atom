@@ -46,7 +46,7 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 - Netease and Qobuz Core session/resolver plus Web integration are present. `streaming-api`
   implements Qobuz protocol and TIDAL auth/request/manifest/DASH; Core integrates TIDAL JSON/BTS
   and DASH materialization. Selected real Netease/TIDAL UPnP online paths were recorded in the
-  [UPnP plan](./upnp-output-plan.md). Full provider acceptance still follows the roadmap.
+  [UPnP plan](./upnp-output-plan.md). Netease/TIDAL acceptance still follows the roadmap.
 - Web Control exposes library, playlist, queue, playback, downloads, statistics, cache,
   providers, settings and plugins. The Core-owned Folder Browser now provides paged browsing,
   unscanned media and CUE/SACD access, scoped scan, pinned folders, search/filter, materials,

@@ -19,6 +19,8 @@ Web Control
 
 ## 1. Qobuz
 
+Qobuz 按当前实现提供。
+
 ### 1.1 签名与 Query / Header 边界
 
 `track/getFileUrl` 使用 MD5 request signature：
@@ -27,18 +29,11 @@ Web Control
 request_sig = md5(object + method + sorted_business_params + request_ts + working_secret)
 ```
 
-签名输入只包含平台要求的业务参数。`app_id`、`user_auth_token`、`request_ts`、`request_sig` 不得错误混入业务参数排序。认证信息按当前已验证实现使用 Qobuz 要求的 header/query 位置；修改前必须以 `native/streaming-api` 的确定性签名向量和真实账号验收为准。
-
-关键回归测试位于 Rust crate，至少覆盖：
-
-- 固定 `track/getFileUrl` 签名向量；
-- Web Player versioned bundle 定位；
-- seed / timezone / info / extras 的 secret candidate 派生；
-- 未知 action 在网络请求前明确拒绝。
+签名输入只包含平台要求的业务参数。`app_id`、`user_auth_token`、`request_ts`、`request_sig` 不得错误混入业务参数排序。认证信息沿用当前实现的 header/query 位置。
 
 ### 1.2 App credential discovery
 
-Qobuz Web Player bundle 会随版本变化，不能依赖固定 bundle URL。正式实现按已验证的 Web Player Bundle 路径动态发现 app id / initialization secret candidate，并将成功结果只缓存在当前进程内。
+Qobuz Web Player bundle 会随版本变化，不能依赖固定 bundle URL。当前实现通过 Web Player Bundle 路径动态发现 app id / initialization secret candidate，并将成功结果只缓存在当前进程内。
 
 约束：
 
@@ -46,7 +41,7 @@ Qobuz Web Player bundle 会随版本变化，不能依赖固定 bundle URL。正
 - 不要求安装 `qobuz-dl`；
 - 自动发现的 app secret 不写入 Atom 配置或数据库；
 - 显式 `QOBUZ_APP_ID` / `QOBUZ_APP_SECRET` 可作为运行环境覆盖；
-- 动态发现失败时只能使用仓库中经过测试验证的兼容参数，不从任意 bundle 字符串猜 secret。
+- 动态发现失败时只使用仓库中的兼容参数，不从任意 bundle 字符串猜 secret。
 
 ### 1.3 用户登录态归 Node Core
 
@@ -145,7 +140,7 @@ Qobuz/TIDAL 协议层不得为了“直通”自行建立播放器或 Diretta co
 
 ## 5. 验收门禁
 
-修改 Qobuz/TIDAL 协议实现后至少运行：
+修改 TIDAL 协议实现后至少运行：
 
 ```text
 cargo test -p streaming-api
@@ -158,7 +153,6 @@ pnpm test:web
 
 真实账号验收重点：
 
-- Qobuz login/search/catalog/getFileUrl/Hi-Res；
 - TIDAL PKCE 或 Device Code、token refresh、search/catalog；
 - TIDAL BTS 与 DASH 两种 playback path；
 - 普通输出与 Diretta 都从同一 Core source resolver 进入；

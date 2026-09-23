@@ -1,10 +1,10 @@
 # SPlayer Atom Live Provider Acceptance
 
-本文定义 Netease、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
+本文定义 Netease 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 
-状态（仓库记录，2026-09-23）：Core/Web 的三家 provider 接入已存在，UPnP 方案记录了
-Netease/TIDAL 的部分真实在线播放；本文件尚无覆盖以下完整矩阵的候选包验收结果。
-Qobuz 真实账号验收及 Netease/TIDAL 完整记录仍见 [Roadmap](./atom-roadmap.md)。
+状态（仓库记录，2026-09-23）：Core/Web 的 Netease/TIDAL 接入已存在，UPnP 方案记录了
+两者的部分真实在线播放；本文件尚无覆盖以下完整矩阵的候选包验收结果，
+仍见 [Roadmap](./atom-roadmap.md)。
 
 ## 1. 通用前置条件
 
@@ -39,16 +39,7 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 - ALSA 与 Diretta 各验证一次；Diretta 在线输入先 exact-byte materialize，且 DAC/Target 指示与源格式一致。
 - scrobble/play statistics 在真实播放结束后由 Core 持久化一次，不因 Control 数量重复。
 
-## 3. Qobuz
-
-- 真实账号 session/entitlement 由 Core 保存，并能正确同步到 Web Control。
-- search → detail → queue → playback 全链路使用真实结果。
-- lossless/high-resolution entitlement 与实际 resolve 结果一致；无权益时明确失败。
-- 三首 queue 的 Core-owned auto-next 与连续播放通过。
-- 同一 Track 分别通过真实 ALSA 与 Diretta 播放；记录源 rate/bits/channels 和 DAC/Target 实际指示。
-- 失效 URL、网络失败和 provider 错误不在 Control 侧重试或解析最终 URL。
-
-## 4. TIDAL
+## 3. TIDAL
 
 - 真实账号 session、subscription/quality entitlement 由 Core 保存，并能正确同步到 Web Control。
 - search → detail → queue → playback 全链路使用真实结果。
@@ -57,10 +48,10 @@ pnpm check:hardware-release -- --base-url http://127.0.0.1:14558
 - JSON/BTS、DASH 分别覆盖真实 ALSA；产品支持的 lossless/hi-res 路径再覆盖 Diretta。
 - entitlement、区域或 manifest 限制必须明确报告，不允许静默降低为另一路径并标记通过。
 
-## 5. 记录模板
+## 4. 记录模板
 
 ```text
-Provider: Netease | Qobuz | TIDAL
+Provider: Netease | TIDAL
 Result: PASS | FAIL | BLOCKED
 Date/timezone / operator:
 

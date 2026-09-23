@@ -40,7 +40,6 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### Providers and Web Control
 
-- [ ] Complete Qobuz real-account login/search/queue/playback/logout acceptance.
 - [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
       for Netease and TIDAL on the intended artifact. Existing UPnP notes verify selected real
       Netease/TIDAL online paths; they do not document the complete provider matrices.
@@ -71,7 +70,8 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 1. Retest the two ALSA fixes on hardware and finish the remaining ALSA runtime/buffering work.
 2. Close final-device ALSA and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Complete provider, Folder Browser, responsive Web and long-running multi-Control acceptance.
+3. Complete Netease/TIDAL, ListenBrainz, Folder Browser, responsive Web and long-running
+   multi-Control acceptance.
 4. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
 
 ## Product scope

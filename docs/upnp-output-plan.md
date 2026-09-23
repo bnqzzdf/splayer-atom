@@ -370,7 +370,7 @@ UPnP 观察到实际 PLAYING 后才开始/恢复 playing wall-clock；Pause/Stop
 | P0   | 同步 scope；锁定 SSDP/XML 依赖；建立四模块骨架                          | AGENTS/roadmap/方案一致；无共享 schema 扩张            |
 | P1   | 发现、SOAP、DIDL、独立 media listener、普通本地文件                     | 参考 Renderer 单曲闭环；原文件 hash/Range 一致         |
 | P2   | playbackSession/output/status/切换/自动 next 接入                       | 三首无 Control 连续播放；native/local/Diretta 路径回归 |
-| P3   | 在线 source 完整物化，复用 resolver/cache/exact-byte helper             | Netease/Qobuz/TIDAL/streaming source 不新增协议实现    |
+| P3   | 在线 source 完整物化，复用 resolver/cache/exact-byte helper             | 沿用现有 provider resolver，不新增协议实现             |
 | P4a  | CUE -> exact PCM WAV                                                    | 多 FILE/INDEX/pregap/边界/有效位深逐样本对照           |
 | P4b  | SACD ISO -> DSF                                                         | stereo track 首/中/末轨 logical DSD 序列对照；mch 拒绝 |
 | P4c  | DSD CUE；独立 DSF/DFF 继续原文件优先                                    | 多 DSD rate、padding、bit-order/声道身份对照           |

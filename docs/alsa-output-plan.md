@@ -728,7 +728,7 @@ signalsmith-stretch，以及解码/扫描/HTTP/分析需要的 FFmpeg；不能�
 正式 artifact 继续禁止 PipeWire/PulseAudio 动态依赖，不能把 `alsa-lib` 的可配置插件入口
 误当成“没有链接桌面声音库就一定硬件直通”。
 
-回归覆盖 ALSA↔Diretta↔UPnP、Core auto-next、CUE/SACD、歌曲缓存、网易/Qobuz/TIDAL、
+回归覆盖 ALSA↔Diretta↔UPnP、Core auto-next、CUE/SACD、歌曲缓存、网易/TIDAL、
 ListenBrainz、Web 多客户端与插件错误。旧日志中的 CPAL/普通路径术语同步更新。
 
 ### 11.4 实机证据
