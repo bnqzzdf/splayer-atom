@@ -1900,6 +1900,8 @@
   "platformHome": {
     "noPlatform": "No online platform is signed in",
     "empty": "No home content available for this platform",
-    "loadFailed": "Failed to load the platform home"
+    "loadFailed": "Failed to load the platform home",
+    "hotPlaylists": "Popular Playlists",
+    "newSongs": "New Releases"
   }
 }

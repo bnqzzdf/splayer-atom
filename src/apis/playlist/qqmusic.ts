@@ -105,3 +105,35 @@ export const fetchQQMusicRank = async (
     tracks,
   };
 };
+
+/** QM 歌单广场条目 */
+export interface QMHotPlaylist {
+  id: string;
+  name: string;
+  cover: string;
+  creator: string;
+  description: string;
+  playCount: number;
+}
+
+interface HotPlaylistsResponse {
+  code?: number;
+  message?: string;
+  total?: number;
+  playlists?: QMHotPlaylist[];
+}
+
+/**
+ * 获取 QM 热门歌单（歌单广场）
+ * @param limit - 返回条数
+ * @param offset - 偏移量
+ * @returns 歌单列表；其 id 可直接用于 collection/qqmusic/playlist/<id>
+ */
+export const fetchQQMusicHotPlaylists = async (
+  limit = 30,
+  offset = 0,
+): Promise<QMHotPlaylist[]> => {
+  const body = await qmApi.hot_playlists<HotPlaylistsResponse>({ limit, offset });
+  if (body.code !== 200) throw new Error(body.message || `QM 热门歌单请求失败: ${body.code}`);
+  return body.playlists ?? [];
+};

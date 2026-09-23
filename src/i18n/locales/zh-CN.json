@@ -1900,6 +1900,8 @@
   "platformHome": {
     "noPlatform": "尚未登录任何在线平台",
     "empty": "该平台暂无首页内容",
-    "loadFailed": "首页加载失败"
+    "loadFailed": "首页加载失败",
+    "hotPlaylists": "热门歌单",
+    "newSongs": "新歌首发"
   }
 }

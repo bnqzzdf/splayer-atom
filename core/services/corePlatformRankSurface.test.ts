@@ -10,6 +10,12 @@ const qmLeaderboardSource = read("../apis/qqmusic/modules/leaderboard.ts");
 const qmToplistSource = read("../apis/qqmusic/modules/toplist.ts");
 const kgModulesSource = read("../apis/kugou/modules/index.ts");
 const kgRankSource = read("../apis/kugou/modules/rank.ts");
+const kgSongCoreSource = read("../apis/kugou/core/song.ts");
+const kgSquareSource = read("../apis/kugou/modules/playlist_square.ts");
+const kgNewSongSource = read("../apis/kugou/modules/newsong.ts");
+const qmSquareSource = read("../apis/qqmusic/modules/playlist_square.ts");
+const qmPlaylistApiSource = read("../../src/apis/playlist/qqmusic.ts");
+const kgPlaylistApiSource = read("../../src/apis/playlist/kugou.ts");
 const collectionTypesSource = read("../../src/types/collection.ts");
 const qmCollectionSource = read("../../src/services/collection/qqmusic.ts");
 const kgCollectionSource = read("../../src/services/collection/kugou.ts");
@@ -44,10 +50,10 @@ test("KG rank module covers directory and detail and is registered", () => {
   assert.match(kgRankSource, /api\/v3\/rank\/list/);
   assert.match(kgRankSource, /api\/v3\/rank\/song/);
   assert.match(kgRankSource, /api\/v3\/rank\/info/);
-  // 榜单歌曲用 authors[]（与 special/song 的 singername 不同）
-  assert.match(kgRankSource, /raw\.authors/);
+  // 榜单歌曲用 authors[]（与 special/song 的 singername 不同）；归一化已抽到 core/song
+  assert.match(kgSongCoreSource, /raw\.authors/);
   // 320k 需要回退到 _high 系列
-  assert.match(kgRankSource, /raw\["320hash"\] \|\| raw\.hash_high/);
+  assert.match(kgSongCoreSource, /raw\["320hash"\] \|\| raw\.hash_high/);
   assert.match(kgModulesSource, /rank_list: rankList/);
   assert.match(kgModulesSource, /rank_detail: rankDetail/);
 });
@@ -77,5 +83,52 @@ test("platform home lists all four platforms and routes rank cards to the rank p
   assert.match(
     platformHomeSource,
     /ALL_PLATFORMS\.filter\(\(p\) => providerSessions\.sessions\[p\]\?\.authenticated\)/,
+  );
+});
+
+test("home shelves use the channels that are actually reachable, not the gated app modules", () => {
+  // QM：只能走歌单广场老 CGI；musicu 的 MusicHallPlatform 对所有请求都回 500005
+  // （注释里会提到该模块名，所以这里断言的是「没有真的去请求 musicu」，而不是「文中不出现」）
+  assert.match(qmSquareSource, /fcg_get_diss_by_tag\.fcg/);
+  assert.doesNotMatch(qmSquareSource, /u\.y\.qq\.com/);
+  assert.match(qmModulesSource, /hot_playlists: playlistSquare/);
+  assert.match(qmPlaylistApiSource, /export const fetchQQMusicHotPlaylists/);
+
+  // KG：mobilecdn 没有新歌/推荐歌单路径（全 Access Deny），走移动站频道
+  assert.match(kgSquareSource, /m\.kugou\.com\/plist\/index&json=true/);
+  assert.match(kgNewSongSource, /m\.kugou\.com\/newsong\/index&json=true/);
+  assert.match(kgModulesSource, /hot_playlists: playlistSquare/);
+  assert.match(kgModulesSource, /new_songs: newSong/);
+  assert.match(kgPlaylistApiSource, /export const fetchKugouHotPlaylists/);
+  assert.match(kgPlaylistApiSource, /export const fetchKugouNewSongs/);
+});
+
+test("KG author-song normalizer is shared so rank and new songs cannot drift apart", () => {
+  // 新歌与榜单的原始结构同族（authors[]），必须共用同一份归一化，
+  // 否则会出现「榜单能播、新歌不能播」这类字段偏差。
+  assert.match(kgRankSource, /normalizeKgAuthorSong/);
+  assert.match(kgNewSongSource, /normalizeKgAuthorSong/);
+  assert.doesNotMatch(kgRankSource, /const normalizeRankSong/);
+  assert.match(kgSongCoreSource, /export const normalizeKgAuthorSong/);
+  // 320k 回退与封面模板替换属于关键行为，留在共享实现里
+  assert.match(kgSongCoreSource, /raw\["320hash"\] \|\| raw\.hash_high/);
+  assert.match(kgSongCoreSource, /fillCover\(raw\.trans_param\?\.union_cover/);
+});
+
+test("platform home renders the shelves ahead of the rank groups", () => {
+  assert.match(platformHomeSource, /fetchQQMusicHotPlaylists/);
+  assert.match(platformHomeSource, /fetchKugouHotPlaylists/);
+  assert.match(platformHomeSource, /fetchKugouNewSongs/);
+  assert.match(platformHomeSource, /qmHotPlaylistSection/);
+  assert.match(platformHomeSource, /kgHotPlaylistSection/);
+  assert.match(platformHomeSource, /kgNewSongSection/);
+  // 书架拉取失败不能拖垮榜单：每个书架都带 catch 兜底
+  assert.match(platformHomeSource, /fetchQQMusicHotPlaylists\(30\)\.catch/);
+  assert.match(platformHomeSource, /fetchKugouHotPlaylists\(1, 30\)\.catch/);
+  assert.match(platformHomeSource, /fetchKugouNewSongs\(30\)\.catch/);
+  // 书架排在榜单之前
+  assert.match(
+    platformHomeSource,
+    /\.\.\.\(hotPlaylists\.length \? \[kgHotPlaylistSection\(hotPlaylists\)\] : \[\]\)[\s\S]{0,200}\.\.\.normalizeKugou\(visible\)/,
   );
 });
