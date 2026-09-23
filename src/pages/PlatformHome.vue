@@ -163,7 +163,9 @@ const tidalModuleTitle = (type: string): string => {
  */
 const toTidalItem = (raw: unknown, moduleType: string): HomeItem | null => {
   const item = asRecord(raw);
-  const id = str(item.id);
+  // 歌单用 uuid（不是 id）：TIDAL 的 PLAYLIST_LIST 项没有 id 字段，
+  // 早期只读 item.id 会把整个歌单分区静默丢弃。
+  const id = str(item.id) ?? str(item.uuid);
   const title = str(item.title) ?? str(item.name);
   if (!id || !title) return null;
   const artists =
