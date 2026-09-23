@@ -9,8 +9,8 @@ SPlayer Atom ships only Linux x86-64 Core artifacts. There is no Desktop install
 Two deployment variants exist:
 
 ```text
-splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 - **system-runtime** uses a system Node `>=22.19.0`.

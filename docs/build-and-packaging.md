@@ -44,12 +44,11 @@ pnpm package:core:bundled
 输出：
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
-版本号来自 `package.json`，日期为打包当天的 `YYYYMMDD`。需要可重复构建时可以通过
-`ATOM_BUILD_DATE=YYYYMMDD` 固定日期。`runtime.json` 同时记录可读的 `buildDate`。
+版本号来自 `package.json`，日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`。需要**内容**可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。
 
 staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
 
