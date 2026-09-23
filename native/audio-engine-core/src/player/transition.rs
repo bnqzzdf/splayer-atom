@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use crate::alsa::format::AlsaPcmFormat;
 use crate::audio_output::AudioOutput;
 use crate::decoder;
 use crate::direct_runtime::DirectPlayback;
@@ -14,7 +15,7 @@ use anyhow::Result;
 use ffmpeg_audio::HttpCancelHandle;
 use parking_lot::Mutex;
 
-use super::{InnerPlayer, PlayerEvent, PlayerState};
+use super::{InnerPlayer, PlaybackRuntime, PlayerEvent, PlayerState, ProcessedRuntime};
 
 /// 切换/seek 时要 join 的旧线程集合，全部挪到 spawn_blocking 工作线程 join，
 /// 主线程持锁阶段只 take handle，避免最坏 200ms+ 的卡顿
@@ -61,6 +62,9 @@ pub struct SeekTake {
     pub output_sample_rate: u32,
     /// 当前输出设备声道数
     pub output_channels: u16,
+    pub output_format: AlsaPcmFormat,
+    pub volume: f32,
+    pub clipping_protection: bool,
     /// 本次 seek 的 token，commit_seeked 时比对最新值，不一致说明已被新 load/seek/stop 取代
     pub token: u64,
     /// 解码侧 DSP 共享实例
@@ -88,10 +92,6 @@ impl InnerPlayer {
         if let Some(previous) = self.pending_load_handle.replace(handle) {
             previous.cancel();
         }
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
-
         // 发停止信号（原子写，纳秒级）
         if let Some(flag) = self.fade_cancel.take() {
             flag.store(true, Ordering::Relaxed);
@@ -100,26 +100,24 @@ impl InnerPlayer {
             flag.store(true, Ordering::Relaxed);
         }
 
-        if let Some(ref shared) = self.shared {
-            shared.stop();
-        }
-        if let Some(playback) = self.playback.take() {
-            playback.stop();
-        }
-        if let Some(ref shared) = self.shared {
-            shared.drain_buffer();
-        }
-        self.shared = None;
+        let (decoder_thread, direct_playback) = match self.runtime.take() {
+            Some(PlaybackRuntime::Processed(runtime)) => {
+                let (_, thread) = runtime.stop();
+                (Some(thread), None)
+            }
+            Some(PlaybackRuntime::Direct(runtime)) => (None, Some(runtime)),
+            None => (None, None),
+        };
         self.cover_raw = None;
         self.seek_base = 0.0;
         self.equalizer.lock().reset_state();
         self.tempo.lock().reset();
 
         let old_threads = OldThreads {
-            decoder_thread: self.decoder_thread.take(),
+            decoder_thread,
             position_timer: self.position_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
-            direct_playback: self.direct_playback.take(),
+            direct_playback,
         };
         (old_threads, token)
     }
@@ -152,23 +150,19 @@ impl InnerPlayer {
     }
 
     pub fn take_for_async_direct_seek(&mut self) -> Result<Option<DirectSeekTake>> {
-        if self.direct_playback.is_none() {
+        if !self.direct_active() {
             return Ok(None);
         }
         if self.state == PlayerState::Playing {
-            if let Some(playback) = self.direct_playback.as_mut() {
+            if let Some(playback) = self.direct_mut() {
                 playback.pause()?;
             }
         }
         self.stop_position_timer();
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
-        let playback = self
-            .direct_playback
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("Direct seek 运行态已丢失"))?;
+        let Some(PlaybackRuntime::Direct(playback)) = self.runtime.take() else {
+            anyhow::bail!("Direct seek 运行态已丢失");
+        };
         self.seek_base = playback.position();
         Ok(Some(DirectSeekTake { playback, token }))
     }
@@ -178,15 +172,12 @@ impl InnerPlayer {
     /// 返回 None 表示当前没有解码线程（空闲 / 已停止 / 正在异步加载被 load 取走），
     /// 此时不做任何副作用——尤其不能 bump token，否则会误杀在途的 load
     pub fn take_for_async_seek(&mut self) -> Option<SeekTake> {
-        self.decoder_thread.as_ref()?;
+        self.processed()?;
+        let output_format = self.output.as_ref()?.format();
 
         // 与 load 共用同一 token 序列：commit_seeked 时比对，防止 seek 期间发生的
         // load/stop 完成后被本次 seek 的 commit 覆盖（旧曲复活 + 新解码线程泄漏）
         let token = self.load_token.fetch_add(1, Ordering::AcqRel) + 1;
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
-
         if let Some(flag) = self.fade_cancel.take() {
             flag.store(true, Ordering::Relaxed);
         }
@@ -194,27 +185,20 @@ impl InnerPlayer {
             flag.store(true, Ordering::Relaxed);
         }
 
-        if let Some(ref shared) = self.shared {
-            shared.stop();
-        }
-        if let Some(playback) = self.playback.take() {
-            playback.stop();
-        }
+        let Some(PlaybackRuntime::Processed(runtime)) = self.runtime.take() else {
+            return None;
+        };
+        let (shared, decoder_thread) = runtime.stop();
 
         let old_threads = OldThreads {
-            decoder_thread: self.decoder_thread.take(),
+            decoder_thread: Some(decoder_thread),
             position_timer: self.position_timer_handle.take(),
             fade_handle: self.fade_handle.take(),
             direct_playback: None,
         };
 
-        let (norm_enabled, norm_gain) = match self.shared.take() {
-            Some(s) => {
-                s.drain_buffer();
-                (s.is_normalization_enabled(), s.normalization_gain())
-            }
-            None => (self.normalization_enabled, 0.0),
-        };
+        let norm_enabled = shared.is_normalization_enabled();
+        let norm_gain = shared.normalization_gain();
 
         Some(SeekTake {
             old_threads,
@@ -225,6 +209,9 @@ impl InnerPlayer {
             original_sample_rate: self.original_sample_rate,
             output_sample_rate: self.output_sample_rate(),
             output_channels: self.output_channels(),
+            output_format,
+            volume: self.target_volume,
+            clipping_protection: self.clipping_protection_enabled,
             token,
             equalizer: Arc::clone(&self.equalizer),
             tempo: Arc::clone(&self.tempo),
@@ -258,21 +245,32 @@ impl InnerPlayer {
         let was_paused = self.state == PlayerState::Paused;
         let volume = self.target_volume;
         let clipping_protection = self.clipping_protection_enabled;
-        let playback = {
+        let playback = (|| {
             let output = self.ensure_output()?;
-            Arc::new(PlaybackHandle::attach(
+            PlaybackHandle::attach(
                 output,
                 Arc::clone(&shared),
                 volume,
                 clipping_protection,
                 was_paused,
-            )?)
+            )
+        })();
+        let playback = match playback {
+            Ok(playback) => Arc::new(playback),
+            Err(error) => {
+                processed_stage.cancel();
+                shared.stop();
+                drop(handle);
+                return Err(error);
+            }
         };
 
-        self.playback = Some(playback);
-        self.shared = Some(shared);
-        self.decoder_thread = Some(handle);
-        self.processed_stage = Some(processed_stage);
+        self.runtime = Some(PlaybackRuntime::Processed(ProcessedRuntime {
+            playback,
+            shared,
+            decoder_thread: handle,
+            stage: processed_stage,
+        }));
         self.seek_base = position_secs;
 
         if was_paused {
@@ -329,21 +327,32 @@ impl InnerPlayer {
 
         let volume = self.target_volume;
         let clipping_protection = self.clipping_protection_enabled;
-        let playback = {
+        let playback = (|| {
             let output = self.ensure_output()?;
-            Arc::new(PlaybackHandle::attach(
+            PlaybackHandle::attach(
                 output,
                 Arc::clone(&shared),
                 volume,
                 clipping_protection,
                 !auto_play,
-            )?)
+            )
+        })();
+        let playback = match playback {
+            Ok(playback) => Arc::new(playback),
+            Err(error) => {
+                processed_stage.cancel();
+                shared.stop();
+                drop(decode_handle);
+                return Err(error);
+            }
         };
 
-        self.playback = Some(playback);
-        self.shared = Some(shared);
-        self.decoder_thread = Some(decode_handle);
-        self.processed_stage = Some(processed_stage);
+        self.runtime = Some(PlaybackRuntime::Processed(ProcessedRuntime {
+            playback,
+            shared,
+            decoder_thread: decode_handle,
+            stage: processed_stage,
+        }));
         self.seek_base = 0.0;
         self.current_source = Some(source.to_string());
 
@@ -377,18 +386,13 @@ impl InnerPlayer {
             return Ok(false);
         }
         self.output = None;
-        self.playback = None;
-        self.shared = None;
-        self.decoder_thread = None;
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
+        self.stop_runtime();
         self.seek_base = playback.seek_base();
         let should_play = self.state == PlayerState::Playing;
         if should_play {
             playback.play()?;
         }
-        self.direct_playback = Some(playback);
+        self.runtime = Some(PlaybackRuntime::Direct(playback));
         if should_play {
             self.start_position_timer();
         }
@@ -410,13 +414,8 @@ impl InnerPlayer {
 
         self.pending_load_handle = None;
         self.output = None;
-        self.playback = None;
-        self.shared = None;
-        self.decoder_thread = None;
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
-        self.direct_playback = Some(playback);
+        self.stop_runtime();
+        self.runtime = Some(PlaybackRuntime::Direct(playback));
         self.seek_base = 0.0;
         self.current_source = Some(source.to_owned());
         self.audio_duration = metadata.duration_secs;

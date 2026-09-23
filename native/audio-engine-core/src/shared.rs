@@ -5,6 +5,8 @@ use std::sync::Arc;
 use ffmpeg_audio::HttpCancelHandle;
 use parking_lot::{Condvar, Mutex};
 
+use crate::alsa::format::AlsaPcmFormat;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProcessedTrackBoundary {
     pub generation: u64,
@@ -21,9 +23,17 @@ pub struct AudioChunk {
     pub track_boundary: Option<ProcessedTrackBoundary>,
 }
 
+/// producer 完成 DSP、最终增益与量化后交给 ALSA writer 的字节块。
+pub struct PreparedPcmChunk {
+    pub bytes: Vec<u8>,
+    pub frames: u64,
+    pub source_sample_count: u64,
+    pub track_boundary: Option<ProcessedTrackBoundary>,
+}
+
 /// 非阻塞弹出缓冲区的结果
 pub enum PopResult {
-    Chunk(AudioChunk),
+    Chunk(PreparedPcmChunk),
     Pending,
     Finished,
 }
@@ -32,9 +42,13 @@ pub enum PopResult {
 pub struct Shared {
     decoded_buffer: Mutex<VecDeque<AudioChunk>>,
     decoded_condvar: Condvar,
-    output_buffer: Mutex<VecDeque<AudioChunk>>,
+    output_buffer: Mutex<VecDeque<PreparedPcmChunk>>,
     output_condvar: Condvar,
     player_buffer_pool: Mutex<Vec<Vec<f32>>>,
+    packed_buffer_pool: Mutex<Vec<Vec<u8>>>,
+    processed_format: Mutex<AlsaPcmFormat>,
+    processed_volume: AtomicU32,
+    clipping_protection: AtomicBool,
     decode_eof: AtomicBool,
     output_eof: AtomicBool,
     is_stopping: AtomicBool,
@@ -86,6 +100,10 @@ impl Shared {
             output_buffer: Mutex::new(VecDeque::with_capacity(OUTPUT_BUFFER_CAPACITY)),
             output_condvar: Condvar::new(),
             player_buffer_pool: Mutex::new(Vec::with_capacity(BUFFER_POOL_CAPACITY)),
+            packed_buffer_pool: Mutex::new(Vec::with_capacity(OUTPUT_BUFFER_CAPACITY + 2)),
+            processed_format: Mutex::new(AlsaPcmFormat::F32Le),
+            processed_volume: AtomicU32::new(1.0_f32.to_bits()),
+            clipping_protection: AtomicBool::new(false),
             decode_eof: AtomicBool::new(false),
             output_eof: AtomicBool::new(false),
             is_stopping: AtomicBool::new(false),
@@ -150,6 +168,51 @@ impl Shared {
         buffer.clear();
         let mut pool = self.player_buffer_pool.lock();
         if pool.len() < BUFFER_POOL_CAPACITY {
+            pool.push(buffer);
+        }
+    }
+
+    /// 输出配置在解码/DSP 线程启动前提交；运行中只更新音量与保护开关。
+    pub fn configure_processed_output(
+        &self,
+        format: AlsaPcmFormat,
+        volume: f32,
+        clipping_protection: bool,
+    ) {
+        *self.processed_format.lock() = format;
+        self.set_processed_volume(volume);
+        self.set_clipping_protection(clipping_protection);
+    }
+
+    pub fn processed_format(&self) -> AlsaPcmFormat {
+        *self.processed_format.lock()
+    }
+
+    pub fn set_processed_volume(&self, volume: f32) {
+        self.processed_volume
+            .store(volume.to_bits(), Ordering::Release);
+    }
+
+    pub fn processed_volume(&self) -> f32 {
+        f32::from_bits(self.processed_volume.load(Ordering::Acquire))
+    }
+
+    pub fn set_clipping_protection(&self, enabled: bool) {
+        self.clipping_protection.store(enabled, Ordering::Release);
+    }
+
+    pub fn clipping_protection(&self) -> bool {
+        self.clipping_protection.load(Ordering::Acquire)
+    }
+
+    pub fn take_packed_buffer(&self) -> Vec<u8> {
+        self.packed_buffer_pool.lock().pop().unwrap_or_default()
+    }
+
+    pub fn recycle_packed_buffer(&self, mut buffer: Vec<u8>) {
+        buffer.clear();
+        let mut pool = self.packed_buffer_pool.lock();
+        if pool.len() < OUTPUT_BUFFER_CAPACITY + 2 {
             pool.push(buffer);
         }
     }
@@ -298,7 +361,7 @@ impl Shared {
     }
 
     /// 推入 DSP 后的数据块，保持小容量背压
-    pub fn push_output(&self, chunk: AudioChunk) {
+    pub fn push_output(&self, chunk: PreparedPcmChunk) {
         let mut buffer = self.output_buffer.lock();
         while buffer.len() >= OUTPUT_BUFFER_CAPACITY && !self.is_stopping.load(Ordering::Acquire) {
             self.output_condvar.wait(&mut buffer);
@@ -358,8 +421,11 @@ impl Shared {
         let output_chunks = std::mem::take(&mut *output);
         output.shrink_to_fit();
         drop(output);
-        for chunk in decoded_chunks.into_iter().chain(output_chunks) {
+        for chunk in decoded_chunks {
             self.recycle_player_buffer(chunk.player_samples);
+        }
+        for chunk in output_chunks {
+            self.recycle_packed_buffer(chunk.bytes);
         }
     }
 }

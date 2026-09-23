@@ -5,4 +5,5 @@ pub mod dsd;
 pub mod format;
 pub mod output;
 pub mod processed_pcm;
+pub mod processed_prepare;
 pub mod writer;

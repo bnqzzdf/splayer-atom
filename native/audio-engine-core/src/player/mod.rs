@@ -52,15 +52,7 @@ impl AlsaPlaybackMode {
 pub struct InnerPlayer {
     /// 输出设备与配置句柄（不持有流），保证 InnerPlayer 整体是 Send 的
     output: Option<AudioOutput>,
-    /// 使用 Arc 包装，允许 fade 线程在 Mutex 外操作音量
-    playback: Option<Arc<PlaybackHandle>>,
-    shared: Option<Arc<Shared>>,
-    /// 解码线程句柄，join 后可回收 DecoderData 复用于 seek
-    decoder_thread: Option<JoinHandle<decoder::DecoderData>>,
-    /// 当前 processed runtime 的单槽 next-track staging；load/seek/stop 都会作废旧句柄。
-    processed_stage: Option<decoder::ProcessedStageHandle>,
-    /// Direct runtime 与 normal playback 互斥；可承载 ALSA direct 或 Diretta transport。
-    direct_playback: Option<DirectPlayback>,
+    runtime: Option<PlaybackRuntime>,
     /// 当前音频的时长（秒）
     audio_duration: f64,
     /// 原始封面数据缓存（load 时提取，getCoverRaw 时返回，避免重复打开文件）
@@ -109,6 +101,29 @@ pub struct InnerPlayer {
     pending_load_handle: Option<HttpCancelHandle>,
 }
 
+/// 一次加载只拥有一条播放链路；切换时整体取出并释放。
+enum PlaybackRuntime {
+    Processed(ProcessedRuntime),
+    Direct(DirectPlayback),
+}
+
+struct ProcessedRuntime {
+    playback: Arc<PlaybackHandle>,
+    shared: Arc<Shared>,
+    decoder_thread: JoinHandle<decoder::DecoderData>,
+    stage: decoder::ProcessedStageHandle,
+}
+
+impl ProcessedRuntime {
+    fn stop(self) -> (Arc<Shared>, JoinHandle<decoder::DecoderData>) {
+        self.stage.cancel();
+        self.shared.stop();
+        self.playback.stop();
+        self.shared.drain_buffer();
+        (self.shared, self.decoder_thread)
+    }
+}
+
 /// 编译期保证 `InnerPlayer: Send`；ALSA handle 只存在于 writer 线程拥有的 PlaybackHandle 内。
 const _: fn() = || {
     fn assert_send<T: Send>() {}
@@ -116,6 +131,41 @@ const _: fn() = || {
 };
 
 impl InnerPlayer {
+    fn processed(&self) -> Option<&ProcessedRuntime> {
+        match &self.runtime {
+            Some(PlaybackRuntime::Processed(runtime)) => Some(runtime),
+            _ => None,
+        }
+    }
+
+    fn direct(&self) -> Option<&DirectPlayback> {
+        match &self.runtime {
+            Some(PlaybackRuntime::Direct(runtime)) => Some(runtime),
+            _ => None,
+        }
+    }
+
+    fn direct_mut(&mut self) -> Option<&mut DirectPlayback> {
+        match &mut self.runtime {
+            Some(PlaybackRuntime::Direct(runtime)) => Some(runtime),
+            _ => None,
+        }
+    }
+
+    fn stop_runtime(&mut self) {
+        match self.runtime.take() {
+            Some(PlaybackRuntime::Processed(runtime)) => {
+                let (_, thread) = runtime.stop();
+                let _ = thread.join();
+            }
+            Some(PlaybackRuntime::Direct(runtime)) => {
+                drop(runtime);
+                self.output = None;
+            }
+            None => {}
+        }
+    }
+
     /// load/reinit 阶段必须先完成 ALSA processed 协商；commit 阶段不再隐式打开默认设备。
     fn ensure_output(&self) -> Result<&AudioOutput> {
         self.output
@@ -159,15 +209,12 @@ impl InnerPlayer {
     }
 
     pub fn processed_stage_handle(&self) -> Option<decoder::ProcessedStageHandle> {
-        self.processed_stage.clone()
+        self.processed().map(|runtime| runtime.stage.clone())
     }
 
     /// 第一版 processed gapless 只在 tempo/pitch 不改变时间轴时启用。
     pub fn processed_gapless_staging_allowed(&self) -> bool {
-        self.playback.is_some()
-            && self.shared.is_some()
-            && self.direct_playback.is_none()
-            && self.tempo.lock().is_bypass()
+        self.processed().is_some() && self.tempo.lock().is_bypass()
     }
 
     pub fn new() -> Result<Self> {
@@ -178,11 +225,7 @@ impl InnerPlayer {
 
         Ok(Self {
             output,
-            playback: None,
-            shared: None,
-            decoder_thread: None,
-            processed_stage: None,
-            direct_playback: None,
+            runtime: None,
             audio_duration: 0.0,
             cover_raw: None,
             state: PlayerState::Idle,
@@ -296,25 +339,22 @@ impl InnerPlayer {
     }
 
     pub fn runtime_active(&self) -> bool {
-        self.direct_playback.is_some()
-            || self.playback.is_some()
-            || self.decoder_thread.is_some()
-            || self.shared.is_some()
+        self.runtime.is_some()
     }
 
     pub fn direct_active(&self) -> bool {
-        self.direct_playback.is_some()
+        self.direct().is_some()
     }
 
     pub fn output_path(&self) -> Option<&'static str> {
-        if let Some(playback) = &self.direct_playback {
+        if let Some(playback) = self.direct() {
             return Some(playback.output_path());
         }
-        self.playback.as_ref().map(|_| "processed-pcm")
+        self.processed().map(|_| "processed-pcm")
     }
 
     pub fn direct_monitor(&self) -> Option<(DirectMonitor, f64, u64)> {
-        self.direct_playback.as_ref().map(|playback| {
+        self.direct().map(|playback| {
             (
                 playback.monitor(),
                 playback.seek_base(),
@@ -324,9 +364,7 @@ impl InnerPlayer {
     }
 
     pub fn direct_stage_handle(&self) -> Option<DirectStageHandle> {
-        self.direct_playback
-            .as_ref()
-            .map(DirectPlayback::stage_handle)
+        self.direct().map(DirectPlayback::stage_handle)
     }
 
     pub fn commit_direct_gapless_boundary(
@@ -337,8 +375,7 @@ impl InnerPlayer {
         cue_end_frame75: Option<u64>,
     ) -> Result<()> {
         let playback = self
-            .direct_playback
-            .as_mut()
+            .direct_mut()
             .ok_or_else(|| anyhow::anyhow!("[Direct] 当前没有可提交的 gapless Direct runtime"))?;
         playback.commit_gapless_boundary(source, duration, cue_start_frame75, cue_end_frame75);
         // staged gapless boundary 不会重新走完整 load，因此旧 raw cover 已不再属于当前 source；
@@ -366,7 +403,7 @@ impl InnerPlayer {
     /// 恢复播放。Paused 时渐入恢复；Stopped/Idle/已播完时返回 Some(source)，
     /// 由 NAPI 绑定层走 async load 复活——网络源的打开可达数秒，不能在锁内同步执行
     pub fn play(&mut self) -> Result<Option<String>> {
-        if self.direct_playback.is_some() || self.direct_mode_selected() {
+        if self.direct_active() || self.direct_mode_selected() {
             if self.state == PlayerState::Playing && self.is_finished() {
                 self.stop_internal();
                 self.state = PlayerState::Stopped;
@@ -375,7 +412,7 @@ impl InnerPlayer {
             return match self.state {
                 PlayerState::Playing => Ok(None),
                 PlayerState::Paused => {
-                    let Some(playback) = self.direct_playback.as_mut() else {
+                    let Some(playback) = self.direct_mut() else {
                         // 输出故障恢复态已经释放失效 runtime；交给 NAPI/Core 从保留位置重载。
                         return Ok(self.current_source.clone());
                     };
@@ -404,14 +441,14 @@ impl InnerPlayer {
             // 暂停状态：渐入恢复
             PlayerState::Paused => {
                 // 如果没有有效的播放链路或解码线程，交给调用方从当前音源重载复活
-                if self.playback.is_none() || self.decoder_thread.is_none() {
+                if self.processed().is_none() {
                     return Ok(self.current_source.clone());
                 }
 
                 // 先取消未完成的渐出：否则其完成回调可能在 sink.play() 之后执行
                 // sink.pause()，导致状态 Playing 但实际无声
                 self.cancel_fade();
-                if let Some(ref playback) = self.playback {
+                if let Some(playback) = self.processed().map(|runtime| &runtime.playback) {
                     playback.set_volume(0.0);
                     playback.play();
                 }
@@ -437,8 +474,8 @@ impl InnerPlayer {
             return Ok(());
         }
 
-        if self.direct_playback.is_some() || self.direct_mode_selected() {
-            if let Some(playback) = self.direct_playback.as_mut() {
+        if self.direct_active() || self.direct_mode_selected() {
+            if let Some(playback) = self.direct_mut() {
                 playback.pause()?;
             }
             self.state = PlayerState::Paused;
@@ -457,7 +494,9 @@ impl InnerPlayer {
 
         // 立即启动非阻塞渐出，避免被后续 stop_*_timer 的 join 阻塞
         // fade 完成后在回调中执行 sink.pause（保持静音，不恢复音量以免串音或爆音）
-        let playback_for_callback = self.playback.as_ref().map(Arc::clone);
+        let playback_for_callback = self
+            .processed()
+            .map(|runtime| Arc::clone(&runtime.playback));
         self.start_fade(
             self.target_volume,
             0.0,
@@ -478,8 +517,8 @@ impl InnerPlayer {
         if self.state != PlayerState::Playing {
             return Ok(());
         }
-        if self.direct_playback.is_some() || self.direct_mode_selected() {
-            if let Some(playback) = self.direct_playback.as_mut() {
+        if self.direct_active() || self.direct_mode_selected() {
+            if let Some(playback) = self.direct_mut() {
                 playback.pause()?;
             }
             self.state = PlayerState::Paused;
@@ -490,7 +529,7 @@ impl InnerPlayer {
             return Ok(());
         }
         self.cancel_fade();
-        if let Some(ref playback) = self.playback {
+        if let Some(playback) = self.processed().map(|runtime| &runtime.playback) {
             playback.pause();
         }
         self.state = PlayerState::Paused;
@@ -509,25 +548,7 @@ impl InnerPlayer {
         let recovery_position = self.position();
         self.cancel_fade();
         self.stop_position_timer();
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
-        if self.direct_playback.take().is_some() {
-            self.output = None;
-        }
-        if let Some(ref shared) = self.shared {
-            shared.stop();
-        }
-        if let Some(playback) = self.playback.take() {
-            playback.stop();
-        }
-        if let Some(handle) = self.decoder_thread.take() {
-            let _ = handle.join();
-        }
-        if let Some(ref shared) = self.shared {
-            shared.drain_buffer();
-        }
-        self.shared = None;
+        self.stop_runtime();
         self.output = None;
         self.seek_base = recovery_position;
         if self.state != PlayerState::Paused {
@@ -560,29 +581,8 @@ impl InnerPlayer {
         self.cancel_fade();
         // 2. 停止定时器并等待线程退出（释放 Arc<Shared> 和 Arc<EventEmitter>）
         self.stop_position_timer();
-        if let Some(stage) = self.processed_stage.take() {
-            stage.cancel();
-        }
-        if self.direct_playback.take().is_some() {
-            self.output = None;
-        }
-        // 3. 通知解码线程停止
-        if let Some(ref shared) = self.shared {
-            shared.stop();
-        }
-        // 4. 停止并释放 ALSA writer
-        if let Some(playback) = self.playback.take() {
-            playback.stop();
-        }
-        // 5. 等待解码线程退出，回收 DecoderData（FFmpeg 资源在此 drop）
-        if let Some(handle) = self.decoder_thread.take() {
-            let _ = handle.join();
-        }
-        // 6. 清空共享缓冲区（即使还有外部 Arc 引用，缓冲区数据也立即释放）
-        if let Some(ref shared) = self.shared {
-            shared.drain_buffer();
-        }
-        self.shared = None;
+        // 3. 整体停止并释放当前唯一运行态。
+        self.stop_runtime();
         self.cover_raw = None;
         self.seek_base = 0.0;
     }
@@ -593,8 +593,8 @@ impl InnerPlayer {
             self.reject_direct_sample_change("调整软件音量")?;
         }
         self.target_volume = volume;
-        if let Some(ref playback) = self.playback {
-            playback.set_volume(volume);
+        if let Some(runtime) = self.processed() {
+            runtime.playback.set_volume(volume);
         }
         Ok(())
     }
@@ -620,10 +620,10 @@ impl InnerPlayer {
 
     /// 获取当前播放位置（秒），基于实际消费的采样数
     pub fn position(&self) -> f64 {
-        if let Some(playback) = &self.direct_playback {
+        if let Some(playback) = self.direct() {
             return playback.position();
         }
-        match &self.shared {
+        match self.processed().map(|runtime| &runtime.shared) {
             Some(shared) if shared.track_transition_count() > 0 => shared.consumed_position(),
             Some(shared) => self.seek_base + shared.consumed_position(),
             None => self.seek_base,
@@ -632,8 +632,8 @@ impl InnerPlayer {
 
     /// 获取总时长（秒）
     pub fn duration(&self) -> f64 {
-        self.shared
-            .as_ref()
+        self.processed()
+            .map(|runtime| &runtime.shared)
             .map(|shared| shared.track_duration())
             .filter(|duration| *duration > 0.0)
             .unwrap_or(self.audio_duration)
@@ -646,7 +646,7 @@ impl InnerPlayer {
         duration_secs: f64,
     ) -> Result<()> {
         anyhow::ensure!(
-            self.playback.is_some() && self.shared.is_some() && self.direct_playback.is_none(),
+            self.processed().is_some(),
             "processed gapless boundary 没有活动 PCM runtime"
         );
         self.current_source = Some(source.to_owned());
@@ -669,13 +669,11 @@ impl InnerPlayer {
 
     /// 检查播放是否已结束
     pub fn is_finished(&self) -> bool {
-        if let Some(playback) = &self.direct_playback {
+        if let Some(playback) = self.direct() {
             return playback.finished();
         }
-        match (&self.shared, &self.playback) {
-            (Some(shared), Some(_)) => shared.is_all_consumed(),
-            _ => false,
-        }
+        self.processed()
+            .is_some_and(|runtime| runtime.shared.is_all_consumed())
     }
 
     /// 设置音量归一化开关
@@ -684,8 +682,8 @@ impl InnerPlayer {
             self.reject_direct_sample_change("启用 ReplayGain/Normalization")?;
         }
         self.normalization_enabled = enabled;
-        if let Some(ref shared) = self.shared {
-            shared.set_normalization_enabled(enabled);
+        if let Some(runtime) = self.processed() {
+            runtime.shared.set_normalization_enabled(enabled);
         }
         Ok(())
     }
@@ -701,8 +699,8 @@ impl InnerPlayer {
             self.reject_direct_sample_change("调整削波保护")?;
         }
         self.clipping_protection_enabled = enabled;
-        if let Some(ref playback) = self.playback {
-            playback.set_clipping_protection(enabled);
+        if let Some(runtime) = self.processed() {
+            runtime.playback.set_clipping_protection(enabled);
         }
         Ok(())
     }
@@ -764,7 +762,7 @@ impl InnerPlayer {
             tempo.is_bypass()
         };
         if !bypass {
-            if let Some(stage) = &self.processed_stage {
+            if let Some(stage) = self.processed().map(|runtime| &runtime.stage) {
                 stage.cancel();
             }
         }
@@ -783,7 +781,7 @@ impl InnerPlayer {
             tempo.is_bypass()
         };
         if !bypass {
-            if let Some(stage) = &self.processed_stage {
+            if let Some(stage) = self.processed().map(|runtime| &runtime.stage) {
                 stage.cancel();
             }
         }
@@ -801,7 +799,7 @@ impl InnerPlayer {
             tempo.is_bypass()
         };
         if !bypass {
-            if let Some(stage) = &self.processed_stage {
+            if let Some(stage) = self.processed().map(|runtime| &runtime.stage) {
                 stage.cancel();
             }
         }
@@ -882,11 +880,9 @@ mod tests {
             .commit_direct_loaded(token, "direct-test.flac", false, metadata, playback)
             .unwrap();
         assert!(committed.is_some());
-        assert!(player.direct_playback.is_some());
+        assert!(player.direct().is_some());
         assert!(player.output.is_none());
-        assert!(player.playback.is_none());
-        assert!(player.shared.is_none());
-        assert!(player.decoder_thread.is_none());
+        assert!(player.processed().is_none());
         assert_eq!(player.state(), PlayerState::Paused);
     }
 
@@ -921,7 +917,7 @@ mod tests {
         assert_eq!(player.state(), PlayerState::Paused);
 
         state.set_failed(true);
-        assert!(player.direct_playback.as_ref().unwrap().failed());
+        assert!(player.direct().unwrap().failed());
         state.set_failed(false);
         state.set_finished(true);
         assert!(player.is_finished());
@@ -944,7 +940,7 @@ mod tests {
                 DirectPlayback::fake(120.0, false),
             )
             .unwrap();
-        let state = player.direct_playback.as_ref().unwrap().fake_state();
+        let state = player.direct().unwrap().fake_state();
         state.set_position(12.5);
         player.play().unwrap();
         assert_eq!(player.state(), PlayerState::Playing);
@@ -953,7 +949,7 @@ mod tests {
 
         assert_eq!(player.state(), PlayerState::Paused);
         assert_eq!(player.current_source(), Some("direct-test.flac"));
-        assert!(player.direct_playback.is_none());
+        assert!(player.direct().is_none());
         assert_eq!(player.output_path(), None);
         assert!((player.position() - 12.5).abs() < 1e-9);
         assert_eq!(player.play().unwrap().as_deref(), Some("direct-test.flac"));
@@ -1041,7 +1037,7 @@ mod tests {
             .take_for_async_direct_seek()
             .unwrap()
             .expect("Direct seek 应取得 Direct runtime");
-        assert!(player.direct_playback.is_none());
+        assert!(player.direct().is_none());
         assert!(player
             .set_volume(0.5)
             .unwrap_err()
@@ -1051,11 +1047,9 @@ mod tests {
         let mut playback = take.playback;
         assert_eq!(playback.seek_while_paused(42.0).unwrap(), 42.0);
         assert!(player.commit_direct_seeked(take.token, playback).unwrap());
-        assert!(player.direct_playback.is_some());
+        assert!(player.direct().is_some());
         assert!(player.output.is_none());
-        assert!(player.playback.is_none());
-        assert!(player.shared.is_none());
-        assert!(player.decoder_thread.is_none());
+        assert!(player.processed().is_none());
         assert_eq!(player.position(), 42.0);
         assert_eq!(player.state(), PlayerState::Playing);
     }

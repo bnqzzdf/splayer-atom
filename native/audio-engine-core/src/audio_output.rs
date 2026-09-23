@@ -9,6 +9,7 @@ use anyhow::{ensure, Context, Result};
 use tracing::{debug, info};
 
 use crate::alsa::device::AlsaHwEndpoint;
+use crate::alsa::format::AlsaPcmFormat;
 use crate::alsa::output::{open_processed_pcm_hw, AlsaPcmConfig};
 use crate::alsa::processed_pcm::AlsaProcessedPcmStream;
 use crate::error::{AudioErrorKind, AudioResultExt};
@@ -76,11 +77,13 @@ impl AudioOutput {
         self.config.channels
     }
 
+    pub fn format(&self) -> AlsaPcmFormat {
+        self.config.format
+    }
+
     pub(crate) fn build_stream(
         &self,
         shared: Arc<Shared>,
-        volume: f32,
-        clipping_protection: bool,
         paused: bool,
     ) -> Result<AlsaProcessedPcmStream> {
         let handle = open_processed_pcm_hw(
@@ -92,18 +95,12 @@ impl AudioOutput {
         let actual = handle.config();
         ensure!(
             actual.sample_rate == self.config.sample_rate
-                && actual.channels == self.config.channels,
-            "ALSA processed 重开后的 rate/channels 与已建立 DSP pipeline 不一致"
+                && actual.channels == self.config.channels
+                && actual.format == self.config.format,
+            "ALSA processed 重开后的 format/rate/channels 与已准备输出块不一致"
         );
-        AlsaProcessedPcmStream::new(
-            handle,
-            shared,
-            volume,
-            clipping_protection,
-            paused,
-            Arc::clone(&self.on_failure),
-        )
-        .with_audio_kind(AudioErrorKind::Device)
+        AlsaProcessedPcmStream::new(handle, shared, paused, Arc::clone(&self.on_failure))
+            .with_audio_kind(AudioErrorKind::Device)
     }
 }
 

@@ -10,6 +10,7 @@ use crate::shared::Shared;
 /// Processed PCM 播放控制句柄；底层 ALSA handle 始终由独立 writer 线程单独持有。
 pub struct PlaybackHandle {
     stream: AlsaProcessedPcmStream,
+    shared: Arc<Shared>,
 }
 
 impl PlaybackHandle {
@@ -20,8 +21,11 @@ impl PlaybackHandle {
         clipping_protection: bool,
         paused: bool,
     ) -> Result<Self> {
+        shared.set_processed_volume(volume);
+        shared.set_clipping_protection(clipping_protection);
         Ok(Self {
-            stream: output.build_stream(shared, volume, clipping_protection, paused)?,
+            stream: output.build_stream(Arc::clone(&shared), paused)?,
+            shared,
         })
     }
 
@@ -42,10 +46,10 @@ impl PlaybackHandle {
     }
 
     pub fn set_volume(&self, volume: f32) {
-        self.stream.set_volume(volume);
+        self.shared.set_processed_volume(volume);
     }
 
     pub fn set_clipping_protection(&self, enabled: bool) {
-        self.stream.set_clipping_protection(enabled);
+        self.shared.set_clipping_protection(enabled);
     }
 }

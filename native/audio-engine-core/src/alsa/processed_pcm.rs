@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
@@ -8,7 +8,6 @@ use alsa::pcm::State;
 use anyhow::{ensure, Context, Result};
 use tracing::{debug, warn};
 
-use super::format::pack_processed_pcm;
 use super::output::AlsaPcmHandle;
 use super::writer::AlsaFrameWriter;
 use crate::audio_output::OutputFailureCallback;
@@ -16,66 +15,6 @@ use crate::shared::{PopResult, ProcessedTrackBoundary, Shared};
 
 const SOURCE_POLL_INTERVAL: Duration = Duration::from_millis(1);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
-const OUTPUT_CEILING: f32 = 0.98;
-const LIMITER_RELEASE: f32 = 0.0005;
-
-struct OutputLimiter {
-    gain: f32,
-}
-
-impl OutputLimiter {
-    fn new() -> Self {
-        Self { gain: 1.0 }
-    }
-
-    /// 软件音量/fade 已应用后，按完整多声道 frame 做最终 clipping protection。
-    fn process(&mut self, samples: &mut [f32], channels: u16) {
-        let channels = usize::from(channels);
-        debug_assert!(channels > 0 && samples.len().is_multiple_of(channels));
-        for frame in samples.chunks_exact_mut(channels) {
-            let peak = frame
-                .iter()
-                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
-            let target_gain = if peak > OUTPUT_CEILING {
-                OUTPUT_CEILING / peak
-            } else {
-                1.0
-            };
-            if peak * self.gain >= OUTPUT_CEILING {
-                self.gain = target_gain;
-            } else {
-                self.gain += (1.0 - self.gain) * LIMITER_RELEASE;
-            }
-            for sample in frame {
-                *sample = (*sample * self.gain).clamp(-OUTPUT_CEILING, OUTPUT_CEILING);
-            }
-        }
-    }
-
-    fn reset(&mut self) {
-        self.gain = 1.0;
-    }
-}
-
-fn apply_final_processing(
-    samples: &mut [f32],
-    gain: f32,
-    channels: u16,
-    clipping_protection: bool,
-    limiter: &mut OutputLimiter,
-) {
-    if (gain - 1.0).abs() > f32::EPSILON {
-        for sample in samples.iter_mut() {
-            *sample *= gain;
-        }
-    }
-    if clipping_protection {
-        limiter.process(samples, channels);
-    } else {
-        limiter.reset();
-    }
-}
-
 enum WriterCommand {
     Play(mpsc::SyncSender<Result<()>>),
     Pause(mpsc::SyncSender<Result<()>>),
@@ -166,8 +105,6 @@ impl PlayedTimeline {
 
 pub struct AlsaProcessedPcmStream {
     command_tx: mpsc::Sender<WriterCommand>,
-    volume: Arc<AtomicU32>,
-    clipping_protection: Arc<AtomicBool>,
     cancel: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
 }
@@ -180,31 +117,19 @@ impl AlsaProcessedPcmStream {
     pub fn new(
         handle: AlsaPcmHandle,
         shared: Arc<Shared>,
-        volume: f32,
-        clipping_protection: bool,
         paused: bool,
         on_failure: OutputFailureCallback,
     ) -> Result<Self> {
-        let volume = Arc::new(AtomicU32::new(volume.to_bits()));
-        let clipping_protection = Arc::new(AtomicBool::new(clipping_protection));
         let cancel = Arc::new(AtomicBool::new(false));
         let (command_tx, command_rx) = mpsc::channel();
-        let worker_volume = Arc::clone(&volume);
-        let worker_clipping_protection = Arc::clone(&clipping_protection);
         let worker_cancel = Arc::clone(&cancel);
         let worker_shared = Arc::clone(&shared);
         let worker = thread::Builder::new()
             .name("alsa-processed-pcm".into())
             .spawn(move || {
-                if let Err(error) = run_writer(
-                    handle,
-                    shared,
-                    worker_volume,
-                    worker_clipping_protection,
-                    worker_cancel.as_ref(),
-                    command_rx,
-                    !paused,
-                ) {
+                if let Err(error) =
+                    run_writer(handle, shared, worker_cancel.as_ref(), command_rx, !paused)
+                {
                     if writer_shutdown_requested(worker_cancel.as_ref(), worker_shared.as_ref()) {
                         debug!(%error, "ALSA processed PCM writer 因主动生命周期切换退出");
                         return;
@@ -216,8 +141,6 @@ impl AlsaProcessedPcmStream {
             .context("启动 ALSA processed PCM writer 失败")?;
         Ok(Self {
             command_tx,
-            volume,
-            clipping_protection,
             cancel,
             worker: Some(worker),
         })
@@ -244,14 +167,6 @@ impl AlsaProcessedPcmStream {
             .context("等待 ALSA processed 控制命令失败")?
     }
 
-    pub fn set_volume(&self, volume: f32) {
-        self.volume.store(volume.to_bits(), Ordering::Relaxed);
-    }
-
-    pub fn set_clipping_protection(&self, enabled: bool) {
-        self.clipping_protection.store(enabled, Ordering::Release);
-    }
-
     pub fn stop(&self) {
         self.cancel.store(true, Ordering::Release);
         let _ = self.command_tx.send(WriterCommand::Stop);
@@ -270,21 +185,16 @@ impl Drop for AlsaProcessedPcmStream {
 fn run_writer(
     handle: AlsaPcmHandle,
     shared: Arc<Shared>,
-    volume: Arc<AtomicU32>,
-    clipping_protection: Arc<AtomicBool>,
     cancel: &AtomicBool,
     command_rx: mpsc::Receiver<WriterCommand>,
     mut playing: bool,
 ) -> Result<()> {
-    let config = handle.config();
     let mut writer = AlsaFrameWriter::new(handle)?;
     let mut hardware_paused = false;
     let mut timeline = PlayedTimeline::default();
     let mut pending_source_samples = 0_u64;
     let mut pending_chunk_boundary: Option<ProcessedTrackBoundary> = None;
     let mut pending_track_boundaries = VecDeque::<PendingTrackBoundary>::new();
-    let mut packed = Vec::<u8>::new();
-    let mut limiter = OutputLimiter::new();
 
     loop {
         if cancel.load(Ordering::Acquire) || shared.is_stopping() {
@@ -333,8 +243,8 @@ fn run_writer(
                 }
                 pending_source_samples =
                     pending_source_samples.saturating_add(chunk.source_sample_count);
-                if chunk.player_samples.is_empty() {
-                    shared.recycle_player_buffer(chunk.player_samples);
+                if chunk.bytes.is_empty() {
+                    shared.recycle_packed_buffer(chunk.bytes);
                     continue;
                 }
                 if let Some(boundary) = pending_chunk_boundary.take() {
@@ -344,38 +254,12 @@ fn run_writer(
                         boundary,
                     });
                 }
-                let frames = chunk.player_samples.len() / usize::from(config.channels);
+                let (written, recovered) = writer.write_all_recovering(&chunk.bytes, || {
+                    cancel.load(Ordering::Acquire) || shared.is_stopping()
+                })?;
+                shared.recycle_packed_buffer(std::mem::take(&mut chunk.bytes));
                 ensure!(
-                    frames * usize::from(config.channels) == chunk.player_samples.len(),
-                    "processed PCM block 未按声道 frame 对齐"
-                );
-                let required = chunk
-                    .player_samples
-                    .len()
-                    .checked_mul(config.format.storage_bytes())
-                    .context("processed PCM pack 长度溢出")?;
-                packed.resize(required, 0);
-                let gain = f32::from_bits(volume.load(Ordering::Relaxed));
-                apply_final_processing(
-                    &mut chunk.player_samples,
-                    gain,
-                    config.channels,
-                    clipping_protection.load(Ordering::Acquire),
-                    &mut limiter,
-                );
-                let stats =
-                    pack_processed_pcm(&chunk.player_samples, 1.0, config.format, &mut packed)?;
-                if stats.clipped {
-                    warn!("ALSA processed PCM 最终转换发生 clipping/sanitize");
-                }
-                shared.recycle_player_buffer(std::mem::take(&mut chunk.player_samples));
-
-                let (written, recovered) = writer
-                    .write_all_recovering(&packed[..stats.bytes], || {
-                        cancel.load(Ordering::Acquire) || shared.is_stopping()
-                    })?;
-                ensure!(
-                    written == frames,
+                    written as u64 == chunk.frames,
                     "ALSA processed write frame 数与 block 不一致"
                 );
                 if recovered {
@@ -652,43 +536,6 @@ mod tests {
         assert_eq!(timeline.played_to(0), 200);
         assert_eq!(timeline.played_to(25), 250);
         assert_eq!(timeline.played_to(50), 300);
-    }
-
-    #[test]
-    fn final_limiter_uses_one_gain_for_the_whole_multichannel_frame() {
-        let mut limiter = OutputLimiter::new();
-        let original = [2.0_f32, 1.0, 0.5, -0.5, -1.0, -2.0];
-        let mut samples = original;
-
-        limiter.process(&mut samples, 6);
-
-        let gain = samples[0] / original[0];
-        for (actual, input) in samples.iter().zip(original) {
-            assert!((actual / input - gain).abs() < 1e-6);
-        }
-        assert!(samples.iter().all(|sample| sample.abs() <= OUTPUT_CEILING));
-    }
-
-    #[test]
-    fn software_gain_is_applied_before_final_limiter() {
-        let mut limiter = OutputLimiter::new();
-        let mut samples = [0.8_f32, -0.8];
-        apply_final_processing(&mut samples, 2.0, 2, true, &mut limiter);
-        assert!(samples.iter().all(|sample| sample.abs() <= OUTPUT_CEILING));
-        assert!((samples[0].abs() - samples[1].abs()).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn disabling_clipping_protection_resets_hidden_limiter_gain() {
-        let mut limiter = OutputLimiter::new();
-        let mut loud = [2.0_f32, -2.0];
-        apply_final_processing(&mut loud, 1.0, 2, true, &mut limiter);
-        assert!(loud[0].abs() <= OUTPUT_CEILING);
-
-        let mut next = [0.5_f32, -0.5];
-        apply_final_processing(&mut next, 1.0, 2, false, &mut limiter);
-        assert_eq!(next, [0.5, -0.5]);
-        assert!((limiter.gain - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]

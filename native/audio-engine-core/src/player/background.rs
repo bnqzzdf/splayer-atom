@@ -73,8 +73,8 @@ impl InnerPlayer {
         let cancel = Arc::new(AtomicBool::new(false));
         self.fade_cancel = Some(Arc::clone(&cancel));
 
-        if let Some(ref playback) = self.playback {
-            let playback = Arc::clone(playback);
+        if let Some(runtime) = self.processed() {
+            let playback = Arc::clone(&runtime.playback);
             let fade_ms = self.fade_duration_ms;
             let handle = thread::spawn(move || {
                 fade_volume(&playback, from, to, fade_ms, &cancel);
@@ -141,8 +141,8 @@ impl InnerPlayer {
             return;
         }
 
-        let shared = match &self.shared {
-            Some(s) => Arc::clone(s),
+        let shared = match self.processed() {
+            Some(runtime) => Arc::clone(&runtime.shared),
             None => return,
         };
         let cb = match &self.event_callback {
@@ -152,7 +152,9 @@ impl InnerPlayer {
         let seek_base = self.seek_base;
         let initial_duration = self.duration();
         let initial_transition_count = shared.track_transition_count();
-        let playback = self.playback.as_ref().map(Arc::clone);
+        let playback = self
+            .processed()
+            .map(|runtime| Arc::clone(&runtime.playback));
 
         let handle = thread::spawn(move || {
             // 停滞检测：消费计数连续 STALL_THRESHOLD_TICKS 次未变 + 缓冲区非空 → sink 静默死亡

@@ -8,8 +8,9 @@ use ffmpeg_audio::{
     sys, AudioError, AudioReader, HttpCancelHandle, ResampleOptions, Resampler, SeekMode,
 };
 use parking_lot::Mutex;
-use tracing::debug;
+use tracing::{debug, warn};
 
+use crate::alsa::processed_prepare::{prepare_chunk, OutputLimiter};
 use crate::cue::CueVirtualInfo;
 use crate::equalizer::Equalizer;
 use crate::error::{AudioErrorKind, AudioResultExt};
@@ -392,9 +393,18 @@ fn process_audio_chunk(
 
 fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<StretchProcessor>) {
     let mut tempo_scratch = shared.take_player_buffer();
+    let format = shared.processed_format();
+    let mut limiter = OutputLimiter::new();
     while let Some(chunk) = shared.pop_decoded() {
         let chunk = process_audio_chunk(chunk, equalizer, tempo, &mut tempo_scratch);
-        shared.push_output(chunk);
+        match prepare_chunk(chunk, shared, format, &mut limiter) {
+            Ok(prepared) => shared.push_output(prepared),
+            Err(error) => {
+                warn!(%error, "ALSA processed PCM 准备输出块失败");
+                shared.mark_decode_failed();
+                break;
+            }
+        }
         if shared.is_stopping() {
             break;
         }

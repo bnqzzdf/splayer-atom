@@ -385,6 +385,8 @@ impl AudioPlayer {
             load_token,
             cover_dir,
             normalization_enabled,
+            volume,
+            clipping_protection,
             device_id,
             direct_target,
             output_generation,
@@ -430,6 +432,8 @@ impl AudioPlayer {
                 player.load_token_handle(),
                 player.cover_cache_dir().map(String::from),
                 player.is_normalization_enabled(),
+                player.volume(),
+                player.clipping_protection_enabled(),
                 device_id,
                 direct_target,
                 output_generation,
@@ -546,6 +550,7 @@ impl AudioPlayer {
                 failure_callback,
             )?;
             let shared = Shared::new(output.sample_rate(), output.channels());
+            shared.configure_processed_output(output.format(), volume, clipping_protection);
             shared.set_normalization_enabled(normalization_enabled);
             equalizer
                 .lock()
@@ -751,6 +756,9 @@ impl AudioPlayer {
             original_sample_rate: _,
             output_sample_rate,
             output_channels,
+            output_format,
+            volume,
+            clipping_protection,
             token,
             equalizer,
             tempo,
@@ -767,6 +775,7 @@ impl AudioPlayer {
             }
             // 沿用实际输出流采样率，与复用的 DecoderData 重采样器目标一致
             let shared = Shared::new(output_sample_rate, output_channels);
+            shared.configure_processed_output(output_format, volume, clipping_protection);
             shared.set_normalization_enabled(normalization_enabled);
             shared.set_normalization_gain(normalization_gain);
             equalizer
