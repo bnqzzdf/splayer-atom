@@ -7,6 +7,7 @@ import type { QMModule } from "../core/types";
 import hot_search from "./hot_search";
 import leaderboard from "./leaderboard";
 import toplist from "./toplist";
+import playlistSquare from "./playlist_square";
 import lyric from "./lyric";
 import match from "./match";
 import search from "./search";
@@ -23,6 +24,7 @@ export const modules: Record<string, QMModule> = {
   hot_search,
   leaderboard,
   toplist,
+  hot_playlists: playlistSquare,
   lyric,
   match,
   search,
