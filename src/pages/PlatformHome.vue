@@ -15,6 +15,7 @@ defineOptions({ name: "PlatformHome" });
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
+import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
@@ -30,6 +31,8 @@ interface HomeItem {
   title: string;
   subtitle?: string;
   image?: string;
+  /** 决定点击后跳哪种详情页 */
+  kind: "album" | "playlist" | "track" | "artist";
 }
 
 /** 归一化后的分区 */
@@ -114,6 +117,8 @@ const toQobuzItem = (raw: unknown): HomeItem | null => {
     title,
     subtitle: artists || str(item.description)?.slice(0, 48),
     image: str(image.small) ?? str(image.thumbnail) ?? str(image.large),
+    // 专辑带 track_count；歌单/其它走 playlist 详情页
+    kind: item.track_count != null ? "album" : "playlist",
   };
 };
 
@@ -148,7 +153,15 @@ const tidalModuleTitle = (type: string): string => {
   return map[type] ?? "推荐";
 };
 
-const toTidalItem = (raw: unknown): HomeItem | null => {
+/**
+ * TIDAL 条目 → HomeItem。
+ *
+ * 取图要按类型找，字段位置不同：
+ *   ALBUM_LIST / PLAYLIST_LIST → item.cover / item.image
+ *   TRACK_LIST                 → item.album.cover（曲目自身没有封面）
+ * 早期只看了前两种，导致 New Tracks / Spotlighted Uploads 这些曲目分区没有图。
+ */
+const toTidalItem = (raw: unknown, moduleType: string): HomeItem | null => {
   const item = asRecord(raw);
   const id = str(item.id);
   const title = str(item.title) ?? str(item.name);
@@ -162,11 +175,24 @@ const toTidalItem = (raw: unknown): HomeItem | null => {
       .map((c) => str(asRecord(c).name))
       .filter(Boolean)
       .join(", ");
+  const albumCover = str(asRecord(item.album).cover);
+  const kind: HomeItem["kind"] =
+    moduleType === "ALBUM_LIST"
+      ? "album"
+      : moduleType === "TRACK_LIST" || moduleType === "VIDEO_LIST"
+        ? "track"
+        : moduleType === "ARTIST_LIST"
+          ? "artist"
+          : "playlist";
+  // 曲目分区点击进专辑详情，其余按自身类型
+  const targetId = kind === "track" ? (str(asRecord(item.album).id) ?? id) : id;
+  const targetKind: HomeItem["kind"] = kind === "track" ? "album" : kind;
   return {
-    id,
+    id: targetId,
     title,
     subtitle: artists || undefined,
-    image: tidalImage(item.image ?? item.cover),
+    image: tidalImage(item.image ?? item.cover ?? albumCover),
+    kind: targetKind,
   };
 };
 
@@ -182,7 +208,9 @@ const normalizeTidal = (data: unknown): HomeSection[] => {
       const rawItems = asArray(paged.items).length
         ? asArray(paged.items)
         : asArray(moduleRecord.items);
-      const items = rawItems.map(toTidalItem).filter((x): x is HomeItem => x !== null);
+      const items = rawItems
+        .map((entry) => toTidalItem(entry, type))
+        .filter((x): x is HomeItem => x !== null);
       if (!items.length) return;
       out.push({
         key: `row-${rowIndex}-${moduleIndex}`,
@@ -214,6 +242,25 @@ const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
       return id && name ? { id, name } : null;
     })
     .filter((x): x is GenreItem => x !== null);
+};
+
+// ---------- 点击跳转 ----------
+
+/**
+ * 打开条目对应的详情页。
+ *
+ * 详情页本身已支持 qobuz/tidal（services/collection 里有对应 loader），
+ * 所以这里只需把 source/id 传过去。
+ */
+const openItem = (item: HomeItem): void => {
+  const source = platform.value;
+  if (item.kind === "album") {
+    navigateToAlbum(item.title, { source, albumId: item.id });
+  } else if (item.kind === "artist") {
+    navigateToArtist(item.title, { source, artistId: item.id });
+  } else {
+    navigateToPlaylist(item.id, { source, name: item.title });
+  }
 };
 
 // ---------- 加载 ----------
@@ -348,14 +395,25 @@ onMounted(async () => {
         <section v-for="section in sections" :key="section.key" class="flex flex-col gap-2.5">
           <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            <div v-for="item in section.items" :key="`${section.key}-${item.id}`" class="min-w-0">
-              <div class="aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10">
+            <button
+              v-for="item in section.items"
+              :key="`${section.key}-${item.id}`"
+              type="button"
+              class="group min-w-0 text-left"
+              :title="item.title"
+              @click="openItem(item)"
+            >
+              <div
+                class="aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10 transition-transform duration-200 group-hover:scale-[1.03]"
+              >
                 <SImg v-if="item.image" :src="item.image" :alt="item.title" class="size-full" />
                 <div v-else class="flex size-full items-center justify-center">
                   <IconLucideDisc3 class="size-7 text-on-surface-variant/30" />
                 </div>
               </div>
-              <p class="mt-1.5 truncate text-xs font-medium text-on-surface" :title="item.title">
+              <p
+                class="mt-1.5 truncate text-xs font-medium text-on-surface group-hover:text-primary"
+              >
                 {{ item.title }}
               </p>
               <p
@@ -365,7 +423,7 @@ onMounted(async () => {
               >
                 {{ item.subtitle }}
               </p>
-            </div>
+            </button>
           </div>
         </section>
       </template>

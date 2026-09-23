@@ -25,6 +25,9 @@ const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
 const WEB_CONTROL_SETTING_PATHS = new Set(["system.onboardingCompleted", "system.uiZoom"]);
 const LEGACY_LIBRARY_NAV_KEY = "/library";
 const SONGS_NAV_KEY = "/songs";
+/** 在线平台页；首次随版本引入时定位到首页之后 */
+const PLATFORMS_NAV_KEY = "/platforms";
+const HOME_NAV_KEY = "/";
 const LEGACY_DEFAULT_FIRST_NAV_GROUP = [
   "/",
   LEGACY_LIBRARY_NAV_KEY,
@@ -91,6 +94,13 @@ export const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
   const seen = new Set<string>();
   const groups: SidebarNavGroup[] = [];
   const source = Array.isArray(stored) ? stored : [];
+  // 存档里是否已见过「在线平台」项——用来区分「本次随版本首次引入」与
+  // 「用户已在侧边栏设置里调整过位置」。只有前者才替它选位置。
+  const hadPlatforms = source.some(
+    (group) =>
+      Array.isArray((group as { keys?: unknown } | null)?.keys) &&
+      ((group as { keys: unknown[] }).keys as unknown[]).includes(PLATFORMS_NAV_KEY),
+  );
   for (let index = 0; index < source.length; index++) {
     const raw = source[index];
     const record = raw as Partial<SidebarNavGroup> | null;
@@ -117,6 +127,14 @@ export const reconcileNavGroups = (stored: unknown): SidebarNavGroup[] => {
     return DEFAULT_SIDEBAR_NAV_GROUPS.map((group) => ({ ...group, keys: [...group.keys] }));
   const missing = all.filter((key) => !seen.has(key));
   if (missing.length > 0) groups[groups.length - 1].keys.push(...missing);
+  // 首次引入时把它从「末组」挪到首页之后；用户调整过则完全尊重其位置。
+  if (!hadPlatforms) {
+    const first = groups[0];
+    const at = first.keys.indexOf(PLATFORMS_NAV_KEY);
+    if (at >= 0) first.keys.splice(at, 1);
+    const home = first.keys.indexOf(HOME_NAV_KEY);
+    first.keys.splice(home >= 0 ? home + 1 : 0, 0, PLATFORMS_NAV_KEY);
+  }
   return groups;
 };
 
