@@ -39,3 +39,6 @@ package-lock.json
 
 # 源码交付包携带的构建身份（由打包脚本生成，见 scripts/atom/sourceIdentity.ts）
 /SOURCE_COMMIT
+
+# 容器内 pnpm 可能在工作树留下 store 目录（构建噪声，不入库）
+.pnpm-store/
