@@ -2,17 +2,18 @@
 
 日期：2026-09-20。
 
-状态（2026-09-22 核对）：ALSA HW 双模式、PCM/Native DSD、Core/Web 控制与 CPAL 移除已实现；
+状态（当前代码，2026-09-23）：ALSA HW 双模式、PCM/Native DSD、Core/Web 控制与 CPAL 移除已实现；
 用户确认已实际试听两天，覆盖 Direct/Processed、各自支持的 PCM/Native DSD、暂停、seek、
 切歌及输出切换，并通过 `/proc/asound/.../stream0` 对比确认输出采样率、比特率与音源一致。
 同日本机 FC4 自动化实测确认 Direct PCM/DSD64、暂停恢复、seek 与跨格式切歌正常，
-但重复发现 Processed PCM seek 返回“缺少已协商 ALSA 输出”；需修复并复验，详见
-[实机记录](./hardware-release-checklist.md)。
+但重复发现 Processed PCM seek 返回“缺少已协商 ALSA 输出”。`c3e135ab` 已修复该
+writer 取消路径以及重启后直接 Play 不加载队列的软件问题，仍需用包含修复的包在 FC4
+复验；`cecee166` 的失败记录保留在 [实机记录](./hardware-release-checklist.md)。
 仍需收口本文要求的统一 native 生命周期与 producer/writer 职责：
 当前 Direct/Processed 保留独立编排，Processed 的最终增益、limiter、打包和缓冲扩容仍在 writer。
 已取得 PCM/DSD 在 USB 驱动提交层的独立逐字节一致性证据，并通过 clean artifact smoke、
 播放中重启/SIGTERM、FC4 断开重连和 Diretta 往返切换；最终设备 bitstream 与完整发布验收
-仍未完成，另发现重启后直接 Play 不加载队列。范围详见
+仍未完成。重启后直接 Play 的旧失败已在软件中修复，尚无对应硬件复验。范围详见
 [2026-09-22 实测](./alsa-acceptance-2026-09-22.md)。
 完成情况由 [Roadmap](./atom-roadmap.md) 维护。
 本文按一个完整目标设计，不拆成先发布 PCM、以后补 DSD 或长期保留旧后端的交付批次。

@@ -1,5 +1,11 @@
 # UPnP 源保真输出实施方案
 
+状态（当前代码，2026-09-23）：`core/atom/upnp/` 的 discovery、transport、
+output、media 模块及 Core 播放接入已实现；CUE/SACD/DSD 的软件对照和部分
+AudioSys 实机结果见第 12 节。首次混合长播暴露的 media stream FD 泄漏已有
+`stream.pipeline()` 修复和 30 次强制 reload 验证；第二轮持续长播、最终
+兼容矩阵与发布包复验尚无完成记录。
+
 日期：2026-09-07。
 
 本文定义 Atom 的 UPnP 输出最终实施方案。UPnP 只是 Core 的一种额外输出方式，不改变
@@ -413,8 +419,8 @@ logical DSD sequence 全轨逐声道一致；DST 另以两张不同真实 ISO �
 60 次 CUE 切换无 FD/temp 线性增长证据；首轮约 11 小时 12 分、约 29 个完整循环的七类混合队列长播
 功能上无 playback/UPnP/DST 错误，但暴露 AudioSys 提前断开原始 DSF HTTP 请求时 `ReadStream` FD 每轮
 泄漏 1 个。media listener 已改用 `stream.pipeline()`，新增 Renderer abort 后 FD 必须关闭的回归，并在修复
-artifact 上连续 30 次原始 DSF 强制 reload 验证残留目标 FD=0、总 FD 回落到 41。当前继续第二轮长播，
-在持续运行再次确认 FD/socket/temp/RSS 不随轮数增长前不提前关闭最终稳定性门禁。
+artifact 上连续 30 次原始 DSF 强制 reload 验证残留目标 FD=0、总 FD 回落到 41。第二轮长播的
+持续运行结果尚未记录；在再次确认 FD/socket/temp/RSS 不随轮数增长前不关闭最终稳定性门禁。
 
 真实 Renderer 能接收资源不等于 DAC bit-perfect。最终兼容矩阵分开记录：Core byte/sample/DSD
 序列保持、Renderer 接受的容器/rate，以及有测量条件时的实际 DAC 输出结果。

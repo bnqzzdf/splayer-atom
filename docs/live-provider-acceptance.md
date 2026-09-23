@@ -2,6 +2,10 @@
 
 本文定义 Netease、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 
+状态（仓库记录，2026-09-23）：Core/Web 的三家 provider 接入已存在，UPnP 方案记录了
+Netease/TIDAL 的部分真实在线播放；本文件尚无覆盖以下完整矩阵的候选包验收结果。
+Qobuz 真实账号验收及 Netease/TIDAL 完整记录仍见 [Roadmap](./atom-roadmap.md)。
+
 ## 1. 通用前置条件
 
 - 使用已记录 SHA256、Atom commit、`sourceDirty=false`、Core protocol 与 capability 的候选 artifact。

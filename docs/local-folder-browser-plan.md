@@ -1,5 +1,11 @@
 # Local Folder Browser Plan
 
+Status (current tree, 2026-09-23): the Core routes/service, Web Folder view and client, shared
+contracts and automated coverage are implemented and merged into `dev`. The old full-tree Web
+projection has been removed. The real-library, NAS/USB, large-directory and material-viewer
+acceptance in section 18 has not been recorded as complete; see the
+[Roadmap](./atom-roadmap.md).
+
 ## 1. Purpose
 
 SPlayer Atom's Folder view exists only for **audio browsing and playback**. It is not a general
@@ -314,9 +320,9 @@ CUE virtual Track    -> track.cuePath / track.cueAudioPath as appropriate
 SACD virtual Track   -> physical ISO path derived from the virtual path
 ```
 
-The existing SACD virtual-path parsing is currently repeated in several Core modules. This work
-must centralize the physical-source mapping in one Core helper and reuse it from scanner, folder
-browsing, local-album identity, and other existing consumers that currently duplicate the rule.
+The SACD virtual-path parsing and physical-source mapping now live in
+`core/utils/localPhysicalSource.ts`. Folder browsing and other Core consumers reuse that helper
+instead of maintaining another physical-source rule.
 
 The folder service should not call `getAllTracks()` and filter the complete library on every browse.
 After `readdir` identifies the direct physical files, the database layer should resolve canonical

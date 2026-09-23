@@ -2,6 +2,10 @@
 
 本文记录 SPlayer Atom 的 Diretta Source Direct CUE 无缝播放方案及当前实现状态。
 
+状态（当前代码，2026-09-23）：Core 的 75fps CUE 坐标、staging/boundary 提交和
+Native Direct PCM/DSD segment handoff 已实现，自动化结果见第 14 节。第 15 节的
+真实 Diretta 硬件验收尚无完整通过记录，因此方案的最终验收仍开放。
+
 目标是解决 CUE 虚拟分轨在 Direct 路径上的边界泄漏、爆音、重复加载和切换不稳定，同时保持 Atom 现有的 Core 单一播放权威和 Source Direct 不变量。
 
 本文只讨论 CUE、Diretta Source Direct、Native staging/handoff 与 Core 播放权威，不讨论 UPnP。
@@ -333,7 +337,7 @@ staging 失败不影响当前曲继续播放。
 
 ## 15. 仍需真实硬件验收
 
-自动化测试不能代替真实 Diretta Host/Target。合并和发布前仍应在 Linux x86-64 真实设备上至少验证：
+自动化测试不能代替真实 Diretta Host/Target。发布前仍应在 Linux x86-64 真实设备上至少验证：
 
 1. 三首以上 PCM CUE 连续 gapless；
 2. CUE 边界前后没有可闻泄漏、爆音或重复开头；
@@ -374,7 +378,7 @@ native/audio-engine/src/bindings/player.rs
 native/audio-engine/index.d.ts
 ```
 
-## 17. 合并前审查清单
+## 17. 实现审查清单
 
 - Web 没有第二个播放/队列权威；
 - Native 没有完整 queue 或第二套播放策略；

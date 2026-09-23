@@ -1,5 +1,9 @@
 # 2026-09-22 ALSA 与发布包实测
 
+本记录只对应下述 `cecee166` 包。之后的 `c3e135ab` 已在软件中修复 Processed PCM
+seek 和重启后直接 Play；本记录中的 FAIL 是该旧包的实测结果，修复包的硬件复验仍见
+[Roadmap](./atom-roadmap.md)。
+
 环境：Linux 7.0.0-31-generic x86-64，HiBy FC4，Diretta DX5 II，Node 24.18.0。
 通过已安装 Core 的 HTTP API 操作真实输出；测试结束恢复原队列、FC4、Direct 模式，
 保持停止，ALSA handle 已关闭。FC4 USB 授权已恢复，临时加载的 usbmon 已卸载。
@@ -65,7 +69,7 @@ DAC 内部处理或最终数字输出。[内核 usbmon 文档](https://docs.kern
 Diretta 本次只复验常用 PCM 与 DSD64 的运行态；未重新验证最高 768 kHz/DSD512、
 Target 数字输出或在线物化链路。此前实机证据仍按原记录保留。
 
-## 不能关闭的项目
+## 本次包未关闭的项目
 
 - Processed PCM seek：先前实测的 HTTP 400 仍未修复，见硬件清单中的复现记录。
 - 重启后的 `/api/play`：`playbackSession.ts` 只在 stopped 或未选索引时加载队列；
