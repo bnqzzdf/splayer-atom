@@ -1538,9 +1538,18 @@
         "homepage": "Homepage"
       },
       "grant": {
-        "network": { "label": "Network", "desc": "Can make network requests" },
-        "control": { "label": "Control", "desc": "Can control the player" },
-        "ui": { "label": "Interface", "desc": "Can extend or modify the app interface" }
+        "network": {
+          "label": "Network",
+          "desc": "Can make network requests"
+        },
+        "control": {
+          "label": "Control",
+          "desc": "Can control the player"
+        },
+        "ui": {
+          "label": "Interface",
+          "desc": "Can extend or modify the app interface"
+        }
       }
     },
     "pluginManager": {
@@ -1744,8 +1753,14 @@
         "copyTitle": "Copy Cloud Title",
         "copyId": "Copy Cloud ID",
         "copyUrl": "Share Cloud Link"
+      },
+      "rank": {
+        "copyTitle": "Copy Chart Title",
+        "copyId": "Copy Chart ID",
+        "copyUrl": "Share Chart Link"
       }
-    }
+    },
+    "rank": "Chart"
   },
   "artist": {
     "label": "Artists",

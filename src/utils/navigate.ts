@@ -136,3 +136,21 @@ export const navigateToPlaylist = (
     id: playlistId,
     name: options.name,
   });
+
+/**
+ * 跳转到榜单页（QQ音乐 / 酷狗官方榜单）
+ * @param rankId - 榜单 ID
+ * @param options.source - 来源
+ * @param options.name - 标题兜底
+ * @returns 是否发起跳转
+ */
+export const navigateToRank = (
+  rankId: string | undefined,
+  options: { source?: TrackSource; name?: string } = {},
+): boolean =>
+  navigateToResource({
+    type: "rank",
+    source: options.source,
+    id: rankId,
+    name: options.name,
+  });

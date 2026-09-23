@@ -15,7 +15,8 @@ export type ShuffleMode = "off" | "on";
 export type TrackSource = "local" | "streaming" | Platform;
 
 /** 播放来源类型 */
-export type PlaybackOriginType = "track" | "playlist" | "album" | "artist" | "radio" | "page";
+export type PlaybackOriginType =
+  "track" | "playlist" | "album" | "artist" | "radio" | "rank" | "page";
 
 /** 本次播放的来源上下文 */
 export interface PlaybackContext {

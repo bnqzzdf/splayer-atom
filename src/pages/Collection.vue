@@ -106,6 +106,7 @@ const typeLabel = computed(() => {
     playlist: t("collection.playlist"),
     radio: t("collection.radio"),
     cloud: t("cloud.title"),
+    rank: t("collection.rank"),
   };
   return map[type] ?? "";
 });
@@ -372,6 +373,7 @@ onBeforeUnmount(() => {
                     <IconLucideDisc3 v-if="type === 'album'" class="size-4" />
                     <IconLucideListMusic v-else-if="type === 'playlist'" class="size-4" />
                     <IconLucideRadio v-else-if="type === 'radio'" class="size-4" />
+                    <IconLucideTrophy v-else-if="type === 'rank'" class="size-4" />
                     <IconLucideCloud v-else class="size-4" />
                   </span>
                 </STooltip>
