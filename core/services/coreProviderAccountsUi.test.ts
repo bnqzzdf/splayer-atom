@@ -43,14 +43,31 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
 
   assert.match(streamingLoginSource, /useProviderSessionsStore\(\)/);
   assert.match(streamingLoginSource, /qobuzApi\.login\(userId, token\)/);
+  // 粘贴 token 作为浏览器授权的备用入口，无需再填写 user_id。
+  assert.ok(streamingLoginSource.includes("copy(localStorage.getItem('qobuz_user_auth_token'))"));
+  assert.doesNotMatch(streamingLoginSource, /Query String Parameters 中复制 user_id/);
+  // 一键 OAuth：主按钮走原生本地回调，粘贴 token 降级为兜底，两条路都在
+  assert.match(streamingLoginSource, /qobuzApi\.oauthStart\(window\.location\.hostname\)/);
+  assert.match(streamingLoginSource, /qobuzApi\.oauthAwait\(\)/);
+  assert.match(streamingLoginSource, /用浏览器登录 Qobuz/);
+  assert.match(streamingLoginSource, /openExternal\(start\.url\)/);
   assert.match(streamingLoginSource, /tidalApi\.authAuthorize\(\)/);
   assert.match(streamingLoginSource, /tidalApi\.authExchange\(code, state\)/);
   assert.match(streamingLoginSource, /tidalApi\.authDeviceAuthorization/);
   assert.match(streamingLoginSource, /tidalApi\.authTokenPoll/);
   assert.match(streamingLoginSource, /providerSessions\.refresh\(\)/);
-  assert.doesNotMatch(
-    streamingLoginSource,
-    /useStreamingAuthStore|useDataStore|localStorage|sessionStorage/,
+  assert.doesNotMatch(streamingLoginSource, /useStreamingAuthStore|useDataStore|sessionStorage/);
+  // 渲染端不得自己读写登录态存储（凭证由 Core 持有）。
+  // 唯一允许出现 localStorage 的地方是 Qobuz 取值提示里的那行 Console 命令——
+  // 它是给用户在浏览器控制台执行的文本，不是本组件的访问。
+  const storageLines = streamingLoginSource
+    .split("\n")
+    .filter((line) => line.includes("localStorage"))
+    .filter((line) => !line.includes("copy(localStorage"));
+  assert.equal(
+    storageLines.length,
+    0,
+    `渲染端不应直接访问 localStorage，命中：\n${storageLines.join("\n")}`,
   );
 
   assert.match(providerAccountsSource, /<PlatformAccount platform="qobuz" \/>/);

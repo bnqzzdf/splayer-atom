@@ -1,6 +1,7 @@
 pub mod album;
 pub mod artist;
 pub mod auth;
+pub mod auth_oauth;
 pub mod config;
 pub mod credentials;
 pub mod playlist;

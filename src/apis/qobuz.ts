@@ -46,8 +46,9 @@ export const qobuzCall = async <T = any>(
  * @param userAuthToken 用户认证 token
  */
 export const login = (userId: string, userAuthToken: string) =>
+  // userId 可留空：Core 会凭 token 反查真实用户，界面因此只需要粘贴 token
   qobuzCall<{ status: string; user?: { id: string; login: string } }>("auth_login", {
-    user_id: userId,
+    ...(userId.trim() ? { user_id: userId.trim() } : {}),
     user_auth_token: userAuthToken,
   });
 
@@ -59,6 +60,43 @@ export const authStatus = () =>
   qobuzCall<{ status: string; loggedIn: boolean; username?: string; userId?: string }>(
     "auth_status",
   );
+
+/** 一键 OAuth：原生层起一次性回调监听后返回的授权信息 */
+export type QobuzOauthStartResponse = {
+  status: string;
+  /** 官方授权页地址，交给 `openExternal` 打开 */
+  url: string;
+  /** 回调监听端口（仅在登录期间存活） */
+  port: number;
+  redirectUri: string;
+  state: string;
+  /** 授权有效期（秒） */
+  expiresIn: number;
+  /** 实际绑定地址：回环 host 为 127.0.0.1，跨机回调为 0.0.0.0 */
+  bindAddr?: string;
+};
+
+/**
+ * 一键 OAuth 第一步：拿授权 URL。
+ *
+ * `redirectHost` 必须是**浏览器能访问到的 Core 地址**。
+ * 授权页由 `window.open` 在用户 PC 上打开，设备自身没有图形浏览器，
+ * 因此回调若写 127.0.0.1 只会打到那台 PC，永远回不到 Core。
+ * 默认由调用方传入 `location.hostname`；不传则退回本机监听（同机场景）。
+ */
+export const oauthStart = (redirectHost?: string) =>
+  qobuzCall<QobuzOauthStartResponse>(
+    "auth_oauth_start",
+    redirectHost ? { redirectHost } : undefined,
+  );
+
+/**
+ * 一键 OAuth 第二步：等浏览器回调并落库。
+ *
+ * 阻塞直到用户完成登录、取消或超时（原生侧上限 180 秒）。
+ */
+export const oauthAwait = () =>
+  qobuzCall<{ status: string; user_id?: string; display_name?: string }>("auth_oauth_await");
 
 /**
  * 搜索（tracks / albums / artists / playlists）

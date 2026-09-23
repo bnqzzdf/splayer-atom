@@ -5,7 +5,13 @@ use super::QobuzClient;
 use crate::error::StreamingError;
 
 impl QobuzClient {
-    /// 验证/登录 Qobuz (支持 user_id + user_auth_token 或 email + password)
+    /// 验证/登录 Qobuz。
+    ///
+    /// 推荐：只给 `userAuthToken`（userId 可选，缺省时由 `user/get` 反查真实用户）。
+    /// 兼容：`userId` + `userAuthToken` 一起给。
+    /// 注意：`email` + `password` 分支保留但**实测不可用**——Qobuz 对该 app_id
+    /// 连 `user/login` 都返回 401 User authentication is required（加签名亦然），
+    /// 因此前端不暴露邮箱密码入口。
     pub async fn auth_login(
         &self,
         params: &HashMap<String, Value>,
@@ -23,10 +29,23 @@ impl QobuzClient {
 
         let mut req_params = HashMap::new();
 
-        if let (Some(uid), Some(tok)) = (user_id, user_auth_token) {
-            req_params.insert("user_id".to_string(), uid.to_string());
+        // 只要给了 token 就走 token 分支：userId 现在是**可选**的。
+        // 网页播放器里 user_id 与 token 是一起给的，但 Qobuz 能凭 token 反查用户，
+        // 所以「只粘 token」也能登录——少一个要用户去 F12 里翻的字段。
+        if let Some(tok) = user_auth_token {
+            let uid = user_id.unwrap_or("");
+            if !uid.is_empty() {
+                req_params.insert("user_id".to_string(), uid.to_string());
+            }
 
-            let client = QobuzClient::new(Some(tok.to_string()), Some(uid.to_string()));
+            let client = QobuzClient::new(
+                Some(tok.to_string()),
+                if uid.is_empty() {
+                    None
+                } else {
+                    Some(uid.to_string())
+                },
+            );
             let user_info = client
                 .request("user/get", req_params, false, true, None)
                 .await?;
@@ -37,6 +56,15 @@ impl QobuzClient {
                 .or_else(|| user.get("email"))
                 .and_then(Value::as_str)
                 .unwrap_or("Qobuz User");
+            // userId 缺省时以服务端返回的真实 id 为准（token 所属用户）
+            let resolved_id = user
+                .get("id")
+                .map(|v| match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                })
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| uid.to_string());
 
             let has_subscription = user
                 .get("subscription")
@@ -52,11 +80,11 @@ impl QobuzClient {
 
             Ok(json!({
                 "status": "success",
-                "user_id": uid,
+                "user_id": resolved_id,
                 "user_auth_token": tok,
                 "display_name": display_name,
                 "user": {
-                    "id": uid,
+                    "id": resolved_id,
                     "login": display_name,
                     "display_name": display_name,
                 },
