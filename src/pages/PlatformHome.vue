@@ -33,14 +33,22 @@ interface HomeItem {
   title: string;
   subtitle?: string;
   image?: string;
-  /** 决定点击后跳哪种详情页 */
-  kind: "album" | "playlist" | "track" | "artist";
+  /**
+   * 决定点击后跳哪种详情页。
+   *
+   * `tag` 表示这是导航标签（如 Qobuz 的 playlists_tags：只有 id/name/slug，
+   * 既没有封面也没有可打开的详情页），只做展示、不响应点击——
+   * 早期把它当歌单处理，导致封面空白且点击请求 playlist_get 报 404。
+   */
+  kind: "album" | "playlist" | "track" | "artist" | "tag";
 }
 
 /** 归一化后的分区 */
 interface HomeSection {
   key: string;
   title: string;
+  /** cards：封面卡片；tags：纯标签行 */
+  variant: "cards" | "tags";
   items: HomeItem[];
 }
 
@@ -113,15 +121,19 @@ const toQobuzItem = (raw: unknown): HomeItem | null => {
     .map((a) => str(asRecord(a).name))
     .filter(Boolean)
     .join(", ");
+  const image = resolveQobuzCover(item, 300);
+  // 判定「导航标签」：既没有封面、也不是可打开的资源（无 track_count / tracks_count），
+  // 只带 id+name+slug。Qobuz 的 playlists_tags 就是这种。
+  const isTag =
+    !image && item.track_count == null && item.tracks_count == null && item.slug != null;
   return {
     id,
     title,
     subtitle: artists || str(item.description)?.slice(0, 48),
     // 复用 format/qobuz 的封面解析：它已覆盖专辑 {large,small} 与歌单 {covers:[...]}
     // 两种结构，并统一走 /api/proxy/image。
-    image: resolveQobuzCover(item, 300),
-    // 专辑带 track_count；歌单/其它走 playlist 详情页
-    kind: item.track_count != null ? "album" : "playlist",
+    image,
+    kind: isTag ? "tag" : item.track_count != null ? "album" : "playlist",
   };
 };
 
@@ -132,7 +144,10 @@ const normalizeQobuz = (data: unknown): HomeSection[] => {
       const items = asArray(asRecord(asRecord(value).data).items)
         .map(toQobuzItem)
         .filter((x): x is HomeItem => x !== null);
-      return { key, title: qobuzSectionTitle(key), items };
+      // 全部条目都是标签时，整个分区按标签行渲染
+      const variant: HomeSection["variant"] =
+        items.length > 0 && items.every((item) => item.kind === "tag") ? "tags" : "cards";
+      return { key, title: qobuzSectionTitle(key), variant, items };
     })
     .filter((section) => section.items.length > 0);
 };
@@ -216,6 +231,7 @@ const normalizeTidal = (data: unknown): HomeSection[] => {
       out.push({
         key: `row-${rowIndex}-${moduleIndex}`,
         title: str(moduleRecord.title) ?? str(rowRecord.title) ?? tidalModuleTitle(type),
+        variant: "cards",
         items,
       });
     });
@@ -254,6 +270,8 @@ const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
  * 所以这里只需把 source/id 传过去。
  */
 const openItem = (item: HomeItem): void => {
+  // 标签不是可打开的资源（它的 id 属于标签而非歌单，直接请求会 404）
+  if (item.kind === "tag") return;
   const source = platform.value;
   if (item.kind === "album") {
     navigateToAlbum(item.title, { source, albumId: item.id });
@@ -399,7 +417,20 @@ onMounted(async () => {
         <!-- 分区列表 -->
         <section v-for="section in sections" :key="section.key" class="flex flex-col gap-2.5">
           <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+
+          <!-- 标签行：导航标签没有封面也没有详情页，只做展示 -->
+          <div v-if="section.variant === 'tags'" class="flex flex-wrap gap-1.5">
+            <span
+              v-for="item in section.items"
+              :key="`${section.key}-${item.id}`"
+              class="rounded-md bg-surface-variant/15 px-2.5 py-1 text-xs text-on-surface-variant"
+            >
+              {{ item.title }}
+            </span>
+          </div>
+
+          <!-- 封面卡片 -->
+          <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             <button
               v-for="item in section.items"
               :key="`${section.key}-${item.id}`"
