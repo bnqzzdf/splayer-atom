@@ -184,6 +184,20 @@ export const getFileRecords = (): FileRecord[] => {
     .all() as FileRecord[];
 };
 
+/** 按 canonical cover URL 找一个可重新生成该缓存封面的物理音源。 */
+export const getCoverSourcePath = (cover: string): string | null => {
+  const row = getDb()
+    .prepare(
+      `SELECT path, cue_audio_path
+       FROM tracks
+       WHERE cover = ?
+       ORDER BY cue_audio_path IS NOT NULL, scanned_at
+       LIMIT 1`,
+    )
+    .get(cover) as Pick<TrackRow, "path" | "cue_audio_path"> | undefined;
+  return row ? (row.cue_audio_path ?? row.path) : null;
+};
+
 /** 批量插入/更新的扫描结果 */
 export interface UpsertTrack {
   id: string;

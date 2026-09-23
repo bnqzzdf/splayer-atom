@@ -43,3 +43,11 @@ test("Controls consume scanner progress through the shared Core event envelope",
   assert.match(libraryStoreSource, /scanProgress\.value = data/);
   assert.doesNotMatch(libraryStoreSource, /window\.api\.library\.onScanProgress/);
 });
+
+test("scanner coalesces library revisions instead of publishing once per progress batch", () => {
+  const progress = scannerSource.split('case "progress": {')[1]?.split('case "done": {')[0];
+  assert.ok(progress);
+  assert.match(progress, /scanChanged = true/);
+  assert.doesNotMatch(progress, /publishLibraryRevision\(\)/);
+  assert.match(scannerSource, /if \(scanChanged\) publishLibraryRevision\(\)/);
+});

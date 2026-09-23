@@ -30,3 +30,35 @@ test("image cache route survives late directory creation and follows cache root 
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+test("image cache route can rebuild a missing file before serving it", async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "splayer-atom-cache-repair-"));
+  const root = path.join(temp, "covers");
+  const app = new Hono();
+  let repairs = 0;
+  app.use(
+    "/cache/covers/*",
+    createDynamicCacheRoute(
+      "/cache/covers",
+      () => root,
+      async (relativePath) => {
+        repairs++;
+        await mkdir(root, { recursive: true });
+        await writeFile(path.join(root, relativePath), "rebuilt");
+        return true;
+      },
+    ),
+  );
+
+  try {
+    const response = await app.request("/cache/covers/cover.jpg");
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), "rebuilt");
+    assert.equal(repairs, 1);
+
+    assert.equal(await (await app.request("/cache/covers/cover.jpg")).text(), "rebuilt");
+    assert.equal(repairs, 1);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});

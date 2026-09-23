@@ -28,6 +28,7 @@ let scanning = false;
 let currentScanProgress: ScanProgress = { phase: "done", total: 0, scanned: 0 };
 let scanGeneration = 0;
 let pendingSacdSyncs: Promise<number>[] = [];
+let scanChanged = false;
 
 const SACD_PLACEHOLDER_TITLE = /^Track\s*0*\d+$/i;
 
@@ -122,6 +123,7 @@ const syncSacdTracks = async (aggregate: JsScannedTrack, generation: number): Pr
     }));
     const nextPaths = new Set(normalized.map((track) => track.path));
     upsertTracks(normalized.map(scannedToUpsert));
+    scanChanged = true;
 
     const stalePaths = existingPaths.filter((trackPath) => !nextPaths.has(trackPath));
     if (stalePaths.length > 0) deleteTracksByPaths(stalePaths);
@@ -294,7 +296,6 @@ const syncCueTracks = async (
   }
 
   if (upserts.length > 0) upsertTracks(upserts);
-  if (upserts.length > 0) publishLibraryRevision();
   const stalePaths = getCueTrackPathsByDirs(dirs).filter((trackPath) => {
     if (nextPaths.has(trackPath)) return false;
     // 不可达目录下的分轨不删除：从虚拟路径提取真实 cuePath 做目录判断
@@ -303,6 +304,7 @@ const syncCueTracks = async (
     return !unavailableDirs.some((dir) => pathInScanDirs(realCuePath, [dir]));
   });
   if (stalePaths.length > 0) deleteTracksByPaths(stalePaths);
+  if (upserts.length > 0 || stalePaths.length > 0) scanChanged = true;
   return nextPaths.size;
 };
 
@@ -320,6 +322,7 @@ const finishScan = async (
   const removedPaths = expandRemovedPaths(event.removedPaths ?? []);
   if (removedPaths.length > 0) {
     deleteTracksByPaths(removedPaths);
+    scanChanged = true;
     libraryLog.info(`清理 ${removedPaths.length} 个已删除文件/虚拟分轨`);
   }
   const cueCount = await syncCueTracks(
@@ -330,7 +333,8 @@ const finishScan = async (
   );
   const sacdCount = sacdCounts.reduce((sum, count) => sum + count, 0);
   scanning = false;
-  if (removedPaths.length > 0 || cueCount > 0 || sacdCount > 0) publishLibraryRevision();
+  if (scanChanged) publishLibraryRevision();
+  scanChanged = false;
   publishScanProgress({
     phase: "done",
     total: event.total,
@@ -366,6 +370,7 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
 
   const normalizedDirs = [...new Set(dirs.map((dir) => path.resolve(dir)))];
   scanning = true;
+  scanChanged = false;
   const generation = ++scanGeneration;
   pendingSacdSyncs = [];
   currentScanProgress = {
@@ -394,7 +399,7 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
             const ordinary = event.tracks.filter((track) => !isSacdAggregate(track));
             if (ordinary.length > 0) {
               upsertTracks(ordinary.map(scannedToUpsert));
-              publishLibraryRevision();
+              scanChanged = true;
             }
             for (const track of event.tracks.filter(isSacdAggregate)) {
               pendingSacdSyncs.push(syncSacdTracks(track, generation));
@@ -413,6 +418,8 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
         case "done": {
           void finishScan(normalizedDirs, event, generation, incremental).catch((error) => {
             scanning = false;
+            if (scanChanged) publishLibraryRevision();
+            scanChanged = false;
             libraryLog.error("扫描收尾失败:", error);
             publishScanProgress({
               phase: "done",
@@ -441,6 +448,8 @@ export const cancelScan = (): void => {
   scanning = false;
   ++scanGeneration;
   pendingSacdSyncs = [];
+  if (scanChanged) publishLibraryRevision();
+  scanChanged = false;
   publishScanProgress({ ...currentScanProgress, phase: "done" });
   libraryLog.info("已发送扫描取消信号");
 };

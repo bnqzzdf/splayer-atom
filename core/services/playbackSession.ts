@@ -863,7 +863,7 @@ export const clearQueue = async (stop = false): Promise<void> => {
 
 export const play = async (): Promise<void> => {
   const state = isUpnpSelected() ? getUpnpOutputStatus().state : getPlayer().getStatus().state;
-  if (queue.length > 0 && (index < 0 || state === "stopped")) {
+  if (queue.length > 0 && (index < 0 || state === "stopped" || state === "idle")) {
     await loadIndexWithPolicy(Math.max(0, index), true);
     return;
   }

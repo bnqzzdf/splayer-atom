@@ -39,6 +39,7 @@ import { store } from "@main/store";
 import { scannedToUpsert } from "./scanner";
 import { getCueAudioPath, inspectCueSheet, parseCueSheet } from "./cue";
 import { publishLibraryRevision } from "./libraryRevision";
+import { repairMissingCoverCache } from "./coverCacheRepair";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 
 const ORDINARY_AUDIO_EXTENSIONS = new Set([
@@ -1405,7 +1406,15 @@ export const resolveFolderDirectoryArtworkPath = async (input: string): Promise<
   try {
     return (await fs.stat(cachedCoverPath)).isFile() ? cachedCoverPath : null;
   } catch {
-    return null;
+    const filename = canonicalCover.startsWith("cache://covers/")
+      ? canonicalCover.slice("cache://covers/".length)
+      : "";
+    if (!filename || !(await repairMissingCoverCache(filename))) return null;
+    try {
+      return (await fs.stat(cachedCoverPath)).isFile() ? cachedCoverPath : null;
+    } catch {
+      return null;
+    }
   }
 };
 

@@ -77,6 +77,14 @@ test("No-repeat playback stops at the final queue item", () => {
   assert.ok(stopAtEnd.indexOf('repeat === "off"') < stopAtEnd.indexOf('shuffle === "on"'));
 });
 
+test("Play reloads the restored queue when native runtime starts idle", () => {
+  const play = sessionSource.split("export const play = async (): Promise<void> => {")[1];
+  assert.ok(play);
+  const body = play.split("export const pause = (): void => {")[0];
+  assert.match(body, /state === "stopped" \|\| state === "idle"/);
+  assert.match(body, /loadIndexWithPolicy\(Math\.max\(0, index\), true\)/);
+});
+
 test("Web display preload follows the Core repeat-off boundary", () => {
   assert.match(rendererPreloaderSource, /repeatMode: status\.repeatMode/);
   assert.match(rendererPreloaderSource, /status\.repeatMode/);

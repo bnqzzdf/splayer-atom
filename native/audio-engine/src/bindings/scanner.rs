@@ -105,7 +105,7 @@ pub struct JsScanEvent {
 /// 批量扫描目录，通过回调推送进度和结果
 ///
 /// 在后台线程中执行，不阻塞 Node.js 事件循环。
-/// 每处理约 20 个文件回调一次 progress 事件，完成后回调 done 事件。
+/// 每处理约 100 个文件回调一次 progress 事件，完成后回调 done 事件。
 #[napi(
     ts_args_type = "dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null, skipUnchanged?: boolean | undefined | null"
 )]

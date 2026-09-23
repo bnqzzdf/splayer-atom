@@ -244,6 +244,7 @@ export {
   getTracksByPhysicalPaths,
   getTrackCount,
   getFileRecords,
+  getCoverSourcePath,
   getCueTrackPathsByDirs,
   upsertTracks,
   deleteTracksByPaths,
