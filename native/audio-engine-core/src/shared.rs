@@ -82,11 +82,14 @@ pub struct Shared {
 /// 共享缓冲区最大容量（背压阈值）
 pub const FRAME_BUFFER_CAPACITY: usize = 192;
 
+/// 解码与 DSP 队列统一按 frame 切块，避免单个异常大 FFmpeg frame 绕过块数背压。
+pub const MAX_PROCESSED_FRAMES_PER_CHUNK: usize = 4_096;
+
 /// DSP 后缓冲只保留少量块，保证 EQ/tempo 参数更新能快速生效
 const OUTPUT_BUFFER_CAPACITY: usize = 4;
 
-/// 复用池上限覆盖解码队列、输出队列和两个线程的在手缓冲
-const BUFFER_POOL_CAPACITY: usize = FRAME_BUFFER_CAPACITY + OUTPUT_BUFFER_CAPACITY + 4;
+/// 只保留少量空闲缓冲；队列里的块不计入复用池。
+const BUFFER_POOL_CAPACITY: usize = 16;
 
 impl Shared {
     pub fn new(sample_rate: u32, channels: u16) -> Arc<Self> {
@@ -165,6 +168,10 @@ impl Shared {
 
     /// 归还播放样本缓冲；池满时直接释放以保持内存有界
     pub fn recycle_player_buffer(&self, mut buffer: Vec<f32>) {
+        let max_samples = MAX_PROCESSED_FRAMES_PER_CHUNK * usize::from(self.channels) * 2;
+        if buffer.capacity() > max_samples {
+            return;
+        }
         buffer.clear();
         let mut pool = self.player_buffer_pool.lock();
         if pool.len() < BUFFER_POOL_CAPACITY {
@@ -210,6 +217,10 @@ impl Shared {
     }
 
     pub fn recycle_packed_buffer(&self, mut buffer: Vec<u8>) {
+        let max_bytes = MAX_PROCESSED_FRAMES_PER_CHUNK * usize::from(self.channels) * 4;
+        if buffer.capacity() > max_bytes {
+            return;
+        }
         buffer.clear();
         let mut pool = self.packed_buffer_pool.lock();
         if pool.len() < OUTPUT_BUFFER_CAPACITY + 2 {
@@ -329,6 +340,34 @@ impl Shared {
 
     /// 推入数据块，缓冲区满时阻塞等待（背压）
     pub fn push(&self, chunk: AudioChunk) {
+        let max_samples = MAX_PROCESSED_FRAMES_PER_CHUNK * usize::from(self.channels);
+        if chunk.player_samples.len() <= max_samples {
+            self.push_one(chunk);
+            return;
+        }
+
+        let total_samples = chunk.player_samples.len();
+        let mut credited = 0_u64;
+        let mut boundary = chunk.track_boundary;
+        for (index, part) in chunk.player_samples.chunks(max_samples).enumerate() {
+            let end = ((index + 1) * max_samples).min(total_samples);
+            let next = (u128::from(chunk.source_sample_count) * end as u128 / total_samples as u128)
+                as u64;
+            let mut player_samples = self.take_player_buffer();
+            player_samples.extend_from_slice(part);
+            if !self.push_one(AudioChunk {
+                player_samples,
+                source_sample_count: next - credited,
+                track_boundary: boundary.take(),
+            }) {
+                break;
+            }
+            credited = next;
+        }
+        self.recycle_player_buffer(chunk.player_samples);
+    }
+
+    fn push_one(&self, chunk: AudioChunk) -> bool {
         let mut buffer = self.decoded_buffer.lock();
         while buffer.len() >= FRAME_BUFFER_CAPACITY
             && !self.is_stopping.load(Ordering::Acquire)
@@ -337,10 +376,12 @@ impl Shared {
             self.decoded_condvar.wait(&mut buffer);
         }
         if self.is_stopping.load(Ordering::Acquire) || self.output_eof.load(Ordering::Acquire) {
-            return;
+            self.recycle_player_buffer(chunk.player_samples);
+            return false;
         }
         buffer.push_back(chunk);
         self.decoded_condvar.notify_one();
+        true
     }
 
     /// 阻塞获取待处理块；解码结束且缓冲耗尽时返回 None
@@ -443,6 +484,38 @@ mod tests {
         }
 
         assert_eq!(shared.player_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
+
+        shared.recycle_player_buffer(Vec::with_capacity(MAX_PROCESSED_FRAMES_PER_CHUNK * 4 + 1));
+        assert_eq!(shared.player_buffer_pool.lock().len(), BUFFER_POOL_CAPACITY);
+        shared.recycle_packed_buffer(Vec::with_capacity(
+            MAX_PROCESSED_FRAMES_PER_CHUNK * 2 * 4 + 1,
+        ));
+        assert!(shared.packed_buffer_pool.lock().is_empty());
+    }
+
+    #[test]
+    fn oversized_decoded_frame_keeps_bounded_chunks_and_exact_source_count() {
+        let shared = Shared::new(48_000, 2);
+        let samples = MAX_PROCESSED_FRAMES_PER_CHUNK * 2 * 2 + 200;
+        shared.push(AudioChunk {
+            player_samples: vec![0.25; samples],
+            source_sample_count: samples as u64,
+            track_boundary: Some(ProcessedTrackBoundary {
+                generation: 3,
+                duration_micros: 1_000_000,
+            }),
+        });
+        shared.mark_eof();
+        let mut count = 0_u64;
+        let mut chunks = 0;
+        while let Some(chunk) = shared.pop_decoded() {
+            assert!(chunk.player_samples.len() <= MAX_PROCESSED_FRAMES_PER_CHUNK * 2);
+            assert_eq!(chunk.track_boundary.is_some(), chunks == 0);
+            count += chunk.source_sample_count;
+            chunks += 1;
+        }
+        assert_eq!(chunks, 3);
+        assert_eq!(count, samples as u64);
     }
 
     #[test]

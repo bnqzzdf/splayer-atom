@@ -11,6 +11,7 @@ use ffmpeg_audio::{
 use parking_lot::Mutex;
 use tracing::{debug, warn};
 
+use crate::alsa::format::AlsaPcmFormat;
 use crate::alsa::processed_prepare::{prepare_chunk, OutputLimiter};
 use crate::cue::CueVirtualInfo;
 use crate::equalizer::Equalizer;
@@ -19,7 +20,7 @@ use crate::loudness::LoudnessAnalyzer;
 use crate::media_probe::{self, PreparedMedia};
 use crate::metadata::{self, AudioMetadata};
 use crate::priority;
-use crate::shared::{AudioChunk, ProcessedTrackBoundary, Shared};
+use crate::shared::{AudioChunk, ProcessedTrackBoundary, Shared, MAX_PROCESSED_FRAMES_PER_CHUNK};
 use crate::tempo::StretchProcessor;
 
 /// 无输出设备信息时初始化 DSP 使用的默认声道数
@@ -463,6 +464,43 @@ impl TempoSourceMap {
     }
 }
 
+fn push_prepared_chunk(
+    chunk: AudioChunk,
+    shared: &Shared,
+    format: AlsaPcmFormat,
+    limiter: &mut OutputLimiter,
+) -> Result<()> {
+    let max_samples = MAX_PROCESSED_FRAMES_PER_CHUNK * usize::from(shared.channels());
+    if chunk.player_samples.len() <= max_samples {
+        shared.push_output(prepare_chunk(chunk, shared, format, limiter)?);
+        return Ok(());
+    }
+
+    let total_samples = chunk.player_samples.len();
+    let mut credited = 0_u64;
+    let mut boundary = chunk.track_boundary;
+    for (index, part) in chunk.player_samples.chunks(max_samples).enumerate() {
+        let end = ((index + 1) * max_samples).min(total_samples);
+        let next =
+            (u128::from(chunk.source_sample_count) * end as u128 / total_samples as u128) as u64;
+        let mut player_samples = shared.take_player_buffer();
+        player_samples.extend_from_slice(part);
+        shared.push_output(prepare_chunk(
+            AudioChunk {
+                player_samples,
+                source_sample_count: next - credited,
+                track_boundary: boundary.take(),
+            },
+            shared,
+            format,
+            limiter,
+        )?);
+        credited = next;
+    }
+    shared.recycle_player_buffer(chunk.player_samples);
+    Ok(())
+}
+
 fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<StretchProcessor>) {
     let mut tempo_scratch = shared.take_player_buffer();
     let format = shared.processed_format();
@@ -473,14 +511,11 @@ fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<Str
         let (tail, chunk) =
             process_audio_chunk(chunk, equalizer, tempo, &mut tempo_scratch, &mut tempo_map);
         for chunk in tail.into_iter().chain(std::iter::once(chunk)) {
-            match prepare_chunk(chunk, shared, format, &mut limiter) {
-                Ok(prepared) => shared.push_output(prepared),
-                Err(error) => {
-                    warn!(%error, "ALSA processed PCM 准备输出块失败");
-                    shared.mark_decode_failed();
-                    prepare_failed = true;
-                    break;
-                }
+            if let Err(error) = push_prepared_chunk(chunk, shared, format, &mut limiter) {
+                warn!(%error, "ALSA processed PCM 准备输出块失败");
+                shared.mark_decode_failed();
+                prepare_failed = true;
+                break;
             }
         }
         if shared.is_stopping() || prepare_failed {
@@ -497,12 +532,9 @@ fn run_dsp_loop(shared: &Shared, equalizer: &Mutex<Equalizer>, tempo: &Mutex<Str
             source_sample_count,
             track_boundary: None,
         };
-        match prepare_chunk(tail, shared, format, &mut limiter) {
-            Ok(prepared) => shared.push_output(prepared),
-            Err(error) => {
-                warn!(%error, "ALSA processed PCM 准备 tempo 曲尾失败");
-                shared.mark_decode_failed();
-            }
+        if let Err(error) = push_prepared_chunk(tail, shared, format, &mut limiter) {
+            warn!(%error, "ALSA processed PCM 准备 tempo 曲尾失败");
+            shared.mark_decode_failed();
         }
         debug_assert!(tempo_map.segments.is_empty());
     }
@@ -921,6 +953,43 @@ mod tests {
         assert_eq!(frames, 4_800);
         assert_eq!(credited, source_samples);
         assert!(audible_tail);
+    }
+
+    #[test]
+    fn oversized_dsp_output_is_split_before_writer_queue() {
+        let shared = Shared::new(48_000, 2);
+        let samples = MAX_PROCESSED_FRAMES_PER_CHUNK * 2 * 2 + 200;
+        push_prepared_chunk(
+            AudioChunk {
+                player_samples: vec![0.25; samples],
+                source_sample_count: samples as u64,
+                track_boundary: Some(ProcessedTrackBoundary {
+                    generation: 5,
+                    duration_micros: 1_000_000,
+                }),
+            },
+            &shared,
+            AlsaPcmFormat::F32Le,
+            &mut OutputLimiter::new(),
+        )
+        .unwrap();
+        shared.mark_output_eof();
+        let mut count = 0_u64;
+        let mut chunks = 0;
+        loop {
+            match shared.try_pop() {
+                crate::shared::PopResult::Chunk(chunk) => {
+                    assert!(chunk.frames <= MAX_PROCESSED_FRAMES_PER_CHUNK as u64);
+                    assert_eq!(chunk.track_boundary.is_some(), chunks == 0);
+                    count += chunk.source_sample_count;
+                    chunks += 1;
+                }
+                crate::shared::PopResult::Finished => break,
+                crate::shared::PopResult::Pending => panic!("已标记输出 EOF"),
+            }
+        }
+        assert_eq!(chunks, 3);
+        assert_eq!(count, samples as u64);
     }
 
     #[test]
