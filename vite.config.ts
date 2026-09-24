@@ -18,7 +18,9 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 // 这样源码交付包在无 .git 环境下构建时，Web 侧显示的 commit / 日期也不会变成 unknown。
 const sourceIdentity = resolveSourceIdentity(root);
 
-const getGitCommit = (): string => sourceIdentity?.commit.slice(0, 7) ?? "unknown";
+// 注入完整提交号，截断统一交给展示层（`@/utils/commit` 的 shortCommit）。
+// 这样界面显示的短号与复制出的诊断信息用的是同一个原始值，不会各截各的。
+const getGitCommit = (): string => sourceIdentity?.commit ?? "unknown";
 
 const getGitDate = (): string => sourceIdentity?.date ?? "unknown";
 

@@ -22,6 +22,7 @@ import {
   readCoreReleaseMetadata,
   resolveCoreBuildDate,
   resolveCoreBuildTime,
+  shortCoreCommit,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 import { resolveSourceIdentity, sourceIdentityFailureMessage } from "./sourceIdentity";
@@ -102,7 +103,7 @@ if (!sourceIdentity) fail(sourceIdentityFailureMessage());
 const atomCommit = sourceIdentity.commit;
 const sourceDirty = sourceIdentity.dirty;
 console.log(
-  `[CoreStage] 源码身份: ${atomCommit.slice(0, 7)} dirty=${sourceDirty} (来源=${sourceIdentity.origin})`,
+  `[CoreStage] 源码身份: ${shortCoreCommit(atomCommit)} dirty=${sourceDirty} (来源=${sourceIdentity.origin})`,
 );
 
 const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {

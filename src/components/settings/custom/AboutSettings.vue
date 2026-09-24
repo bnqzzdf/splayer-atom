@@ -5,6 +5,7 @@ import { getCoreInfo } from "@/core/controlClient";
 import { useCopyText } from "@/composables/useCopyText";
 import ProductBrand from "@/components/brand/ProductBrand.vue";
 import { openExternal } from "@/utils/url";
+import { shortCommit } from "@/utils/commit";
 import {
   APP_VERSION,
   REPO_URL,
@@ -40,7 +41,7 @@ const envItems = computed<EnvItem[]>(() => {
   return [
     {
       label: "Atom",
-      value: knownCommit(commit) ? `${atomVersion} (${commit.slice(0, 7)})` : atomVersion,
+      value: knownCommit(commit) ? `${atomVersion} (${shortCommit(commit)})` : atomVersion,
       url: knownCommit(commit) ? `${REPO_URL}/commit/${commit}` : undefined,
     },
     ...(info
