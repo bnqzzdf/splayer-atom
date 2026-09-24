@@ -223,6 +223,33 @@ const tidalModuleTitle = (type: string): string => {
 };
 
 /**
+ * TIDAL 分区标题的中文化。
+ *
+ * 这些标题来自 TIDAL 的 `pages/home`（不是我们的 UI 文案）。实测 TIDAL 本身**会**按
+ * `locale` 本地化分区标题：de_DE → `Die Hits`、fr_FR → `Les hits`、pt_BR → `Os Sucessos`；
+ * 但**没有中文 locale**：zh_CN / zh_TW / zh_HK / zh_SG / zh-Hans / zh-Hant 全部回落到英文。
+ * 所以中文只能由我们自己做映射。
+ *
+ * 两点刻意的取舍：
+ * - 只映射**完全匹配**的已知标题。TIDAL 新增分区时原样透出英文，而不是被错误翻译；
+ * - 不映射歌单名（`TIDAL's Top Hits`、`Pop Hits` 这类）：实测它们连在德语下都不本地化，
+ *   属于 TIDAL 的编辑歌单正式名称，翻译反而会与官方名称不符，且数量多、会变动。
+ *
+ * 与 Qobuz 侧既有的 `qobuzSectionTitle()`（new_releases → 新发行）保持同一做法。
+ */
+const tidalSectionTitle = (rawTitle: string | undefined, type: string): string => {
+  const known: Record<string, string> = {
+    "The Hits": t("platformHome.tidalSection.hits"),
+    "New Tracks": t("platformHome.tidalSection.newTracks"),
+    "New Albums": t("platformHome.tidalSection.newAlbums"),
+    "Spotlighted Uploads": t("platformHome.tidalSection.spotlightedUploads"),
+    "From our editors": t("platformHome.tidalSection.fromOurEditors"),
+  };
+  if (rawTitle && known[rawTitle]) return known[rawTitle];
+  return rawTitle ?? tidalModuleTitle(type);
+};
+
+/**
  * TIDAL 条目 → HomeItem。
  *
  * 封面字段按类型分布：歌单在 squareImage（其 image 是矩形编辑图，取 640 会 403）、
@@ -288,7 +315,7 @@ const normalizeTidal = (data: unknown): HomeSection[] => {
       if (!items.length) return;
       out.push({
         key: `row-${rowIndex}-${moduleIndex}`,
-        title: str(moduleRecord.title) ?? str(rowRecord.title) ?? tidalModuleTitle(type),
+        title: tidalSectionTitle(str(moduleRecord.title) ?? str(rowRecord.title), type),
         variant: "cards",
         items,
       });

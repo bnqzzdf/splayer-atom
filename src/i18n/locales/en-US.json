@@ -1904,6 +1904,13 @@
     "hotPlaylists": "Popular Playlists",
     "newSongs": "New Releases",
     "authRequired": "Sign in to {platform} to load its home",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "tidalSection": {
+      "hits": "The Hits",
+      "newTracks": "New Tracks",
+      "newAlbums": "New Albums",
+      "spotlightedUploads": "Spotlighted Uploads",
+      "fromOurEditors": "From our editors"
+    }
   }
 }
