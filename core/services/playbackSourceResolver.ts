@@ -543,7 +543,12 @@ const resolveTidal = async (
     return { source: resolved.localPath, provider: "official", format: "m4a", size: resolved.size };
   }
   if (!resolved.streamUrl) {
-    throw sourceError(ErrorCode.URL_RESOLVE_FAILED, `TIDAL track unavailable: ${track.id}`);
+    // 实测：非订阅账号拿不到 streamUrl。以前报 URL_RESOLVE_FAILED（「无法获取播放地址」），
+    // 用户以为是解析故障；真实原因是缺少会员权益。
+    throw sourceError(
+      ErrorCode.PROVIDER_VIP_REQUIRED,
+      `TIDAL requires a subscription: ${track.id}`,
+    );
   }
   return {
     source: resolved.streamUrl,
