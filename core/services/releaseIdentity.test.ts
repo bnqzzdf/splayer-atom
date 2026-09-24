@@ -30,7 +30,7 @@ const serverSource = read("core/server/index.ts");
 test("SPlayer Atom owns a Node Core and Web Control product identity", () => {
   assert.equal(packageJson.name, "splayer-atom");
   assert.equal(packageJson.productName, "SPlayer Atom");
-  assert.equal(packageJson.version, "1.1.0");
+  assert.equal(packageJson.version, "1.1.1");
   assert.match(packageJson.description ?? "", /Web \+ Core music player adapted from SPlayer-Next/);
   assert.equal(packageJson.repository?.url, "https://github.com/bnqzzdf/splayer-atom");
   assert.equal(packageJson.bugs?.url, "https://github.com/bnqzzdf/splayer-atom/issues");
@@ -61,8 +61,14 @@ test("Core package filenames contain product version, build date and build time"
   assert.match(artifactNameSource, /\^\\d\{6\}\$/);
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
   );
+  // 提交号进入文件名：拿到一个 tar 就能知道它出自哪次提交，无需解包读 runtime.json
+  assert.match(artifactNameSource, /export const shortCoreCommit = \(commit: string\): string =>/);
+  assert.match(artifactNameSource, /\^\[0-9a-f\]\{8,40\}\$/);
+  assert.match(artifactNameSource, /value\.slice\(0, 8\)/);
+  // 解析失败要抛错，避免把垃圾写进文件名
+  assert.match(artifactNameSource, /产物名需要合法的 commit/);
 });
 
 test("runtime integrations identify the current product as SPlayer Atom", () => {

@@ -58,13 +58,29 @@ export const resolveCoreBuildTime = (
 export const coreArtifactSuffix = (bundleNode: boolean): string =>
   `-${bundleNode ? "bundled" : "system"}-linux-x64.tar.gz`;
 
+/** 产物名里使用的短提交号（8 位），只接受十六进制串 */
+export const shortCoreCommit = (commit: string): string => {
+  const value = commit.trim().toLowerCase();
+  if (!/^[0-9a-f]{8,40}$/.test(value)) {
+    throw new Error(`产物名需要合法的 commit，当前为 ${commit}`);
+  }
+  return value.slice(0, 8);
+};
+
+/**
+ * 产物文件名：`splayer-atom-core-<version>-<短提交号>-<YYYYMMDD>-<HHMMSS>-<flavor>-linux-x64.tar.gz`
+ *
+ * 带上提交号，是为了让「拿到一个 tar 就能知道它是哪次提交构建的」——
+ * 之前只能解包读 `runtime.json` 才知道，而文件名里的日期+时刻无法与提交对应。
+ */
 export const coreArtifactFileName = (
   bundleNode: boolean,
   version: string,
+  commit: string,
   buildDate: string,
   buildTime: string,
 ): string =>
-  `splayer-atom-core-${version}-${buildDate}-${buildTime}${coreArtifactSuffix(bundleNode)}`;
+  `splayer-atom-core-${version}-${shortCoreCommit(commit)}-${buildDate}-${buildTime}${coreArtifactSuffix(bundleNode)}`;
 
 /**
  * 兜底发现：`out/` 下最新的同 flavor 产物。
