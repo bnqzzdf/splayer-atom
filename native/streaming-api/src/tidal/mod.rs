@@ -3,6 +3,7 @@ pub mod artist;
 pub mod auth;
 pub mod config;
 pub mod dash;
+pub mod discover;
 pub mod pkce;
 pub mod playlist;
 pub mod search;
@@ -12,6 +13,7 @@ pub mod user;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -129,21 +131,43 @@ impl TidalClient {
         query: &HashMap<String, String>,
         token: Option<&str>,
     ) -> Result<(reqwest::StatusCode, Value), StreamingError> {
-        let mut req = self
-            .http
-            .get(url)
-            .header("User-Agent", TIDAL_USER_AGENT)
-            .query(query);
-        if let Some(token) = token {
-            req = req.header("Authorization", format!("Bearer {token}"));
+        // TIDAL 的传输层偶发失败（connect/timeout）会表现为
+        // "error sending request for url ..."，重试一次通常即可恢复。
+        // 注意：HTTP 4xx/5xx 是正常响应，不会走到这里，因此重试不会掩盖业务错误。
+        const MAX_ATTEMPTS: u32 = 3;
+        let mut last_error: Option<StreamingError> = None;
+
+        for attempt in 0..MAX_ATTEMPTS {
+            let mut req = self
+                .http
+                .get(url)
+                .header("User-Agent", TIDAL_USER_AGENT)
+                .query(query);
+            if let Some(token) = token {
+                req = req.header("Authorization", format!("Bearer {token}"));
+            }
+
+            match req.send().await {
+                Ok(resp) => {
+                    let status = resp.status();
+                    let body = resp
+                        .json()
+                        .await
+                        .map_err(|error| StreamingError::Parse(error.to_string()))?;
+                    return Ok((status, body));
+                }
+                Err(error) => {
+                    let retriable = error.is_timeout() || error.is_connect() || error.is_request();
+                    last_error = Some(StreamingError::Reqwest(error));
+                    if !retriable || attempt + 1 == MAX_ATTEMPTS {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(300 * u64::from(attempt + 1))).await;
+                }
+            }
         }
-        let resp = req.send().await?;
-        let status = resp.status();
-        let body = resp
-            .json()
-            .await
-            .map_err(|error| StreamingError::Parse(error.to_string()))?;
-        Ok((status, body))
+
+        Err(last_error.unwrap_or_else(|| StreamingError::Other("TIDAL request failed".into())))
     }
 
     /// 返回自动刷新后的 token；Core 负责持久化它们。

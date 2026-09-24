@@ -209,7 +209,8 @@
       "album": "前往专辑「{id}」",
       "artist": "前往歌手「{id}」",
       "playlist": "前往歌单「{id}」"
-    }
+    },
+    "platforms": "流媒体接入"
   },
   "recognition": {
     "title": "听歌识曲",
@@ -1895,5 +1896,12 @@
       "discNumber": "碟号",
       "lyrics": "内嵌歌词"
     }
+  },
+  "platformHome": {
+    "noPlatform": "尚未登录任何在线平台",
+    "empty": "该平台暂无首页内容",
+    "loadFailed": "首页加载失败",
+    "hotPlaylists": "热门歌单",
+    "newSongs": "新歌首发"
   }
 }

@@ -266,13 +266,33 @@ export const artistToCover = (artist: QobuzArtist): CoverItem => ({
 
 /**
  * 提取 Qobuz 歌单封面 URL
- * 优先级：images300[0] > images150[0] > images[0] > image.large > image.small
- * 参照 MemoryPlay L9977-9978
+ * 优先级：images300[0] > images150[0] > images[0] > image.covers[0] > image.large > image.small
+ *
+ * 注意 `image.covers[0]`：`discover/index` 与 `playlist/get` 返回的歌单封面是
+ * `{ covers: [url] }`，而专辑是 `{ large, small, thumbnail }`。
+ * 早期只读 large/small，导致首页「推荐歌单」「歌单标签」等分区的封面整片空白。
  */
 const playlistCoverUrl = (raw: QobuzPlaylist, size = 300): string | undefined => {
   const arr = raw.images300?.[0] || raw.images150?.[0] || raw.images?.[0];
   if (arr) return withCoverSize(arr, size);
-  return withCoverSize(raw.image?.large ?? raw.image?.small, size);
+  const viaCovers = (raw.image as { covers?: string[] } | undefined)?.covers?.[0];
+  return withCoverSize(viaCovers ?? raw.image?.large ?? raw.image?.small, size);
+};
+
+/**
+ * 通用 Qobuz 封面解析（专辑 / 歌单 / 其它混合条目）。
+ *
+ * 首页分区里专辑与歌单混排，字段位置不同，这里按可用性依次尝试并统一走图片代理。
+ * @param raw - 原始条目
+ * @param size - 目标尺寸
+ */
+export const resolveQobuzCover = (raw: unknown, size = 300): string | undefined => {
+  const item = (typeof raw === "object" && raw !== null ? raw : {}) as QobuzPlaylist;
+  const image = (item.image ?? {}) as QobuzImage & { covers?: string[] };
+  const direct =
+    item.images300?.[0] || item.images150?.[0] || item.images?.[0] || image.covers?.[0];
+  if (typeof direct === "string" && direct) return withCoverSize(direct, size);
+  return withCoverSize(image.large ?? image.small ?? image.thumbnail, size);
 };
 
 /**
