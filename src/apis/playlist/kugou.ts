@@ -117,3 +117,52 @@ export const fetchKugouRank = async (
     tracks,
   };
 };
+/** KG 精选歌单条目 */
+export interface KGHotPlaylist {
+  id: string;
+  name: string;
+  cover: string;
+  coverOriginal: string;
+  creator: string;
+  description: string;
+  playCount: number;
+  trackCount: number;
+  publishTime: string;
+}
+
+interface HotPlaylistsResponse {
+  code?: number;
+  message?: string;
+  page?: number;
+  total?: number;
+  hasNext?: boolean;
+  playlists?: KGHotPlaylist[];
+}
+
+/**
+ * 获取 KG 精选歌单（移动站歌单频道；接口固定 30 条/页）
+ * @param page - 页码，从 1 开始
+ * @param limit - 截断条数（用于首页书架）
+ * @returns 歌单列表；其 id（specialid）可直接用于 collection/kugou/playlist/<id>
+ */
+export const fetchKugouHotPlaylists = async (
+  page = 1,
+  limit?: number,
+): Promise<KGHotPlaylist[]> => {
+  const body = await kgApi.hot_playlists<HotPlaylistsResponse>(limit ? { page, limit } : { page });
+  if (body.code !== 200) throw new Error(body.message || `KG 精选歌单请求失败: ${body.code}`);
+  return body.playlists ?? [];
+};
+
+/**
+ * 获取 KG 新歌首发
+ * @param limit - 截断条数（用于首页书架）
+ * @returns Track 列表
+ */
+export const fetchKugouNewSongs = async (limit?: number): Promise<Track[]> => {
+  const body = await kgApi.new_songs<{ code?: number; message?: string; songs?: KGSong[] }>(
+    limit ? { limit } : {},
+  );
+  if (body.code !== 200) throw new Error(body.message || `KG 新歌请求失败: ${body.code}`);
+  return kgSongsToTracks(body.songs);
+};
