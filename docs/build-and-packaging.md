@@ -44,8 +44,8 @@ pnpm package:core:bundled
 输出：
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 版本号来自 `package.json`，日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`（文件名带秒级时刻，同一天多次构建不会互相覆盖）。需要内容可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。

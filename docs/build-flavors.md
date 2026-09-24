@@ -42,7 +42,7 @@ The SDK remains external and is not bundled.
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz` and requires a compatible system Node `>=22.19.0`.
+Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz` and requires a compatible system Node `>=22.19.0`.
 
 ## bundled-runtime
 
@@ -50,6 +50,6 @@ Produces `splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.g
 pnpm package:core:bundled
 ```
 
-Produces `splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
+Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
 
 Both variants contain the same Core JS, Web Control, native addons, protocol version and data schema.

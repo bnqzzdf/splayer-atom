@@ -279,7 +279,13 @@ if (archive) {
   const archiveFile = path.join(
     root,
     "out",
-    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate, buildTime),
+    coreArtifactFileName(
+      bundleNode,
+      packageMetadata.version,
+      sourceIdentity.commit,
+      buildDate,
+      buildTime,
+    ),
   );
   rmSync(archiveFile, { force: true });
   const tar = spawnSync(

@@ -47,8 +47,8 @@ explicit package installation only. It does not install or enable unattended sec
 Artifacts:
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 The version comes from `package.json` and the date/time are the packaging date and time in `YYYYMMDD-HHMMSS` format.
