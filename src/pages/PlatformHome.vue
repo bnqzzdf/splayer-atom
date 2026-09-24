@@ -22,6 +22,7 @@ defineOptions({ name: "PlatformHome" });
 
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import type { Track } from "@shared/types/player";
+import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
 import {
@@ -106,6 +107,25 @@ const sections = ref<HomeSection[]>([]);
 const genres = ref<GenreItem[]>([]);
 /** 当前筛选的流派；空串表示不筛选 */
 const activeGenre = ref<string>("");
+/** 登录对话框（认证失效时提供「去登录」入口，而不是只丢一个裸错误串） */
+const loginDialogOpen = ref(false);
+
+/**
+ * 判断错误是不是「需要登录」这一类。
+ *
+ * 各平台措辞不同，实测遇到的几种：
+ *   - `API error (401): TIDAL token 已过期且自动刷新失败，请重新登录 …`
+ *   - `Authentication error: Qobuz is not logged in`
+ *   - `API error (401): User authentication is required.`
+ * 这类失败给用户「去登录」的明确动作，比展示原始报文有用得多。
+ */
+const isAuthError = (message: string): boolean =>
+  /(?:\b401\b|not logged in|authentication is required|token .*expired|已过期|重新登录)/i.test(
+    message,
+  );
+
+/** 当前错误是否属于「需要登录」 */
+const errorNeedsLogin = computed(() => error.value !== "" && isAuthError(error.value));
 
 /** 已登录的平台才显示标签 */
 const loggedInPlatforms = computed<Platform[]>(() =>
@@ -504,6 +524,13 @@ const selectGenre = async (id: string): Promise<void> => {
   await load();
 };
 
+/** 登录对话框关闭：若该平台已登录，自动重载首页（省掉用户手动刷新） */
+const onLoginDialogClose = async (open: boolean): Promise<void> => {
+  if (open) return;
+  await providerSessions.refresh().catch(() => {});
+  if (providerSessions.sessions[platform.value]?.authenticated) await load();
+};
+
 watch(
   () => loggedInPlatforms.value.join(","),
   (joined) => {
@@ -579,8 +606,16 @@ onMounted(async () => {
         </div>
 
         <!-- 错误 -->
+        <!-- 认证类失败给「去登录」入口；其余（网络、上游故障）才展示原始报文 -->
         <div v-else-if="error" class="py-16 text-center text-sm text-on-surface-variant">
-          {{ error }}
+          <template v-if="errorNeedsLogin">
+            <p>{{ t("platformHome.authRequired", { platform: PLATFORM_LABELS[platform] }) }}</p>
+            <SButton class="mt-3" variant="filled" size="small" @click="loginDialogOpen = true">
+              {{ t("platformHome.signIn") }}
+            </SButton>
+            <p class="mt-3 text-xs text-on-surface-variant/60">{{ error }}</p>
+          </template>
+          <template v-else>{{ error }}</template>
         </div>
 
         <!-- 分区列表 -->
@@ -633,5 +668,14 @@ onMounted(async () => {
         </section>
       </template>
     </div>
+
+    <!-- 认证失效时的登录入口：登录成功后自动重载当前平台首页 -->
+    <StreamingLoginDialog
+      v-if="platform === 'qobuz' || platform === 'tidal'"
+      v-model:open="loginDialogOpen"
+      :tab="platform === 'tidal' ? 'tidal' : 'qobuz'"
+      :single-platform="platform === 'tidal' ? 'tidal' : 'qobuz'"
+      @update:open="onLoginDialogClose"
+    />
   </div>
 </template>

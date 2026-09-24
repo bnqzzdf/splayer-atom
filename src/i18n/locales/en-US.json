@@ -1902,6 +1902,8 @@
     "empty": "No home content available for this platform",
     "loadFailed": "Failed to load the platform home",
     "hotPlaylists": "Popular Playlists",
-    "newSongs": "New Releases"
+    "newSongs": "New Releases",
+    "authRequired": "Sign in to {platform} to load its home",
+    "signIn": "Sign in"
   }
 }
