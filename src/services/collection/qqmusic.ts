@@ -1,6 +1,6 @@
 import type { CollectionType } from "@/types/collection";
 import { fetchQQMusicAlbum } from "@/apis/album/qqmusic";
-import { fetchQQMusicPlaylist } from "@/apis/playlist/qqmusic";
+import { fetchQQMusicPlaylist, fetchQQMusicRank } from "@/apis/playlist/qqmusic";
 import type { LoadCollectionOptions } from "./types";
 
 export const loadQQMusicCollection = async (
@@ -39,6 +39,22 @@ export const loadQQMusicCollection = async (
         creator: playlist.owner,
         tracks,
         trackCount: playlist.trackCount ?? tracks.length,
+      });
+    }
+    return;
+  }
+  if (type === "rank") {
+    const { rank, tracks } = await fetchQQMusicRank(originalId, fallbackName);
+    if (!options.signal?.aborted) {
+      options.onUpdate({
+        id: rank.id ?? originalId,
+        type,
+        source: "qqmusic",
+        title: rank.name,
+        cover: rank.cover,
+        description: rank.description,
+        tracks,
+        trackCount: rank.trackCount ?? tracks.length,
       });
     }
     return;

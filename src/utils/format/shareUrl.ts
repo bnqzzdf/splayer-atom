@@ -62,6 +62,15 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       streaming: null,
       local: null,
     },
+    rank: {
+      netease: null,
+      qqmusic: `https://y.qq.com/n/ryqq/toplist/${collection.id}`,
+      kugou: `https://www.kugou.com/yy/rank/home/${collection.id}-8888.html`,
+      qobuz: null,
+      tidal: null,
+      streaming: null,
+      local: null,
+    },
   };
   return urls[collection.type]?.[collection.source] ?? null;
 };
