@@ -135,16 +135,16 @@ const handleLogout = async (): Promise<void> => {
   if (!adapter.value) return;
   try {
     await adapter.value.logout();
+  } finally {
     profile.value = null;
     await refreshSession();
     toast.success(t("settings.platformLogin.toast.logoutDone", { name: platformName.value }));
-  } catch (error) {
-    console.error(`[platform-account] ${props.platform} logout failed`, error);
-    toast.error(t("settings.platformLogin.toast.logoutFailed", { name: platformName.value }));
   }
 };
 
-const loggedIn = computed(() => session.value.authenticated);
+const loggedIn = computed(() =>
+  isStreaming.value ? session.value.authenticated : Boolean(profile.value),
+);
 </script>
 
 <template>

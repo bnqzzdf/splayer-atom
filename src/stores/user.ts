@@ -31,6 +31,8 @@ import { subscribeAlbum } from "@/apis/album/netease";
 import { subscribeArtist } from "@/apis/artist/netease";
 import { fetchUserCloud, deleteCloudSongs } from "@/apis/cloud/netease";
 import { useProviderSessionsStore } from "./providerSessions";
+import { toast } from "@/composables/useToast";
+import i18n from "@/i18n";
 
 /** 登录 cookie 保活间隔 */
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -567,24 +569,72 @@ export const useUserStore = defineStore(
       await refreshPlaylists();
     };
 
+    /**
+     * 收藏类写操作的前置校验。
+     *
+     * 网易云的「订阅歌单 / 收藏专辑 / 收藏歌手」都必须登录；未登录直接调接口时
+     * 服务端只会回一个语义不明的错误（实测 302「系统错误」，连续重试后变成
+     * 405「操作过于频繁」），用户根本看不出真正原因。这里先拦下来给明确提示。
+     * @returns 是否已登录、可以继续调用
+     */
+    const requireNeteaseLogin = (): boolean => {
+      if (isLoggedIn.value) return true;
+      toast.error(i18n.global.t("errors.SUBSCRIBE_LOGIN_REQUIRED"));
+      return false;
+    };
+
+    /**
+     * 收藏类写操作的错误归一。
+     *
+     * 网易云对写操作的风控会回 405「操作过于频繁」（实测：账号已登录、取消订阅正常、
+     * 只有订阅被拒，换 weapi 通道也一样，属服务端风控），302「系统错误」同样语义不明。
+     * 这两种换成可读提示，避免用户只看到 "netease 405: ..." 这种原始报文。
+     */
+    const reportSubscribeFailure = (error: unknown): void => {
+      const raw = error instanceof Error ? error.message : String(error);
+      if (/405|操作过于频繁|302|系统错误|too frequent/i.test(raw)) {
+        toast.error(i18n.global.t("errors.SUBSCRIBE_REJECTED"));
+        return;
+      }
+      toast.error(raw || i18n.global.t("errors.UNKNOWN"));
+    };
+
     /** 订阅 / 取消订阅他人歌单 */
     const togglePlaylistSubscribe = async (
       playlistId: string,
       subscribe: boolean,
     ): Promise<void> => {
-      await subscribePlaylist(playlistId, subscribe);
+      if (!requireNeteaseLogin()) return;
+      try {
+        await subscribePlaylist(playlistId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       await refreshPlaylists();
     };
 
     /** 收藏 / 取消收藏专辑 */
     const toggleAlbumSubscribe = async (albumId: string, subscribe: boolean): Promise<void> => {
-      await subscribeAlbum(albumId, subscribe);
+      if (!requireNeteaseLogin()) return;
+      try {
+        await subscribeAlbum(albumId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       albums.value = await fetchUserAlbums();
     };
 
     /** 收藏 / 取消收藏歌手 */
     const toggleArtistSubscribe = async (artistId: string, subscribe: boolean): Promise<void> => {
-      await subscribeArtist(artistId, subscribe);
+      if (!requireNeteaseLogin()) return;
+      try {
+        await subscribeArtist(artistId, subscribe);
+      } catch (error) {
+        reportSubscribeFailure(error);
+        return;
+      }
       artists.value = await fetchUserArtists();
     };
 
