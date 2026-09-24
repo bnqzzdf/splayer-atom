@@ -209,7 +209,8 @@
       "album": "前往专辑「{id}」",
       "artist": "前往歌手「{id}」",
       "playlist": "前往歌单「{id}」"
-    }
+    },
+    "platforms": "流媒体接入"
   },
   "recognition": {
     "title": "听歌识曲",
@@ -1894,6 +1895,22 @@
       "trackNumber": "音轨号",
       "discNumber": "碟号",
       "lyrics": "内嵌歌词"
+    }
+  },
+  "platformHome": {
+    "noPlatform": "尚未登录任何在线平台",
+    "empty": "该平台暂无首页内容",
+    "loadFailed": "首页加载失败",
+    "hotPlaylists": "热门歌单",
+    "newSongs": "新歌首发",
+    "authRequired": "{platform} 需要登录后才能读取首页内容",
+    "signIn": "去登录",
+    "tidalSection": {
+      "hits": "热门精选",
+      "newTracks": "新歌",
+      "newAlbums": "新专辑",
+      "spotlightedUploads": "上传精选",
+      "fromOurEditors": "编辑精选"
     }
   }
 }

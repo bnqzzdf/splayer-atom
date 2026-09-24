@@ -94,7 +94,8 @@ export const DEFAULT_SIDEBAR_NAV_GROUPS: SidebarNavGroup[] = [
   {
     name: "",
     showName: false,
-    keys: ["/", "/albums/local", "/artists/local", "/songs", "/folders", "/stats"],
+    // /platforms（在线平台）紧跟首页：它是继「本地首页」之后的第二个内容入口
+    keys: ["/", "/platforms", "/albums/local", "/artists/local", "/songs", "/folders", "/stats"],
   },
   {
     name: "",

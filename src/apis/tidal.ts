@@ -193,3 +193,20 @@ export const userGetFavorites = (
   limit = 50,
   offset = 0,
 ) => tidalCall("user_getFavorites", { type, limit, offset });
+
+// ============ 首页（pages）与分类导航 ============
+
+/**
+ * 首页分区：`{ id, title, rows: [{ modules: [{ type, items }] }] }`。
+ *
+ * `deviceType` 是后端必填项，原生层已给默认值 DESKTOP。
+ */
+export const pagesHome = (params?: { device_type?: string; locale?: string }) =>
+  tidalCall<{ title?: string; rows?: unknown[] }>("pages_home", params);
+
+/** 指定页面：`pages/{pageId}` */
+export const pagesGet = (pageId: string, params?: { locale?: string }) =>
+  tidalCall("pages_get", { page_id: pageId, ...params });
+
+/** 分类（流派）导航：返回分类数组，每项含 id/name/image */
+export const genres = (params?: { locale?: string }) => tidalCall<unknown[]>("genres", params);

@@ -11,6 +11,7 @@ import IconLucideStar from "~icons/lucide/star";
 import IconLucideHistory from "~icons/lucide/history";
 import IconLucideDownload from "~icons/lucide/download";
 import IconLucideCloud from "~icons/lucide/cloud";
+import IconLucideGlobe from "~icons/lucide/globe";
 
 /** 侧边栏固定导航项元数据 */
 export interface SidebarNavEntry {
@@ -25,6 +26,7 @@ export interface SidebarNavEntry {
 
 const SIDEBAR_NAV_ENTRIES: SidebarNavEntry[] = [
   { key: "/", labelKey: "nav.home", icon: IconLucideHome, hideable: false },
+  { key: "/platforms", labelKey: "nav.platforms", icon: IconLucideGlobe, hideable: true },
   { key: "/albums/local", labelKey: "album.label", icon: IconLucideDisc3, hideable: true },
   { key: "/artists/local", labelKey: "artist.label", icon: IconLucideUser, hideable: true },
   { key: "/songs", labelKey: "nav.songs", icon: IconLucideMusic, hideable: true },

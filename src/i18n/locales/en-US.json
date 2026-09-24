@@ -209,7 +209,8 @@
       "album": "Go to album [{id}]",
       "artist": "Go to artist [{id}]",
       "playlist": "Go to playlist [{id}]"
-    }
+    },
+    "platforms": "Streaming Access"
   },
   "recognition": {
     "title": "Music Recognition",
@@ -1894,6 +1895,22 @@
       "trackNumber": "Track No.",
       "discNumber": "Disc No.",
       "lyrics": "Embedded Lyrics"
+    }
+  },
+  "platformHome": {
+    "noPlatform": "No online platform is signed in",
+    "empty": "No home content available for this platform",
+    "loadFailed": "Failed to load the platform home",
+    "hotPlaylists": "Popular Playlists",
+    "newSongs": "New Releases",
+    "authRequired": "Sign in to {platform} to load its home",
+    "signIn": "Sign in",
+    "tidalSection": {
+      "hits": "The Hits",
+      "newTracks": "New Tracks",
+      "newAlbums": "New Albums",
+      "spotlightedUploads": "Spotlighted Uploads",
+      "fromOurEditors": "From our editors"
     }
   }
 }
