@@ -59,13 +59,18 @@ explicit package installation only. It does not install or enable unattended sec
 Artifacts:
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
 Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible date is required. `runtime.json` also records a
 human-readable `buildDate`.
+
+`<commit>` is the 8-character short commit (from `git rev-parse HEAD`, or the `commit=` field of the
+`SOURCE_COMMIT` file shipped inside a source package). It always matches `runtime.json.atomCommit`
+and the commit shown on the Web Control's About page — **a tarball alone tells you which commit it
+was built from**, with no need to unpack and read `runtime.json`.
 
 Both contain the same Core JS, Web Control, project-built addons, runtime dependencies (including
 `better-sqlite3`), protocol, and data schema.

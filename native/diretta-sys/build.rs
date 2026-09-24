@@ -62,6 +62,13 @@ fn main() {
         .expect("libstdc++.a path does not have a parent directory");
     bridge.compile("atom_diretta_bridge");
 
+    // glibc < 2.38 兼容层：ACQUA 预编译库引用了 C23 的 __isoc23_strtol/strtoll。
+    // 在 glibc >= 2.38 平台上本文件条件编译为空，不会引入任何符号。
+    cc::Build::new()
+        .file("src/glibc_compat.c")
+        .flag_if_supported("-fPIC")
+        .compile("atom_glibc_compat");
+
     let (host_lib, acqua_lib): (String, String) = if target_arch == "aarch64" {
         (
             "DirettaHost_aarch64-linux-15-nolog".to_owned(),
@@ -78,11 +85,6 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", libstdcxx_dir.display());
     println!("cargo:rustc-link-lib=static={host_lib}");
     println!("cargo:rustc-link-lib=static={acqua_lib}");
-    // ACQUA 引用的旧 glibc 兼容符号必须排在 ACQUA 静态库之后链接。
-    cc::Build::new()
-        .file("src/glibc_compat.c")
-        .flag_if_supported("-fPIC")
-        .compile("atom_glibc_compat");
     println!("cargo:rustc-link-lib=static=stdc++");
     println!("cargo:rustc-link-arg=-Wl,-Bsymbolic");
     println!("cargo:rustc-link-lib=dylib=pthread");

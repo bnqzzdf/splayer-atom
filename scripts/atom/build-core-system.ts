@@ -8,6 +8,7 @@ import {
   resolveCoreBuildDate,
   resolveCoreBuildTime,
 } from "./core-artifact-name";
+import { resolveSourceIdentity } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -20,6 +21,7 @@ const release = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
 // 打包时刻一次性决定并下发，保证 stage 与 check 两步算出的产物名一致（秒级不会再漂）
 const buildTime = resolveCoreBuildTime();
+const sourceIdentity = resolveSourceIdentity(root);
 const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate, ATOM_BUILD_TIME: buildTime };
 
 if (process.versions.node !== CORE_NODE_REFERENCE) {
@@ -65,5 +67,15 @@ run("验收最终 tar artifact", bin("tsx"), [
 ]);
 
 console.log(
-  `[CoreBuild] PASS ${path.join(root, "out", coreArtifactFileName(bundleNode, release.version, buildDate, buildTime))}`,
+  `[CoreBuild] PASS ${path.join(
+    root,
+    "out",
+    coreArtifactFileName(
+      bundleNode,
+      release.version,
+      sourceIdentity?.commit ?? "00000000",
+      buildDate,
+      buildTime,
+    ),
+  )}`,
 );

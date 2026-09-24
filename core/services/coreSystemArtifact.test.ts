@@ -75,7 +75,7 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /AGPL license/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate, buildTime\)/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(stageSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
   assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
@@ -156,19 +156,19 @@ test("system and bundled runtime remain deployment variants of the same staged C
   assert.match(launcherSource, /NODE_BIN=\$ROOT_DIR\/runtime\/bin\/node/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate, buildTime\)/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     buildSource,
-    /coreArtifactFileName\(bundleNode, release\.version, buildDate, buildTime\)/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     artifactCheckSource,
-    /coreArtifactFileName\(bundleNode, release\.version, buildDate, buildTime\)/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
   );
 
   // 打包时刻进入文件名：同一天多次构建不会互相覆盖

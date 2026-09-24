@@ -21,6 +21,7 @@ import {
   resolveCoreBuildTime,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
+import { resolveSourceIdentity } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -31,14 +32,24 @@ const buildDate = resolveCoreBuildDate();
 const buildTime = resolveCoreBuildTime();
 // 正常由 build-core-system 下发 ATOM_BUILD_TIME，能精确重建文件名；
 // 单独运行/跨天复核时退回「取 out/ 下最新的同 flavor 产物」。
-const expectedArchive = path.join(
-  root,
-  "out",
-  coreArtifactFileName(bundleNode, release.version, buildDate, buildTime),
-);
-const archiveFile = existsSync(expectedArchive)
-  ? expectedArchive
-  : findLatestCoreArtifact(root, bundleNode);
+const sourceIdentity = resolveSourceIdentity(root);
+const expectedArchive = sourceIdentity
+  ? path.join(
+      root,
+      "out",
+      coreArtifactFileName(
+        bundleNode,
+        release.version,
+        sourceIdentity.commit,
+        buildDate,
+        buildTime,
+      ),
+    )
+  : "";
+const archiveFile =
+  expectedArchive && existsSync(expectedArchive)
+    ? expectedArchive
+    : findLatestCoreArtifact(root, bundleNode);
 
 const fail = (message: string): never => {
   throw new Error(`[CoreArtifact] ${message}`);

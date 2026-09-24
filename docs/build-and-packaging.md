@@ -44,11 +44,13 @@ pnpm package:core:bundled
 输出：
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
 版本号来自 `package.json`，日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`。需要**内容**可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。
+
+`<commit>` 是 8 位短提交号（取自 `git rev-parse HEAD`，或源码交付包内 `SOURCE_COMMIT` 的 `commit=`），与 `runtime.json.atomCommit` 以及 Web Control「关于软件」页显示的提交号完全一致——**拿到一个 tar 就能知道它出自哪次提交，不必解包读 `runtime.json`**。
 
 staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
 
