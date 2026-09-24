@@ -30,6 +30,35 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
+/// 构造 refresh_token 授权的表单字段。
+///
+/// **刻意不包含 `scope`**：按 RFC 6749 §6，省略 scope 表示「沿用原授权范围」。
+/// 之前的实现固定发 `TIDAL_SCOPE`（含 `w_sub`），而 authorize 阶段并不发 scope
+/// （服务端按默认集合授予，实测为 `[READ_USR_DATA, WRITE_USR]`），两边不一致导致刷新被拒：
+///
+/// ```text
+/// 400 One or more of the requested scopes are not allowed.
+/// Requested scopes: [READ_USR_DATA, WRITE_USR, WRITE_SUBSCRIPTION]
+/// allowed scopes:   [READ_USR_DATA, WRITE_USR]
+/// ```
+///
+/// 后果是 access token（约 4 小时）一过期就再也刷不回来，用户必须重新登录。
+fn refresh_token_form<'a>(
+    client_id: &'a str,
+    refresh_token: &'a str,
+    client_secret: &'a str,
+) -> Vec<(&'a str, &'a str)> {
+    let mut form = vec![
+        ("client_id", client_id),
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh_token),
+    ];
+    if !client_secret.is_empty() {
+        form.push(("client_secret", client_secret));
+    }
+    form
+}
+
 impl TidalClient {
     /// 第一步（官方移动端 PKCE 流程）：生成高音质授权 URL
     pub async fn auth_authorize(
@@ -410,15 +439,9 @@ impl TidalClient {
             .or_else(|| self.client_secret.as_deref())
             .unwrap_or("");
 
-        let mut form_params = vec![
-            ("client_id", client_id),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", refresh_token),
-            ("scope", TIDAL_SCOPE),
-        ];
-        if !client_secret.is_empty() {
-            form_params.push(("client_secret", client_secret));
-        }
+        // 刷新时**不发送 scope**：按 RFC 6749 §6，省略 scope 即表示「沿用原授权范围」。
+        // 细节与实测报错见 refresh_token_form 的文档注释。
+        let form_params = refresh_token_form(client_id, refresh_token, client_secret);
 
         let url = format!("{}/token", TIDAL_AUTH_BASE);
         let resp = self
@@ -484,5 +507,46 @@ impl TidalClient {
 
     pub async fn auth_logout(&self) -> Result<Value, StreamingError> {
         Ok(json!({ "status": "success", "loggedIn": false }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 回归：刷新请求绝不能带 scope。
+    ///
+    /// 曾经固定发 TIDAL_SCOPE（含 w_sub），而 authorize 阶段未申请该范围，
+    /// 服务端在 refresh 阶段严格校验后返回
+    /// `400 requested scopes are not allowed`，导致 access token 一过期就无法续期。
+    #[test]
+    fn refresh_form_never_sends_scope() {
+        let form = refresh_token_form("client-id", "refresh-token", "");
+        assert!(
+            !form.iter().any(|(k, _)| *k == "scope"),
+            "refresh_token 授权不能带 scope（RFC 6749 §6 省略即沿用原授权）: {form:?}"
+        );
+        assert!(form.contains(&("grant_type", "refresh_token")));
+        assert!(form.contains(&("refresh_token", "refresh-token")));
+        assert!(form.contains(&("client_id", "client-id")));
+    }
+
+    /// 有 secret 时追加 client_secret，且仍然不带 scope。
+    #[test]
+    fn refresh_form_appends_client_secret_without_scope() {
+        let form = refresh_token_form("cid", "rt", "secret");
+        assert!(form.contains(&("client_secret", "secret")));
+        assert!(!form.iter().any(|(k, _)| *k == "scope"));
+    }
+
+    /// 授权范围必须与 TIDAL 实际授予的集合一致，不含未使用的 w_sub。
+    #[test]
+    fn tidal_scope_excludes_unused_subscription_write() {
+        assert!(
+            !TIDAL_SCOPE.contains("w_sub"),
+            "w_sub 在代码中从未使用，申请它会让 refresh 被服务端拒绝: {TIDAL_SCOPE}"
+        );
+        assert!(TIDAL_SCOPE.contains("r_usr"));
+        assert!(TIDAL_SCOPE.contains("w_usr"));
     }
 }

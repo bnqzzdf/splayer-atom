@@ -326,6 +326,10 @@ const onTidalRequestDeviceCode = async (): Promise<void> => {
     );
     tidalDeviceInfo.value = info;
     tidalPollStatus.value = "polling";
+    // 拿到设备码后直接拉起浏览器，与 Qobuz 一键登录的体验对齐：
+    // 用户只需在打开的页面点「授权」，不必自己找链接、也不用输码
+    //（verificationUriComplete 已带码）。轮询在下方自动进行。
+    openTidalAuthUrl();
     tidalPollMessage.value = "请在浏览器中完成授权…";
     scheduleNextPoll();
   } catch (err) {
@@ -414,7 +418,8 @@ const openTidalAuthUrl = (): void => {
     tidalDeviceInfo.value?.verificationUri ??
     "https://link.tidal.com";
   const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
-  window.open(url, "_blank", "noopener");
+  // 与 Qobuz 一键登录走同一个出口（额外带 noreferrer）
+  openExternal(url);
 };
 
 /** TIDAL 登出 */
