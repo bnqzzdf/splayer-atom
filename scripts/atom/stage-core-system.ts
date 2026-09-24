@@ -21,6 +21,7 @@ import {
   formatCoreBuildDate,
   readCoreReleaseMetadata,
   resolveCoreBuildDate,
+  resolveCoreBuildTime,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
@@ -38,6 +39,33 @@ const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
+const buildTime = resolveCoreBuildTime();
+
+/**
+ * 归档内文件时间戳锚定到「打包日 00:00（构建环境本地时区）」。
+ *
+ * 之前用的是 `--mtime=@0`，解包后所有文件都显示 1970-01-01，带来三个实际问题：
+ * - `rsync -a` / `tar --compare` 这类按 mtime 判断的工具，遇到**大小相同**的改动文件
+ *   会误判为未变化而跳过；
+ * - 非内容哈希命名的静态资源（renderer/images、fonts、icons）会带
+ *   `Last-Modified: 1970`，可能被浏览器当作未更新而返回旧内容；
+ * - 运维无法判断某次部署究竟更新了哪些文件。
+ *
+ * 用**本地零点**而不是打包时刻，是为了保留「同一个 ATOM_BUILD_DATE 能复现出相同字节」
+ * 这一性质——runtime.json 的 buildDate 与产物文件名本来也按日锚定；
+ * 用本地时区而不是 UTC，则是为了让解包后 `ls` 显示的日期与打包当天一致
+ * （否则 CST 下会显示成当天 08:00，东八区以外的偏移更难看懂）。
+ */
+const archiveEpochSeconds = Math.floor(
+  new Date(
+    Number(buildDate.slice(0, 4)),
+    Number(buildDate.slice(4, 6)) - 1,
+    Number(buildDate.slice(6, 8)),
+  ).getTime() / 1000,
+);
+
+// 显式标注类型：只有 const 带显式类型注解时，TS 才会把对它的调用视为 never，
+// 从而在 `if (!x) fail(...)` 之后正确收窄。
 
 const fail = (message: string): never => {
   throw new Error(`[CoreStage] ${message}`);
@@ -248,14 +276,14 @@ if (archive) {
   const archiveFile = path.join(
     root,
     "out",
-    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate),
+    coreArtifactFileName(bundleNode, packageMetadata.version, buildDate, buildTime),
   );
   rmSync(archiveFile, { force: true });
   const tar = spawnSync(
     "tar",
     [
       "--sort=name",
-      "--mtime=@0",
+      `--mtime=@${archiveEpochSeconds}`,
       "--owner=0",
       "--group=0",
       "--numeric-owner",

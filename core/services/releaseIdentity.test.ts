@@ -53,12 +53,15 @@ test("Core artifact carries Atom version commit and dirty state", () => {
   assert.doesNotMatch(coreInfoSource, /splayerBaseline|ATOM_SPLAYER_BASELINE/);
 });
 
-test("Core package filenames contain product version and build date", () => {
+test("Core package filenames contain product version, build date and build time", () => {
   assert.match(artifactNameSource, /ATOM_BUILD_DATE/);
   assert.match(artifactNameSource, /\^\\d\{8\}\$/);
+  // 打包时刻进入文件名：同一天多次构建不会互相覆盖
+  assert.match(artifactNameSource, /ATOM_BUILD_TIME/);
+  assert.match(artifactNameSource, /\^\\d\{6\}\$/);
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{bundleNode \? "bundled" : "system"\}-linux-x64\.tar\.gz/,
+    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
   );
 });
 

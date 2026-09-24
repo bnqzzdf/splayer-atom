@@ -14,9 +14,11 @@ import type { CoreInfo } from "../../shared/types/core";
 import WebSocket from "ws";
 import {
   coreArtifactFileName,
+  findLatestCoreArtifact,
   formatCoreBuildDate,
   readCoreReleaseMetadata,
   resolveCoreBuildDate,
+  resolveCoreBuildTime,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
 
@@ -26,11 +28,17 @@ const bundleNode = args.delete("--bundle-node");
 if (args.size > 0) throw new Error(`[CoreArtifact] 未知参数: ${[...args].join(" ")}`);
 const release = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
-const archiveFile = path.join(
+const buildTime = resolveCoreBuildTime();
+// 正常由 build-core-system 下发 ATOM_BUILD_TIME，能精确重建文件名；
+// 单独运行/跨天复核时退回「取 out/ 下最新的同 flavor 产物」。
+const expectedArchive = path.join(
   root,
   "out",
-  coreArtifactFileName(bundleNode, release.version, buildDate),
+  coreArtifactFileName(bundleNode, release.version, buildDate, buildTime),
 );
+const archiveFile = existsSync(expectedArchive)
+  ? expectedArchive
+  : findLatestCoreArtifact(root, bundleNode);
 
 const fail = (message: string): never => {
   throw new Error(`[CoreArtifact] ${message}`);

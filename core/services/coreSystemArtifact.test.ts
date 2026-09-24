@@ -75,7 +75,7 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /AGPL license/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate\)/,
+    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate, buildTime\)/,
   );
   assert.match(stageSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
   assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
@@ -89,7 +89,7 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /sourceDirty/);
   assert.doesNotMatch(stageSource, /splayerBaseline|acceptedBaseline|upstreamMetadata/);
   assert.match(stageSource, /--sort=name/);
-  assert.match(stageSource, /--mtime=@0/);
+  assert.match(stageSource, /--mtime=@\$\{archiveEpochSeconds\}/);
   assert.doesNotMatch(stageSource, /pnpm\s+(?:install|deploy)|npm\s+install|postinstall/);
 });
 
@@ -156,17 +156,31 @@ test("system and bundled runtime remain deployment variants of the same staged C
   assert.match(launcherSource, /NODE_BIN=\$ROOT_DIR\/runtime\/bin\/node/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate\)/,
+    /coreArtifactFileName\(bundleNode, packageMetadata\.version, buildDate, buildTime\)/,
   );
-  assert.match(buildSource, /coreArtifactFileName\(bundleNode, release\.version, buildDate\)/);
+  assert.match(
+    buildSource,
+    /coreArtifactFileName\(bundleNode, release\.version, buildDate, buildTime\)/,
+  );
   assert.match(
     artifactCheckSource,
-    /coreArtifactFileName\(bundleNode, release\.version, buildDate\)/,
+    /coreArtifactFileName\(bundleNode, release\.version, buildDate, buildTime\)/,
   );
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{bundleNode \? "bundled" : "system"\}-linux-x64\.tar\.gz/,
+    /splayer-atom-core-\$\{version\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
   );
+
+  // 打包时刻进入文件名：同一天多次构建不会互相覆盖
+  assert.match(artifactNameSource, /resolveCoreBuildTime/);
+  assert.match(artifactNameSource, /ATOM_BUILD_TIME 必须使用 HHMMSS 格式/);
+  // 内容可复现性保持不变：runtime.json 仍然只记日期，不记时刻
+  assert.match(stageSource, /buildDate: formatCoreBuildDate\(buildDate\)/);
+  assert.doesNotMatch(stageSource, /buildTime: buildTime/);
+  // build-core-system 把时刻一次性下发，保证 stage 与 check 算出同一个文件名
+  assert.match(buildSource, /ATOM_BUILD_TIME: buildTime/);
+  // 单独运行/跨天复核时退回「取最新产物」，不再依赖秒级重建
+  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleNode\)/);
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {

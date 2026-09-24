@@ -162,7 +162,8 @@ run_docker run --rm \
       exit 1
     fi
 
-    archive=$(node -e "const runtime = require(\"./out/core-system/runtime.json\"); const date = runtime.buildDate.replace(/-/g, \"\"); process.stdout.write([\"out/splayer-atom-core\", runtime.atomVersion, date, \"bundled-linux-x64.tar.gz\"].join(\"-\"))")
+    # 产物名带打包时刻（YYYYMMDD-HHMMSS），无法从 runtime.json 重建，直接取 out/ 下最新的那个
+    archive=$(ls -t out/splayer-atom-core-*-bundled-linux-x64.tar.gz 2>/dev/null | head -1)
     test -f "$archive"
     flavor=$ATOM_DEBIAN11_DIRETTA_MODE-diretta
     if [ "$ATOM_DEBIAN11_DIRETTA_MODE" = with ]; then

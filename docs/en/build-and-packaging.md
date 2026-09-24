@@ -59,11 +59,11 @@ explicit package installation only. It does not install or enable unattended sec
 Artifacts:
 
 ```text
-out/splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-out/splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-system-linux-x64.tar.gz
+out/splayer-atom-core-<version>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
-The version comes from `package.json` and the date is the packaging date in `YYYYMMDD` format.
+The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
 Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible date is required. `runtime.json` also records a
 human-readable `buildDate`.
 
