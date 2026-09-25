@@ -168,7 +168,7 @@ test("system and bundled runtime remain deployment variants of the same staged C
   );
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant\)\}/,
   );
 
   // 打包时刻进入文件名：同一天多次构建不会互相覆盖
@@ -180,7 +180,7 @@ test("system and bundled runtime remain deployment variants of the same staged C
   // build-core-system 把时刻一次性下发，保证 stage 与 check 算出同一个文件名
   assert.match(buildSource, /ATOM_BUILD_TIME: buildTime/);
   // 单独运行/跨天复核时退回「取最新产物」，不再依赖秒级重建
-  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleNode\)/);
+  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleNode, direttaVariant\)/);
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {

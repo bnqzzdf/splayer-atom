@@ -114,8 +114,8 @@ pnpm package:core:bundled
 产物位于 `out/`，文件名包含版本号和构建日期：
 
 ```text
-splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz
 ```
 
 Diretta 正式构建必须显式提供支持的 Host SDK：

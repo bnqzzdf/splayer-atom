@@ -28,9 +28,9 @@ fn main() {
     }
     let cpu_variant = env::var("DIRETTA_CPU_VARIANT")
         .ok()
-        .filter(|value| matches!(value.as_str(), "v2" | "v3" | "v4"))
+        .filter(|value| matches!(value.as_str(), "v2" | "v3" | "v4" | "zen4"))
         .unwrap_or_else(|| {
-            panic!("DIRETTA_CPU_VARIANT must be set to v2, v3, or v4");
+            panic!("DIRETTA_CPU_VARIANT must be set to v2, v3, v4, or zen4");
         });
 
     let mut bridge = cc::Build::new();
