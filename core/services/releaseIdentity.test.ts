@@ -13,6 +13,7 @@ const packageJson = JSON.parse(read("package.json")) as {
   repository?: { url?: string };
   bugs?: { url?: string };
 };
+const direttaSdkSource = read("scripts/atom/diretta-sdk.ts");
 const artifactNameSource = read("scripts/atom/core-artifact-name.ts");
 const stageSource = read("scripts/atom/stage-core-system.ts");
 const artifactSource = read("scripts/atom/check-core-artifact.ts");
@@ -61,8 +62,15 @@ test("Core package filenames contain product version, build date and build time"
   assert.match(artifactNameSource, /\^\\d\{6\}\$/);
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant\)\}/,
   );
+  // Diretta 变体进入文件名：同一版本会为不同 CPU 代次各出一个 tar，
+  // 名字里不带变体就分不清能不能在手上这台机器跑。
+  assert.match(artifactNameSource, /-diretta-\$\{direttaVariant\}/);
+  assert.match(artifactNameSource, /coreArtifactSuffix\(bundleNode, direttaVariant\)/);
+  assert.match(artifactNameSource, /export const readDirettaCpuVariantFromNativeBuild = /);
+  // 变体清单必须覆盖 SDK 实际发布的 x86-64 型号
+  assert.match(direttaSdkSource, /DIRETTA_CPU_VARIANTS = \["v2", "v3", "v4", "zen4"\] as const/);
   // 提交号进入文件名：拿到一个 tar 就能知道它出自哪次提交，无需解包读 runtime.json
   assert.match(artifactNameSource, /export const shortCoreCommit = \(commit: string\): string =>/);
   assert.match(artifactNameSource, /\^\[0-9a-f\]\{8,40\}\$/);

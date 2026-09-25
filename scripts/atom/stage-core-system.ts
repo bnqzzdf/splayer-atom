@@ -24,7 +24,7 @@ import {
   resolveCoreBuildTime,
   shortCoreCommit,
 } from "./core-artifact-name";
-import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
+import { DIRETTA_SDK_RELEASE, type DirettaCpuVariant } from "./diretta-sdk";
 import { resolveSourceIdentity, sourceIdentityFailureMessage } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -114,7 +114,7 @@ const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {
   modules?: string[];
   diretta?: boolean;
   direttaSdkRelease?: number | null;
-  direttaCpuVariant?: "v2" | "v3" | "v4" | null;
+  direttaCpuVariant?: DirettaCpuVariant | null;
 };
 if (nativeBuild.profile !== "release" || nativeBuild.flavor !== "core-audio") {
   fail(
@@ -286,6 +286,7 @@ if (archive) {
       sourceIdentity.commit,
       buildDate,
       buildTime,
+      nativeBuild.direttaCpuVariant ?? null,
     ),
   );
   rmSync(archiveFile, { force: true });
