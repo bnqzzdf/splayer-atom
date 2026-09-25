@@ -103,7 +103,7 @@ pnpm package:core:bundled
 pnpm package:core:debian11 --without-diretta
 ```
 
-The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4` with SDK 150 set
+The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4|zen4` with SDK 150 set
 through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-bundled-build).
 
 Validate the final Linux x86-64 `tar.gz`, including runtime metadata, native addon loading, Web root,

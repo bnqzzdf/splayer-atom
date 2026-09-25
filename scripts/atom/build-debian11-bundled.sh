@@ -12,6 +12,10 @@ CARGO_HTTP_TIMEOUT=${CARGO_HTTP_TIMEOUT:-600}
 CARGO_HTTP_LOW_SPEED_LIMIT=${CARGO_HTTP_LOW_SPEED_LIMIT:-1}
 CARGO_NET_RETRY=${CARGO_NET_RETRY:-10}
 DOCKER_BIN=${DOCKER_BIN:-docker}
+# 网络模式：镜像构建要联网拉 apt 包与 Node/Rust，容器内还要拉 pnpm/cargo 依赖。
+# BuildKit 默认的 bridge 网络在部分宿主上不可用（Gentoo 上实测报
+# `network bridge not found`），所以默认用 host，可用 ATOM_DEBIAN11_NETWORK 覆盖。
+DOCKER_NETWORK=${ATOM_DEBIAN11_NETWORK:-host}
 DIRETTA_MODE=without
 DIRETTA_MODE_SET=false
 DIRETTA_VARIANT=${DIRETTA_CPU_VARIANT:-}
@@ -40,7 +44,7 @@ for arg in "$@"; do
       DIRETTA_VARIANT_SET=true
       ;;
     --help)
-      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4]"
+      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4|zen4]"
       echo "包含 Diretta 时还需设置 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK"
       exit 0
       ;;
@@ -53,8 +57,8 @@ done
 
 if [ "$DIRETTA_MODE" = with ]; then
   case "$DIRETTA_VARIANT" in
-    v2|v3|v4) ;;
-    *) echo "[Debian11] 包含 Diretta 时必须指定 --diretta-variant=v2|v3|v4" >&2; exit 2 ;;
+    v2|v3|v4|zen4) ;;
+    *) echo "[Debian11] 包含 Diretta 时必须指定 --diretta-variant=v2|v3|v4|zen4" >&2; exit 2 ;;
   esac
   if [ -z "${DIRETTA_SDK_ROOT:-}" ] || [ ! -d "$DIRETTA_SDK_ROOT/Host" ] || [ ! -d "$DIRETTA_SDK_ROOT/lib" ]; then
     echo "[Debian11] DIRETTA_SDK_ROOT 必须指向包含 Host/ 和 lib/ 的 SDK 目录" >&2
@@ -86,6 +90,7 @@ fi
 
 echo "[Debian11] 构建镜像: ${IMAGE_NAME}"
 run_docker build \
+  --network "$DOCKER_NETWORK" \
   --file "$ROOT_DIR/docker/atom-debian11/Dockerfile" \
   --tag "$IMAGE_NAME" \
   "$ROOT_DIR/docker/atom-debian11"
@@ -112,6 +117,7 @@ if [ "$DIRETTA_MODE" = with ]; then
 fi
 run_docker run --rm \
   --name "$CONTAINER_NAME" \
+  --network "$DOCKER_NETWORK" \
   "$@" \
   --volume "$NODE_VOLUME:/src/node_modules" \
   --volume "$PNPM_VOLUME:/root/.local/share/pnpm/store" \
@@ -122,55 +128,7 @@ run_docker run --rm \
   --env "CARGO_HTTP_LOW_SPEED_LIMIT=$CARGO_HTTP_LOW_SPEED_LIMIT" \
   --env "CARGO_NET_RETRY=$CARGO_NET_RETRY" \
   --env "ATOM_DEBIAN11_DIRETTA_MODE=$DIRETTA_MODE" \
+  --volume "$ROOT_DIR/docker/atom-debian11/build.sh:/usr/local/bin/atom-debian11-build.sh:ro" \
   --workdir /src \
   "$IMAGE_NAME" \
-  sh -eu -c '
-    git config --global --add safe.directory /src
-    pnpm install --frozen-lockfile --store-dir /root/.local/share/pnpm/store
-
-    sqlite_dir=$(dirname "$(node -p "require.resolve(\"better-sqlite3/package.json\")")")
-    npm --prefix "$sqlite_dir" run build-release
-    cp "$sqlite_dir/build/Release/better_sqlite3.node" "$sqlite_dir/prebuilds/linux-x64.node"
-
-    if [ "$ATOM_DEBIAN11_DIRETTA_MODE" = with ]; then
-      pnpm exec tsx scripts/atom/build-core-system.ts \
-        --require-diretta "--diretta-variant=$DIRETTA_CPU_VARIANT" --bundle-node
-    else
-      pnpm package:core:bundled
-    fi
-
-    check_glibc() {
-      module=$1
-      max_glibc=$(readelf --version-info "$module" \
-        | grep -oE "GLIBC_[0-9]+(\\.[0-9]+)+" \
-        | sort -V | tail -1)
-      case "$max_glibc" in
-        GLIBC_2.[0-2][0-9]|GLIBC_2.3[01]) : ;;
-        *) echo "[Debian11] 拒绝超过 glibc 2.31 的模块: $module ($max_glibc)" >&2; exit 1 ;;
-      esac
-      echo "[Debian11] $module 最高需求: $max_glibc"
-    }
-    check_glibc out/core-system/native/audio-engine.node
-    check_glibc out/core-system/native/streaming-api.node
-    check_glibc out/core-system/node_modules/better-sqlite3/prebuilds/linux-x64.node
-
-    node -e '\''const runtime = require("./out/core-system/runtime.json"); const withDiretta = process.env.ATOM_DEBIAN11_DIRETTA_MODE === "with"; if (runtime.capabilities.diretta !== withDiretta || runtime.diretta !== withDiretta || (withDiretta && runtime.direttaCpuVariant !== process.env.DIRETTA_CPU_VARIANT)) throw new Error("Diretta 产物能力位与构建模式不一致")'\''
-    if [ "$ATOM_DEBIAN11_DIRETTA_MODE" = with ] && \
-      readelf --dyn-syms --wide out/core-system/native/audio-engine.node \
-      | grep -Eq "UND[[:space:]]+__isoc23_strtol(l)?(@|$)"; then
-      echo "[Debian11] Diretta addon 仍引用 Debian 11 缺失的 __isoc23_strtol 符号" >&2
-      exit 1
-    fi
-
-    # 产物名带打包时刻（YYYYMMDD-HHMMSS），无法从 runtime.json 重建，直接取 out/ 下最新的那个
-    archive=$(ls -t out/splayer-atom-core-*-bundled-linux-x64.tar.gz 2>/dev/null | head -1)
-    test -f "$archive"
-    flavor=$ATOM_DEBIAN11_DIRETTA_MODE-diretta
-    if [ "$ATOM_DEBIAN11_DIRETTA_MODE" = with ]; then
-      flavor=$flavor-$DIRETTA_CPU_VARIANT
-    fi
-    debian_archive=${archive%.tar.gz}-debian11-$flavor.tar.gz
-    cp "$archive" "$debian_archive"
-    sha256sum "$debian_archive"
-    echo "[Debian11] PASS $debian_archive"
-  '
+  sh /usr/local/bin/atom-debian11-build.sh
