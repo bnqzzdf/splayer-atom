@@ -5,6 +5,7 @@ import { CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
 import {
   coreArtifactFileName,
   readCoreReleaseMetadata,
+  readDirettaCpuVariantFromNativeBuild,
   resolveCoreBuildDate,
   resolveCoreBuildTime,
 } from "./core-artifact-name";
@@ -52,6 +53,9 @@ run("构建 Core native release", bin("tsx"), [
   ...(requireDiretta ? ["--require-diretta"] : []),
   ...(direttaVariantArg ? [direttaVariantArg] : []),
 ]);
+// native 构建刚把变体写进 out/native/build.json：产物名必须与它一致，
+// 因为 stage / check 两步也是从同一个文件重建文件名的。
+const direttaVariant = readDirettaCpuVariantFromNativeBuild(root);
 run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.config.ts"]);
 run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);
 run("构建 Web Control", bin("vite"), ["build", "-c", "vite.config.ts"]);
@@ -76,6 +80,7 @@ console.log(
       sourceIdentity?.commit ?? "00000000",
       buildDate,
       buildTime,
+      direttaVariant,
     ),
   )}`,
 );

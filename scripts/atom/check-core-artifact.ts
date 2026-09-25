@@ -17,10 +17,11 @@ import {
   findLatestCoreArtifact,
   formatCoreBuildDate,
   readCoreReleaseMetadata,
+  readDirettaCpuVariantFromNativeBuild,
   resolveCoreBuildDate,
   resolveCoreBuildTime,
 } from "./core-artifact-name";
-import { DIRETTA_SDK_RELEASE } from "./diretta-sdk";
+import { DIRETTA_SDK_RELEASE, type DirettaCpuVariant } from "./diretta-sdk";
 import { resolveSourceIdentity } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
@@ -33,6 +34,8 @@ const buildTime = resolveCoreBuildTime();
 // 正常由 build-core-system 下发 ATOM_BUILD_TIME，能精确重建文件名；
 // 单独运行/跨天复核时退回「取 out/ 下最新的同 flavor 产物」。
 const sourceIdentity = resolveSourceIdentity(root);
+// 变体来自 native 构建落盘的 build.json，与 stage 用的是同一个来源
+const direttaVariant = readDirettaCpuVariantFromNativeBuild(root);
 const expectedArchive = sourceIdentity
   ? path.join(
       root,
@@ -43,13 +46,14 @@ const expectedArchive = sourceIdentity
         sourceIdentity.commit,
         buildDate,
         buildTime,
+        direttaVariant,
       ),
     )
   : "";
 const archiveFile =
   expectedArchive && existsSync(expectedArchive)
     ? expectedArchive
-    : findLatestCoreArtifact(root, bundleNode);
+    : findLatestCoreArtifact(root, bundleNode, direttaVariant);
 
 const fail = (message: string): never => {
   throw new Error(`[CoreArtifact] ${message}`);
@@ -167,7 +171,7 @@ try {
     dataSchema?: { database?: number; config?: number };
     capabilities?: CoreInfo["capabilities"];
     direttaSdkRelease?: number | null;
-    direttaCpuVariant?: "v2" | "v3" | "v4" | null;
+    direttaCpuVariant?: DirettaCpuVariant | null;
   };
   if (
     runtime.productName !== "SPlayer Atom" ||

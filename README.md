@@ -114,8 +114,8 @@ pnpm package:core:bundled
 Artifacts are written to `out/`, with the product version and build date in the filename:
 
 ```text
-splayer-atom-core-<version>-<YYYYMMDD>-system-linux-x64.tar.gz
-splayer-atom-core-<version>-<YYYYMMDD>-bundled-linux-x64.tar.gz
+splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz
+splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz
 ```
 
 A formal Diretta build must provide the supported external Host SDK:
