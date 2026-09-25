@@ -99,9 +99,11 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-`v2`、`v3`、`v4` 对应 SDK 的 x86-64 库变体。构建时只读挂载 SDK，不把 SDK 文件放入产物。脚本会检查 native addon 的 glibc 版本、Diretta 能力位和产物启动。两种模式分别保留为
+`v2`、`v3`、`v4`、`zen4` 对应 SDK 的 x86-64 库变体——变体决定产物**能不能在目标 CPU 上跑**，不只是快慢，详见 [CPU 变体](/cpu-variants)。构建时只读挂载 SDK，不把 SDK 文件放入产物。脚本会检查 native addon 的 glibc 版本、Diretta 能力位和产物启动。两种模式分别保留为
 `out/*-debian11-without-diretta.tar.gz` 和 `out/*-debian11-with-diretta-<variant>.tar.gz`。
 Diretta SDK 150 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本仓库兼容层提供。
+
+容器本身（Dockerfile + 容器内构建脚本 + 缓存卷说明）在 [`docker/atom-debian11/`](../docker/atom-debian11/README.md)。
 
 ## Artifact smoke
 

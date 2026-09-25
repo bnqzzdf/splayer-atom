@@ -98,19 +98,20 @@
 
 ## 五、复现步骤
 
-在构建主机 `192.168.101.133` 上：
+仓库里已有打包好的入口，不需要手工拼 docker 命令：
 
 ```bash
-# 1) 构建镜像（首次约 10 分钟；必须 --network host）
-cd /root/build-d11/splayer-atom-dev-1.1.0
-docker build --network host \
-  --file docker/atom-debian11/Dockerfile \
-  --tag splayer-atom-debian11-builder \
-  docker/atom-debian11
+# 建镜像 → 容器内构建 → 产出 debian11 产物，一条命令到底
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+  pnpm package:core:debian11 --with-diretta --diretta-variant=v2
 
-# 2) 在容器内构建（脚本已挂载 SDK 并开启 Diretta）
-/root/d11_build_oauth.sh
+# 不带 Diretta（ALSA-only）
+pnpm package:core:debian11 --without-diretta
 ```
+
+宿主侧驱动是 `scripts/atom/build-debian11-bundled.sh`，容器内脚本是
+[`docker/atom-debian11/build.sh`](../docker/atom-debian11/build.sh)，
+镜像定义与用法见 [`docker/atom-debian11/README.md`](../docker/atom-debian11/README.md)。
 
 容器内实际执行的核心命令：
 

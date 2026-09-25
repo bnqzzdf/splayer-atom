@@ -30,7 +30,8 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
     --require-diretta --diretta-variant=v2
 ```
 
-`--diretta-variant` selects the x86-64 Host SDK library flavor (`v2`, `v3`, or `v4`). The selected
+`--diretta-variant` selects the x86-64 Host SDK library flavor (`v2`, `v3`, `v4`, or `zen4`). The
+flavor decides whether the artifact can run on the target CPU at all, not just how fast. The selected
 variant is passed to the native Cargo build and recorded in the artifact metadata. A Diretta build
 must specify it explicitly; it is not silently defaulted to `v2`.
 
@@ -48,7 +49,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
 ```
 
 The first mode is the default. The second mode mounts SDK 150 read-only and uses its selected
-`v2`, `v3`, or `v4` x86-64 libraries. The build checks the packaged native modules against glibc
+`v2`, `v3`, `v4`, or `zen4` x86-64 libraries. The build checks the packaged native modules against glibc
 2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 150's
 ACQUA library receives the required old-glibc integer parsing compatibility symbols at link time;
 the SDK files are not packaged. Mode-specific copies are retained as
