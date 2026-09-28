@@ -27,6 +27,11 @@
  *       设备码 client → HIGH / mp4a.40.2（另一首 LOW / mp4a.40.5）
  *     且设备码接口对官方 client 直接 400（Client is not a Limited Input Device client），
  *     所以"全自动 + 无损"在 TIDAL 侧拿不到，只能把取舍摆给用户看。
+ *   - 回环回调（Qobuz 那种本机监听）**已实测被拒**，别再试：
+ *     同一个官方 client 的授权链接，只把 redirect_uri 换成 http://<core-ip>:8799/callback，
+ *     浏览器直接得到 TIDAL 错误页 `Error 11102`（连登录页都没出现），
+ *     而换成已注册的 https://com.player.tidal/auth 就能正常登录；监听端零回调。
+ *     redirect_uri 是预注册的，官方 client 只认那一个自定义域。
  *   - 两条路都支持自定义 Client ID / Client Secret
  */
 

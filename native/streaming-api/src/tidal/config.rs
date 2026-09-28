@@ -24,6 +24,11 @@ pub const TIDAL_SCOPE: &str = "r_usr+w_usr";
 ///   DEFAULT_CLIENT → HIGH / mp4a.40.2（另一首 LOW / mp4a.40.5）
 /// 因此 Web 侧把「官方客户端 + 人工粘贴回调」作为默认登录路径：
 /// 想让用户少复制一次，就得放弃无损，而这不是这个项目能接受的取舍。
+///
+/// 回环回调（Qobuz 那种本机监听）也走不通——实测：同一 client 的授权链接只把
+/// redirect_uri 换成 `http://<core-ip>:8799/callback`，浏览器直接得到
+/// `Error 11102`（连登录页都不出现），而换回下面这个已注册的 redirect 就正常；
+/// 监听端零回调。redirect_uri 是预注册的，别在这条路上再花时间。
 pub const TIDAL_OFFICIAL_CLIENT_ID: &str = "YUJf8vfXOxVvzo2W";
 pub const TIDAL_ANDROID_REDIRECT_URI: &str = "https://com.player.tidal/auth";
 

@@ -77,4 +77,8 @@ test("TIDAL 默认走无损那条，设备码（AAC）不得被摆成推荐路�
   // 实测映射要留在文档里，避免以后有人凭印象"优化"成全自动
   assert.match(loginDialogSource, /设备码 client → HIGH \/ mp4a\.40\.2/);
   assert.match(tidalConfigSource, /LIMITED INPUT DEVICE CLIENT|Limited Input Device client/);
+  // 回环回调已实测被拒（Error 11102）：这条负面结论也要留在源码里，别被重新试一遍
+  assert.match(loginDialogSource, /回环回调（Qobuz 那种本机监听）\*\*已实测被拒\*\*/);
+  assert.match(loginDialogSource, /Error 11102/);
+  assert.match(tidalConfigSource, /Error 11102/);
 });
