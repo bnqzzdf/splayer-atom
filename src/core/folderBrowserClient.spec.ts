@@ -29,12 +29,19 @@ describe("Folder Browser Core Protocol client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { folderBrowserClient } = await import("./folderBrowserClient");
-    await folderBrowserClient.browse("/music", undefined, 200, undefined, "philip");
+    await folderBrowserClient.browse({
+      path: "/music",
+      filter: "philip",
+      sort: "mtime",
+      order: "desc",
+    });
 
     const url = new URL(String(fetchMock.mock.calls[1]?.[0]));
     expect(url.pathname).toBe("/api/library/folders/browse");
     expect(url.searchParams.get("path")).toBe("/music");
     expect(url.searchParams.get("filter")).toBe("philip");
+    expect(url.searchParams.get("sort")).toBe("mtime");
+    expect(url.searchParams.get("order")).toBe("desc");
     expect(url.pathname).not.toContain("/search");
   });
 

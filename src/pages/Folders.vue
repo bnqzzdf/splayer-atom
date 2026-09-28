@@ -4,7 +4,9 @@ defineOptions({ name: "Folders" });
 import type {
   FolderBatchTarget,
   FolderBrowseEntry,
+  FolderBrowseOrder,
   FolderBrowsePage,
+  FolderBrowseSort,
   FolderContainerResult,
   FolderDirectoryEntry,
   FolderMaterialEntry,
@@ -53,6 +55,9 @@ import IconList from "~icons/lucide/list";
 import IconLayoutGrid from "~icons/lucide/layout-grid";
 import IconListChecks from "~icons/lucide/list-checks";
 import IconArrowLeftRight from "~icons/lucide/arrow-left-right";
+import IconArrowUp from "~icons/lucide/arrow-up";
+import IconArrowDown from "~icons/lucide/arrow-down";
+import IconArrowUpDown from "~icons/lucide/arrow-up-down";
 import IconX from "~icons/lucide/x";
 
 type ViewRow =
@@ -77,10 +82,32 @@ const settings = useSettingsStore();
 const routeText = (value: unknown): string =>
   typeof value === "string" ? value : Array.isArray(value) ? String(value[0] ?? "") : "";
 
+const parseFolderSort = (value: unknown): FolderBrowseSort | null => {
+  const text = routeText(value);
+  return text === "name" || text === "mtime" || text === "track" ? text : null;
+};
+const parseFolderOrder = (value: unknown): FolderBrowseOrder | null => {
+  const text = routeText(value);
+  return text === "asc" || text === "desc" ? text : null;
+};
+const defaultFolderOrder = (sort: FolderBrowseSort): FolderBrowseOrder =>
+  sort === "mtime" ? "desc" : "asc";
+
 const currentPath = computed(() => routeText(route.query.path));
 const requestedContainerPath = computed(() => routeText(route.query.container));
 const requestedFocusId = computed(() => routeText(route.query.focus));
 const requestedFocusPath = computed(() => routeText(route.query.focusPath));
+const routeFolderSort = computed(() => parseFolderSort(route.query.sort));
+const routeFolderOrder = computed(() => parseFolderOrder(route.query.order));
+const currentSort = computed<FolderBrowseSort>(
+  () => routeFolderSort.value ?? settings.appearance.folderBrowseSort,
+);
+const currentOrder = computed<FolderBrowseOrder>(() => {
+  if (routeFolderOrder.value) return routeFolderOrder.value;
+  return routeFolderSort.value
+    ? defaultFolderOrder(routeFolderSort.value)
+    : settings.appearance.folderBrowseOrder;
+});
 
 const roots = shallowRef<FolderRootEntry[]>([]);
 const pins = shallowRef<FolderPinEntry[]>([]);
@@ -95,6 +122,8 @@ const error = ref("");
 const listRef = shallowRef<SVirtualListExposed | null>(null);
 const loadedPath = ref("");
 const loadedFilter = ref("");
+const loadedSort = ref<FolderBrowseSort>("name");
+const loadedOrder = ref<FolderBrowseOrder>("asc");
 const scrollPositions = new Map<string, FolderScrollState>();
 const folderFilters = new Map<string, string>();
 const highlightKey = ref("");
@@ -125,6 +154,11 @@ const folderViewMode = computed<FolderViewMode>({
     settings.appearance.folderViewMode = value;
   },
 });
+const folderSortOptions = computed(() => [
+  { label: t("folder.sortName"), value: "name" },
+  { label: t("folder.sortMtime"), value: "mtime" },
+  { label: t("folder.sortTrack"), value: "track" },
+]);
 const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
 const batchActive = ref(false);
 const batchSelectedKeys = shallowRef<Set<string>>(new Set());
@@ -341,6 +375,13 @@ const rowContainsPath = (row: ViewRow, path: string): boolean => {
   return false;
 };
 
+const folderScrollStateKey = (
+  path: string,
+  filter: string,
+  sort: FolderBrowseSort,
+  order: FolderBrowseOrder,
+): string => [path, filter.trim(), sort, order].join("\u0000");
+
 const saveCurrentScroll = (): void => {
   if (!loadedPath.value || !listRef.value) return;
   const top = listRef.value.getScrollTop();
@@ -353,11 +394,24 @@ const saveCurrentScroll = (): void => {
     anchorPath && anchorIndex < viewRows.value.length
       ? top - listRef.value.getItemTop(anchorIndex)
       : 0;
-  scrollPositions.set(loadedPath.value, { top, anchorPath, anchorOffset });
+  scrollPositions.set(
+    folderScrollStateKey(
+      loadedPath.value,
+      loadedFilter.value,
+      loadedSort.value,
+      loadedOrder.value,
+    ),
+    { top, anchorPath, anchorOffset },
+  );
 };
 
-const restoreScroll = async (path: string): Promise<void> => {
-  const state = scrollPositions.get(path);
+const restoreScroll = async (
+  path: string,
+  filter: string,
+  sort: FolderBrowseSort,
+  order: FolderBrowseOrder,
+): Promise<void> => {
+  const state = scrollPositions.get(folderScrollStateKey(path, filter, sort, order));
   if (!state || state.top <= 0) return;
   await nextTick();
   const list = listRef.value;
@@ -424,6 +478,8 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   const generation = ++browseGeneration;
   const target = currentPath.value;
   const activeFilter = filterQuery.value.trim();
+  const activeSort = currentSort.value;
+  const activeOrder = currentOrder.value;
   directoryThumbnailFailures.value = new Set();
   loadedPath.value = target;
   error.value = "";
@@ -432,8 +488,11 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   nextCursor.value = undefined;
   page.value = null;
   container.value = null;
+  loadingMore.value = false;
   if (!target) {
     loadedFilter.value = "";
+    loadedSort.value = activeSort;
+    loadedOrder.value = activeOrder;
     loading.value = true;
     try {
       await loadRoots();
@@ -448,25 +507,43 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   }
   loading.value = true;
   try {
+    const scrollStateKey = folderScrollStateKey(target, activeFilter, activeSort, activeOrder);
     const savedAnchorPath = restoreSavedPosition
-      ? scrollPositions.get(target)?.anchorPath
+      ? scrollPositions.get(scrollStateKey)?.anchorPath
       : undefined;
-    const result = await folderBrowserClient.browse(
-      target,
-      undefined,
-      200,
-      focusOverride ||
-        requestedContainerPath.value ||
-        requestedFocusPath.value ||
+    const explicitFocusPath = requestedContainerPath.value || requestedFocusPath.value;
+    const result = await folderBrowserClient.browse({
+      path: target,
+      limit: 200,
+      focusPath:
+        focusOverride ||
+        explicitFocusPath ||
         savedAnchorPath ||
         undefined,
-      activeFilter || undefined,
-    );
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      filterQuery.value.trim() !== activeFilter
+      filterQuery.value.trim() !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
+      return;
+    }
+    if (
+      activeFilter &&
+      explicitFocusPath &&
+      !result.entries.some((entry) => entry.path === explicitFocusPath)
+    ) {
+      ignoreFilterReload = true;
+      filterQuery.value = "";
+      ignoreFilterReload = false;
+      folderFilters.set(target, "");
+      exitBatch();
+      await loadCurrent(explicitFocusPath, false);
       return;
     }
     page.value = result;
@@ -474,13 +551,19 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
     previousCursor.value = result.previousCursor;
     nextCursor.value = result.nextCursor;
     loadedFilter.value = activeFilter;
-    if (restoreSavedPosition) await restoreScroll(target);
+    loadedSort.value = activeSort;
+    loadedOrder.value = activeOrder;
+    if (restoreSavedPosition) {
+      await restoreScroll(target, activeFilter, activeSort, activeOrder);
+    }
     await loadContainer();
   } catch (value) {
     if (
       generation === browseGeneration &&
       currentPath.value === target &&
-      filterQuery.value.trim() === activeFilter
+      filterQuery.value.trim() === activeFilter &&
+      currentSort.value === activeSort &&
+      currentOrder.value === activeOrder
     ) {
       error.value = value instanceof Error ? value.message : String(value);
     }
@@ -499,11 +582,13 @@ const markDirectoryThumbnailFailed = (path: string): void => {
 const refreshCurrent = async (): Promise<void> => {
   const target = currentPath.value;
   saveCurrentScroll();
-  const state = scrollPositions.get(target);
+  const state = scrollPositions.get(
+    folderScrollStateKey(target, loadedFilter.value, loadedSort.value, loadedOrder.value),
+  );
   const anchorPath = state?.anchorPath;
   await loadCurrent(anchorPath, false);
   if (currentPath.value !== target || loadedPath.value !== target) return;
-  await restoreScroll(target);
+  await restoreScroll(target, loadedFilter.value, loadedSort.value, loadedOrder.value);
 };
 
 const loadMore = async (): Promise<void> => {
@@ -511,26 +596,33 @@ const loadMore = async (): Promise<void> => {
     !currentPath.value ||
     !nextCursor.value ||
     loadingMore.value ||
-    filterQuery.value.trim() !== loadedFilter.value
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
   )
     return;
   const generation = browseGeneration;
   const target = currentPath.value;
   const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
   const cursor = nextCursor.value;
   loadingMore.value = true;
   try {
-    const result = await folderBrowserClient.browse(
-      target,
+    const result = await folderBrowserClient.browse({
+      path: target,
       cursor,
-      200,
-      undefined,
-      activeFilter || undefined,
-    );
+      limit: 200,
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -541,7 +633,9 @@ const loadMore = async (): Promise<void> => {
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -560,12 +654,16 @@ const loadPrevious = async (): Promise<void> => {
     !currentPath.value ||
     !previousCursor.value ||
     loadingMore.value ||
-    filterQuery.value.trim() !== loadedFilter.value
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
   )
     return;
   const generation = browseGeneration;
   const target = currentPath.value;
   const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
   const cursor = previousCursor.value;
   loadingMore.value = true;
   const rowsBefore = viewRows.value;
@@ -575,17 +673,20 @@ const loadPrevious = async (): Promise<void> => {
   const anchorOffset =
     anchorKey && listRef.value ? scrollTop - listRef.value.getItemTop(anchorIndex) : 0;
   try {
-    const result = await folderBrowserClient.browse(
-      target,
+    const result = await folderBrowserClient.browse({
+      path: target,
       cursor,
-      200,
-      undefined,
-      activeFilter || undefined,
-    );
+      limit: 200,
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -602,7 +703,9 @@ const loadPrevious = async (): Promise<void> => {
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -617,11 +720,44 @@ const loadPrevious = async (): Promise<void> => {
 };
 
 const goFolder = async (path: string): Promise<void> => {
-  await router.push({ name: "folders", query: { path } });
+  await router.push({
+    name: "folders",
+    query: { path, sort: currentSort.value, order: currentOrder.value },
+  });
 };
 
 const goHome = async (): Promise<void> => {
   await router.push({ name: "folders" });
+};
+
+const updateFolderSort = async (
+  sort: FolderBrowseSort,
+  order: FolderBrowseOrder,
+): Promise<void> => {
+  if (!currentPath.value) return;
+  exitBatch();
+  await router.replace({
+    name: "folders",
+    query: {
+      ...route.query,
+      path: currentPath.value,
+      sort,
+      order,
+    },
+  });
+  settings.appearance.folderBrowseSort = sort;
+  settings.appearance.folderBrowseOrder = order;
+};
+
+const handleFolderSort = (value: string | number | boolean): void => {
+  const sort = parseFolderSort(String(value));
+  if (!sort || sort === currentSort.value) return;
+  void updateFolderSort(sort, defaultFolderOrder(sort));
+};
+
+const toggleFolderOrder = (): void => {
+  const order: FolderBrowseOrder = currentOrder.value === "asc" ? "desc" : "asc";
+  void updateFolderSort(currentSort.value, order);
 };
 
 const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
@@ -631,6 +767,8 @@ const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
     name: "folders",
     query: {
       path: currentPath.value,
+      sort: currentSort.value,
+      order: currentOrder.value,
       ...(!same ? { container: entry.path } : {}),
     },
   });
@@ -937,7 +1075,12 @@ const openSearchResult = async (result: FolderSearchResult): Promise<void> => {
   searchQuery.value = "";
   await router.push({
     name: "folders",
-    query: { path: result.parent, focusPath: result.path },
+    query: {
+      path: result.parent,
+      sort: currentSort.value,
+      order: currentOrder.value,
+      focusPath: result.path,
+    },
   });
 };
 
@@ -1013,6 +1156,18 @@ watch(
   (value) => {
     if (ignoreFilterReload || !currentPath.value) return;
     folderFilters.set(currentPath.value, value);
+    if (
+      value.trim() === loadedFilter.value &&
+      currentSort.value === loadedSort.value &&
+      currentOrder.value === loadedOrder.value
+    ) {
+      return;
+    }
+    exitBatch();
+    browseGeneration++;
+    previousCursor.value = undefined;
+    nextCursor.value = undefined;
+    loadingMore.value = false;
     void performFilter(value);
   },
   { flush: "sync" },
@@ -1071,18 +1226,56 @@ watch(viewerOpen, (open) => {
 });
 
 watch(
-  currentPath,
-  (path) => {
-    exitBatch();
-    restoreFolderFilter(path);
-    void loadCurrent();
+  () =>
+    [
+      currentPath.value,
+      currentSort.value,
+      currentOrder.value,
+      requestedContainerPath.value,
+      requestedFocusPath.value,
+      requestedFocusId.value,
+    ] as const,
+  (next, previous) => {
+    const [path, sort, order, containerPath, focusPath, focusId] = next;
+    if (
+      path &&
+      (routeFolderSort.value !== sort || routeFolderOrder.value !== order)
+    ) {
+      void router.replace({
+        name: "folders",
+        query: { ...route.query, path, sort, order },
+      });
+      return;
+    }
+
+    const pathOrSortChanged =
+      !previous ||
+      path !== previous[0] ||
+      sort !== previous[1] ||
+      order !== previous[2];
+    if (pathOrSortChanged) {
+      exitBatch();
+      restoreFolderFilter(path);
+      void loadCurrent();
+      return;
+    }
+
+    if (!path || path !== loadedPath.value || loading.value) return;
+    const focusTarget = containerPath || focusPath;
+    if (focusTarget && !entries.value.some((entry) => entry.path === focusTarget)) {
+      void loadCurrent(focusTarget, false);
+      return;
+    }
+    if (containerPath !== previous[3]) {
+      void loadContainer();
+      return;
+    }
+    if (focusPath !== previous[4] || focusId !== previous[5]) {
+      void focusRequestedEntry();
+    }
   },
   { immediate: true },
 );
-
-watch(requestedContainerPath, () => {
-  if (currentPath.value === loadedPath.value && !loading.value) void loadContainer();
-});
 
 let unsubscribeScan: (() => void) | null = null;
 let unsubscribeRevision: (() => void) | null = null;
@@ -1280,6 +1473,31 @@ onBeforeUnmount(() => {
           >
             <template #prefix><IconSearch class="size-4 opacity-50" /></template>
           </SInput>
+          <SPopselect
+            :model-value="currentSort"
+            :options="folderSortOptions"
+            align="end"
+            @update:model-value="handleFolderSort"
+          >
+            <template #trigger="{ selected }">
+              <SButton variant="secondary" size="small" round>
+                <template #icon><IconArrowUpDown class="size-3.5" /></template>
+                {{ selected?.label ?? t("folder.sortName") }}
+              </SButton>
+            </template>
+          </SPopselect>
+          <SButton
+            variant="secondary"
+            circle
+            size="small"
+            :title="t(currentOrder === 'asc' ? 'folder.sortAscending' : 'folder.sortDescending')"
+            @click="toggleFolderOrder"
+          >
+            <template #icon>
+              <IconArrowUp v-if="currentOrder === 'asc'" />
+              <IconArrowDown v-else />
+            </template>
+          </SButton>
           <SButton
             variant="secondary"
             circle

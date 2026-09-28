@@ -56,6 +56,18 @@ test("Folder presentation supports list/grid without changing route semantics", 
   assert.equal(foldersSource.includes('class="absolute right-2 top-2 opacity-90"'), false);
 });
 
+test("Folder display sorting stays route-aware and keeps navigation state isolated", () => {
+  assert.ok(foldersSource.includes('sort: currentSort.value'));
+  assert.ok(foldersSource.includes('order: currentOrder.value'));
+  assert.ok(foldersSource.includes("folderScrollStateKey("));
+  assert.ok(foldersSource.includes("currentSort.value !== loadedSort.value"));
+  assert.ok(foldersSource.includes("currentOrder.value !== loadedOrder.value"));
+  assert.ok(foldersSource.includes("browseGeneration++"));
+  assert.ok(foldersSource.includes("explicitFocusPath"));
+  assert.ok(folderClientSource.includes('if (sort) params.set("sort", sort)'));
+  assert.ok(folderClientSource.includes('if (order) params.set("order", order)'));
+});
+
 test("Folder scan refreshes once at completion instead of reloading every library batch", () => {
   assert.ok(foldersSource.includes("if (scanCoversCurrent.value) return;"));
   assert.ok(foldersSource.includes('progress.phase === "done"'));

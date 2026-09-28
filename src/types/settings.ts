@@ -1,5 +1,6 @@
 import type { LyricFormat } from "@shared/types/lyrics";
 import { DEFAULT_LYRIC_FORMAT_ORDER as DEFAULT_LYRIC_FORMAT_ORDER_SHARED } from "@shared/types/lyrics";
+import type { FolderBrowseOrder, FolderBrowseSort } from "@shared/types/folderBrowser";
 import type { Platform } from "@shared/types/platform";
 
 /** 播放器背景类型 */
@@ -245,6 +246,10 @@ export interface AppearanceSettings {
   layoutMode: LayoutMode;
   /** 文件夹页面的子目录展示方式 */
   folderViewMode: FolderViewMode;
+  /** 文件夹页面默认显示排序 */
+  folderBrowseSort: FolderBrowseSort;
+  /** 文件夹页面默认显示方向 */
+  folderBrowseOrder: FolderBrowseOrder;
   /** 路由切换动效 */
   routeTransition: RouteTransition;
   /** 侧边栏折叠 */

@@ -2,6 +2,7 @@ import type {
   FolderActionResult,
   FolderBatchTarget,
   FolderBrowsePage,
+  FolderBrowseRequest,
   FolderContainerResult,
   FolderNavigationTarget,
   FolderPinEntry,
@@ -42,17 +43,21 @@ export const folderBrowserClient = {
   getRoots: (): Promise<{ roots: FolderRootEntry[]; pins: FolderPinEntry[] }> =>
     request("/library/folders/roots"),
 
-  browse: async (
-    path: string,
-    cursor?: string,
+  browse: async ({
+    path,
+    cursor,
     limit = 200,
-    focusPath?: string,
-    filter?: string,
-  ): Promise<FolderBrowsePage> => {
+    focusPath,
+    filter,
+    sort,
+    order,
+  }: FolderBrowseRequest): Promise<FolderBrowsePage> => {
     const params = new URLSearchParams({ path, limit: String(limit) });
     if (cursor) params.set("cursor", cursor);
     if (focusPath) params.set("focus", focusPath);
     if (filter) params.set("filter", filter);
+    if (sort) params.set("sort", sort);
+    if (order) params.set("order", order);
     return mapBrowse(await request<FolderBrowsePage>(`/library/folders/browse?${params}`));
   },
 
