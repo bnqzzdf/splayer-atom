@@ -103,7 +103,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
 `out/*-debian11-without-diretta.tar.gz` 和 `out/*-debian11-with-diretta-<variant>.tar.gz`。
 Diretta SDK 150 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本仓库兼容层提供。
 
-容器本身（Dockerfile + 容器内构建脚本 + 缓存卷说明）在 [`docker/atom-debian11/`](../docker/atom-debian11/README.md)。
+容器本身（Dockerfile + 容器内构建脚本 + 缓存卷说明）在 [`docker/atom-debian11/`](https://github.com/bnqzzdf/splayer-atom/blob/dev/docker/atom-debian11/README.md)。
 
 ## Artifact smoke
 

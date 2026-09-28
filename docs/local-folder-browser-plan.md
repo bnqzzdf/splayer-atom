@@ -1,10 +1,16 @@
 # Local Folder Browser Plan
 
-Status (current tree, 2026-09-23): the Core routes/service, Web Folder view and client, shared
+Status (reviewed 2026-09-28, source `058c0e63`): the Core routes/service, Web Folder view and client, shared
 contracts and automated coverage are implemented and merged into `dev`. The old full-tree Web
 projection has been removed. The real-library, NAS/USB, large-directory and material-viewer
-acceptance in section 18 has not been recorded as complete; see the
+acceptance in sections 17/18 has not been recorded as complete; see the
 [Roadmap](./atom-roadmap.md).
+
+List/grid preference persistence is also implemented. This document preserves the foundation's
+design and acceptance criteria; the old-tree description below is historical context, not current
+architecture. The [Folder Browser improvement plan](./folder-browser-improvements.md) extends the
+fixed browse ordering, header controls, file information and operation-scope feedback described
+here. Those additions are planned, not implemented; recursive playback ordering remains unchanged.
 
 ## 1. Purpose
 
@@ -12,7 +18,7 @@ SPlayer Atom's Folder view exists only for **audio browsing and playback**. It i
 file manager and will not grow file-management operations such as rename, move, copy, arbitrary
 directory deletion, or unrestricted host-filesystem browsing.
 
-The current Folder view is a Web-side projection of the scanned library:
+Before this replacement, Folder view was a Web-side projection of the scanned library:
 
 ```text
 all library Tracks
@@ -22,7 +28,7 @@ all library Tracks
   -> STree flattening/rendering
 ```
 
-That model has three concrete problems:
+That model had three concrete problems:
 
 1. A newly configured music directory does not become useful in Folder view until the library scan
    completes, even though the files already exist on the Core host.
@@ -75,8 +81,9 @@ atomic commits for review and rollback, but the old tree model is removed when t
 - Browsing arbitrary Core-host paths that are not reachable through a configured library root.
 - Becoming a Linux file explorer.
 
-Existing music-domain operations elsewhere in Atom, such as tag editing or deleting an individual
-library track, are not broadened by this work.
+Existing music-domain operations elsewhere in Atom are not broadened by this work. Removing
+library records, playlist membership or root configuration must not delete user-owned media;
+host music-file deletion commands/UI are prohibited by `AGENTS.md`.
 
 ## 3. Ownership model
 
@@ -812,7 +819,7 @@ SongList, PlayerBar, Full Player, QueuePopover, QueuePanel, local playlists/albu
 collections, and History should consume this shared Track action model instead of independently
 reimplementing the common subset. Non-local Tracks do not show “Open containing folder”.
 
-The following current tree projection is removed once the replacement is complete:
+The replacement removed the following old tree projection:
 
 - `src/utils/folderTree.ts`;
 - `src/types/folder.ts`;

@@ -34,8 +34,10 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   smoke. See the [2026-09-22 record](./alsa-acceptance-2026-09-22.md).
 - `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Both
   passed FC4 retest on installed clean artifact `3e420f78`; see the
-  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The [ALSA plan](./alsa-output-plan.md)
-  records the structural runtime/buffering work still needed.
+  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The subsequent shared writer, single runtime
+  ownership and bounded queue/pool work is implemented; the
+  [local-module retest](./alsa-gap-fixes-2026-09-23.md) covers source through `53284360`.
+  The [ALSA plan](./alsa-output-plan.md) and roadmap retain clean-artifact and device acceptance.
 - UPnP shares Core queue, source and cache flow; its CUE/SACD materialization is isolated from
   Direct/normal playback. The [UPnP plan](./upnp-output-plan.md) records AudioSys playback,
   extraction comparison and initial long-run evidence, as well as the outstanding stability gate.
@@ -57,6 +59,9 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   unscanned media and CUE/SACD access, scoped scan, pinned folders, search/filter, materials,
   list/grid views, recursive and batch actions, and shared containing-folder actions. The
   implementation is merged into `dev`; real-library UX acceptance is still open.
+- Folder list/grid preference persistence is implemented in `058c0e63`. The
+  [Folder Browser improvements](./folder-browser-improvements.md) add planned display sorting and
+  interaction refinements; these additions are not completed work.
 - Responsive Web layout has shared 768/1280 px breakpoints, mobile navigation, a compact player
   bar, adaptive lists, full player, settings and dialogs. Approved queue-drag and duplicate song-row
   double-click interactions were removed. Device acceptance is still open.
