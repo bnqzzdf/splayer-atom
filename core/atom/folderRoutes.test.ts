@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -30,6 +30,10 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
       "base64",
     ),
   );
+  utimesSync(albumDir, 1_000, 1_000);
+  utimesSync(emptyDir, 2_000, 2_000);
+  utimesSync(pdf, 3_000, 3_000);
+  utimesSync(textFile, 4_000, 4_000);
 
   const database = await import("@main/database");
   const { store } = await import("@main/store");
@@ -58,6 +62,41 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
     };
     assert.ok(browse.entries.some((entry) => entry.kind === "material" && entry.path === pdf));
     assert.ok(browse.entries.some((entry) => entry.kind === "material" && entry.path === textFile));
+
+    const sortedBrowseResponse = await app.request(
+      "http://folder.test/library/folders/browse?path=" +
+        encodeURIComponent(root) +
+        "&sort=mtime&order=desc",
+    );
+    assert.equal(sortedBrowseResponse.status, 200);
+    const sortedBrowse = (await sortedBrowseResponse.json()) as {
+      entries: Array<{ kind: string; name: string; path: string; mtime: number; size?: number }>;
+    };
+    assert.deepEqual(
+      sortedBrowse.entries.map((entry) => entry.name),
+      ["Empty", "Album", "Rip.log", "Booklet.pdf"],
+      "HTTP browse sorting keeps entry groups fixed while applying the requested direction",
+    );
+    assert.ok(sortedBrowse.entries.every((entry) => Number.isFinite(entry.mtime)));
+    assert.ok(
+      sortedBrowse.entries
+        .filter((entry) => entry.kind === "material")
+        .every((entry) => typeof entry.size === "number"),
+    );
+
+    const invalidSortResponse = await app.request(
+      "http://folder.test/library/folders/browse?path=" + encodeURIComponent(root) + "&sort=title",
+    );
+    assert.equal(invalidSortResponse.status, 400);
+    assert.deepEqual(await invalidSortResponse.json(), { error: "FOLDER_BROWSE_SORT_INVALID" });
+
+    const invalidOrderResponse = await app.request(
+      "http://folder.test/library/folders/browse?path=" +
+        encodeURIComponent(root) +
+        "&order=sideways",
+    );
+    assert.equal(invalidOrderResponse.status, 400);
+    assert.deepEqual(await invalidOrderResponse.json(), { error: "FOLDER_BROWSE_ORDER_INVALID" });
 
     const filteredBrowseResponse = await app.request(
       `http://folder.test/library/folders/browse?path=${encodeURIComponent(root)}&filter=booklet`,

@@ -1,6 +1,18 @@
 import type { Track } from "./player";
 
 export type FolderMaterialType = "image" | "pdf" | "text";
+export type FolderBrowseSort = "name" | "mtime" | "track";
+export type FolderBrowseOrder = "asc" | "desc";
+
+export interface FolderBrowseRequest {
+  path: string;
+  cursor?: string;
+  limit?: number;
+  focusPath?: string;
+  filter?: string;
+  sort?: FolderBrowseSort;
+  order?: FolderBrowseOrder;
+}
 
 export interface FolderRootEntry {
   name: string;
@@ -20,12 +32,15 @@ export interface FolderDirectoryEntry {
   kind: "directory";
   name: string;
   path: string;
+  mtime: number;
 }
 
 export interface FolderTrackEntry {
   kind: "track";
   name: string;
   path: string;
+  size: number;
+  mtime: number;
   track: Track;
 }
 
@@ -41,6 +56,8 @@ export interface FolderContainerEntry {
   kind: "cue" | "sacd";
   name: string;
   path: string;
+  size: number;
+  mtime: number;
   trackCount?: number;
 }
 

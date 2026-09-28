@@ -6,7 +6,9 @@ import type {
   FolderActionResult,
   FolderBatchTarget,
   FolderBrowseEntry,
+  FolderBrowseOrder,
   FolderBrowsePage,
+  FolderBrowseSort,
   FolderContainerResult,
   FolderMaterialEntry,
   FolderMaterialType,
@@ -38,7 +40,7 @@ import { parseAlbum, parseArtists } from "@main/utils/metadata";
 import { store } from "@main/store";
 import { scannedToUpsert } from "./scanner";
 import { getCueAudioPath, inspectCueSheet, parseCueSheet } from "./cue";
-import { publishLibraryRevision } from "./libraryRevision";
+import { getLibraryRevision, publishLibraryRevision } from "./libraryRevision";
 import { repairMissingCoverCache } from "./coverCacheRepair";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 
@@ -488,10 +490,60 @@ const entryRank = (entry: FolderBrowseEntry): number => {
   return 1;
 };
 
-const compareBrowseEntries = (a: FolderBrowseEntry, b: FolderBrowseEntry): number => {
+const compareExactPaths = (a: FolderBrowseEntry, b: FolderBrowseEntry): number =>
+  a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+
+const compareNamesAndPaths = (a: FolderBrowseEntry, b: FolderBrowseEntry): number => {
+  const name = collator.compare(a.name, b.name);
+  return name !== 0 ? name : compareExactPaths(a, b);
+};
+
+const orderedCompare = (value: number, order: FolderBrowseOrder): number =>
+  value === 0 || order === "asc" ? value : -value;
+
+const validTrackPosition = (entry: FolderBrowseEntry): { disc: number; track: number } | null => {
+  if (
+    entry.kind !== "track" ||
+    !Number.isInteger(entry.track.track) ||
+    (entry.track.track ?? 0) <= 0
+  ) {
+    return null;
+  }
+  const disc =
+    Number.isInteger(entry.track.disc) && (entry.track.disc ?? 0) > 0 ? entry.track.disc! : 1;
+  return { disc, track: entry.track.track! };
+};
+
+const compareBrowseEntries = (
+  a: FolderBrowseEntry,
+  b: FolderBrowseEntry,
+  sort: FolderBrowseSort,
+  order: FolderBrowseOrder,
+): number => {
   const rank = entryRank(a) - entryRank(b);
   if (rank !== 0) return rank;
-  return collator.compare(a.name, b.name);
+
+  if (sort === "name") {
+    const name = orderedCompare(collator.compare(a.name, b.name), order);
+    return name !== 0 ? name : compareExactPaths(a, b);
+  }
+
+  if (sort === "mtime") {
+    const mtime = orderedCompare(a.mtime - b.mtime, order);
+    return mtime !== 0 ? mtime : compareNamesAndPaths(a, b);
+  }
+
+  // 曲目排序只作用于媒体组；目录、资料和未知轨号媒体始终保持名称升序。
+  if (entryRank(a) !== 1) return compareNamesAndPaths(a, b);
+  const aTrack = validTrackPosition(a);
+  const bTrack = validTrackPosition(b);
+  if (aTrack && !bTrack) return -1;
+  if (!aTrack && bTrack) return 1;
+  if (!aTrack || !bTrack) return compareNamesAndPaths(a, b);
+  const disc = orderedCompare(aTrack.disc - bTrack.disc, order);
+  if (disc !== 0) return disc;
+  const track = orderedCompare(aTrack.track - bTrack.track, order);
+  return track !== 0 ? track : compareNamesAndPaths(a, b);
 };
 
 const normalizeBrowseFilter = (value?: string): string => value?.trim().toLocaleLowerCase() ?? "";
@@ -507,24 +559,68 @@ const matchesBrowseFilter = (entry: FolderBrowseEntry, filter: string): boolean 
   return values.some((value) => value.toLocaleLowerCase().includes(filter));
 };
 
-const encodeBrowseCursor = (offset: number, mtime: number, filter: string): string =>
-  Buffer.from(JSON.stringify({ offset, mtime, filter }), "utf8").toString("base64url");
+type BrowseCursor = {
+  offset: number;
+  directory: string;
+  directoryMtime: number;
+  filter: string;
+  sort: FolderBrowseSort;
+  order: FolderBrowseOrder;
+  signature: string;
+  libraryRevision: number;
+};
 
-const decodeBrowseCursor = (
-  cursor: string | undefined,
-): { offset: number; mtime: number; filter: string } | null => {
+const createBrowseResultSignature = (
+  entries: FolderBrowseEntry[],
+  sort: FolderBrowseSort,
+): string => {
+  const hash = createHash("sha256");
+  for (const entry of entries) {
+    const position = sort === "track" ? validTrackPosition(entry) : null;
+    hash.update(
+      JSON.stringify([
+        entry.kind,
+        entry.path,
+        entry.name,
+        entry.mtime,
+        sort === "mtime" ? entry.mtime : sort === "name" ? entry.name : position,
+      ]),
+    );
+    hash.update("\n");
+  }
+  return hash.digest("base64url");
+};
+
+const encodeBrowseCursor = (cursor: BrowseCursor): string =>
+  Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+
+const decodeBrowseCursor = (cursor: string | undefined): BrowseCursor | null => {
   if (!cursor) return null;
   try {
-    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
-      offset?: unknown;
-      mtime?: unknown;
-      filter?: unknown;
-    };
-    if (!Number.isInteger(value.offset) || typeof value.mtime !== "number") return null;
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<
+      Record<keyof BrowseCursor, unknown>
+    >;
+    if (
+      !Number.isInteger(value.offset) ||
+      typeof value.directory !== "string" ||
+      typeof value.directoryMtime !== "number" ||
+      typeof value.filter !== "string" ||
+      (value.sort !== "name" && value.sort !== "mtime" && value.sort !== "track") ||
+      (value.order !== "asc" && value.order !== "desc") ||
+      typeof value.signature !== "string" ||
+      !Number.isInteger(value.libraryRevision)
+    ) {
+      return null;
+    }
     return {
       offset: Math.max(0, Number(value.offset)),
-      mtime: value.mtime,
-      filter: typeof value.filter === "string" ? value.filter : "",
+      directory: value.directory,
+      directoryMtime: value.directoryMtime,
+      filter: value.filter,
+      sort: value.sort,
+      order: value.order,
+      signature: value.signature,
+      libraryRevision: Number(value.libraryRevision),
     };
   } catch {
     return null;
@@ -537,6 +633,8 @@ export const browseFolder = async (
   requestedLimit = DEFAULT_BROWSE_LIMIT,
   focusPath?: string,
   filter?: string,
+  sort: FolderBrowseSort = "name",
+  order: FolderBrowseOrder = "asc",
 ): Promise<FolderBrowsePage> => {
   const resolved = resolveFolderPath(input);
   let directoryStat;
@@ -559,10 +657,20 @@ export const browseFolder = async (
   const parsedCursor = decodeBrowseCursor(cursor);
   if (cursor && !parsedCursor) throw new Error("FOLDER_CURSOR_INVALID");
   const normalizedFilter = normalizeBrowseFilter(filter);
-  if (parsedCursor && parsedCursor.filter !== normalizedFilter) {
+  if (
+    parsedCursor &&
+    (parsedCursor.directory !== pathKey(resolved.path) ||
+      parsedCursor.filter !== normalizedFilter ||
+      parsedCursor.sort !== sort ||
+      parsedCursor.order !== order)
+  ) {
     throw new Error("FOLDER_CURSOR_INVALID");
   }
-  if (parsedCursor && Math.abs(parsedCursor.mtime - directoryStat.mtimeMs) > 0.5) {
+  if (
+    parsedCursor &&
+    (Math.abs(parsedCursor.directoryMtime - directoryStat.mtimeMs) > 0.5 ||
+      parsedCursor.libraryRevision !== getLibraryRevision())
+  ) {
     throw new Error("FOLDER_CURSOR_STALE");
   }
 
@@ -589,7 +697,7 @@ export const browseFolder = async (
   const entries: FolderBrowseEntry[] = [];
   for (const entry of physical) {
     if (entry.type === "directory") {
-      entries.push({ kind: "directory", name: entry.name, path: entry.path });
+      entries.push({ kind: "directory", name: entry.name, path: entry.path, mtime: entry.mtime });
       continue;
     }
     const ext = extension(entry.path);
@@ -600,6 +708,8 @@ export const browseFolder = async (
         kind: "cue",
         name: entry.name,
         path: entry.path,
+        size: entry.size,
+        mtime: entry.mtime,
         trackCount: tracks.length || inspection?.trackCount || undefined,
       });
       continue;
@@ -610,6 +720,8 @@ export const browseFolder = async (
         kind: "sacd",
         name: entry.name,
         path: entry.path,
+        size: entry.size,
+        mtime: entry.mtime,
         trackCount: tracks.length || undefined,
       });
       continue;
@@ -618,7 +730,14 @@ export const browseFolder = async (
       if (cueBackings.has(pathKey(entry.path))) continue;
       const track = canonicalForExactFile(canonical, entry.path);
       if (canonicalFileIsFresh(track, entry)) {
-        entries.push({ kind: "track", name: entry.name, path: entry.path, track });
+        entries.push({
+          kind: "track",
+          name: entry.name,
+          path: entry.path,
+          size: entry.size,
+          mtime: entry.mtime,
+          track,
+        });
       } else {
         entries.push({
           kind: "file",
@@ -648,8 +767,12 @@ export const browseFolder = async (
     }
   }
 
-  entries.sort(compareBrowseEntries);
   const filteredEntries = entries.filter((entry) => matchesBrowseFilter(entry, normalizedFilter));
+  filteredEntries.sort((a, b) => compareBrowseEntries(a, b, sort, order));
+  const resultSignature = createBrowseResultSignature(filteredEntries, sort);
+  if (parsedCursor && parsedCursor.signature !== resultSignature) {
+    throw new Error("FOLDER_CURSOR_STALE");
+  }
   const counts = filteredEntries.reduce(
     (result, entry) => {
       if (entry.kind === "directory") result.directories++;
@@ -673,6 +796,15 @@ export const browseFolder = async (
     parsedCursor?.offset ?? (focusIndex >= 0 ? Math.floor(focusIndex / limit) * limit : 0);
   const pageEntries = filteredEntries.slice(offset, offset + limit);
   const nextOffset = offset + pageEntries.length;
+  const cursorBase = {
+    directory: pathKey(resolved.path),
+    directoryMtime: directoryStat.mtimeMs,
+    filter: normalizedFilter,
+    sort,
+    order,
+    signature: resultSignature,
+    libraryRevision: getLibraryRevision(),
+  };
   return {
     path: resolved.path,
     root: resolved.root,
@@ -682,11 +814,11 @@ export const browseFolder = async (
     entries: pageEntries,
     previousCursor:
       offset > 0
-        ? encodeBrowseCursor(Math.max(0, offset - limit), directoryStat.mtimeMs, normalizedFilter)
+        ? encodeBrowseCursor({ ...cursorBase, offset: Math.max(0, offset - limit) })
         : undefined,
     nextCursor:
       nextOffset < filteredEntries.length
-        ? encodeBrowseCursor(nextOffset, directoryStat.mtimeMs, normalizedFilter)
+        ? encodeBrowseCursor({ ...cursorBase, offset: nextOffset })
         : undefined,
   };
 };
