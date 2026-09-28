@@ -4,11 +4,19 @@
 
 ## 当前状态
 
+文件夹浏览改进方案基于 2026-09-28 的源码核对（`058c0e63`）；该日期不是新的硬件、账号、
+浏览器或发布验收记录。
+
 SPlayer Atom 是一套 Linux x86-64 Node Core，并以 Web Control 作为唯一 UI。Web + Core 迁移、
 ALSA HW Direct / Processed 路径、Diretta Source Direct、UPnP 输出、Core 拥有的 Folder Browser、
 Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进入当前代码树。Netease、QQ音乐、
 酷狗、Qobuz 与 TIDAL 的 Core/Web 路径均已具备。Debian 11 bundled 包可以在带或不带 Diretta 的
 情况下构建。已确认的实现里程碑见 [Atom 已完成](./atom-completed.md)。
+
+Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当前目录筛选、列表/网格展示、素材、
+范围扫描、递归操作及已加载音频/容器曲目的批量操作。列表/网格偏好也已在 `058c0e63`
+持久化。多种显示排序尚未实现；[文件夹浏览改进方案](./folder-browser-improvements.md)是后续开发
+范围，应与现有浏览器的真实曲库验收分别记录。
 
 本路线图跟踪剩余工作与验收。代码只能确立某条路径是否存在；硬件、真实账户、浏览器与发布验收
 需要一次记录的运行。[2026-09-22 ALSA 记录](./alsa-acceptance-2026-09-22.md) 覆盖产物提交
@@ -50,12 +58,25 @@ Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进
       路径，而不是完整的 provider 矩阵。
 - [ ] 为 Now Playing、永久收听、401/429 处理、离线重试与重启补一份有界的真实 token ListenBrainz
       验收记录。当前代码实现了这些路径，但此前的完成勾选项在仓库中没有对应的运行记录。
-- [ ] 为已合并的 [Core 拥有的 Folder Browser](./local-folder-browser-plan.md) 完成手动浏览器、
-      NAS/USB、大目录与素材查看器验收。它的 Core/Web 实现与自动化测试都已具备；旧的整树投影已被移除。
 - [ ] 在[响应式方案](./web-responsive-plan.md)中的代表性视口与实际移动设备上完成响应式
       Web Control 验收。布局已实现；仓库中没有完整的设备/交互验收记录。
 - [ ] 记录多个真实 Web Control 在刷新、断开与重连情况下的长时运行使用。产物冒烟测试已通过
       多个 WebSocket 客户端与重连；这比长时运行的浏览器验收范围更窄。
+
+### 文件夹浏览
+
+[原方案](./local-folder-browser-plan.md)定义已实现的基础功能；
+[改进方案](./folder-browser-improvements.md)定义后续开发。显示排序独立于 Core 拥有的目录播放顺序。
+
+- [ ] 第一批：在 Core 实现文件名、修改时间和碟/轨号显示排序、升降序、组内顺序、分页前排序及
+      游标失效校验。
+- [ ] 第一批：在 Web 增加排序控件和浏览器本地偏好，处理排序相关的历史、筛选、滚动与精确定位；
+      复用已有的列表/网格偏好持久化。
+- [ ] 第一批：补充必要的物理文件信息、播放范围与已加载项批量选择提示，以及现有搜索截断提示。
+- [ ] 分别记录第一批的实现与验收；为现有 Folder Browser 完成真实浏览器、NAS/USB、大目录与
+      素材查看器验收。现有 Core/Web 实现和自动化测试已具备，但完整真实曲库验收尚无记录。
+- [ ] 第二批：规范专辑/艺术家导航、当前子树递归搜索与可操作的批量失败详情；新增元数据排序
+      应以具体使用场景为依据，不阻塞第一批验收。
 
 ### 发布
 
@@ -71,9 +92,10 @@ Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进
 
 1. 用一个干净候选产物验证 ALSA 行为与资源趋势；修复观察到的故障。
 2. 完成目标设备的 ALSA 检查，以及尚未完成的 UPnP/Diretta CUE 硬件验收。
-3. 完成全部五个 provider 矩阵、ListenBrainz、Folder Browser、响应式 Web 与
+3. 实现第一批文件夹浏览改进，复用已完成的基础功能。
+4. 完成全部五个 provider 矩阵、ListenBrainz、Folder Browser、响应式 Web 与
    长时运行多 Control 验收。
-4. 在一个干净候选上执行安装、升级、回滚与最终硬件检查，然后发布。
+5. 在一个干净候选上执行安装、升级、回滚与最终硬件检查，然后发布。
 
 ## 产品范围
 
@@ -92,4 +114,5 @@ Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进
 | [Provider 验收](./live-provider-acceptance.md)                                                | 真实账户验收标准                    |
 | [ALSA 方案](./alsa-output-plan.md)、[UPnP 方案](./upnp-output-plan.md)                        | 输出实现与剩余检查                  |
 | [Folder Browser 方案](./local-folder-browser-plan.md)、[响应式方案](./web-responsive-plan.md) | Web 功能与设备验收标准              |
+| [文件夹浏览改进方案](./folder-browser-improvements.md)                                        | 显示排序、文件信息与分批验收        |
 | [Direct CUE 方案](./direct-cue-gapless-plan.md)、[歌词方案](./lyric-improvements.md)          | 无缝与歌词实现                      |
