@@ -17,6 +17,20 @@ const providerAccountsSection: SettingSection = {
   id: "providerAccounts",
   items: [
     {
+      key: "neteaseAccount",
+      type: "custom",
+      component: PlatformAccount,
+      componentProps: { platform: "netease" },
+      fullWidth: true,
+      keywords: [
+        "NCM",
+        "网易云",
+        "网易云音乐",
+        "settings.platformLogin.loginQr",
+        "settings.platformLogin.manualCookie",
+      ],
+    },
+    {
       key: "qqmusicAccount",
       type: "custom",
       component: PlatformAccount,

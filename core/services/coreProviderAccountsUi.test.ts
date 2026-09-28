@@ -18,9 +18,13 @@ const otherSettingsSource = read(
 );
 const headlessRoutesSource = read(new URL("../atom/headless/routes.ts", import.meta.url));
 const providerClientSource = read(new URL("../../src/core/providerClient.ts", import.meta.url));
-const loginDialogSource = read(
-  new URL("../../src/components/modals/LoginDialog.vue", import.meta.url),
+const platformLoginPanelSource = read(
+  new URL("../../src/components/modals/PlatformLoginPanel.vue", import.meta.url),
 );
+const loginPlatformRegistrySource = read(
+  new URL("../../src/apis/login/platform.ts", import.meta.url),
+);
+const navUserSource = read(new URL("../../src/components/layout/NavUser.vue", import.meta.url));
 const sharedApisSource = read(new URL("../../shared/types/apis.ts", import.meta.url));
 
 test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
@@ -102,8 +106,48 @@ test("Web provider surface exposes only Atom-managed providers", () => {
 });
 
 test("Netease account UI uses Core QR/manual-cookie flows without a host login window", () => {
-  assert.doesNotMatch(loginDialogSource, /providerLoginWindow|hasHostCapability|openLoginWeb/);
-  assert.match(loginDialogSource, /openManualCookie/);
-  assert.match(loginDialogSource, /neteaseQrLoginAdapter/);
-  assert.match(loginDialogSource, /<QrLoginPanel/);
+  // 网易的登录面板（扫码 + 手动 Cookie）现在是 PlatformLoginPanel，弹窗与设置行共用同一套流程
+  assert.doesNotMatch(
+    platformLoginPanelSource,
+    /providerLoginWindow|hasHostCapability|openLoginWeb/,
+  );
+  assert.match(platformLoginPanelSource, /cookieOpen/);
+  assert.match(platformLoginPanelSource, /<QrLoginPanel/);
+  assert.match(platformLoginPanelSource, /<LoginCookieDialog/);
+  // 扫码适配器由注册表按平台取，网易只在注册表里出现一次
+  assert.match(platformLoginPanelSource, /getPlatformAccountAdapter\(props\.platform\)/);
+  assert.match(loginPlatformRegistrySource, /netease: \{/);
+  assert.match(loginPlatformRegistrySource, /qrLogin: neteaseQrLoginAdapter/);
+  assert.doesNotMatch(platformLoginPanelSource, /neteaseApi\.login_qr/);
+});
+
+test("全部五个平台只有一个登录入口：统一的带页签弹窗", () => {
+  // 设置页：网易云与其余四个平台在同一张表里，缺一行就会让「在线平台账号」看起来漏了网易
+  for (const platform of ["netease", "qqmusic", "kugou", "qobuz", "tidal"]) {
+    assert.match(
+      settingsSchemaSource,
+      new RegExp(`componentProps: \\{ platform: "${platform}" \\}`),
+      `设置页缺少 ${platform} 账号行`,
+    );
+  }
+  assert.match(settingsSchemaSource, /key: "neteaseAccount"/);
+
+  // 弹窗覆盖全部五个平台：页签由 ALL_PLATFORMS 生成，不再只认 qobuz/tidal
+  assert.match(
+    streamingLoginSource,
+    /ALL_PLATFORMS\.map\(\(p\) => \(\{ key: p, label: PLATFORM_TAB_LABELS\[p\] \}\)\)/,
+  );
+  assert.match(
+    streamingLoginSource,
+    /import PlatformLoginPanel from "@\/components\/modals\/PlatformLoginPanel\.vue"/,
+  );
+  for (const slot of ["netease", "qqmusic", "kugou", "qobuz", "tidal"]) {
+    assert.match(streamingLoginSource, new RegExp(`<template #${slot}>`), `弹窗缺少 ${slot} 页签`);
+  }
+  assert.doesNotMatch(streamingLoginSource, /tab\?: "qobuz" \| "tidal"/);
+
+  // header 的头像按钮就是这个入口：未登录点开弹窗，已登录也能从账号气泡进去
+  assert.match(navUserSource, /<StreamingLoginDialog v-model:open="loginOpen"/);
+  assert.doesNotMatch(navUserSource, /<LoginDialog/);
+  assert.match(navUserSource, /login\.managePlatforms/);
 });

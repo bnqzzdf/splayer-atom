@@ -2,6 +2,7 @@
 import { useUserStore } from "@/stores/user";
 import { dialog } from "@/composables/useDialog";
 import { toast } from "@/composables/useToast";
+import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import vipImg from "@/assets/images/vip.png";
 import IconLucideListMusic from "~icons/lucide/list-music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
@@ -11,6 +12,12 @@ const { t } = useI18n();
 const router = useRouter();
 const user = useUserStore();
 
+/**
+ * 统一登录弹窗。
+ *
+ * 这个按钮以前只弹网易登录（LoginDialog），其他平台散在搜索页、平台页、设置里；
+ * 现在一律走同一个带平台页签的弹窗——不传 tab，弹窗自己落到第一个未登录的平台。
+ */
 const loginOpen = ref(false);
 const popoverOpen = ref(false);
 
@@ -47,6 +54,21 @@ const stats = computed(() => [
 
 const onTriggerClick = (): void => {
   if (!user.isLoggedIn) loginOpen.value = true;
+};
+
+/** 已登录时也能从这里进统一弹窗：连接别的平台、或重新走一遍某个平台的登录 */
+const openPlatformLogin = (): void => {
+  popoverOpen.value = false;
+  loginOpen.value = true;
+};
+
+/**
+ * 关窗后复核网易账号态：弹窗可能刚把网易登进来或退出去，
+ * 头像栏要在它关掉的那一刻就变成对应形态（图标按钮 ↔ 账号气泡）。
+ */
+const onLoginDialogClose = async (open: boolean): Promise<void> => {
+  if (open) return;
+  await user.fetchStatus().catch(() => {});
 };
 
 const handleStatClick = (key: "playlist" | "album" | "artist"): void => {
@@ -148,6 +170,10 @@ const handleLogout = async (): Promise<void> => {
         </div>
       </div>
       <SDivider class="w-full" />
+      <SButton variant="secondary" size="small" block @click="openPlatformLogin">
+        <template #icon><IconLucideLogIn /></template>
+        {{ t("login.managePlatforms") }}
+      </SButton>
       <SButton variant="secondary" size="small" block @click="handleLogout">
         <template #icon><IconLucideLogOut /></template>
         {{ t("login.logout") }}
@@ -159,5 +185,5 @@ const handleLogout = async (): Promise<void> => {
     <template #icon><IconLucideUserRound /></template>
   </SButton>
 
-  <LoginDialog v-model:open="loginOpen" />
+  <StreamingLoginDialog v-model:open="loginOpen" @update:open="onLoginDialogClose" />
 </template>

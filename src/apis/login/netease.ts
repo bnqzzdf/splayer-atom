@@ -3,7 +3,7 @@
  */
 
 import type { UserProfile } from "@/types/user";
-import { netease as neteaseApi } from "@/apis/netease";
+import { clearNeteaseSession, netease as neteaseApi } from "@/apis/netease";
 import type { QrLoginAdapter, QrLoginState } from "./platform";
 
 interface LoginStatusBody {
@@ -126,4 +126,21 @@ export const refreshLogin = async (): Promise<boolean> => {
 /** 服务端登出（仅打断 server session，不清本地 cookie） */
 export const logoutNetease = async (): Promise<void> => {
   await neteaseApi.logout();
+};
+
+/**
+ * 账号登出：打断 server session 并清掉本地会话。
+ *
+ * `logoutNetease` 只动服务端，本地 cookie 还在，下次 login_status 仍是登录态；
+ * 设置页的「退出登录」要的是真正退出，所以这里补上本地清理。
+ * （header 那条路的 `user.logout()` 还会额外重置 store，见 PlatformAccount.vue。）
+ */
+export const logoutNeteaseAccount = async (): Promise<void> => {
+  try {
+    await logoutNetease();
+  } catch (error) {
+    // 服务端失败不阻塞本地清理：否则用户会卡在「退了但还显示已登录」
+    console.warn("[login] netease server logout failed", error);
+  }
+  await clearNeteaseSession();
 };

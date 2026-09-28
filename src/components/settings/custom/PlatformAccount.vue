@@ -5,6 +5,7 @@ import LoginCookieDialog from "@/components/modals/LoginCookieDialog.vue";
 import { toast } from "@/composables/useToast";
 import { providerClient } from "@/core/providerClient";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { useUserStore } from "@/stores/user";
 import { getPlatformAccountAdapter, type QrLoginAdapter } from "@/apis/login/platform";
 import type { Platform, PlatformProfile } from "@shared/types/platform";
 
@@ -13,17 +14,23 @@ import type { Platform, PlatformProfile } from "@shared/types/platform";
  *
  * 两种形态：
  * - 托管式（Qobuz / TIDAL）：登录态由 Core 的 provider session 投影，弹窗内做网页/设备授权。
- * - 账号式（QM / KG）：adapter 提供 profile / Cookie / 扫码，扫码走 Core 的 login_qr_* 模块。
+ * - 账号式（网易云 / QM / KG）：adapter 提供 profile / Cookie / 扫码，扫码走 Core 的 login_qr_* 模块。
  */
 const props = defineProps<{ platform: Platform }>();
 
 const { t } = useI18n();
 const providerSessions = useProviderSessionsStore();
+const user = useUserStore();
 
 const isStreaming = computed(() => props.platform === "qobuz" || props.platform === "tidal");
-const isAccount = computed(() => props.platform === "qqmusic" || props.platform === "kugou");
+/**
+ * 账号式平台：登录态是自己去查 profile 得到的（扫码 / Cookie），
+ * 与托管式的 provider session 投影不是一回事。
+ */
+const ACCOUNT_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(["netease", "qqmusic", "kugou"]);
+const isAccount = computed(() => ACCOUNT_PLATFORMS.has(props.platform));
 
-/** adapter 注册表当前只覆盖 QM/KG/Qobuz/TIDAL。 */
+/** adapter 注册表当前覆盖全部五个托管平台。 */
 const adapter = computed(() =>
   isAccount.value ? getPlatformAccountAdapter(props.platform) : null,
 );
@@ -44,6 +51,19 @@ const refreshSession = async (): Promise<void> => {
     await providerSessions.refresh();
   } catch (error) {
     console.warn(`[provider-account] ${props.platform} session refresh failed`, error);
+  }
+};
+
+/**
+ * 网易的账号态有两处投影：providerSessions（Core 侧）与 user store（头像栏、首页读它）。
+ * 扫码 / Cookie 登录与退出都要把 store 拉回同步，否则头像栏会停在旧状态。
+ */
+const syncNeteaseStore = async (): Promise<void> => {
+  if (props.platform !== "netease") return;
+  try {
+    await user.fetchStatus();
+  } catch (error) {
+    console.warn("[provider-account] netease store sync failed", error);
   }
 };
 
@@ -120,6 +140,7 @@ const openQrModal = (key?: string): void => {
 
 const handleQrSuccess = async (): Promise<void> => {
   await refreshSession();
+  await syncNeteaseStore();
   await refreshProfile();
   qrModalOpen.value = false;
   toast.success(
@@ -130,6 +151,13 @@ const handleQrSuccess = async (): Promise<void> => {
   );
 };
 
+/** 手动 Cookie 登录成功：与扫码登录走同一套状态同步 */
+const handleCookieSuccess = async (): Promise<void> => {
+  await refreshSession();
+  await syncNeteaseStore();
+  await refreshProfile();
+};
+
 const handleLogout = async (): Promise<void> => {
   confirmOpen.value = false;
   if (!adapter.value) return;
@@ -138,6 +166,7 @@ const handleLogout = async (): Promise<void> => {
   } finally {
     profile.value = null;
     await refreshSession();
+    await syncNeteaseStore();
     toast.success(t("settings.platformLogin.toast.logoutDone", { name: platformName.value }));
   }
 };
@@ -292,12 +321,7 @@ const loggedIn = computed(() =>
     :open="cookieModalOpen"
     :platform="props.platform"
     @update:open="(v: boolean) => (cookieModalOpen = v)"
-    @success="
-      () => {
-        void refreshSession();
-        void refreshProfile();
-      }
-    "
+    @success="handleCookieSuccess"
   />
 
   <SDialog

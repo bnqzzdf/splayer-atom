@@ -367,6 +367,7 @@
     "success": "Signed in",
     "failed": "Sign-in failed, please try again",
     "unknownUser": "Unknown user",
+    "managePlatforms": "Streaming accounts",
     "logout": "Sign out",
     "logoutConfirmTitle": "Sign out",
     "logoutConfirmDesc": "Sign out of the current account?",

@@ -15,7 +15,6 @@ import { useProviderSessionsStore } from "@/stores/providerSessions";
 import { useCoreCapabilitiesStore } from "@/stores/coreCapabilities";
 import { useStreamingStore } from "@/stores/streaming";
 import { navigateToAlbum, navigateToArtist, navigateToPlaylist } from "@/utils/navigate";
-import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { libraryClient } from "@/core/libraryClient";
 
 const { t } = useI18n();
@@ -383,21 +382,16 @@ const isAuthError = computed(() => {
 });
 
 const loginDialogOpen = ref(false);
-const loginDialogTab = ref<"qobuz" | "tidal">("qobuz");
+const loginDialogTab = ref<Platform>("netease");
 
-/** QM / KG 的登录入口在设置面板的「在线平台账号」区，搜索页不再另开登录弹窗。 */
-const ACCOUNT_SETTINGS_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>(["qqmusic", "kugou"]);
-
+/**
+ * 打开统一登录弹窗，落在当前搜索平台那一页。
+ *
+ * 以前 QM/KG 只能跳去设置面板、网易只能弹自己的弹窗，搜索页因此要按平台分流；
+ * 现在一个弹窗覆盖五个平台，这里只把当前平台当默认页签传进去。
+ */
 const openLoginModal = (): void => {
-  if (ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)) {
-    useSettingsDialog().show("network");
-    return;
-  }
-  if (status.searchPlatform === "tidal") {
-    loginDialogTab.value = "tidal";
-  } else {
-    loginDialogTab.value = "qobuz";
-  }
+  loginDialogTab.value = status.searchPlatform;
   loginDialogOpen.value = true;
 };
 
@@ -464,9 +458,7 @@ const onLoginDialogClose = (open: boolean): void => {
           {{
             status.searchPlatform === "tidal"
               ? "搜索与播放 TIDAL 曲目需要先绑定授权您的 TIDAL 账号"
-              : ACCOUNT_SETTINGS_PLATFORMS.has(status.searchPlatform)
-                ? "搜索与播放该平台曲目需要先在「设置 → 在线平台账号」中登录"
-                : "搜索与播放该平台曲目需要先登录账号"
+              : "搜索与播放该平台曲目需要先登录账号"
           }}
         </div>
         <div class="flex items-center gap-3">

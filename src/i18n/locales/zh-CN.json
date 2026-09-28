@@ -367,6 +367,7 @@
     "success": "登录成功",
     "failed": "登录失败，请重试",
     "unknownUser": "未知用户",
+    "managePlatforms": "在线平台账号",
     "logout": "退出登录",
     "logoutConfirmTitle": "退出登录",
     "logoutConfirmDesc": "确认退出当前账号？",

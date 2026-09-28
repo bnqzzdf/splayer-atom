@@ -246,13 +246,14 @@ test("网易分区页按 shelf + tab 逐页取数，而不是一把取完", () =
   assert.match(platformSectionPageSource, /more: artists\.length >= PAGE_SIZE/);
 });
 
-test("认证失败时的「去登录」按平台分流：只有 Qobuz/TIDAL 有独立登录弹窗", () => {
-  // StreamingLoginDialog 只认 qobuz/tidal，对 QM/KG/网易弹它等于按钮失灵
-  assert.match(platformHomePageSource, /const openLogin = \(\): void =>/);
-  assert.match(platformHomePageSource, /ACCOUNT_SETTINGS_PLATFORMS\.has\(platform\.value\)/);
-  assert.match(platformHomePageSource, /useSettingsDialog\(\)\.show\("network"\)/);
+test("认证失败时的「去登录」打开统一登录弹窗，而不是跳设置页", () => {
+  // 以前 QM/KG/网易没有独立登录弹窗，只能把用户丢去设置面板；
+  // 现在弹窗覆盖五个平台，入口一律直开弹窗并带上当前平台
+  assert.match(platformHomePageSource, /const openLogin = \(\): void => \{/);
+  assert.match(platformHomePageSource, /loginDialogOpen\.value = true/);
+  assert.doesNotMatch(platformHomePageSource, /useSettingsDialog|ACCOUNT_SETTINGS_PLATFORMS/);
   assert.match(platformHomePageSource, /@click="openLogin"/);
-  assert.doesNotMatch(platformHomePageSource, /@click="loginDialogOpen = true"/);
+  assert.match(platformHomePageSource, /<StreamingLoginDialog[\s\S]{0,120}:tab="platform"/);
 });
 
 test("新增文案中英文齐备", () => {

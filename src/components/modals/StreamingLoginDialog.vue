@@ -1,6 +1,14 @@
 <script setup lang="ts">
 /**
- * 流媒体平台登录对话框（Qobuz / TIDAL）
+ * 在线平台登录对话框（全部五个平台）
+ *
+ * 这是**唯一的登录入口**：一个按钮打开它，页签里挑平台，各自走自己的登录流程。
+ * 之前分成两个弹窗（这个只管 Qobuz/TIDAL、另有网易专用的 LoginDialog），
+ * 结果每个入口只能覆盖一部分平台，用户得先知道"哪个平台该去哪儿登"。
+ *
+ * 账号式（网易云 / QQ音乐 / 酷狗）：
+ *   - 页签内是 PlatformLoginPanel：扫码为主，扫码走不通退到「手动 Cookie」
+ *   - 网易的账号态额外投影在 user store（头像栏 / 首页读它），面板登录后会同步
  *
  * Qobuz：**一键浏览器登录**（推荐）
  *   - Core 起一次性回调监听 → 打开官方授权页 → 用户正常登录
@@ -22,41 +30,49 @@ import * as tidalApi from "@/apis/tidal";
 import { toast } from "@/composables/useToast";
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import type { TidalDeviceAuthorizationResponse } from "@/apis/tidal";
+import PlatformLoginPanel from "@/components/modals/PlatformLoginPanel.vue";
+import { ALL_PLATFORMS, type Platform } from "@shared/types/platform";
 import STabs from "@/components/ui/STabs.vue";
 import SAlert from "@/components/ui/SAlert.vue";
 import IconLucideChevronDown from "~icons/lucide/chevron-down";
 
+/** 页签文案：这里要选的是"哪个平台"，简写（NCM/QM/KG）读不出来，所以用全名 */
+const PLATFORM_TAB_LABELS: Record<Platform, string> = {
+  netease: "网易云音乐",
+  qqmusic: "QQ音乐",
+  kugou: "酷狗音乐",
+  qobuz: "Qobuz",
+  tidal: "TIDAL",
+};
+
 const props = defineProps<{
   open: boolean;
-  tab?: "qobuz" | "tidal";
-  singlePlatform?: "qobuz" | "tidal";
+  /** 打开时选中的平台；不传则自动落到第一个未登录的平台 */
+  tab?: Platform;
+  /** 只展示这一个平台的流程（设置页的单平台卡片用） */
+  singlePlatform?: Platform;
 }>();
 const emit = defineEmits<{
   "update:open": [value: boolean];
-  "update:tab": [value: "qobuz" | "tidal"];
+  "update:tab": [value: Platform];
 }>();
 
 const providerSessions = useProviderSessionsStore();
 
-type Tab = "qobuz" | "tidal";
-const activeTab = ref<Tab>(props.singlePlatform ?? props.tab ?? "qobuz");
+/** 自动选址：第一个未登录的平台；都登录了就回到第一个 */
+const firstUnloggedPlatform = (): Platform =>
+  ALL_PLATFORMS.find((p) => !providerSessions.sessions[p]?.authenticated) ?? ALL_PLATFORMS[0];
+
+const activeTab = ref<Platform>(props.singlePlatform ?? props.tab ?? firstUnloggedPlatform());
 const qobuzSession = computed(() => providerSessions.sessions.qobuz);
 const tidalSession = computed(() => providerSessions.sessions.tidal);
 
-// 单平台卡片只展示对应登录流程；独立调用时仍保留双平台切换。
-const tabs = computed<{ key: Tab; label: string }[]>(() => {
+// 单平台卡片只展示对应登录流程；独立调用时保留全平台切换。
+const tabs = computed<{ key: Platform; label: string }[]>(() => {
   if (props.singlePlatform) {
-    return [
-      {
-        key: props.singlePlatform,
-        label: props.singlePlatform === "qobuz" ? "Qobuz" : "TIDAL",
-      },
-    ];
+    return [{ key: props.singlePlatform, label: PLATFORM_TAB_LABELS[props.singlePlatform] }];
   }
-  return [
-    { key: "qobuz", label: "Qobuz" },
-    { key: "tidal", label: "TIDAL" },
-  ];
+  return ALL_PLATFORMS.map((p) => ({ key: p, label: PLATFORM_TAB_LABELS[p] }));
 });
 
 // 当外部指定平台变化时同步当前页签。
@@ -116,7 +132,7 @@ const clearTidalPollTimer = (): void => {
   }
 };
 
-/** 打开时刷新登录状态 + 切到未登录的 tab + 重置 TIDAL 状态 */
+/** 打开时刷新登录状态 + 重置 Qobuz/TIDAL 状态 */
 watch(
   () => props.open,
   async (open) => {
@@ -127,6 +143,9 @@ watch(
     await providerSessions.refresh().catch((error) => {
       console.warn("[streaming-login] provider session refresh failed", error);
     });
+    // 没有外部指定平台时，重新落到第一个未登录的平台：
+    // 上一次可能已经登好了，再打开就该指向下一个要登的
+    if (!props.singlePlatform && !props.tab) activeTab.value = firstUnloggedPlatform();
     qobuzUserId.value = "";
     qobuzAuthToken.value = "";
     qobuzOauthStatus.value = "idle";
@@ -438,11 +457,57 @@ const onOpenUpdate = (value: boolean): void => {
   if (!value) clearTidalPollTimer();
   emit("update:open", value);
 };
+
+/**
+ * 账号式平台登录成功：与 Qobuz/TIDAL 一样自动关窗。
+ *
+ * 关窗会触发调用方的 @update:open，平台页 / 首页据此重新拉数据。
+ */
+const onAccountLoginSuccess = (): void => {
+  setTimeout(() => emit("update:open", false), 800);
+};
 </script>
 
 <template>
-  <SDialog :open="open" title="连接在线平台账号" width="480px" @update:open="onOpenUpdate">
+  <!-- 五个平台页签并排时需要更宽；单平台卡片（设置页）保持原宽度 -->
+  <SDialog
+    :open="open"
+    title="连接在线平台账号"
+    :width="singlePlatform ? '480px' : '560px'"
+    @update:open="onOpenUpdate"
+  >
     <STabs v-model="activeTab" :tabs="tabs" type="segment" class="mb-1">
+      <!-- 账号式平台：扫码 / 手动 Cookie，面板本身也负责已登录态的展示与退出 -->
+      <template #netease>
+        <div class="pt-3">
+          <PlatformLoginPanel
+            platform="netease"
+            :active="activeTab === 'netease'"
+            @success="onAccountLoginSuccess"
+          />
+        </div>
+      </template>
+
+      <template #qqmusic>
+        <div class="pt-3">
+          <PlatformLoginPanel
+            platform="qqmusic"
+            :active="activeTab === 'qqmusic'"
+            @success="onAccountLoginSuccess"
+          />
+        </div>
+      </template>
+
+      <template #kugou>
+        <div class="pt-3">
+          <PlatformLoginPanel
+            platform="kugou"
+            :active="activeTab === 'kugou'"
+            @success="onAccountLoginSuccess"
+          />
+        </div>
+      </template>
+
       <!-- Qobuz Tab -->
       <template #qobuz>
         <div class="flex flex-col gap-3 pt-3">

@@ -47,7 +47,6 @@ import {
 } from "@/apis/playlist/kugou";
 import { fetchNeteaseHotArtists, fetchNeteaseNewAlbums } from "@/apis/playlist/netease";
 import { formatCompact } from "@/utils/format";
-import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import {
   ALL_PLATFORMS,
   PLATFORM_LABELS,
@@ -117,24 +116,12 @@ const activeTabs = ref<Record<string, string>>({});
 const loginDialogOpen = ref(false);
 
 /**
- * 账号入口在设置面板「在线平台账号」区的平台。
+ * 「去登录」。
  *
- * 只有 Qobuz/TIDAL 有独立的流媒体登录弹窗（StreamingLoginDialog 只认这两个），
- * QM/酷狗/网易云的账号在设置里，所以认证失败时不能统一弹那个对话框——
- * 对后三者它根本不会渲染，按钮会像坏了一样。
+ * 统一登录弹窗覆盖全部五个平台，所以这里不再按平台分流：
+ * 传当前平台当默认页签，用户也能在弹窗里换到别的平台。
  */
-const ACCOUNT_SETTINGS_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
-  "qqmusic",
-  "kugou",
-  "netease",
-]);
-
-/** 「去登录」：按平台分流到设置面板或流媒体登录弹窗 */
 const openLogin = (): void => {
-  if (ACCOUNT_SETTINGS_PLATFORMS.has(platform.value)) {
-    useSettingsDialog().show("network");
-    return;
-  }
   loginDialogOpen.value = true;
 };
 
@@ -649,10 +636,13 @@ onMounted(async () => {
 <template>
   <div class="h-full overflow-y-auto">
     <div class="mx-auto flex max-w-[1400px] flex-col gap-5 px-4 pb-10 pt-4 sm:px-6 sm:pt-6">
-      <!-- 未登录任何平台 -->
+      <!-- 未登录任何平台：给统一登录入口，否则这里是个死胡同 -->
       <div v-if="!loggedInPlatforms.length" class="py-16 text-center">
         <IconLucideMusic class="mx-auto size-10 text-on-surface-variant/40" />
         <p class="mt-3 text-sm text-on-surface-variant">{{ t("platformHome.noPlatform") }}</p>
+        <SButton class="mt-3" variant="filled" size="small" @click="openLogin">
+          {{ t("platformHome.signIn") }}
+        </SButton>
       </div>
 
       <template v-else>
@@ -836,12 +826,10 @@ onMounted(async () => {
       </template>
     </div>
 
-    <!-- 认证失效时的登录入口：登录成功后自动重载当前平台首页 -->
+    <!-- 认证失效时的登录入口：统一弹窗，落在当前平台页签；登录成功后自动重载本页 -->
     <StreamingLoginDialog
-      v-if="platform === 'qobuz' || platform === 'tidal'"
       v-model:open="loginDialogOpen"
-      :tab="platform === 'tidal' ? 'tidal' : 'qobuz'"
-      :single-platform="platform === 'tidal' ? 'tidal' : 'qobuz'"
+      :tab="platform"
       @update:open="onLoginDialogClose"
     />
   </div>
