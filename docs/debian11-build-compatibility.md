@@ -110,8 +110,8 @@ pnpm package:core:debian11 --without-diretta
 ```
 
 宿主侧驱动是 `scripts/atom/build-debian11-bundled.sh`，容器内脚本是
-[`docker/atom-debian11/build.sh`](../docker/atom-debian11/build.sh)，
-镜像定义与用法见 [`docker/atom-debian11/README.md`](../docker/atom-debian11/README.md)。
+[`docker/atom-debian11/build.sh`](https://github.com/bnqzzdf/splayer-atom/blob/dev/docker/atom-debian11/build.sh)，
+镜像定义与用法见 [`docker/atom-debian11/README.md`](https://github.com/bnqzzdf/splayer-atom/blob/dev/docker/atom-debian11/README.md)。
 
 容器内实际执行的核心命令：
 
