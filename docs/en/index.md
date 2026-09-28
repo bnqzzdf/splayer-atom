@@ -33,4 +33,4 @@ features:
 
 SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.
 
-Continue with the [User Guide](/en/guide), [Build and Packaging](/en/build-and-packaging), or [Core Deployment](/en/core-deployment).
+Continue with the [User Guide](./guide.md), [Build and Packaging](./build-and-packaging.md), or [Core Deployment](./core-deployment.md).

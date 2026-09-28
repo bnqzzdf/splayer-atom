@@ -20,9 +20,9 @@ The player bar exposes one Core-backed output selector for ALSA, optional Dirett
 
 ## Providers
 
-Atom has Core/Web paths for Netease, QQ Music (QM), Kugou (KG), Qobuz, and TIDAL. QM/KG support QR and manual cookie login; Qobuz supports browser OAuth and manual token entry. Core persists credentials and projects login status without credentials. A manually entered cookie or token passes through the browser form during login. Full real-account playback acceptance remains open in the [roadmap](/en/atom-roadmap).
+Atom has Core/Web paths for Netease, QQ Music (QM), Kugou (KG), Qobuz, and TIDAL. QM/KG support QR and manual cookie login; Qobuz supports browser OAuth and manual token entry. Core persists credentials and projects login status without credentials. A manually entered cookie or token passes through the browser form during login. Full real-account playback acceptance remains open in the [roadmap](./atom-roadmap.md).
 
-See [Streaming Services](/en/streaming) for self-hosted media servers.
+See [Streaming Services](./streaming.md) for self-hosted media servers.
 
 ## Lyrics
 
@@ -34,7 +34,7 @@ Download and cache directories live on the Core host. Web Control selects Core d
 
 ## Plugins
 
-Plugins run in an isolated Core child process and can extend source resolution and playback control. See [Using Plugins](/en/plugins-usage) and [Plugin Development](/en/plugins/).
+Plugins run in an isolated Core child process and can extend source resolution and playback control. See [Using Plugins](./plugins-usage.md) and [Plugin Development](./plugins/index.md).
 
 ## Multiple controls
 

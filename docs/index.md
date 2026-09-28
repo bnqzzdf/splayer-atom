@@ -33,4 +33,4 @@ features:
 
 SPlayer Atom 基于 SPlayer-Next 修改，采用 **Node Core + Web Control** 模式，当前发布目标为 Linux x86-64。
 
-继续阅读：[使用指南](/guide)、[构建与打包](/build-and-packaging)、[Core 部署](/core-deployment)。
+继续阅读：[使用指南](./guide.md)、[构建与打包](./build-and-packaging.md)、[Core 部署](./core-deployment.md)。

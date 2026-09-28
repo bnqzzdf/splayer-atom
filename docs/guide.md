@@ -26,9 +26,9 @@ SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览�
 
 ## 在线服务
 
-Atom 已接入 Netease、QQ 音乐（QM）、酷狗（KG）、Qobuz 与 TIDAL。QM/KG 支持扫码和手动 Cookie 登录；Qobuz 支持浏览器授权，也可手动粘贴 token。Core 保存登录信息并向 Web Control 投影不含凭据的登录状态；手动登录时，输入的 Cookie 或 token 会暂时经过浏览器表单。上述平台的完整真实账号播放验收仍在[路线图](/atom-roadmap)中。
+Atom 已接入 Netease、QQ 音乐（QM）、酷狗（KG）、Qobuz 与 TIDAL。QM/KG 支持扫码和手动 Cookie 登录；Qobuz 支持浏览器授权，也可手动粘贴 token。Core 保存登录信息并向 Web Control 投影不含凭据的登录状态；手动登录时，输入的 Cookie 或 token 会暂时经过浏览器表单。上述平台的完整真实账号播放验收仍在[路线图](./atom-roadmap.md)中。
 
-自建媒体服务见 [流媒体服务](/streaming)。
+自建媒体服务见 [流媒体服务](./streaming.md)。
 
 ## 歌词
 
@@ -40,7 +40,7 @@ Atom 已接入 Netease、QQ 音乐（QM）、酷狗（KG）、Qobuz 与 TIDAL。
 
 ## 插件
 
-插件运行在 Core 的隔离子进程中，可扩展音源解析与播放控制。见 [插件使用](/plugins-usage) 和 [插件开发](/plugins/)。
+插件运行在 Core 的隔离子进程中，可扩展音源解析与播放控制。见 [插件使用](./plugins-usage.md) 和 [插件开发](./plugins/index.md)。
 
 ## 多个 Web Control
 

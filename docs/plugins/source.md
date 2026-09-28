@@ -6,7 +6,7 @@
 
 音源插件还可选地**兜底歌词与封面**——内置来源拿不到歌词、或曲目无封面时回退到插件。不限在线平台：本地文件没有内嵌歌词 / 封面时同样适用。见[元数据兜底](#metadata-fallback)。
 
-阅读本文前请先了解 [插件总览与架构](/plugins/)，其中的通用 API（`splayer.request` / `storage` / `log` / `utils` 等）对音源插件同样适用，这里不再重复。
+阅读本文前请先了解 [插件总览与架构](./index.md)，其中的通用 API（`splayer.request` / `storage` / `log` / `utils` 等）对音源插件同样适用，这里不再重复。
 
 ## 工作原理
 
@@ -65,7 +65,7 @@ splayer.on("musicUrl", async (req) => {
 把 `example.js` 托管在可访问的 HTTPS 地址，在 **设置 → 插件管理 → 在线导入** 中粘贴 raw URL 即可使用。
 
 ::: tip
-`@type source` 可省略（缺省即为 `source`）。音源插件不依赖控制类能力，播放地址 / 歌词 / 封面写 `1` 或 `2` 均可；若声明 `musicComment`，需写 `3`。各级别新增能力见[插件总览 · API 级别与变更记录](/plugins/#api-级别与变更记录)。
+`@type source` 可省略（缺省即为 `source`）。音源插件不依赖控制类能力，播放地址 / 歌词 / 封面写 `1` 或 `2` 均可；若声明 `musicComment`，需写 `3`。各级别新增能力见[插件总览 · API 级别与变更记录](./index.md#api-级别与变更记录)。
 :::
 
 ## `splayer.register(capabilities)`
@@ -185,7 +185,7 @@ splayer.on("musicUrl", async (req) => {
 });
 ```
 
-`resolveWy` / `resolveTx` 由你自己写——内部各自调对应平台的接口（一般用 [`splayer.request`](/plugins/#通用-api)）拿到播放地址。两个平台的取址逻辑互不相同，但都通过同一个 `musicUrl` 处理器对外暴露。
+`resolveWy` / `resolveTx` 由你自己写——内部各自调对应平台的接口（一般用 [`splayer.request`](./index.md#通用-api)）拿到播放地址。两个平台的取址逻辑互不相同，但都通过同一个 `musicUrl` 处理器对外暴露。
 
 ## 元数据兜底（歌词 / 封面） {#metadata-fallback}
 
@@ -213,7 +213,7 @@ splayer.register({
 });
 ```
 
-> `musicSearch` 是匹配前提，补歌词 / 封面 / 评论时都需要它。评论能力属于 API level 3，级别变更记录见[插件总览](/plugins/#api-级别与变更记录)。
+> `musicSearch` 是匹配前提，补歌词 / 封面 / 评论时都需要它。评论能力属于 API level 3，级别变更记录见[插件总览](./index.md#api-级别与变更记录)。
 
 ### `musicSearch`
 
@@ -260,7 +260,7 @@ splayer.register({
 ### `musicComment`
 
 ::: warning 需要 apiLevel 3
-脚本头部必须声明 `@apiLevel 3`。各级别新增能力见[插件总览 · API 级别与变更记录](/plugins/#api-级别与变更记录)。
+脚本头部必须声明 `@apiLevel 3`。各级别新增能力见[插件总览 · API 级别与变更记录](./index.md#api-级别与变更记录)。
 :::
 
 **请求**：
@@ -397,7 +397,7 @@ splayer.on("musicComment", async ({ musicInfo, type, page, limit }) => {
 
 ## 更新支持
 
-音源插件在脚本头声明 `@updateUrl`，宿主即会检查 `@version` 并提示用户一键原地更新（lx 音源脚本沿用运行时的 `updateAlert`）。完整说明见 [插件更新](/plugins/update)。
+音源插件在脚本头声明 `@updateUrl`，宿主即会检查 `@version` 并提示用户一键原地更新（lx 音源脚本沿用运行时的 `updateAlert`）。完整说明见 [插件更新](./update.md)。
 
 ## 兼容 lx 插件
 
@@ -453,4 +453,4 @@ await postPlugin("/api/plugins/match-cover", {
 });
 ```
 
-更多调试方式与错误码见 [总览 · 调试](/plugins/#调试) 与 [错误码](/plugins/#错误码)。
+更多调试方式与错误码见 [总览 · 调试](./index.md#调试) 与 [错误码](./index.md#错误码)。

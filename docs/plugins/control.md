@@ -8,7 +8,7 @@
 - 声明自己的设置项，由「设置 → 插件管理」渲染和持久化；
 - 向歌曲菜单贡献自定义动作。
 
-阅读本文前请先了解 [插件总览与架构](/plugins/)，其中的通用网络、存储、日志和权限规则对控制插件同样适用。
+阅读本文前请先了解 [插件总览与架构](./index.md)，其中的通用网络、存储、日志和权限规则对控制插件同样适用。
 
 ::: warning 当前不下发播放事件
 协议里仍保留 `register({ events })` 与 `splayer.player.on(...)`，用于兼容已有脚本和后续演进；但当前 Atom Core **不会主动向插件推送** `trackChange` / `lyricChange` / `lineChange` / `playStateChange`。新插件不要依赖播放事件订阅，也不要用高频 `getPosition()` 轮询代替事件流。
@@ -154,7 +154,7 @@ splayer.on("menuClick", async ({ menuId, track }) => {
 
 ## 更新
 
-声明 `@updateUrl` 后，Core 会检查远端 `@version`。发现新版时，插件管理可以原地更新，并保留启用状态、设置和插件存储。详见 [插件更新](/plugins/update)。
+声明 `@updateUrl` 后，Core 会检查远端 `@version`。发现新版时，插件管理可以原地更新，并保留启用状态、设置和插件存储。详见 [插件更新](./update.md)。
 
 ## 调试
 
@@ -170,4 +170,4 @@ await fetch("/api/plugins/you.example-control/setting", {
 }).then((response) => response.json());
 ```
 
-插件日志汇入 Core 日志。更多错误码和沙箱限制见 [插件总览与架构](/plugins/)。
+插件日志汇入 Core 日志。更多错误码和沙箱限制见 [插件总览与架构](./index.md)。

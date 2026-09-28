@@ -21,7 +21,7 @@ pnpm dev
 ## Architecture rules
 
 For architecture or playback changes, read the root `AGENTS.md` and the
-[Atom Roadmap](/en/atom-roadmap). As a general rule, library, provider, playback, and output behavior
+[Atom Roadmap](./atom-roadmap.md). As a general rule, library, provider, playback, and output behavior
 belongs in Core, while interface and interaction behavior belongs in Web Control. Detailed
 implementation constraints are kept in `AGENTS.md` instead of being repeated in user-facing docs.
 

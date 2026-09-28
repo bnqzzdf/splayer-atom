@@ -8,7 +8,7 @@ These are the objects delivered to plugin handlers. A `?` marks an optional fiel
 
 ### Track
 
-The `track` payload in the [`menuClick`](/en/plugins/control#track-menu-extensions) handler. The `trackChange` payload is protocol-reserved and is not currently dispatched by Core.
+The `track` payload in the [`menuClick`](./plugins/control.md#track-menu-extensions) handler. The `trackChange` payload is protocol-reserved and is not currently dispatched by Core.
 
 | Field             | Type                               | Description                                                                                            |
 | ----------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |

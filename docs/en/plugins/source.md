@@ -4,7 +4,7 @@
 
 A source plugin (`@type source`) provides playable URLs when the built-in provider cannot return one. It can also supply fallback lyrics, covers, and comments for online, local, and streaming tracks.
 
-Read [Plugin Overview](/en/plugins/) first for common APIs such as `request`, `storage`, `log`, and `utils`.
+Read [Plugin Overview](./index.md) first for common APIs such as `request`, `storage`, `log`, and `utils`.
 
 ## How resolution works
 
@@ -263,7 +263,7 @@ splayer.on("musicPic", async ({ musicInfo }) => {
 
 ## Priority and updates
 
-Multiple source plugins can be enabled for one platform. They are tried in registry order (installation/load order). A user-configurable priority (`plugins.priority.*`) is **not implemented yet**: the registry has the lookup but no caller, and neither an HTTP route nor a UI entry can set it. Declare `@updateUrl` for host-managed updates; LX scripts can use `updateAlert`. See [Plugin Updates](/en/plugins/update).
+Multiple source plugins can be enabled for one platform. They are tried in registry order (installation/load order). A user-configurable priority (`plugins.priority.*`) is **not implemented yet**: the registry has the lookup but no caller, and neither an HTTP route nor a UI entry can set it. Declare `@updateUrl` for host-managed updates; LX scripts can use `updateAlert`. See [Plugin Updates](./update.md).
 
 ## LX compatibility
 

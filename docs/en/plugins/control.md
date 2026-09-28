@@ -8,7 +8,7 @@ A control plugin (`@type control`) does not provide audio sources. The current A
 - plugin-owned settings rendered and persisted by **Settings → Plugin Management**;
 - custom track-menu actions.
 
-Read [Plugin Overview and Architecture](/en/plugins/) first for the shared network, storage, logging, and permission model.
+Read [Plugin Overview and Architecture](./index.md) first for the shared network, storage, logging, and permission model.
 
 ::: warning Playback events are not currently published
 The protocol still retains `register({ events })` and `splayer.player.on(...)` for compatibility and future evolution, but the current Atom Core **does not push** `trackChange`, `lyricChange`, `lineChange`, or `playStateChange` to plugins. New plugins should not depend on event subscriptions, and should not replace them with high-frequency `getPosition()` polling.
@@ -154,7 +154,7 @@ Menu handlers run in the plugin sandbox, with no DOM and no custom-window capabi
 
 ## Updates
 
-Declare `@updateUrl` to let Core compare the remote `@version`. In-place updates preserve enabled state, settings, and plugin storage. See [Plugin Updates](/en/plugins/update).
+Declare `@updateUrl` to let Core compare the remote `@version`. In-place updates preserve enabled state, settings, and plugin storage. See [Plugin Updates](./update.md).
 
 ## Debugging
 
@@ -170,4 +170,4 @@ await fetch("/api/plugins/you.example-control/setting", {
 }).then((response) => response.json());
 ```
 
-Plugin logs are written through Core logging. See [Plugin Overview and Architecture](/en/plugins/) for sandbox restrictions and error codes.
+Plugin logs are written through Core logging. See [Plugin Overview and Architecture](./index.md) for sandbox restrictions and error codes.

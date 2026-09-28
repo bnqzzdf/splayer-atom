@@ -8,18 +8,18 @@ SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音�
 
 本文介绍插件系统的整体架构、运行模型与两类插件共用的通用 API。具体的编写方式见：
 
-- [音源插件](/plugins/source)：解析歌曲的播放地址（`musicUrl`），并可兜底歌词与封面（内置来源拿不到时，不限在线平台）。
-- [控制插件](/plugins/control)：反向控制播放、声明设置项、向歌曲菜单添加菜单项。
-- [插件更新](/plugins/update)：脚本如何声明更新地址、宿主如何检查版本、用户如何一键更新（两类插件通用）。
+- [音源插件](./source.md)：解析歌曲的播放地址（`musicUrl`），并可兜底歌词与封面（内置来源拿不到时，不限在线平台）。
+- [控制插件](./control.md)：反向控制播放、声明设置项、向歌曲菜单添加菜单项。
+- [插件更新](./update.md)：脚本如何声明更新地址、宿主如何检查版本、用户如何一键更新（两类插件通用）。
 
-最终用户的安装与管理方式见 [插件使用](/plugins-usage)。
+最终用户的安装与管理方式见 [插件使用](../plugins-usage.md)。
 
 ## 插件能做什么
 
 | 类型                         | `@type`   | 用途                                                     |
 | ---------------------------- | --------- | -------------------------------------------------------- |
-| [音源插件](/plugins/source)  | `source`  | 为歌曲提供可播放的 URL，扩展可播放的曲库                 |
-| [控制插件](/plugins/control) | `control` | 反向控制播放器，声明用户设置项，并可向歌曲菜单添加菜单项 |
+| [音源插件](./source.md)  | `source`  | 为歌曲提供可播放的 URL，扩展可播放的曲库                 |
+| [控制插件](./control.md) | `control` | 反向控制播放器，声明用户设置项，并可向歌曲菜单添加菜单项 |
 
 一个脚本只能是其中一种类型，由头部 `@type` 决定，缺省为 `source`。
 
@@ -27,7 +27,7 @@ SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音�
 
 ## 分发插件
 
-Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub、Gitee 或其它 HTTPS 地址，并把 raw `.js` URL 提供给用户。建议在 manifest 中声明稳定的 `@updateUrl`，这样已安装插件仍可在「设置 → 插件管理」中检查并应用更新。详见 [插件更新](/plugins/update)。
+Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub、Gitee 或其它 HTTPS 地址，并把 raw `.js` URL 提供给用户。建议在 manifest 中声明稳定的 `@updateUrl`，这样已安装插件仍可在「设置 → 插件管理」中检查并应用更新。详见 [插件更新](./update.md)。
 
 ## 技术架构
 
@@ -110,11 +110,11 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 | `@grant`       |      | 控制插件声明权限：`network`（联网）/ `control`（控制播放器）/ `ui`（扩展界面，如菜单项），逗号分隔；音源插件自动获 `network` |
 | `@type`        |      | `source`（音源，默认）或 `control`（控制）；**建议显式声明**，决定插件类型与权限默认                                         |
 | `@apiLevel`    |      | 声明兼容的 [API 级别与变更记录](#api-级别与变更记录)，当前宿主为 `3`；具体能力所需级别以该表为准                             |
-| `@updateUrl`   |      | 更新检查地址，详见 [插件更新](/plugins/update)                                                                               |
-| `@changelog`   |      | 更新说明，详见 [插件更新](/plugins/update)                                                                                   |
+| `@updateUrl`   |      | 更新检查地址，详见 [插件更新](./update.md)                                                                               |
+| `@changelog`   |      | 更新说明，详见 [插件更新](./update.md)                                                                                   |
 
 ::: warning
-为了获得稳定的展示与更新行为，原生 SPlayer 插件应显式声明 `@name`、`@version` 和 `@id`。插件**身份 ID** 优先取 `@id`（作者声明，跨版本或改名都不变）；未声明时由名称推导（纯非 ASCII 名会退化为名称哈希以避免冲突）。ID 与源码内容无关，因此**重新导入同一身份的脚本会原地替换**。发布新版时只改 `@version` 与脚本内容，别动 `@id`（未声明 ID 时也别动 `@name`），详见 [插件更新](/plugins/update)。
+为了获得稳定的展示与更新行为，原生 SPlayer 插件应显式声明 `@name`、`@version` 和 `@id`。插件**身份 ID** 优先取 `@id`（作者声明，跨版本或改名都不变）；未声明时由名称推导（纯非 ASCII 名会退化为名称哈希以避免冲突）。ID 与源码内容无关，因此**重新导入同一身份的脚本会原地替换**。发布新版时只改 `@version` 与脚本内容，别动 `@id`（未声明 ID 时也别动 `@name`），详见 [插件更新](./update.md)。
 :::
 
 ## 权限
@@ -128,7 +128,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 | `ui`      | `register({ menus })` | 向歌曲菜单等界面添加项 |
 
 - **音源插件**（`@type source`，含缺省）**自动获得 `network`**，无需声明——联网解析 URL 是其本职。
-- **控制插件**（`@type control`）要联网（如把当前曲目/歌词推给外部服务）必须声明 `@grant network`；要反向控制播放器必须声明 `@grant control`；要向歌曲菜单添加菜单项必须声明 `@grant ui`（详见 [控制插件 · 菜单扩展](/plugins/control#菜单扩展)）。
+- **控制插件**（`@type control`）要联网（如把当前曲目/歌词推给外部服务）必须声明 `@grant network`；要反向控制播放器必须声明 `@grant control`；要向歌曲菜单添加菜单项必须声明 `@grant ui`（详见 [控制插件 · 菜单扩展](./control.md#菜单扩展)）。
 - 未授予对应权限时，`splayer.request` 以 `PLUGIN_PERMISSION_DENIED` 失败，`splayer.player.*` 调用被忽略，未授权的 `menus` 声明会被丢弃。
 
 ## API 级别与变更记录
@@ -222,7 +222,7 @@ console.log(resp.status, resp.body);
 
 ### `splayer.getSetting(key)`
 
-同步读取用户为该插件配置的值，未配置时返回 `undefined`。控制类插件通过 `splayer.register` 声明设置项，详见 [控制插件 · 设置项](/plugins/control#设置项)。
+同步读取用户为该插件配置的值，未配置时返回 `undefined`。控制类插件通过 `splayer.register` 声明设置项，详见 [控制插件 · 设置项](./control.md#设置项)。
 
 ### `splayer.log`
 

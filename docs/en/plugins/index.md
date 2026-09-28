@@ -6,24 +6,24 @@ SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A p
 
 This plugin model is inherited from SPlayer-Next and adapted for the Web + Core runtime. Atom does not operate a plugin market; authors host their own scripts and users install them from raw HTTPS URLs.
 
-- [Source plugins](/en/plugins/source) resolve playable URLs and can provide fallback lyrics, covers, and comments.
-- [Control plugins](/en/plugins/control) control the player, expose settings, and add track menu items.
-- [Plugin updates](/en/plugins/update) describes update metadata and in-place upgrades.
+- [Source plugins](./source.md) resolve playable URLs and can provide fallback lyrics, covers, and comments.
+- [Control plugins](./control.md) control the player, expose settings, and add track menu items.
+- [Plugin updates](./update.md) describes update metadata and in-place upgrades.
 
-End users should see [Using Plugins](/en/plugins-usage).
+End users should see [Using Plugins](../plugins-usage.md).
 
 ## Plugin types
 
 | Type                                  | `@type`   | Purpose                                                   |
 | ------------------------------------- | --------- | --------------------------------------------------------- |
-| [Source plugin](/en/plugins/source)   | `source`  | Provide playable URLs and metadata fallbacks              |
-| [Control plugin](/en/plugins/control) | `control` | Extend playback control, settings, and track-menu actions |
+| [Source plugin](./source.md)   | `source`  | Provide playable URLs and metadata fallbacks              |
+| [Control plugin](./control.md) | `control` | Extend playback control, settings, and track-menu actions |
 
 A script has one type, selected by `@type`; the default is `source`.
 
 ## Distributing plugins
 
-Atom does not maintain a plugin market. Authors can host a script on GitHub, Gitee, or another HTTPS location and share its raw `.js` URL. Declare a stable `@updateUrl` in the manifest so installed plugins can still check for and apply updates from **Settings → Plugin Management**. See [Plugin Updates](/en/plugins/update).
+Atom does not maintain a plugin market. Authors can host a script on GitHub, Gitee, or another HTTPS location and share its raw `.js` URL. Declare a stable `@updateUrl` in the manifest so installed plugins can still check for and apply updates from **Settings → Plugin Management**. See [Plugin Updates](./update.md).
 
 ## Architecture
 
