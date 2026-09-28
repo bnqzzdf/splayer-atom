@@ -12,19 +12,19 @@
 
 ## 一、已确证的事实（均有实测证据，不要推翻重查）
 
-| #   | 事实                                                                                | 证据                                                                                                                               |
-| --- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 授权端点 = `https://www.qobuz.com/signin/oauth`，参数 `ext_app_id` + `redirect_url` | 用户提供的链接 base64 解码结果                                                                                                     |
-| 2   | app_id = `798273057`（与网页播放器一致）                                            | 用户 F12 确认                                                                                                                      |
-| 3   | 回调参数名 = **`code_autorisation`**（8 位，单次有效）                              | 实测落地 URL：`https://play.qobuz.com/discover?code_autorisation=HUukQqWc`                                                         |
-| 4   | `redirect_url` **被采用**（回调发生在该地址）                                       | 同上，回调目标即 URL 中给出的地址                                                                                                  |
-| 5   | 邮箱+密码登录**不可用**，勿再尝试                                                   | 无会话实例上假凭据：不签名 401，**加签名后仍 401**；且 `user/login` 是唯一 `signed=false` 的调用，改成 signed 无改善（改动已回退） |
-| 6   | 设备码流程**不存在**（TIDAL 才有 RFC 8628）                                         | `native/streaming-api/src/tidal/auth.rs` 有 `auth_device_authorization`；qobuz 侧无对应实现与公开端点                              |
-| 7   | 现有「粘贴 token」路径**完全可用**                                                  | 干净实例（.132）实测：登出 → 只给 token 登录 → 搜索/直链全部 OK                                                                    |
-| 8   | Qobuz 对**未签名**请求一律回 `401 User authentication is required`                  | 多个端点、含故意用 `bogus123`，响应完全相同 → 该 401 无法用于区分端点                                                              |
-| 9   | 兑换端点 = `GET /api.json/0.2/oauth/callback`，query `code` + `private_key`          | play.qobuz.com bundle：`paramsMapper=e=>({code:e.code,private_key:e.privateKey})` + `requester.get("oauth/callback",{query:t})`；实测伪 code 回 `404 No result matching given argument`（端点存在且校验 code） |
-| 10  | `private_key` = `6lz8C03UDIC7`（网页播放器 initialization 常量）                     | bundle：`authenticate({privateKey:"6lz8C03UDIC7",code:t})`；兑换响应含 `user_auth_token` 与 `userId`                                |
-| 11  | 兑换**不需要请求签名**                                                              | 同上，网页播放器只带 `code` + `private_key`，app_id 走 `X-App-Id` 头                                                              |
+| #   | 事实                                                                                | 证据                                                                                                                                                                                                           |
+| --- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 授权端点 = `https://www.qobuz.com/signin/oauth`，参数 `ext_app_id` + `redirect_url` | 用户提供的链接 base64 解码结果                                                                                                                                                                                 |
+| 2   | app_id = `798273057`（与网页播放器一致）                                            | 用户 F12 确认                                                                                                                                                                                                  |
+| 3   | 回调参数名 = **`code_autorisation`**（8 位，单次有效）                              | 实测落地 URL：`https://play.qobuz.com/discover?code_autorisation=HUukQqWc`                                                                                                                                     |
+| 4   | `redirect_url` **被采用**（回调发生在该地址）                                       | 同上，回调目标即 URL 中给出的地址                                                                                                                                                                              |
+| 5   | 邮箱+密码登录**不可用**，勿再尝试                                                   | 无会话实例上假凭据：不签名 401，**加签名后仍 401**；且 `user/login` 是唯一 `signed=false` 的调用，改成 signed 无改善（改动已回退）                                                                             |
+| 6   | 设备码流程**不存在**（TIDAL 才有 RFC 8628）                                         | `native/streaming-api/src/tidal/auth.rs` 有 `auth_device_authorization`；qobuz 侧无对应实现与公开端点                                                                                                          |
+| 7   | 现有「粘贴 token」路径**完全可用**                                                  | 干净实例（.132）实测：登出 → 只给 token 登录 → 搜索/直链全部 OK                                                                                                                                                |
+| 8   | Qobuz 对**未签名**请求一律回 `401 User authentication is required`                  | 多个端点、含故意用 `bogus123`，响应完全相同 → 该 401 无法用于区分端点                                                                                                                                          |
+| 9   | 兑换端点 = `GET /api.json/0.2/oauth/callback`，query `code` + `private_key`         | play.qobuz.com bundle：`paramsMapper=e=>({code:e.code,private_key:e.privateKey})` + `requester.get("oauth/callback",{query:t})`；实测伪 code 回 `404 No result matching given argument`（端点存在且校验 code） |
+| 10  | `private_key` = `6lz8C03UDIC7`（网页播放器 initialization 常量）                    | bundle：`authenticate({privateKey:"6lz8C03UDIC7",code:t})`；兑换响应含 `user_auth_token` 与 `userId`                                                                                                           |
+| 11  | 兑换**不需要请求签名**                                                              | 同上，网页播放器只带 `code` + `private_key`，app_id 走 `X-App-Id` 头                                                                                                                                           |
 
 ## 二、原未知点（已由 #9/#10/#11 解出，保留作为记录）
 
@@ -124,6 +124,7 @@ Qobuz 不可能回传它没收到的东西 ⇒ 真实回跳必然被拒、空等
 而生产路径传 `Some(state)` —— 测试与生产的参数不一致，于是缺陷被"测绿"了。
 
 **修法（双保险）**：
+
 - `state` 同时写进 `redirect_url` 的 query 和授权 URL 本身；
 - 校验放宽为「**带了但不匹配才拒绝，缺失则放行**」——因为 Qobuz 是否保留
   `redirect_url` 的 query 未经实测，强制要求会让真实登录再次失败。
@@ -136,6 +137,7 @@ Qobuz 不可能回传它没收到的东西 ⇒ 真实回跳必然被拒、空等
 
 **修法**：前端把 `window.location.hostname`（浏览器实际访问 Core 用的地址）传给
 `auth_oauth_start`；原生据此：
+
 - host 是回环（`localhost` 或 `127.` 前缀）→ 绑 `127.0.0.1`，保持原约束；主机名白名单只允许 `[A-Za-z0-9.-]`，`::1` / `[::1]` 会被判为非法参数直接报错；
 - 否则 → 绑 `0.0.0.0`，并把该 host 写进 `redirect_url`，让 PC 的回跳能打回设备。
 
@@ -202,31 +204,31 @@ Qobuz 不可能回传它没收到的东西 ⇒ 真实回跳必然被拒、空等
 
 ### 7.2 自动化验证（全部通过）
 
-| # | 检查项 | 结果 |
-| --- | --- | --- |
-| 1 | 负对照：未知 action 回 `Unsupported Qobuz API` | ✅ |
-| 2 | `auth_oauth_start` 结构（url/port/redirectUri/state/expiresIn=180） | ✅ |
-| 3 | 回环场景：不传 host → 绑 `127.0.0.1` | ✅ |
-| 4 | 跨机场景：传 host → 绑 `0.0.0.0` 且回调地址用该 host | ✅ |
-| 5 | 重复 start → 旧监听立刻释放端口 | ✅ |
-| 6 | 无关请求（favicon）404 后继续等待 | ✅ |
-| 7 | 跨机可达（外部主机访问回调端口） | ✅ |
-| 8 | 带正确 state 回调 → 200 + 成功页 | ✅ |
-| 9 | **不带 state 回调 → 仍放行** | ✅ |
-| 10 | 错误 state → 400 拒绝 | ✅ |
-| 11 | `error=access_denied` → 立即失败（实测 0 秒） | ✅ |
-| 12 | 回调后端口释放（`ss -ltn` 无残留） | ✅ |
-| 13 | 假 code 兑换 → 正确到达 Qobuz 并回 404 | ✅ |
-| 14 | 会话投影 `userId=2961963` | ✅ |
+| #   | 检查项                                                              | 结果 |
+| --- | ------------------------------------------------------------------- | ---- |
+| 1   | 负对照：未知 action 回 `Unsupported Qobuz API`                      | ✅   |
+| 2   | `auth_oauth_start` 结构（url/port/redirectUri/state/expiresIn=180） | ✅   |
+| 3   | 回环场景：不传 host → 绑 `127.0.0.1`                                | ✅   |
+| 4   | 跨机场景：传 host → 绑 `0.0.0.0` 且回调地址用该 host                | ✅   |
+| 5   | 重复 start → 旧监听立刻释放端口                                     | ✅   |
+| 6   | 无关请求（favicon）404 后继续等待                                   | ✅   |
+| 7   | 跨机可达（外部主机访问回调端口）                                    | ✅   |
+| 8   | 带正确 state 回调 → 200 + 成功页                                    | ✅   |
+| 9   | **不带 state 回调 → 仍放行**                                        | ✅   |
+| 10  | 错误 state → 400 拒绝                                               | ✅   |
+| 11  | `error=access_denied` → 立即失败（实测 0 秒）                       | ✅   |
+| 12  | 回调后端口释放（`ss -ltn` 无残留）                                  | ✅   |
+| 13  | 假 code 兑换 → 正确到达 Qobuz 并回 404                              | ✅   |
+| 14  | 会话投影 `userId=2961963`                                           | ✅   |
 
 ### 7.3 真人验收（方案第四节第 1~5 项）
 
-| # | 检查项 | 结果 |
-| --- | --- | --- |
-| 1 | 干净实例点击「用浏览器登录」→ 浏览器登录 → 自动完成，全程不碰 Console/F12 | ✅ |
-| 2 | 会话投影为用户真实 id `2961963`（非 app_id） | ✅ |
-| 3 | `catalog_search` 有结果（实测返回 Miles Davis 专辑 3 条） | ✅ |
-| 4 | 登录后本地监听关闭、端口释放 | ✅ |
-| 5 | 超时路径（180s 自动关闭并报可读错误） | ✅ 自动化覆盖 |
+| #   | 检查项                                                                    | 结果          |
+| --- | ------------------------------------------------------------------------- | ------------- |
+| 1   | 干净实例点击「用浏览器登录」→ 浏览器登录 → 自动完成，全程不碰 Console/F12 | ✅            |
+| 2   | 会话投影为用户真实 id `2961963`（非 app_id）                              | ✅            |
+| 3   | `catalog_search` 有结果（实测返回 Miles Davis 专辑 3 条）                 | ✅            |
+| 4   | 登录后本地监听关闭、端口释放                                              | ✅            |
+| 5   | 超时路径（180s 自动关闭并报可读错误）                                     | ✅ 自动化覆盖 |
 
 **遗留**：方案第四节的第 6 项「三台部署后 `391+ pass`」尚未执行（本次只部署了 `.190`）。

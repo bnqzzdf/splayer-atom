@@ -14,8 +14,8 @@ End users should see [Using Plugins](../plugins-usage.md).
 
 ## Plugin types
 
-| Type                                  | `@type`   | Purpose                                                   |
-| ------------------------------------- | --------- | --------------------------------------------------------- |
+| Type                           | `@type`   | Purpose                                                   |
+| ------------------------------ | --------- | --------------------------------------------------------- |
 | [Source plugin](./source.md)   | `source`  | Provide playable URLs and metadata fallbacks              |
 | [Control plugin](./control.md) | `control` | Extend playback control, settings, and track-menu actions |
 

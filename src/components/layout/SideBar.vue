@@ -375,9 +375,7 @@ onMounted(() => {
       <div
         class="flex-1 min-h-0 pb-3 overflow-y-auto transition-[padding] duration-300"
         :class="
-          isCollapsed
-            ? 'px-2 [&::-webkit-scrollbar]:hidden'
-            : 'px-3 [scrollbar-gutter:stable]'
+          isCollapsed ? 'px-2 [&::-webkit-scrollbar]:hidden' : 'px-3 [scrollbar-gutter:stable]'
         "
         @contextmenu.capture="onMenuContextMenu"
       >

@@ -222,49 +222,49 @@ const codecLabel = (codec: string): string => {
 
       <div class="overflow-x-auto min-h-0 flex-1 py-1">
         <div class="mx-auto flex w-fit items-center gap-2">
-        <div class="grid shrink-0 grid-rows-[1.25rem_repeat(7,13px)] gap-y-0.5">
-          <div />
-          <div
-            v-for="(label, dow) in rowLabels"
-            :key="dow"
-            class="flex items-center justify-end whitespace-nowrap text-xs leading-none text-on-surface-variant/50"
-          >
-            {{ [1, 3, 5].includes(dow) ? label : "" }}
-          </div>
-        </div>
-
-        <div
-          class="grid shrink-0 gap-0.5"
-          :style="{
-            gridTemplateColumns: `repeat(${heatWeeks.length}, 13px)`,
-            gridTemplateRows: '1.25rem repeat(7, 13px)',
-          }"
-        >
-          <div
-            v-for="(label, weekIndex) in weekMonthLabels"
-            :key="`m${weekIndex}`"
-            class="whitespace-nowrap text-center text-xs leading-none text-on-surface-variant/50"
-          >
-            {{ label }}
-          </div>
-          <template v-for="dow in 7" :key="`r${dow}`">
-            <STooltip
-              v-for="(week, weekIndex) in heatWeeks"
-              :key="weekIndex"
-              :content="dayTooltip(week[dow - 1])"
-              :disabled="!week[dow - 1]"
-              side="top"
-              align="center"
+          <div class="grid shrink-0 grid-rows-[1.25rem_repeat(7,13px)] gap-y-0.5">
+            <div />
+            <div
+              v-for="(label, dow) in rowLabels"
+              :key="dow"
+              class="flex items-center justify-end whitespace-nowrap text-xs leading-none text-on-surface-variant/50"
             >
-              <div
-                class="h-full min-h-0 w-full rounded-[3px]"
-                :class="week[dow - 1] ? 'cursor-default' : 'opacity-0'"
-                :style="cellStyle(cellPlayCount(week, dow))"
-              />
-            </STooltip>
-          </template>
+              {{ [1, 3, 5].includes(dow) ? label : "" }}
+            </div>
+          </div>
+
+          <div
+            class="grid shrink-0 gap-0.5"
+            :style="{
+              gridTemplateColumns: `repeat(${heatWeeks.length}, 13px)`,
+              gridTemplateRows: '1.25rem repeat(7, 13px)',
+            }"
+          >
+            <div
+              v-for="(label, weekIndex) in weekMonthLabels"
+              :key="`m${weekIndex}`"
+              class="whitespace-nowrap text-center text-xs leading-none text-on-surface-variant/50"
+            >
+              {{ label }}
+            </div>
+            <template v-for="dow in 7" :key="`r${dow}`">
+              <STooltip
+                v-for="(week, weekIndex) in heatWeeks"
+                :key="weekIndex"
+                :content="dayTooltip(week[dow - 1])"
+                :disabled="!week[dow - 1]"
+                side="top"
+                align="center"
+              >
+                <div
+                  class="h-full min-h-0 w-full rounded-[3px]"
+                  :class="week[dow - 1] ? 'cursor-default' : 'opacity-0'"
+                  :style="cellStyle(cellPlayCount(week, dow))"
+                />
+              </STooltip>
+            </template>
+          </div>
         </div>
-      </div>
       </div>
 
       <div class="flex items-center justify-center gap-2 text-xs text-on-surface-variant/50">
@@ -355,7 +355,10 @@ const codecLabel = (codec: string): string => {
     </SCard>
 
     <!-- 音质构成 -->
-    <SCard radius="xl" class="col-span-1 md:col-span-2 flex h-52 min-w-0 flex-col gap-3 xl:col-span-1">
+    <SCard
+      radius="xl"
+      class="col-span-1 md:col-span-2 flex h-52 min-w-0 flex-col gap-3 xl:col-span-1"
+    >
       <div class="flex items-baseline justify-between gap-3">
         <h3 class="text-base font-semibold text-on-surface">
           {{ t("stats.audioQuality") }}

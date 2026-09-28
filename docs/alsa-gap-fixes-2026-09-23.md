@@ -23,7 +23,7 @@ FC4 运行验证使用包含上述四项修复的本地 release native 模块；
   带 `--features diretta`：175 项通过；`cargo check -p audio-engine --features diretta`
   通过。`cargo fmt --all --check` 与 `git diff --check` 通过。
 - `DIRETTA_SDK_ROOT=/home/bnqzzdf/code/DirettaHostSDK_150 DIRETTA_CPU_VARIANT=v3
-  cargo build -p audio-engine --release --features diretta` 通过。本地模块
+cargo build -p audio-engine --release --features diretta` 通过。本地模块
   `target/release/libaudio_engine.so` SHA256 为
   `af101c5ee61032196ec1f6c3f7d9904b2d58a90f76b744aba2d45b91fbf42dee`。
 

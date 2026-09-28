@@ -76,11 +76,7 @@ test("distributed player helpers use Core Protocol without host event facades", 
   assert.match(lyricPosterSource, /playerClient\.getCoverRaw\(\)/);
   assert.match(lyricLoaderSource, /playerClient\.readLyricFile\(ext\.path\)/);
   const migratedIpc = /window\.api\.player\.(getCoverRaw|readLyricFile)/;
-  for (const source of [
-    playerCoverSource,
-    lyricPosterSource,
-    lyricLoaderSource,
-  ]) {
+  for (const source of [playerCoverSource, lyricPosterSource, lyricLoaderSource]) {
     assert.doesNotMatch(source, migratedIpc);
   }
   assert.doesNotMatch(

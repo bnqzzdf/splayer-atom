@@ -481,12 +481,16 @@ defineExpose({
                   {{ t("songList.title") }}
                 </div>
               </div>
-              <div v-if="showAlbum" class="hidden md:block flex-1 min-w-0">{{ t("songList.album") }}</div>
+              <div v-if="showAlbum" class="hidden md:block flex-1 min-w-0">
+                {{ t("songList.album") }}
+              </div>
               <div class="w-14 shrink-0 text-center">{{ t("songList.actions") }}</div>
               <div v-if="showDuration" class="hidden sm:block w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
-              <div v-if="showSize" class="hidden md:block w-16 shrink-0 text-center">{{ t("songList.size") }}</div>
+              <div v-if="showSize" class="hidden md:block w-16 shrink-0 text-center">
+                {{ t("songList.size") }}
+              </div>
             </div>
           </div>
         </template>
@@ -505,7 +509,11 @@ defineExpose({
                     ? 'bg-primary/16 border-primary/40'
                     : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12'
               "
-              @click="batch.active.value ? batch.toggle(item.id) : player.playFrom(sortedItems, index, props.playbackContext)"
+              @click="
+                batch.active.value
+                  ? batch.toggle(item.id)
+                  : player.playFrom(sortedItems, index, props.playbackContext)
+              "
               @contextmenu="contextTrack = item"
             >
               <!-- 序号 / 多选 -->
@@ -636,8 +644,14 @@ defineExpose({
                         <span class="md:hidden mx-1 opacity-40">·</span>
                         <span
                           class="md:hidden transition-opacity opacity-70"
-                          :class="isAlbumLinkable(item) ? 'cursor-pointer hover:opacity-90' : 'opacity-50'"
-                          @click="isAlbumLinkable(item) ? ($event.stopPropagation(), goAlbum(item)) : undefined"
+                          :class="
+                            isAlbumLinkable(item) ? 'cursor-pointer hover:opacity-90' : 'opacity-50'
+                          "
+                          @click="
+                            isAlbumLinkable(item)
+                              ? ($event.stopPropagation(), goAlbum(item))
+                              : undefined
+                          "
                         >
                           {{ item.album.name }}
                         </span>

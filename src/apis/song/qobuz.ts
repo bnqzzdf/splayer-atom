@@ -4,8 +4,7 @@ import type { QualityLevel } from "@/utils/quality";
 import { qobuzCall } from "@/apis/qobuz";
 
 export type QobuzPlayUrlResult =
-  | { available: true; url: string; isTrial: boolean }
-  | { available: false; errorCode: ErrorCode };
+  { available: true; url: string; isTrial: boolean } | { available: false; errorCode: ErrorCode };
 
 interface QobuzSongUrlResponse {
   code: number;

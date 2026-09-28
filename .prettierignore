@@ -8,3 +8,7 @@ auto-eslint.mjs
 auto-imports.d.ts
 components.d.ts
 native/*/index.d.ts
+
+# 本地资料归档（已由 .git/info/exclude 排除、不进仓库）。
+# 它含历史源码包与 MANIFEST.sha256，格式化会改写归档内容并使其清单失效。
+_materials

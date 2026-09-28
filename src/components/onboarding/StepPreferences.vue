@@ -77,7 +77,9 @@ const isColorActive = (hex: string): boolean =>
           class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
         >
           <span class="text-sm">{{ t("onboarding.preferences.modeLabel") }}</span>
-          <div class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
+          <div
+            class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end"
+          >
             <SButton
               v-for="m in MODES"
               :key="m.value"
@@ -98,7 +100,9 @@ const isColorActive = (hex: string): boolean =>
           class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 rounded-xl bg-on-surface/4 border border-solid border-primary/10 px-4 py-3"
         >
           <span class="text-sm shrink-0">{{ t("onboarding.preferences.colorLabel") }}</span>
-          <div class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end">
+          <div
+            class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 justify-start sm:justify-end"
+          >
             <SButton
               v-for="hex in PRESET_COLORS"
               :key="hex"

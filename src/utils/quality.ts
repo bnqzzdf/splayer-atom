@@ -38,9 +38,7 @@ const LOSSLESS_CODECS = new Set([
  */
 export const isLosslessCodec = (codec: string): boolean => {
   const lowerCodec = codec.toLowerCase();
-  return (
-    LOSSLESS_CODECS.has(lowerCodec) || lowerCodec === "pcm" || lowerCodec.startsWith("pcm_")
-  );
+  return LOSSLESS_CODECS.has(lowerCodec) || lowerCodec === "pcm" || lowerCodec.startsWith("pcm_");
 };
 
 /** 等级短码文案 */

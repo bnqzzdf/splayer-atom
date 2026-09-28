@@ -73,8 +73,9 @@ test("Core applies pause-on-device-switch policy when restoring playback on the 
 
 test("native output selection never owns source reload or resume", () => {
   const nativeSwitch =
-    nativeBindingSource.split("pub async fn set_output_device")[1]?.split("/// 获取当前选择的输出设备")[0] ??
-    "";
+    nativeBindingSource
+      .split("pub async fn set_output_device")[1]
+      ?.split("/// 获取当前选择的输出设备")[0] ?? "";
   assert.match(nativeSwitch, /player\.set_output_device\(device_id\)\.into_napi\(\)/);
   assert.doesNotMatch(nativeSwitch, /self\.load\(|self\.seek\(|self\.play\(|pause_immediately/);
 });

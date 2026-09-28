@@ -161,62 +161,62 @@ const handleReset = (): void => {
           class="flex items-stretch gap-1 min-w-[480px] transition-opacity"
           :class="enabled && !directLocked ? '' : 'opacity-50 pointer-events-none'"
         >
-        <div class="flex-1 flex flex-col items-center gap-2 min-w-0">
-          <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
-            {{ formatDb(localPreamp) }}
+          <div class="flex-1 flex flex-col items-center gap-2 min-w-0">
+            <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
+              {{ formatDb(localPreamp) }}
+            </div>
+            <div class="h-40 w-full flex justify-center">
+              <SSlider
+                :model-value="localPreamp"
+                :min="PREAMP_MIN"
+                :max="PREAMP_MAX"
+                :step="1"
+                :show-popover="false"
+                :disabled="directLocked || !enabled"
+                vertical
+                center-fill
+                :thumb-size="16"
+                :track-height="5"
+                @change="onPreampChange"
+                @drag-end="onPreampCommit"
+              >
+                <template #popover="{ value }">{{ formatDb(value) }}</template>
+              </SSlider>
+            </div>
+            <div class="text-xs text-on-surface-variant whitespace-nowrap">
+              {{ t("equalizer.preamp") }}
+            </div>
           </div>
-          <div class="h-40 w-full flex justify-center">
-            <SSlider
-              :model-value="localPreamp"
-              :min="PREAMP_MIN"
-              :max="PREAMP_MAX"
-              :step="1"
-              :show-popover="false"
-              :disabled="directLocked || !enabled"
-              vertical
-              center-fill
-              :thumb-size="16"
-              :track-height="5"
-              @change="onPreampChange"
-              @drag-end="onPreampCommit"
-            >
-              <template #popover="{ value }">{{ formatDb(value) }}</template>
-            </SSlider>
+          <SDivider vertical class="!h-auto self-stretch mx-1.5" />
+          <div
+            v-for="(label, index) in FREQ_LABELS"
+            :key="label"
+            class="flex-1 flex flex-col items-center gap-2 min-w-0"
+          >
+            <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
+              {{ formatDb(localBands[index]) }}
+            </div>
+            <div class="h-40 w-full flex justify-center">
+              <SSlider
+                :model-value="localBands[index]"
+                :min="BAND_MIN"
+                :max="BAND_MAX"
+                :step="1"
+                :show-popover="false"
+                :disabled="directLocked || !enabled"
+                vertical
+                center-fill
+                :thumb-size="16"
+                :track-height="5"
+                @change="onBandChange(index, $event)"
+                @drag-end="onBandCommit"
+              >
+                <template #popover="{ value }">{{ formatDb(value) }}</template>
+              </SSlider>
+            </div>
+            <div class="text-xs text-on-surface-variant tabular-nums">{{ label }}</div>
           </div>
-          <div class="text-xs text-on-surface-variant whitespace-nowrap">
-            {{ t("equalizer.preamp") }}
-          </div>
-        </div>
-        <SDivider vertical class="!h-auto self-stretch mx-1.5" />
-        <div
-          v-for="(label, index) in FREQ_LABELS"
-          :key="label"
-          class="flex-1 flex flex-col items-center gap-2 min-w-0"
-        >
-          <div class="text-xs text-on-surface-variant/70 tabular-nums h-4">
-            {{ formatDb(localBands[index]) }}
-          </div>
-          <div class="h-40 w-full flex justify-center">
-            <SSlider
-              :model-value="localBands[index]"
-              :min="BAND_MIN"
-              :max="BAND_MAX"
-              :step="1"
-              :show-popover="false"
-              :disabled="directLocked || !enabled"
-              vertical
-              center-fill
-              :thumb-size="16"
-              :track-height="5"
-              @change="onBandChange(index, $event)"
-              @drag-end="onBandCommit"
-            >
-              <template #popover="{ value }">{{ formatDb(value) }}</template>
-            </SSlider>
-          </div>
-          <div class="text-xs text-on-surface-variant tabular-nums">{{ label }}</div>
-        </div>
-      </SCard>
+        </SCard>
       </div>
     </div>
 

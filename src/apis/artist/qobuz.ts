@@ -45,10 +45,7 @@ interface QobuzSearchResponse {
  * 2. track.album 无 id（空 {}）→ 按 track.performer.name 从 albums 中
  *    匹配同名歌手的第一个有封面的专辑
  */
-const enrichTracksWithAlbumCover = (
-  tracks: QobuzTrack[],
-  albums: QobuzAlbum[],
-): QobuzTrack[] => {
+const enrichTracksWithAlbumCover = (tracks: QobuzTrack[], albums: QobuzAlbum[]): QobuzTrack[] => {
   const albumMap = new Map<string, QobuzAlbum>();
   for (const a of albums) {
     if (a?.id != null) albumMap.set(String(a.id), a);

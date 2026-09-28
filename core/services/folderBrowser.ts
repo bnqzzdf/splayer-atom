@@ -166,7 +166,9 @@ export const listPinnedFolders = async (): Promise<FolderPinEntry[]> => {
   );
 };
 
-export const authorizeFolderPath = async (input: string): Promise<{ path: string; root: string }> => {
+export const authorizeFolderPath = async (
+  input: string,
+): Promise<{ path: string; root: string }> => {
   const resolved = resolveFolderPath(input);
   await assertResolvedRealPath(resolved);
   return resolved;
@@ -1063,9 +1065,7 @@ const resolveFolderBatchTargets = async (
       }
     } catch {
       failed.push(
-        target.kind === "path"
-          ? target.path
-          : `${target.containerPath}#${target.trackId}`,
+        target.kind === "path" ? target.path : `${target.containerPath}#${target.trackId}`,
       );
     }
   }
@@ -1342,9 +1342,7 @@ export const makeFolderMaterialThumbnail = async (input: string): Promise<Buffer
   return makeImageThumbnailFromPath(material.entry.path);
 };
 
-const folderDirectoryArtworkPath = async (
-  physical: PhysicalEntry[],
-): Promise<string | null> => {
+const folderDirectoryArtworkPath = async (physical: PhysicalEntry[]): Promise<string | null> => {
   const images = physical.filter(
     (item) => item.type === "file" && materialType(item.path) === "image",
   );

@@ -3,10 +3,10 @@
 这个目录是 `pnpm package:core:debian11` 用的打包环境。**发布产物在这里构建**，
 因为它决定了产物的 glibc 下限。
 
-| 文件 | 作用 |
-| --- | --- |
+| 文件         | 作用                                                                                                               |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
 | `Dockerfile` | 构建镜像：Debian 11 (bullseye, glibc 2.31) + build-essential/clang/llvm + Node 24.18.0 + pnpm 11.5.2 + Rust stable |
-| `build.sh` | **在容器内**跑的构建脚本：装依赖 → 编 native → 打产物 → 校验 glibc 与 Diretta 能力位 |
+| `build.sh`   | **在容器内**跑的构建脚本：装依赖 → 编 native → 打产物 → 校验 glibc 与 Diretta 能力位                               |
 
 宿主侧的入口是 `scripts/atom/build-debian11-bundled.sh`（`pnpm package:core:debian11`），
 它负责建镜像、建缓存卷、把仓库与 SDK 挂进容器，然后执行 `build.sh`。
@@ -46,12 +46,12 @@ out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>[-diretta-<变体>]-
 变体不是「优化等级」，是**能不能在这台机器上跑**。SDK 按 `-march=x86-64-vN` 分别发布
 预编译库，用比目标机更高的变体会直接 SIGILL（`invalid opcode`）。
 
-| 变体 | 需要 | 典型 CPU |
-| --- | --- | --- |
-| `v2` | SSE4.2 / POPCNT（x86-64-v2） | Celeron J1900、Atom、二代酷睿及以后 |
-| `v3` | AVX / AVX2 / FMA | Haswell（2013）及以后 |
-| `v4` | AVX-512 | Skylake-X、Ice Lake 服务器 |
-| `zen4` | AMD Zen 4 | Ryzen 7000 / EPYC 9004 |
+| 变体   | 需要                         | 典型 CPU                            |
+| ------ | ---------------------------- | ----------------------------------- |
+| `v2`   | SSE4.2 / POPCNT（x86-64-v2） | Celeron J1900、Atom、二代酷睿及以后 |
+| `v3`   | AVX / AVX2 / FMA             | Haswell（2013）及以后               |
+| `v4`   | AVX-512                      | Skylake-X、Ice Lake 服务器          |
+| `zen4` | AMD Zen 4                    | Ryzen 7000 / EPYC 9004              |
 
 原则：**取目标机支持的最高代次**。低变体产物在高代次机器上照样能跑，反过来不行。
 （SDK 150 没有发布 v1 库，所以不存在带 Diretta 的 v1 产物；需要 v1 只能用 ALSA-only。）

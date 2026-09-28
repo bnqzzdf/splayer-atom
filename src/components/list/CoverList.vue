@@ -97,7 +97,9 @@ const columnCount = computed(() => {
   if (!innerWidth.value) return 1;
   return Math.max(
     1,
-    Math.floor((innerWidth.value + effectiveGap.value) / (effectiveMinSize.value + effectiveGap.value)),
+    Math.floor(
+      (innerWidth.value + effectiveGap.value) / (effectiveMinSize.value + effectiveGap.value),
+    ),
   );
 });
 

@@ -4,8 +4,7 @@ import type { QualityLevel } from "@/utils/quality";
 import { tidalCall } from "@/apis/tidal";
 
 export type TidalPlayUrlResult =
-  | { available: true; url: string; isTrial: boolean }
-  | { available: false; errorCode: ErrorCode };
+  { available: true; url: string; isTrial: boolean } | { available: false; errorCode: ErrorCode };
 
 interface TidalSongUrlResponse {
   code: number;

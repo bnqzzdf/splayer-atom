@@ -80,7 +80,9 @@ onMounted(() => {
       :class="isMobile ? 'w-full flex-1' : 'w-70 shrink-0'"
     >
       <h2 class="text-2xl font-bold mb-1 px-1">{{ t("settings.title") }}</h2>
-      <p class="text-sm text-on-surface-variant/80 mb-4 sm:mb-5 px-1">{{ t("settings.subtitle") }}</p>
+      <p class="text-sm text-on-surface-variant/80 mb-4 sm:mb-5 px-1">
+        {{ t("settings.subtitle") }}
+      </p>
 
       <!-- 搜索 -->
       <SettingsSearch
@@ -91,7 +93,10 @@ onMounted(() => {
 
       <!-- 菜单 -->
       <Transition name="fade">
-        <div v-show="!isSearchActive" class="flex-1 min-h-0 overflow-y-auto -mr-4 sm:-mr-5 pr-4 sm:pr-5">
+        <div
+          v-show="!isSearchActive"
+          class="flex-1 min-h-0 overflow-y-auto -mr-4 sm:-mr-5 pr-4 sm:pr-5"
+        >
           <SettingsMenu
             :categories="settingsSchema"
             :active-id="activeId"

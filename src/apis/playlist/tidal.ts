@@ -30,7 +30,10 @@ export const fetchPlaylist = async (
 ): Promise<{ playlist: Playlist; tracks: Track[] } | null> => {
   const [data, tracksData] = await Promise.all([
     tidalCall<TidalPlaylist>("playlist_get", { playlist_id: playlistId }),
-    tidalCall<TidalPlaylistTracksResponse>("playlist_getTracks", { playlist_id: playlistId, limit: 100 }),
+    tidalCall<TidalPlaylistTracksResponse>("playlist_getTracks", {
+      playlist_id: playlistId,
+      limit: 100,
+    }),
   ]);
   if (!data?.uuid) return null;
   return {

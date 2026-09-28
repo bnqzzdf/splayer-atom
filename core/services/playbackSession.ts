@@ -1283,12 +1283,7 @@ export const onNativeProcessedTrackBoundary = (
     const track = enrichLocalTrackFromMediaInfo(prepared.item.track, prepared.processedMediaInfo);
     const item = { ...prepared.item, track };
     const duration = Math.max(track.duration || 0, eventDurationMs || 0);
-    commitProcessedPlaybackBoundary(
-      prepared.processedSource,
-      duration,
-      track,
-      item.context,
-    );
+    commitProcessedPlaybackBoundary(prepared.processedSource, duration, track, item.context);
     commitGaplessSessionProjection(
       prepared.queueIndex,
       item,

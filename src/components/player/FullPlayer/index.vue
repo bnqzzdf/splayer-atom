@@ -82,7 +82,6 @@ const onAfterLeave = () => {
   lyricMounted.value = false;
 };
 
-
 // 手机端打开全屏播放器时，默认展示封面而不是歌词
 watch(
   () => status.isPlayerExpanded,
@@ -91,7 +90,7 @@ watch(
       showLyric.value = false;
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 重新挂载时，刷新初始时间
@@ -192,9 +191,12 @@ const {
   openPicker,
 } = usePlaylistPicker();
 
-const { openContainingFolder: openDisplayTrackContainingFolderAction } = useTrackMenu(displayTrack, {
-  hidePlayActions: true,
-});
+const { openContainingFolder: openDisplayTrackContainingFolderAction } = useTrackMenu(
+  displayTrack,
+  {
+    hidePlayActions: true,
+  },
+);
 
 const openDisplayTrackContainingFolder = async (): Promise<void> => {
   if (await openDisplayTrackContainingFolderAction()) collapse();
@@ -331,7 +333,10 @@ const showComments = (): void => {
               class="relative flex flex-col items-center text-center w-full max-w-[85vw] max-h-[45vh] min-w-0 transition-transform duration-300"
             >
               <Transition name="scale-switch" mode="out-in">
-                <div :key="displayTrack?.id" class="flex flex-col items-center w-full min-w-0 max-w-full">
+                <div
+                  :key="displayTrack?.id"
+                  class="flex flex-col items-center w-full min-w-0 max-w-full"
+                >
                   <PlayerCover
                     class="max-w-[min(260px,55vw)] max-h-[35vh] aspect-square"
                     :class="hasLyric ? 'cursor-pointer' : ''"
@@ -706,7 +711,9 @@ const showComments = (): void => {
                 <template #icon><IconLucideListPlus class="size-4" /></template>
               </SButton>
               <SButton
-                v-if="displayTrack?.source === 'local' && (displayTrack.path || displayTrack.cuePath)"
+                v-if="
+                  displayTrack?.source === 'local' && (displayTrack.path || displayTrack.cuePath)
+                "
                 type="cover"
                 variant="ghost"
                 size="small"

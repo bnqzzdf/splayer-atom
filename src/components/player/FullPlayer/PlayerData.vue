@@ -246,7 +246,11 @@ const justifyContent = computed(() => {
               :class="
                 isArtistLinkable(artist) ? 'cursor-pointer transition-colors hover:text-cover' : ''
               "
-              @click="isArtistLinkable(artist) ? ($event.stopPropagation(), goToResource(artistTarget(artist))) : undefined"
+              @click="
+                isArtistLinkable(artist)
+                  ? ($event.stopPropagation(), goToResource(artistTarget(artist)))
+                  : undefined
+              "
             >
               {{ artist.name }}
             </span>
@@ -276,7 +280,11 @@ const justifyContent = computed(() => {
       <span
         class="truncate"
         :class="isPlaybackSourceLinkable ? 'cursor-pointer transition-colors hover:text-cover' : ''"
-        @click="isPlaybackSourceLinkable ? ($event.stopPropagation(), goToResource(playbackSourceTarget)) : undefined"
+        @click="
+          isPlaybackSourceLinkable
+            ? ($event.stopPropagation(), goToResource(playbackSourceTarget))
+            : undefined
+        "
       >
         {{ playbackSourceText }}
       </span>

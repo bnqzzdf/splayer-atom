@@ -105,9 +105,11 @@ const scanProgress = shallowRef<ScanProgress | null>(null);
 const scanning = computed(() => scanProgress.value?.phase === "scanning");
 const scanCoversCurrent = computed(() => {
   if (!scanning.value || !currentPath.value) return false;
-  return scanProgress.value?.scopeDirs?.some((scope) =>
-    folderPathWithinRoot(currentPath.value, scope),
-  ) ?? false;
+  return (
+    scanProgress.value?.scopeDirs?.some((scope) =>
+      folderPathWithinRoot(currentPath.value, scope),
+    ) ?? false
+  );
 });
 
 const searchQuery = ref("");
@@ -134,9 +136,11 @@ const playlistPickerOpen = ref(false);
 const playlistSubmitting = ref(false);
 const createRecursive = ref(true);
 const createTargetPath = ref("");
-const createTargetTrack = shallowRef<{ containerPath: string; trackId: string; title: string } | null>(
-  null,
-);
+const createTargetTrack = shallowRef<{
+  containerPath: string;
+  trackId: string;
+  title: string;
+} | null>(null);
 const createBatchTargets = shallowRef<FolderBatchTarget[] | null>(null);
 
 const viewerOpen = ref(false);
@@ -239,9 +243,7 @@ const viewRows = computed<ViewRow[]>(() => {
   return rows;
 });
 
-const batchTargetForRow = (
-  row: ViewRow,
-): { key: string; target: FolderBatchTarget } | null => {
+const batchTargetForRow = (row: ViewRow): { key: string; target: FolderBatchTarget } | null => {
   if (row.kind === "container-track") {
     return {
       key: row.key,
@@ -260,9 +262,7 @@ const batchTargetForRow = (
 const batchCandidates = computed(() =>
   viewRows.value
     .map(batchTargetForRow)
-    .filter(
-      (item): item is { key: string; target: FolderBatchTarget } => item !== null,
-    ),
+    .filter((item): item is { key: string; target: FolderBatchTarget } => item !== null),
 );
 const batchSelectedTargets = computed(() =>
   batchCandidates.value
@@ -272,8 +272,7 @@ const batchSelectedTargets = computed(() =>
 const batchSelectedCount = computed(() => batchSelectedTargets.value.length);
 const batchAllSelected = computed(
   () =>
-    batchCandidates.value.length > 0 &&
-    batchSelectedCount.value === batchCandidates.value.length,
+    batchCandidates.value.length > 0 && batchSelectedCount.value === batchCandidates.value.length,
 );
 const batchPartialSelected = computed(
   () => batchSelectedCount.value > 0 && !batchAllSelected.value,
@@ -706,9 +705,9 @@ const openCreatePlaylist = (targetPath: string, recursive: boolean): void => {
   createBatchTargets.value = null;
   playlistPickerOpen.value = true;
   if (!playlistStore.initialized) {
-    void playlistStore.load().catch((value) =>
-      toast.error(value instanceof Error ? value.message : String(value)),
-    );
+    void playlistStore
+      .load()
+      .catch((value) => toast.error(value instanceof Error ? value.message : String(value)));
   }
 };
 
@@ -723,9 +722,9 @@ const openContainerTrackPlaylist = (track: Track, containerPath: string): void =
   };
   playlistPickerOpen.value = true;
   if (!playlistStore.initialized) {
-    void playlistStore.load().catch((value) =>
-      toast.error(value instanceof Error ? value.message : String(value)),
-    );
+    void playlistStore
+      .load()
+      .catch((value) => toast.error(value instanceof Error ? value.message : String(value)));
   }
 };
 
@@ -737,9 +736,9 @@ const openBatchPlaylist = (): void => {
   createBatchTargets.value = [...batchSelectedTargets.value];
   playlistPickerOpen.value = true;
   if (!playlistStore.initialized) {
-    void playlistStore.load().catch((value) =>
-      toast.error(value instanceof Error ? value.message : String(value)),
-    );
+    void playlistStore
+      .load()
+      .catch((value) => toast.error(value instanceof Error ? value.message : String(value)));
   }
 };
 
@@ -1559,18 +1558,14 @@ onBeforeUnmount(() => {
               batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
             ]"
             @click="
-              batchActive &&
-              item.entry.kind !== 'directory' &&
-              item.entry.kind !== 'material'
+              batchActive && item.entry.kind !== 'directory' && item.entry.kind !== 'material'
                 ? toggleBatchKey(item.key)
                 : undefined
             "
           >
             <SCheckbox
               v-if="
-                batchActive &&
-                item.entry.kind !== 'directory' &&
-                item.entry.kind !== 'material'
+                batchActive && item.entry.kind !== 'directory' && item.entry.kind !== 'material'
               "
               :checked="batchSelectedKeys.has(item.key)"
               size="small"
@@ -1605,16 +1600,11 @@ onBeforeUnmount(() => {
             <button
               class="min-w-0 flex-1 text-left"
               :class="
-                batchActive &&
-                (item.entry.kind === 'directory' || item.entry.kind === 'material')
+                batchActive && (item.entry.kind === 'directory' || item.entry.kind === 'material')
                   ? 'cursor-default opacity-60'
                   : ''
               "
-              @click="
-                batchActive
-                  ? undefined
-                  : activateEntry(item.entry)
-              "
+              @click="batchActive ? undefined : activateEntry(item.entry)"
             >
               <div class="line-clamp-2 break-words text-sm font-medium">
                 {{ item.entry.kind === "track" ? item.entry.track.title : item.entry.name }}

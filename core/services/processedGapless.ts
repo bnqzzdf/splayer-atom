@@ -2,10 +2,7 @@ import type { LyricFormat } from "@shared/types/lyrics";
 import type { MediaInfo, PlaybackContext, Track, TrackDetail } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { setActiveCueTrack } from "@main/services/playerTimeline";
-import {
-  localMediaInfoFromNativeMetadata,
-  nextPlayerLoadSeq,
-} from "@main/services/playerLoad";
+import { localMediaInfoFromNativeMetadata, nextPlayerLoadSeq } from "@main/services/playerLoad";
 import { pruneDirectInputs } from "@main/atom/directInput";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";
 import * as listenbrainz from "@main/services/listenbrainz";

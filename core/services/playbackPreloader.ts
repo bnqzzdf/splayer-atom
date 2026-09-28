@@ -244,7 +244,8 @@ const canStageProcessed = (
     return false;
   }
   // SACD/Native DSD 不进入 processed；保持正常 Ended -> load/reject 语义。
-  if (toNativeSacdPlaybackSource(resolved.source, track.track, track.duration) != null) return false;
+  if (toNativeSacdPlaybackSource(resolved.source, track.track, track.duration) != null)
+    return false;
   return true;
 };
 
@@ -417,9 +418,9 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
           ? `[session] preloaded Direct next: ${item.track.title} generation=${directGeneration}`
           : processedGeneration !== null
             ? `[session] preloaded processed next: ${item.track.title} generation=${processedGeneration}`
-          : upnpMedia
-            ? `[session] preloaded UPnP media: ${item.track.title}`
-            : `[session] preloaded source: ${item.track.title}`,
+            : upnpMedia
+              ? `[session] preloaded UPnP media: ${item.track.title}`
+              : `[session] preloaded source: ${item.track.title}`,
       );
     } catch (error) {
       if (token !== preloadToken) return;
@@ -485,11 +486,7 @@ export const consumeProcessedPlaybackBoundary = (
   generation: number,
   queue: readonly PlaybackQueueItem[],
 ): PreparedProcessedPlaybackBoundary | null => {
-  if (
-    !prepared ||
-    prepared.processedGeneration !== generation ||
-    !prepared.processedSource
-  ) {
+  if (!prepared || prepared.processedGeneration !== generation || !prepared.processedSource) {
     return null;
   }
   const current = queue[prepared.queueIndex];

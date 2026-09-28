@@ -2,10 +2,7 @@ import type { LyricFormat } from "@shared/types/lyrics";
 import type { DirectStageResult, PlaybackContext, Track } from "@shared/types/player";
 import { getPlayer } from "@main/services/engine";
 import { directCueSegmentFromTrack, setActiveCueTrack } from "@main/services/playerTimeline";
-import {
-  localMediaInfoFromNativeMetadata,
-  nextPlayerLoadSeq,
-} from "@main/services/playerLoad";
+import { localMediaInfoFromNativeMetadata, nextPlayerLoadSeq } from "@main/services/playerLoad";
 import { pruneDirectInputs } from "@main/atom/directInput";
 import { playerLog } from "@main/utils/logger";
 import * as neteaseScrobble from "@main/services/neteaseScrobble";

@@ -2,8 +2,7 @@ import { store } from "@main/store";
 import type { AlsaPlaybackMode } from "@shared/types/settings";
 import { isDirectAlsaHardwareOutput, isDirettaOutput } from "@shared/utils/outputDevice";
 
-export const getAlsaPlaybackMode = (): AlsaPlaybackMode =>
-  store.get("player.alsaPlaybackMode");
+export const getAlsaPlaybackMode = (): AlsaPlaybackMode => store.get("player.alsaPlaybackMode");
 
 export const isAlsaDirectOutput = (
   deviceId: string | null | undefined,

@@ -9,7 +9,9 @@ const events = read(new URL("./corePlayerEvents.ts", import.meta.url));
 const processedGapless = read(new URL("./processedGapless.ts", import.meta.url));
 const binding = read(new URL("../../native/audio-engine/src/bindings/player.rs", import.meta.url));
 const decoder = read(new URL("../../native/audio-engine-core/src/decoder.rs", import.meta.url));
-const writer = read(new URL("../../native/audio-engine-core/src/alsa/processed_pcm.rs", import.meta.url));
+const writer = read(
+  new URL("../../native/audio-engine-core/src/alsa/processed_pcm.rs", import.meta.url),
+);
 const player = read(new URL("../../native/audio-engine-core/src/player/mod.rs", import.meta.url));
 
 test("processed preload stages only optional compatible whole-track PCM and never blocks full load", () => {

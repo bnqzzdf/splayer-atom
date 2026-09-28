@@ -66,7 +66,10 @@ test("Folder HTTP routes keep material streaming and path authorization inside l
     const filteredBrowse = (await filteredBrowseResponse.json()) as {
       entries: Array<{ path: string }>;
     };
-    assert.deepEqual(filteredBrowse.entries.map((entry) => entry.path), [pdf]);
+    assert.deepEqual(
+      filteredBrowse.entries.map((entry) => entry.path),
+      [pdf],
+    );
 
     const emptyDirectoryThumb = await app.request(
       `http://folder.test/library/folders/directory/thumbnail?path=${encodeURIComponent(emptyDir)}`,

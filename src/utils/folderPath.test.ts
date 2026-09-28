@@ -14,21 +14,12 @@ test("folderPathWithinRoot handles Windows drive paths case-insensitively", () =
 });
 
 test("folderPathWithinRoot handles UNC paths case-insensitively", () => {
-  assert.equal(
-    folderPathWithinRoot("\\\\NAS\\Music\\Album", "\\\\nas\\music"),
-    true,
-  );
-  assert.equal(
-    folderPathWithinRoot("\\\\NAS\\Music2", "\\\\nas\\music"),
-    false,
-  );
+  assert.equal(folderPathWithinRoot("\\\\NAS\\Music\\Album", "\\\\nas\\music"), true);
+  assert.equal(folderPathWithinRoot("\\\\NAS\\Music2", "\\\\nas\\music"), false);
 });
 
 test("appendFolderPath preserves the configured path separator style", () => {
   assert.equal(appendFolderPath("/music", "Album"), "/music/Album");
   assert.equal(appendFolderPath("C:\\Music", "Album"), "C:\\Music\\Album");
-  assert.equal(
-    appendFolderPath("\\\\NAS\\Music\\", "Album"),
-    "\\\\NAS\\Music\\Album",
-  );
+  assert.equal(appendFolderPath("\\\\NAS\\Music\\", "Album"), "\\\\NAS\\Music\\Album");
 });

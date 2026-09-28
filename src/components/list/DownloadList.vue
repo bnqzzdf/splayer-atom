@@ -229,7 +229,9 @@ defineExpose({ playAll });
             </span>
           </div>
           <!-- 大小 -->
-          <div class="hidden sm:block w-20 shrink-0 text-center text-sm tabular-nums text-on-surface-variant">
+          <div
+            class="hidden sm:block w-20 shrink-0 text-center text-sm tabular-nums text-on-surface-variant"
+          >
             {{ sizeText(item) || "—" }}
           </div>
           <!-- 时长 -->

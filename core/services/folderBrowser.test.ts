@@ -210,7 +210,9 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.equal(page.parent, null);
     assert.ok(page.entries.some((entry) => entry.kind === "directory" && entry.path === subfolder));
     assert.equal(
-      page.entries.some((entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink),
+      page.entries.some(
+        (entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink,
+      ),
       false,
       "browse must not expose symlinks whose real target escapes the configured root",
     );
@@ -345,7 +347,9 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.ok(search.data.some((entry) => entry.kind === "directory" && entry.path === subfolder));
     const escapedSearch = await folder.searchFolders("external");
     assert.equal(
-      escapedSearch.data.some((entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink),
+      escapedSearch.data.some(
+        (entry) => entry.path === outsideDirectoryLink || entry.path === outsideFileLink,
+      ),
       false,
       "Folder Search must not traverse or expose out-of-root symlink targets",
     );
@@ -398,13 +402,7 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     const massiveFocused = await folder.browseFolder(massive, undefined, 200, focusTarget);
     assert.ok(massiveFocused.entries.some((entry) => entry.path === focusTarget));
     assert.ok(massiveFocused.previousCursor);
-    const filteredMassive = await folder.browseFolder(
-      massive,
-      undefined,
-      20,
-      undefined,
-      "0551",
-    );
+    const filteredMassive = await folder.browseFolder(massive, undefined, 20, undefined, "0551");
     assert.equal(filteredMassive.counts.media, 1);
     assert.deepEqual(
       filteredMassive.entries.map((entry) => entry.path),

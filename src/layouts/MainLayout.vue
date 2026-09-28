@@ -160,7 +160,9 @@ const playerBarInnerClass = computed(() => {
       <footer
         v-if="!isDesktop && showPlayerBar"
         class="fixed bottom-0 left-0 right-0 z-30 bg-surface-panel border-t border-t-solid border-t-primary/10 pb-[env(safe-area-inset-bottom,0px)]"
-        :class="isPlayerExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'"
+        :class="
+          isPlayerExpanded ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'
+        "
       >
         <PlayerBar />
       </footer>

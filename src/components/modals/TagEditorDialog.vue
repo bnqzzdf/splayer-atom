@@ -238,7 +238,9 @@ const handleSave = async (): Promise<void> => {
       <!-- 在线匹配 -->
       <SCard size="small" variant="primary">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="w-full sm:flex-1 text-sm text-on-surface">{{ t("tagEditor.matchHint") }}</span>
+          <span class="w-full sm:flex-1 text-sm text-on-surface">
+            {{ t("tagEditor.matchHint") }}
+          </span>
           <div class="w-24 shrink-0">
             <SSelect v-model="matchPlatform" :options="platformOptions" />
           </div>
