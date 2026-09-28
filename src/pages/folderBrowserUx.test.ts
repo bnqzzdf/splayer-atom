@@ -78,8 +78,8 @@ test("Folder rows expose physical file identity without inventing unscanned meta
 });
 
 test("Folder operation scope and loaded-only batch selection are explicit", () => {
-  assert.ok(foldersSource.includes('t("folder.playRecursive")'));
-  assert.ok(foldersSource.includes("folderOperationScopeHint"));
+  assert.ok(foldersSource.includes('t("folder.play")'));
+  assert.ok(foldersSource.includes('key: "currentOnly"'));
   assert.ok(foldersSource.includes('t("folder.selectLoaded")'));
   assert.ok(foldersSource.includes('t("folder.invertLoaded")'));
   assert.ok(foldersSource.includes("batchCandidates.value.map((item) => item.key)"));

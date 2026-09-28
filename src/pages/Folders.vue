@@ -162,11 +162,6 @@ const folderSortOptions = computed(() => [
   { label: t("folder.sortMtime"), value: "mtime" },
   { label: t("folder.sortTrack"), value: "track" },
 ]);
-const folderOperationScopeHint = computed(() =>
-  filterQuery.value.trim()
-    ? t("folder.scopeFilteredHint")
-    : t("folder.scopeRecursiveHint"),
-);
 
 const fileExtension = (name: string): string => {
   const index = name.lastIndexOf(".");
@@ -1525,7 +1520,7 @@ onBeforeUnmount(() => {
             @click="runAction(currentPath, 'play', true)"
           >
             <template #icon><IconPlay /></template>
-            {{ t("folder.playRecursive") }}
+            {{ t("folder.play") }}
           </SButton>
           <SButton
             variant="secondary"
@@ -1546,9 +1541,6 @@ onBeforeUnmount(() => {
               </SButton>
             </template>
           </SDropdownMenu>
-          <span class="text-xs text-on-surface-variant/60">
-            {{ folderOperationScopeHint }}
-          </span>
           <SInput
             v-model="filterQuery"
             :placeholder="t('folder.filterPlaceholder')"
