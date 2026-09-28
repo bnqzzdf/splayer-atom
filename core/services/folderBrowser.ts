@@ -1268,7 +1268,6 @@ export const resolveTrackFolderLocation = (track: Track): FolderNavigationTarget
     return {
       path: path.dirname(track.cuePath),
       containerPath: path.resolve(track.cuePath),
-      focusTrackId: track.id,
     };
   }
   const iso = sacdIsoPathFromVirtual(track.path);
@@ -1276,7 +1275,6 @@ export const resolveTrackFolderLocation = (track: Track): FolderNavigationTarget
     return {
       path: path.dirname(iso),
       containerPath: path.resolve(iso),
-      focusTrackId: track.id,
     };
   }
   return {

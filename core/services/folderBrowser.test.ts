@@ -836,7 +836,6 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.deepEqual(cueLocation, {
       path: root,
       containerPath: cue,
-      focusTrackId: "cue-track",
     });
     const iso = path.join(root, "disc.iso");
     const sacdLocation = folder.resolveTrackFolderLocation({
@@ -850,7 +849,6 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.deepEqual(sacdLocation, {
       path: root,
       containerPath: iso,
-      focusTrackId: "sacd-track",
     });
 
     const duplicateRootA = path.join(root, "Root A", "music");

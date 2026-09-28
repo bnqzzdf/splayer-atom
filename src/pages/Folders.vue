@@ -346,6 +346,12 @@ const batchTargetForRow = (
   }
   if (row.kind !== "entry") return null;
   if (row.entry.kind === "directory" || row.entry.kind === "material") return null;
+  if (
+    (row.entry.kind === "cue" || row.entry.kind === "sacd") &&
+    container.value?.path === row.entry.path
+  ) {
+    return null;
+  }
   return { key: row.key, target: { kind: "path", path: row.entry.path } };
 };
 
@@ -356,6 +362,7 @@ const batchCandidates = computed(() =>
       (item): item is { key: string; target: FolderBatchTarget } => item !== null,
     ),
 );
+const batchCandidateKeys = computed(() => new Set(batchCandidates.value.map((item) => item.key)));
 const batchSelectedTargets = computed(() =>
   batchCandidates.value
     .filter((item) => batchSelectedKeys.value.has(item.key))
@@ -511,8 +518,9 @@ const loadRoots = async (): Promise<void> => {
 };
 
 const focusRequestedEntry = async (): Promise<void> => {
-  const id = requestedFocusId.value;
-  const focusPath = requestedFocusPath.value;
+  const containerPath = requestedContainerPath.value;
+  const id = containerPath ? "" : requestedFocusId.value;
+  const focusPath = containerPath || requestedFocusPath.value;
   if (!id && !focusPath) return;
   await nextTick();
   const index = viewRows.value.findIndex((row) => {
@@ -1885,20 +1893,10 @@ onBeforeUnmount(() => {
             v-else
             class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-primary/6"
             :class="batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : ''"
-            @click="
-              batchActive &&
-              item.entry.kind !== 'directory' &&
-              item.entry.kind !== 'material'
-                ? toggleBatchKey(item.key)
-                : undefined
-            "
+            @click="batchActive && batchCandidateKeys.has(item.key) ? toggleBatchKey(item.key) : undefined"
           >
             <SCheckbox
-              v-if="
-                batchActive &&
-                item.entry.kind !== 'directory' &&
-                item.entry.kind !== 'material'
-              "
+              v-if="batchActive && batchCandidateKeys.has(item.key)"
               :checked="batchSelectedKeys.has(item.key)"
               size="small"
               @update:checked="toggleBatchKey(item.key)"

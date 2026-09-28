@@ -154,8 +154,11 @@ test("Folder batch management keeps explicit file selection Core-owned", () => {
   assert.ok(
     foldersSource.includes("folderBrowserClient.addBatchToPlaylist(playlistId, batchTargets)"),
   );
-  assert.ok(foldersSource.includes("item.entry.kind !== 'directory'"));
-  assert.ok(foldersSource.includes("item.entry.kind !== 'material'"));
+  assert.ok(
+    foldersSource.includes('(row.entry.kind === "cue" || row.entry.kind === "sacd") &&'),
+  );
+  assert.ok(foldersSource.includes("container.value?.path === row.entry.path"));
+  assert.ok(foldersSource.includes("batchCandidateKeys.has(item.key)"));
   assert.ok(folderClientSource.includes('"/library/folders/batch/playlist"'));
   assert.ok(folderClientSource.includes("/library/folders/batch/"));
 });
@@ -163,6 +166,13 @@ test("Folder batch management keeps explicit file selection Core-owned", () => {
 test("Show in folder remains shared across player and queue surfaces", () => {
   assert.ok(trackMenuSource.includes('id: "openContainingFolder"'));
   assert.ok(trackMenuSource.includes("folderBrowserClient.location(current)"));
+  assert.ok(
+    foldersSource.includes(
+      "const focusPath = containerPath || requestedFocusPath.value;",
+    ),
+  );
+  assert.equal(foldersSource.includes("data-folder-track-id"), false);
+  assert.equal(foldersSource.includes("requestAnimationFrame"), false);
   assert.ok(queuePopoverSource.includes("onOpenContainingFolder(item)"));
   assert.ok(queuePopoverSource.includes("openContainingFolder(track)"));
   assert.ok(queuePanelSource.includes("onOpenContainingFolder(item)"));
