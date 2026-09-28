@@ -364,6 +364,8 @@ const batchSelectedTargets = computed(() =>
 const batchSelectedCount = computed(() => batchSelectedTargets.value.length);
 const batchAllSelected = computed(
   () =>
+    !previousCursor.value &&
+    !nextCursor.value &&
     batchCandidates.value.length > 0 &&
     batchSelectedCount.value === batchCandidates.value.length,
 );
@@ -392,12 +394,95 @@ const toggleBatchKey = (key: string): void => {
   batchSelectedKeys.value = next;
 };
 
-const toggleBatchAll = (): void => {
-  if (batchAllSelected.value) setBatchSelection([]);
-  else setBatchSelection(batchCandidates.value.map((item) => item.key));
+const loadAllBatchEntries = async (): Promise<boolean> => {
+  if (
+    !currentPath.value ||
+    loading.value ||
+    loadingMore.value ||
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
+  ) {
+    return false;
+  }
+  if (!previousCursor.value && !nextCursor.value) return true;
+
+  const generation = browseGeneration;
+  const target = currentPath.value;
+  const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
+  const allEntries: FolderBrowseEntry[] = [];
+  let cursor: string | undefined;
+  let lastPage: FolderBrowsePage | null = null;
+  loadingMore.value = true;
+  try {
+    do {
+      const result = await folderBrowserClient.browse({
+        path: target,
+        cursor,
+        limit: 500,
+        filter: activeFilter || undefined,
+        sort: activeSort,
+        order: activeOrder,
+      });
+      if (
+        generation !== browseGeneration ||
+        currentPath.value !== target ||
+        loadedFilter.value !== activeFilter ||
+        currentSort.value !== activeSort ||
+        currentOrder.value !== activeOrder
+      ) {
+        return false;
+      }
+      allEntries.push(...result.entries);
+      lastPage = result;
+      cursor = result.nextCursor;
+    } while (cursor);
+
+    if (!lastPage) return false;
+    entries.value = allEntries;
+    page.value = {
+      ...lastPage,
+      entries: allEntries,
+      previousCursor: undefined,
+      nextCursor: undefined,
+    };
+    previousCursor.value = undefined;
+    nextCursor.value = undefined;
+    return true;
+  } catch (value) {
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
+    ) {
+      return false;
+    }
+    if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
+      await refreshCurrent();
+    } else {
+      toast.error(value instanceof Error ? value.message : String(value));
+    }
+    return false;
+  } finally {
+    loadingMore.value = false;
+  }
 };
 
-const invertBatchSelection = (): void => {
+const toggleBatchAll = async (): Promise<void> => {
+  if (batchAllSelected.value) {
+    setBatchSelection([]);
+    return;
+  }
+  if (!(await loadAllBatchEntries())) return;
+  setBatchSelection(batchCandidates.value.map((item) => item.key));
+};
+
+const invertBatchSelection = async (): Promise<void> => {
+  if (!(await loadAllBatchEntries())) return;
   setBatchSelection(
     batchCandidates.value
       .filter((item) => !batchSelectedKeys.value.has(item.key))
@@ -1380,11 +1465,12 @@ onBeforeUnmount(() => {
           <SCheckbox
             :checked="batchAllSelected"
             :indeterminate="batchPartialSelected"
+            :disabled="loadingMore"
             size="small"
             @update:checked="toggleBatchAll"
           />
           <span class="shrink-0 text-sm text-on-surface-variant">
-            {{ t("folder.selectLoaded") }}
+            {{ t("folder.selectAll") }}
           </span>
           <span class="shrink-0 text-sm tabular-nums text-on-surface-variant">
             {{ t("songList.batch.selected", { count: batchSelectedCount }) }}
@@ -1393,11 +1479,11 @@ onBeforeUnmount(() => {
           <SButton
             variant="ghost"
             size="small"
-            :disabled="batchSelectedCount === 0"
+            :disabled="loadingMore || batchCandidates.length === 0"
             @click="invertBatchSelection"
           >
             <template #icon><IconArrowLeftRight class="size-3.5" /></template>
-            {{ t("folder.invertLoaded") }}
+            {{ t("folder.invertSelection") }}
           </SButton>
           <SButton
             variant="ghost"

@@ -107,11 +107,18 @@ test("Folder rows expose physical file identity without inventing unscanned meta
   assert.equal(foldersSource.includes("formatTime(item.entry.track.duration || 0)"), false);
 });
 
-test("Folder operation scope and loaded-only batch selection are explicit", () => {
+test("Folder operation scope and batch selection hide pagination details", () => {
   assert.ok(foldersSource.includes('t("folder.play")'));
   assert.ok(foldersSource.includes('key: "currentOnly"'));
-  assert.ok(foldersSource.includes('t("folder.selectLoaded")'));
-  assert.ok(foldersSource.includes('t("folder.invertLoaded")'));
+  assert.ok(foldersSource.includes('t("folder.selectAll")'));
+  assert.ok(foldersSource.includes('t("folder.invertSelection")'));
+  assert.equal(foldersSource.includes("selectLoaded"), false);
+  assert.equal(foldersSource.includes("invertLoaded"), false);
+  assert.ok(foldersSource.includes("const loadAllBatchEntries = async (): Promise<boolean>"));
+  assert.ok(foldersSource.includes("limit: 500"));
+  assert.ok(foldersSource.includes("} while (cursor);"));
+  assert.ok(foldersSource.includes("previousCursor.value = undefined"));
+  assert.ok(foldersSource.includes("nextCursor.value = undefined"));
   assert.ok(foldersSource.includes("batchCandidates.value.map((item) => item.key)"));
 });
 
