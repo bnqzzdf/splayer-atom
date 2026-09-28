@@ -49,10 +49,11 @@ be removed.
 
 ## Installation layout
 
-The extracted `core-system` directory is the installation root:
+The archive contains the installation root directly — there is no wrapper directory, so
+extracting into a target path yields the layout below:
 
 ```text
-core-system/
+<installation root>/
 ├─ app/
 ├─ renderer/
 ├─ native/
@@ -77,7 +78,7 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core
 ```
 
-The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same `core-system/` installation layout.
+The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same installation layout (no wrapper directory).
 
 ### systemd for ordinary ALSA Core
 
@@ -107,7 +108,8 @@ Do not infer a Target fault from a non-root Diretta connection timeout. Diretta 
 
 Do not unpack a new release over the active installation. Preserve the complete previous installation so rollback never depends on an old Core reading data already migrated by a newer Core.
 
-Assume the active installation is `/opt/splayer-atom-core` and the new archive extracts as `core-system`.
+Assume the active installation is `/opt/splayer-atom-core`. The archive holds the installation
+root at its top level, so it extracts straight into that path.
 
 1. Stop Core and confirm the service is inactive.
 
@@ -127,8 +129,7 @@ sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
 ```bash
 ARCHIVE=/path/to/the-built-system-linux-x64.tar.gz
 sudo mkdir -p /opt/splayer-atom-core
-sudo tar -xzf "$ARCHIVE" \
-  -C /opt/splayer-atom-core --strip-components=1
+sudo tar -xzf "$ARCHIVE" -C /opt/splayer-atom-core
 # bundled-runtime uses the corresponding bundled archive and the same target layout
 ```
 

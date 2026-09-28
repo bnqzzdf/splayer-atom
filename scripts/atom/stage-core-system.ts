@@ -304,6 +304,10 @@ if (archive) {
     ),
   );
   rmSync(archiveFile, { force: true });
+  // 归档内容就是安装根，不再套 `core-system/` 这一层：
+  // 解包到目标目录即得到 app/ renderer/ bin/ runtime.json …，
+  // 部署方不需要 `--strip-components` 或先 cd 进一层。
+  // `out/core-system` 仍只是本机的暂存目录，名字不进产物。
   const tar = spawnSync(
     "tar",
     [
@@ -314,9 +318,9 @@ if (archive) {
       "--numeric-owner",
       "-czf",
       archiveFile,
-      "core-system",
+      ".",
     ],
-    { cwd: path.join(root, "out"), encoding: "utf8" },
+    { cwd: outputDir, encoding: "utf8" },
   );
   if (tar.error) throw tar.error;
   if (tar.status !== 0 || tar.signal) {

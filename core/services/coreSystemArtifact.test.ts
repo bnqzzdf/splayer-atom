@@ -206,3 +206,21 @@ test("Core artifact paths are bundle-relative and scanner stays Electron-free", 
   assert.match(scannerSource, /@main\/atom\/cacheUrl/);
   assert.doesNotMatch(scannerSource, /@main\/utils\/protocol/);
 });
+
+test("产物解包后直接是安装根，不再套 core-system/ 这一层", () => {
+  // 归档从暂存目录内部创建（cwd = out/core-system，成员是 "."），
+  // 于是解包到目标路径即得到 app/ renderer/ bin/ runtime.json …。
+  // 一旦有人改回 `cwd: out` + 成员 "core-system"，部署脚本又会多出一层目录。
+  const tarStart = stageSource.indexOf("const tar = spawnSync(");
+  const tarEnd = stageSource.indexOf("if (tar.error)", tarStart);
+  assert.ok(tarStart > 0 && tarEnd > tarStart, "未找到 tar 调用");
+  const tarCall = stageSource.slice(tarStart, tarEnd);
+  assert.match(tarCall, /"tar",/);
+  assert.match(tarCall, /"-czf",\s*archiveFile,\s*"\.",/);
+  assert.doesNotMatch(tarCall, /"core-system"/);
+  assert.match(tarCall, /cwd: outputDir/);
+
+  // 校验脚本按同一个约定解包：安装根就是解包目录本身
+  assert.match(artifactCheckSource, /const installRoot = tempDir;/);
+  assert.doesNotMatch(artifactCheckSource, /path\.join\(tempDir, "core-system"\)/);
+});

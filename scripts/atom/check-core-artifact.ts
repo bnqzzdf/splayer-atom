@@ -157,7 +157,10 @@ try {
     fail(`解包失败: ${`${extract.stdout ?? ""}${extract.stderr ?? ""}`.trim()}`);
   }
 
-  const installRoot = path.join(tempDir, "core-system");
+  // 归档不再套一层目录：解包出来的就是安装根，`runtime.json` 直接在顶层。
+  // 早期产物带 `core-system/` 前缀，部署时还得 strip-components 或手动进目录，
+  // 多这一层只是把同一件事说了两遍。
+  const installRoot = tempDir;
   const runtime = JSON.parse(readFileSync(path.join(installRoot, "runtime.json"), "utf8")) as {
     productName?: string;
     atomVersion?: string;
