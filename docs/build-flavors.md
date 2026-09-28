@@ -63,7 +63,9 @@ SDK 文件不会被打包。各模式的副本分别保留为
 pnpm package:core
 ```
 
-产出 `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`，并要求有兼容的系统 Node `>=22.19.0`。
+产出 `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`。
+
+该产物在**运行**时要求系统 Node 满足 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2`）。这与**构建**要求不同：打包任何 flavor 都要求构建进程的 Node **恰好为 `24.18.0`**（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`）。
 
 ## bundled-runtime
 

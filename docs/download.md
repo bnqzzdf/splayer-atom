@@ -4,7 +4,7 @@ title: 下载与部署
 
 # 下载与部署
 
-> 最后更新：2026-09-25
+> 最后更新：2026-09-28
 
 SPlayer Atom 只发布 Linux x86-64 Core，不提供 Desktop 安装包。
 

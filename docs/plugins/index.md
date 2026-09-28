@@ -1,6 +1,6 @@
 # 插件总览与架构
 
-> 最后更新：2026-09-16
+> 最后更新：2026-09-28
 
 SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音源与控制能力。每个插件都运行在**独立隔离沙箱**中，通过 Core 注入的全局对象 `splayer` 与播放域交互。
 
@@ -79,7 +79,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 | `disabled` | 已被用户禁用                                      |
 
 ::: tip 崩溃自愈
-插件 host 崩溃或卡死后会自动重启并重载所有已启用插件（按 **2s → 8s → 30s** 退避），连续失败 3 次后置为 `error`。单个插件加载/运行出错只置该插件为 `error`，不影响其它插件。
+插件 host 崩溃或卡死后会自动重启并重载所有已启用插件（按 **2s → 8s → 30s** 退避），第 4 次丢失（重启尝试数超过 3）才把这些插件置为 `error`。单个插件加载/运行出错只置该插件为 `error`，不影响其它插件。
 :::
 
 ## 脚本头部（Manifest）
@@ -101,7 +101,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 
 | 字段           | 必填 | 说明                                                                                                                         |
 | -------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@name`        |      | 插件展示名（最长 24 字符）；缺省时使用脚本内容生成的兼容名称                                                                 |
+| `@name`        |      | 插件展示名（最长 64 字符）；缺省时使用脚本内容生成的兼容名称                                                                 |
 | `@version`     |      | 版本号；缺省为 `0.0.0`                                                                                                       |
 | `@id`          |      | 插件身份标识（建议反向域名式，如 `you.my-plugin`）；不写则由名称推导                                                         |
 | `@description` |      | 简介                                                                                                                         |
@@ -145,7 +145,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 
 - 声明值**必须 ≤ 当前宿主级别**，否则拒绝加载并报 `PLUGIN_API_LEVEL_MISMATCH`（需等应用升级）；
 - 声明你实际用到的**最低**级别即可——只做播放地址 / 歌词 / 封面写 `1`，用到任何控制能力写 `2`，用到评论能力写 `3`；
-- 控制插件（`@type control`）必须声明 `2`，否则控制能力在运行时不可用。
+- 控制插件（`@type control`）必须声明 `2`（或更高），声明低于 `2` 在解析头部时即以 `PLUGIN_API_LEVEL_MISMATCH` 拒绝加载，而不是等到运行时才禁用控制能力。
 
 ::: tip
 后续版本若新增插件能力，会提升宿主级别并在上表追加一行。你的插件声明的级别不变即可继续运行（向后兼容），用到新能力时再相应提高 `@apiLevel`。
@@ -158,7 +158,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 - **没有** Node 内置模块（`fs` / `net` / `path` 等）、**没有** `require` / `import`、**没有** DOM 或浏览器宿主 API；
 - **可用全局**：`splayer`、`Buffer`、`URL` / `URLSearchParams`、`TextEncoder` / `TextDecoder`、`btoa` / `atob`、`Promise`、`queueMicrotask`、定时器（`setTimeout` / `setInterval` / `setImmediate` 及其 clear 版本），以及 `console`（自动转发到 `splayer.log`）；
 - **网络**只能经 `splayer.request` 发起，且仅允许 `http://` / `https://`；
-- 脚本**顶层同步执行**有 5 秒时限，超时视为加载失败。请把耗时逻辑放进异步处理器，不要在顶层做同步重计算。
+- 脚本**顶层同步执行**有 10 秒时限，超时视为加载失败。请把耗时逻辑放进异步处理器，不要在顶层做同步重计算。
 
 ## 通用 API
 
@@ -169,7 +169,7 @@ Atom 不维护插件市场。插件作者可以把脚本放在自己的 GitHub�
 | 属性                 | 类型     | 说明                       |
 | -------------------- | -------- | -------------------------- |
 | `splayer.pluginId`   | `string` | 宿主分配的插件 ID          |
-| `splayer.apiLevel`   | `number` | 宿主 Host API 级别         |
+| `splayer.apiLevel`   | `number` | 插件自己声明的 `@apiLevel` |
 | `splayer.locale`     | `string` | 当前界面语言（如 `zh-CN`） |
 | `splayer.appVersion` | `string` | 应用版本                   |
 
@@ -251,7 +251,7 @@ console.log(resp.status, resp.body);
 | 约束         | 值    | 说明                                     |
 | ------------ | ----- | ---------------------------------------- |
 | 加载超时     | 10 秒 | 从 fork 到收到就绪信号，超时判为加载失败 |
-| 顶层执行超时 | 5 秒  | 脚本同步部分的执行时限                   |
+| 顶层执行超时 | 10 秒 | 脚本同步部分的执行时限                   |
 | 网络默认超时 | 15 秒 | `splayer.request` 默认值                 |
 | 网络最大超时 | 60 秒 | `request` 的 `timeout` 上限              |
 | 在线导入大小 | ~9 MB | 在线安装脚本的体积上限                   |
@@ -279,20 +279,25 @@ console.log(resp.status, resp.body);
 
 处理器抛异常时可通过 `err.code` 携带错误码，未携带时默认 `PLUGIN_HANDLER_ERROR`：
 
-| Code                        | 含义                                           |
-| --------------------------- | ---------------------------------------------- |
-| `PLUGIN_ACTION_UNSUPPORTED` | 插件未注册该动作                               |
-| `PLUGIN_SCRIPT_ERROR`       | 脚本语法或运行错误                             |
-| `PLUGIN_INVALID_MANIFEST`   | 头部字段缺失或不合法                           |
-| `PLUGIN_API_LEVEL_MISMATCH` | 声明的 `apiLevel` 高于宿主                     |
-| `PLUGIN_REQUEST_TIMEOUT`    | 请求超时                                       |
-| `PLUGIN_CANCELLED`          | 请求被取消（如切歌）                           |
-| `PLUGIN_NETWORK_ERROR`      | 网络错误                                       |
-| `PLUGIN_URL_NOT_ALLOWED`    | URL 协议不在白名单                             |
-| `PLUGIN_INVALID_RESULT`     | 返回结果不合法（如 `musicUrl` 未含字符串 url） |
-| `PLUGIN_NOT_READY`          | 插件未就绪                                     |
-| `PLUGIN_WORKER_CRASHED`     | 子进程崩溃                                     |
-| `PLUGIN_HANDLER_ERROR`      | 处理器默认错误码                               |
+| Code                        | 含义                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `PLUGIN_UNKNOWN`            | 未知错误                                                                                         |
+| `PLUGIN_NOT_FOUND`          | 插件不存在                                                                                       |
+| `PLUGIN_DISABLED`           | 插件已被禁用                                                                                     |
+| `PLUGIN_NOT_READY`          | 插件未就绪                                                                                       |
+| `PLUGIN_ACTION_UNSUPPORTED` | 插件未注册该动作                                                                                 |
+| `PLUGIN_LOAD_TIMEOUT`       | 加载超时（从 fork 到收到就绪信号）                                                               |
+| `PLUGIN_SCRIPT_ERROR`       | 脚本语法或运行错误                                                                               |
+| `PLUGIN_INVALID_MANIFEST`   | 头部字段缺失或不合法                                                                             |
+| `PLUGIN_API_LEVEL_MISMATCH` | `apiLevel` 不兼容（高于宿主，或控制插件低于 2）                                                  |
+| `PLUGIN_REQUEST_TIMEOUT`    | 请求超时                                                                                         |
+| `PLUGIN_CANCELLED`          | 请求被取消（如切歌）                                                                             |
+| `PLUGIN_NETWORK_ERROR`      | 网络错误                                                                                         |
+| `PLUGIN_URL_NOT_ALLOWED`    | URL 协议不在白名单                                                                               |
+| `PLUGIN_PERMISSION_DENIED`  | 缺少所需权限（如 `network` / `control`）                                                         |
+| `PLUGIN_WORKER_CRASHED`     | 子进程崩溃                                                                                       |
+| `PLUGIN_HANDLER_ERROR`      | 处理器默认错误码                                                                                 |
+| `PLUGIN_INVALID_RESULT`     | 返回结果不合法（如 `musicUrl` 未含字符串 url）；仅 lx 兼容层抛出，不在 `PluginErrorCodes` 常量中 |
 
 ## 调试
 

@@ -132,8 +132,9 @@ sudo tar -xzf "$ARCHIVE" -C /opt/splayer-atom-core
 # bundled-runtime 用对应的 bundled 归档，目标布局相同
 ```
 
-选择由目标 Git 提交构建的产物。部署前核对其中 `runtime.json` 的 `atomCommit`；文件名中的
-产品版本和构建日期不能精确标识源码修订。
+选择由目标 Git 提交构建的产物。产物文件名已带 8 位提交号，可以先用它筛选；权威记录仍是包内的
+`runtime.json.atomCommit`，部署前以它为准核对源码修订（口径同
+[构建与打包](./build-and-packaging.md) 的「拿到一个 tar 就知道它出自哪次提交」）。
 
 4. 用升级前持久状态的副本替换新产物中空的 `data/`。用复制而非移动，以便回滚目录仍可独立恢复。
 

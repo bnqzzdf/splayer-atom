@@ -1,24 +1,33 @@
-# splayer-atom-core 1.1.0 · Debian 11 兼容构建说明
+# splayer-atom-core 1.1.0 · Debian 11 兼容构建说明（1.1.0 时期历史记录）
 
 > 最后更新：2026-09-28
 
 > 本文说明本次交付产物**为什么是 Debian 11 兼容的**、兼容性如何实测、以及为达成它做了什么。
 > 本文由构建与验证过程直接产出，所有数字均为实测值。
+>
+> **范围声明**：本文是 **1.1.0 时期的历史记录**——产物指纹、构建环境、部署状态与验证结果都取自
+> 2026-09-23 前后那一次交付。当前 `package.json` 的版本已是 **1.1.2**，产物命名规则此后也已变更
+> （§一 的文件名与 §五 的规则示例都按当时/当前两套口径分别标注）。需要当前规则请以
+> [构建与打包](./build-and-packaging.md) 与 `scripts/atom/core-artifact-name.ts` 为准。
 
 ---
 
 ## 一、产物指纹
 
-| 项目 | 值 |
-| --- | --- |
-| 产物文件 | `splayer-atom-core-1.1.0-20260923-150342-bundled-linux-x64.tar.gz` |
-| SHA256 | `b5ae8529430cc6d5a027ca41127eb31750f06f559961337b824dd1b8770bb231` |
-| 大小 | 56,837,764 字节 |
-| atomCommit | `07c2442d5f688fcf9e5050ca6bce9879f855abcb` |
-| sourceDirty | `false`（改动已提交为 `07c2442`） |
-| Diretta CPU 变体 | `v3` |
-| Node 参考版本 | 24.18.0 |
-| 构建日期 | 2026-09-23 |
+| 项目             | 值                                                                 |
+| ---------------- | ------------------------------------------------------------------ |
+| 产物文件         | `splayer-atom-core-1.1.0-20260923-150342-bundled-linux-x64.tar.gz` |
+| SHA256           | `b5ae8529430cc6d5a027ca41127eb31750f06f559961337b824dd1b8770bb231` |
+| 大小             | 56,837,764 字节                                                    |
+| atomCommit       | `07c2442d5f688fcf9e5050ca6bce9879f855abcb`                         |
+| sourceDirty      | `false`（改动已提交为 `07c2442`）                                  |
+| Diretta CPU 变体 | `v3`                                                               |
+| Node 参考版本    | 24.18.0                                                            |
+| 构建日期         | 2026-09-23                                                         |
+
+> 表中的产物名是**当时实际产出的文件名**，格式为 `<version>-<YYYYMMDD><HHMMSS>-...`，还没有把提交号
+> 和日期、时刻拆成独立段。按当前规则（`scripts/atom/core-artifact-name.ts:117-125`）同样的产物应命名为
+> `splayer-atom-core-1.1.0-07c2442d-20260923-150342-bundled-linux-x64.tar.gz`。§五末尾给出当前规则的完整说明。
 
 ---
 
@@ -26,11 +35,11 @@
 
 构建容器为 **Debian 11 (bullseye)，glibc 2.31**。产物内三个原生组件的实测最高 glibc 符号需求：
 
-| 组件 | 最高 glibc 需求 | 判定（阈值 2.31） |
-| --- | --- | --- |
-| `native/audio-engine.node` | **GLIBC_2.30** | ✅ 通过 |
-| `native/streaming-api.node` | **GLIBC_2.30** | ✅ 通过 |
-| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | **GLIBC_2.29** | ✅ 通过 |
+| 组件                                                   | 最高 glibc 需求 | 判定（阈值 2.31） |
+| ------------------------------------------------------ | --------------- | ----------------- |
+| `native/audio-engine.node`                             | **GLIBC_2.30**  | ✅ 通过           |
+| `native/streaming-api.node`                            | **GLIBC_2.30**  | ✅ 通过           |
+| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | **GLIBC_2.29**  | ✅ 通过           |
 
 **结论：产物可在 glibc ≥ 2.30 的 Linux x86_64 上运行，即覆盖 Debian 11 及以上的目标机。**
 
@@ -43,16 +52,16 @@
 
 ## 三、构建环境（可复现）
 
-| 组件 | 版本 / 位置 |
-| --- | --- |
-| 构建主机 | `192.168.101.133`（Docker 29.7.2） |
-| 基础镜像 | `debian:11`（bullseye） |
-| 镜像内 glibc | 2.31 |
-| Node.js | 24.18.0 |
-| pnpm | 11.5.2 |
-| Rust | 1.98.1（stable，minimal profile） |
-| Diretta SDK | `DirettaHostSDK_150`（`/root/DirettaHostSDK_150`） |
-| 构建镜像标签 | `splayer-atom-debian11-builder` |
+| 组件         | 版本 / 位置                                        |
+| ------------ | -------------------------------------------------- |
+| 构建主机     | `192.168.101.133`（Docker 29.7.2）                 |
+| 基础镜像     | `debian:11`（bullseye）                            |
+| 镜像内 glibc | 2.31                                               |
+| Node.js      | 24.18.0                                            |
+| pnpm         | 11.5.2                                             |
+| Rust         | 1.98.1（stable，minimal profile）                  |
+| Diretta SDK  | `DirettaHostSDK_150`（`/root/DirettaHostSDK_150`） |
+| 构建镜像标签 | `splayer-atom-debian11-builder`                    |
 
 > ⚠️ 该主机的 Docker **没有 bridge 网络**（无 `docker0`），
 > 因此镜像构建与容器运行都必须显式加 `--network host`，否则报 `network bridge not found`。
@@ -118,7 +127,7 @@ pnpm package:core:debian11 --without-diretta
 容器内实际执行的核心命令：
 
 ```sh
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --store-dir /root/.local/share/pnpm/store
 # better-sqlite3 必须从源码编译，以匹配 Debian 11 的 glibc
 sqlite_dir=$(dirname "$(node -p "require.resolve('better-sqlite3/package.json')")")
 npm --prefix "$sqlite_dir" run build-release
@@ -129,7 +138,25 @@ DIRETTA_SDK_ROOT=/root/DirettaHostSDK_150 DIRETTA_CPU_VARIANT=v3 \
     --require-diretta --diretta-variant=v3 --bundle-node
 ```
 
-产物位于 `out/splayer-atom-core-1.1.0-<date>-bundled-linux-x64.tar.gz`。
+产物名遵循 `scripts/atom/core-artifact-name.ts:117-125` 的规则：
+
+```text
+splayer-atom-core-<version>-<8位commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz
+```
+
+各段含义：
+
+- `<version>`：`package.json` 的版本号。
+- `<8位commit>`：`git rev-parse HEAD` 的前 8 位（或源码交付包内 `SOURCE_COMMIT` 的 `commit=`），
+  与产物内 `runtime.json.atomCommit` 一致，因此「拿到一个 tar 就知道它出自哪次提交」。
+- `<YYYYMMDD>` / `<HHMMSS>`：打包日期与时刻，可分别用 `ATOM_BUILD_DATE` / `ATOM_BUILD_TIME` 固定。
+- `[-diretta-<variant>]`：只有带 Diretta 的构建才有，`<variant>` 为 `v2` / `v3` / `v4` / `zen4`；
+  不带 Diretta 的 ALSA-only 构建没有这一段。
+- 末段 `<flavor>` 为 `bundled` 或 `system`，这里演示的是 `bundled`。
+
+按当前规则，本文这次交付的产物应命名为
+`splayer-atom-core-1.1.0-07c2442d-20260923-150342-bundled-linux-x64.tar.gz`；当时实际产出的是
+§一 表中的旧格式名（当时规则尚未把提交号与日期、时刻拆开）。
 
 ---
 
@@ -144,44 +171,66 @@ commit=8cd2e2a6 dirty=True 平台位=5/5 [netease,qqmusic,kugou,qobuz,tidal]
 rc-service splayer-atom-core status → started
 ```
 
+> **读法：这两个提交不是同一个对象，也不是笔误。**
+>
+> - **产物自身的身份**（§一）：`atomCommit=07c2442d5f688fcf9e5050ca6bce9879f855abcb`、
+>   `sourceDirty=false`，取自包内 `runtime.json`，表示这份 tar 由 `07c2442d` 的干净工作树构建。
+> - **部署到目标机时的运行态/工作树状态**：上面 `commit=8cd2e2a6 dirty=True`，描述的是部署当时
+>   目标机上那份工作树的提交与脏状态，与发布包内容无关。
+>
+> 两者可以同时成立：产物由 `07c2442d` 构建，部署到处于 `8cd2e2a6`、工作树有改动的目标机上。
+> 判断一份产物出自哪次提交，一律以产物内 `runtime.json.atomCommit` 为准；目标机的工作树状态
+> 只说明那台机器上还有什么未提交改动。
+
 **Qobuz OAuth 自动化验证（除真实浏览器登录外全部覆盖）**
 
-| # | 检查项 | 结果 |
-| --- | --- | --- |
-| 1 | 接口已注册（负对照 `Unsupported Qobuz API`） | ✅ |
-| 2 | `auth_oauth_start` 返回结构（url/port/redirectUri/state/expiresIn=180） | ✅ |
-| 3 | 回环场景：不传 host → 绑 `127.0.0.1` | ✅ |
-| 4 | 跨机场景：传 host → 绑 `0.0.0.0`，回调地址用该 host | ✅ |
-| 5 | 重复 start → 旧监听立刻释放端口 | ✅ |
-| 6 | 无关请求（favicon）404 后监听继续 | ✅ |
-| 7 | 跨机可达（外部主机访问回调端口） | ✅ |
-| 8 | 带正确 state 回调 → 200 + 成功页 | ✅ |
-| 9 | 不带 state 回调 → 仍放行（Qobuz 不回传 state 时的关键容错） | ✅ |
-| 10 | 错误 state → 400 拒绝 | ✅ |
-| 11 | `error=access_denied` → 立即失败（实测 0 秒，未空等 180s） | ✅ |
-| 12 | 回调后端口释放（`ss -ltn` 无残留） | ✅ |
-| 13 | 假 code 兑换 → 请求正确到达 Qobuz 并回 404 | ✅ |
-| 14 | 会话投影 `userId=2961963`（真实用户 id，非 app_id） | ✅ |
+> 说明：以下 Qobuz OAuth 内容与 §七 的 `state` 策略属于**附录/历史记录**，主题与文件名
+> 「Debian 11 兼容构建说明」并不对应，内容与 [Qobuz OAuth 方案](./qobuz-oauth-plan.md) 重叠。
+> 这里保留原始记录以便溯源；后续如整理文档，建议把这部分迁入 `docs/qobuz-oauth-plan.md`
+> 或单独的验收记录，而不是继续留在本文。
+
+| #   | 检查项                                                                  | 结果 |
+| --- | ----------------------------------------------------------------------- | ---- |
+| 1   | 接口已注册（负对照 `Unsupported Qobuz API`）                            | ✅   |
+| 2   | `auth_oauth_start` 返回结构（url/port/redirectUri/state/expiresIn=180） | ✅   |
+| 3   | 回环场景：不传 host → 绑 `127.0.0.1`                                    | ✅   |
+| 4   | 跨机场景：传 host → 绑 `0.0.0.0`，回调地址用该 host                     | ✅   |
+| 5   | 重复 start → 旧监听立刻释放端口                                         | ✅   |
+| 6   | 无关请求（favicon）404 后监听继续                                       | ✅   |
+| 7   | 跨机可达（外部主机访问回调端口）                                        | ✅   |
+| 8   | 带正确 state 回调 → 200 + 成功页                                        | ✅   |
+| 9   | 不带 state 回调 → 仍放行（Qobuz 不回传 state 时的关键容错）             | ✅   |
+| 10  | 错误 state → 400 拒绝                                                   | ✅   |
+| 11  | `error=access_denied` → 立即失败（实测 0 秒，未空等 180s）              | ✅   |
+| 12  | 回调后端口释放（`ss -ltn` 无残留）                                      | ✅   |
+| 13  | 假 code 兑换 → 请求正确到达 Qobuz 并回 404                              | ✅   |
+| 14  | 会话投影 `userId=2961963`（真实用户 id，非 app_id）                     | ✅   |
 
 **真人端到端验证（2026-09-23 已完成 ✅）**
 
 设备本身无图形浏览器，浏览器在用户 PC 上，因此这一步由真人在浏览器完成：
 
-| 检查项 | 结果 |
-| --- | --- |
-| 点击授权链接 → 浏览器完成 Qobuz 登录 → 回跳设备回调端口 | ✅ 回调页显示「Qobuz 登录成功」 |
-| 全程不需要 Console / F12 / 复制粘贴 | ✅ |
-| 真实兑换成功，拿到 `user_auth_token` | ✅ |
-| 会话投影 `userId=2961963`、`username=tomosak`（真实用户 id，非 app_id） | ✅ |
-| 功能可用：`catalog_search` 返回结果（实测 Miles Davis 专辑 3 条） | ✅ |
-| 登录完成后回调端口释放（`ss -ltn` 无残留） | ✅ |
+| 检查项                                                                  | 结果                            |
+| ----------------------------------------------------------------------- | ------------------------------- |
+| 点击授权链接 → 浏览器完成 Qobuz 登录 → 回跳设备回调端口                 | ✅ 回调页显示「Qobuz 登录成功」 |
+| 全程不需要 Console / F12 / 复制粘贴                                     | ✅                              |
+| 真实兑换成功，拿到 `user_auth_token`                                    | ✅                              |
+| 会话投影 `userId=2961963`、`username=tomosak`（真实用户 id，非 app_id） | ✅                              |
+| 功能可用：`catalog_search` 返回结果（实测 Miles Davis 专辑 3 条）       | ✅                              |
+| 登录完成后回调端口释放（`ss -ltn` 无残留）                              | ✅                              |
 
 **实测确认的兑换响应形状**（此前唯一未实测项）：
 
 ```json
-{"status":"success","user_id":"2961963","display_name":"tomosak",
- "user_auth_token":"mDkSe-...","user":{"id":"2961963","login":"tomosak"},
- "is_active":false,"max_format_id":5}
+{
+  "status": "success",
+  "user_id": "2961963",
+  "display_name": "tomosak",
+  "user_auth_token": "mDkSe-...",
+  "user": { "id": "2961963", "login": "tomosak" },
+  "is_active": false,
+  "max_format_id": 5
+}
 ```
 
 即 `oauth/callback` 确实返回 `user_auth_token` 与 `user_id`，实现中的多键兼容解析取到了正确值，
@@ -194,6 +243,7 @@ rc-service splayer-atom-core status → started
 - 回调监听在跨机场景下绑定 `0.0.0.0`（否则用户 PC 上的浏览器无法回跳到设备）。
   风险由这些因素约束：端口随机、仅在登录期间存活、最长 180 秒、一次性、且授权码只能由 Qobuz 签发。
   若所在网段不可信，建议改用 SSH 隧道而非长期暴露。
-- `state` 校验采取「带了但不匹配才拒绝，缺失则放行」：Qobuz 是否原样保留
-  `redirect_url` 的 query 尚未经真实登录确认，强制要求会导致真实登录必然超时。
-  真实登录成功后应复核此策略。
+- `state` 校验采取「带了但不匹配才拒绝，缺失则放行」。真人端到端登录已于 2026-09-23 完成并成功
+  （见 §六），所以「尚未经真实登录确认」的旧说法不再成立；但本次记录没有区分那次真实回调是否
+  携带 `state`，无法据此收紧策略，因此暂时保留「缺失则放行」，待能在真实登录中观测 `state`
+  回传后再复核是否强制要求。

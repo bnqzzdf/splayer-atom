@@ -1,6 +1,6 @@
 # 2026-09-22 ALSA 与发布包实测
 
-> 最后更新：2026-09-23
+> 最后更新：2026-09-28
 
 本记录只对应下述 `cecee166` 包。之后的 `c3e135ab` 已在软件中修复 Processed PCM
 seek 和重启后直接 Play；本记录中的 FAIL 是该旧包的实测结果，修复包的硬件复验仍见
@@ -13,7 +13,7 @@ seek 和重启后直接 Play；本记录中的 FAIL 是该旧包的实测结果�
 ## 发布包身份与 smoke
 
 - 源码提交：`cecee166b5c3014d0221a2573965314dfda79d98`，包记录 `sourceDirty=false`。
-- 包：`splayer-atom-core-1.1.0-20260922-diretta-v3-bundled-linux-x64.tar.gz`。
+- 包：`splayer-atom-core-1.1.0-20260922-diretta-v3-bundled-linux-x64.tar.gz`（当时命名规则，尚未包含提交号与构建时刻；当前规则见[构建与打包](./build-and-packaging.md)）。
 - SHA256：`b9ec85e6f9d4fac0936caf23f6e0062422b7852933f57728dd5bba7524050a1d`。
 - 安装目录中对应的 220 个非 data 文件与归档内容逐一比对，差异为 0。
 - 在临时目录解包，运行现有 `check-core-artifact.ts` 的检查逻辑；临时副本仅调整归档路径
@@ -77,6 +77,7 @@ Target 数字输出或在线物化链路。此前实机证据仍按原记录保�
 - 重启后的 `/api/play`：`playbackSession.ts` 只在 stopped 或未选索引时加载队列；
   恢复后的 idle 且 index 有效会直接调用无已加载源的 native play，与实测现象一致。
 - 统一 runtime / producer-writer 职责：代码审计仍不符合原实施设计。
+  以下为 2026-09-22 当日快照，后续重构已改变这些细节：
   `player/mod.rs` 保留独立 `playback`、`decoder_thread`、`direct_playback`；
   `alsa/processed_pcm.rs::run_writer` 仍执行 `packed.resize`、最终 gain/limiter 与 packing。
   播放测试通过不能替代这些结构性改动。

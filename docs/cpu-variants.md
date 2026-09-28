@@ -1,6 +1,6 @@
 # Diretta CPU 变体（v2 / v3 / v4 / zen4）
 
-> 最后更新：2026-09-25
+> 最后更新：2026-09-28
 
 播放引擎 `audio-engine.node` 静态链接 Diretta Host SDK 的预编译库。SDK 按
 `-march=x86-64-vN` 分别发布这些库，**变体不是优化等级，而是「能不能在这台机器上跑」**。
@@ -29,30 +29,42 @@ Core 本身能启动、能加载 addon，是因为只有真正走进音频路径
 
 `objdump -d` 统计 AVX 类指令（`%ymm`/`%zmm`/`vpxor`/`vfmadd`/`vmovdqu`/`vpaddd`/`vperm`）：
 
-| 归档 | 大小 | AVX 类指令 |
-| --- | --- | --- |
-| `libACQUA_x64-linux-15v2-nolog.a` | 335,892 | **0** |
-| `libDirettaHost_x64-linux-15v2-nolog.a` | 377,288 | **0** |
-| `libACQUA_x64-linux-15v3-nolog.a` | 337,244 | 623 |
-| `libDirettaHost_x64-linux-15v3-nolog.a` | 379,024 | 466 |
+| 归档                                    | 大小    | AVX 类指令 |
+| --------------------------------------- | ------- | ---------- |
+| `libACQUA_x64-linux-15v2-nolog.a`       | 335,892 | **0**      |
+| `libDirettaHost_x64-linux-15v2-nolog.a` | 377,288 | **0**      |
+| `libACQUA_x64-linux-15v3-nolog.a`       | 337,244 | 623        |
+| `libDirettaHost_x64-linux-15v3-nolog.a` | 379,024 | 466        |
 
 SDK 150 还发布了 `v4` 与 `zen4`（`lib*_x64-linux-15v4-nolog.a`、`lib*_x64-linux-15zen4-nolog.a`）。
 
 ### **没有 v1**
 
 SDK 150 的 `lib/` 下不存在任何 `v1` 归档，所以**带 Diretta 的 v1 产物不可能存在**。
-需要 v1（纯 x86-64 基线）只能做**不带 Diretta 的 ALSA-only 构建**（`pnpm package:core`
-不带 `--require-diretta`），那条路径不链接 SDK。
+需要 v1（纯 x86-64 基线）只能做**不带 Diretta 的 ALSA-only 构建**。
+
+是否链接 SDK 不由 `--require-diretta` 决定，而由 **`DIRETTA_SDK_ROOT` 是否存在**决定
+（`scripts/atom/build-core-native.ts:35,43-50,90`）：只有它存在时才会带上 `diretta` feature 并读
+SDK release。因此
+
+- **不设置** `DIRETTA_SDK_ROOT` → 不带 Diretta 的 ALSA-only 构建（`pnpm package:core`），不链接 SDK；
+- 保留了 `DIRETTA_SDK_ROOT`、只是想拿掉变体时**不能只摘 `DIRETTA_CPU_VARIANT`**：脚本会因
+  「Diretta Core 构建要求指定 `--diretta-variant=v2|v3|v4`」直接失败
+  （`scripts/atom/build-core-native.ts:48-50`）。
+
+`--require-diretta` 的唯一作用是**缺 SDK 时报错**（`scripts/atom/build-core-native.ts:36-38`），
+它本身不会让构建去链接 SDK。`docker/atom-debian11/build.sh:52-53` 也专门记下了这个坑：
+不带 Diretta 的容器内构建必须确保 `DIRETTA_SDK_ROOT` 未设置。
 
 ## 变体与 CPU 代次对照
 
-| 变体 | 需要的指令集 | 典型 CPU | 产物 |
-| --- | --- | --- | --- |
-| v2 | SSE4.2 / POPCNT / CMPXCHG16B（x86-64-v2） | Celeron J1900、Atom、二代酷睿及以后 | ✅ |
-| v3 | AVX / AVX2 / BMI / FMA（x86-64-v3） | Haswell（2013）及以后、多数现代 x86 | ✅ |
-| v4 | AVX-512（x86-64-v4） | Skylake-X、Ice Lake 服务器 | ✅ |
-| zen4 | AMD Zen 4 优化版 | Ryzen 7000 / EPYC 9004 | ✅ |
-| v1 | 纯基线 | 2009 年前的机器 | ❌ 见上 |
+| 变体 | 需要的指令集                              | 典型 CPU                            | 产物    |
+| ---- | ----------------------------------------- | ----------------------------------- | ------- |
+| v2   | SSE4.2 / POPCNT / CMPXCHG16B（x86-64-v2） | Celeron J1900、Atom、二代酷睿及以后 | ✅      |
+| v3   | AVX / AVX2 / BMI / FMA（x86-64-v3）       | Haswell（2013）及以后、多数现代 x86 | ✅      |
+| v4   | AVX-512（x86-64-v4）                      | Skylake-X、Ice Lake 服务器          | ✅      |
+| zen4 | AMD Zen 4 优化版                          | Ryzen 7000 / EPYC 9004              | ✅      |
+| v1   | 纯基线                                    | 2009 年前的机器                     | ❌ 见上 |
 
 > 选变体的原则：**取目标机器支持的最高代次**。v2 产物在 v3/v4 机器上照样能跑
 > （只是用不到 AVX 优化），反过来不行。
@@ -86,8 +98,12 @@ splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-diretta-v2-bundled-linu
 splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>-bundled-linux-x64.tar.gz
 ```
 
-`runtime.json` 与 `native/build.json` 都记录 `direttaCpuVariant`；产物自检会交叉校验
-两者一致，并且「带 Diretta 就必须有变体、不带就必须没有」。
+`runtime.json` 与 `native/build.json` 都记录 `direttaCpuVariant`。产物自检
+`scripts/atom/check-core-artifact.ts` 只做**存在性**校验——「带 Diretta 就必须有变体、
+不带就必须为 `null`」（`:38,222-230`），并沿用 `build.json` 的变体重建产物名；它**不比对**
+`runtime.json` 与 `native/build.json` 的变体是否一致。真正逐字比对变体的是 Debian 11
+容器构建的最后一步：把 `runtime.json.direttaCpuVariant` 与本次构建的 `DIRETTA_CPU_VARIANT`
+比较（`docker/atom-debian11/build.sh:95-97`）。
 
 ## 验收
 

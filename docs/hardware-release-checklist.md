@@ -5,6 +5,16 @@
 本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
 实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。
 
+> **范围说明（哪些是历史记录、哪些是待执行清单）**
+>
+> - **历史记录**：「当前已取得的开发期实机证据」与「2026-09-22 本机自动化实测补充」两节记录的是
+>   已经完成、结论已固定的开发期实机结果，不需要重做。
+> - **待执行清单**：从下面「## 1. 前置条件」开始，是需要对**准备发布的最终 clean artifact**
+>   逐项执行并留下记录的清单。
+>
+> 历史记录不能替代待执行清单：已验证的是实现原理，发布包仍需用最终 artifact 重跑一次
+> release-candidate hardware smoke。
+
 ## 当前已取得的开发期实机证据
 
 以下能力已经在真实 Diretta Host / Target / DAC 链路完成，不再作为“未知能力”保留：
@@ -106,6 +116,12 @@ pnpm check:hardware-release -- --base-url http://192.168.1.20:14558
 ```
 
 默认调用只读取 `/api/info`、`/api/status`、`/api/session` 与 `/api/output/devices`。输出包含 artifact SHA256、Core identity/capability、分类后的 ALSA/Diretta outputs、播放器状态和脱敏 session metadata；不会输出本地路径、封面 URL 或最终 playable URL。
+
+`scripts/atom/check-hardware-release.ts` 以 JSON 打印报告，报告顶层含 `schemaVersion` 与 `readOnly`：
+`readOnly` 为 `true` 表示本次只做只读诊断，没有执行任何 `--select-output` / `--play-*` 动作
+（`scripts/atom/check-hardware-release.ts:369-371`）。当 `errors` 非空或任一 action 为 `FAIL` 时，
+脚本把退出码设为 1（`scripts/atom/check-hardware-release.ts:418-419`），因此可以直接当门禁用：
+默认只读运行退出码非 0 说明诊断本身发现了问题。
 
 `/api/output/devices` 的 Diretta discovery 失败只记录该 endpoint 的错误。不要把用户态 discovery 成功视为连接权限证明，也不要从 discovery/连接超时推断 Target 已损坏、被占用或应被重置。
 

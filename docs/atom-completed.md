@@ -33,6 +33,7 @@
   冒烟测试。见 [2026-09-22 记录](./alsa-acceptance-2026-09-22.md)。
 - `c3e135ab` 包含针对 Processed 定位与重启后播放失败的软件修复。二者在已安装的干净产物
   `3e420f78` 上通过 FC4 复测；见 [2026-09-23 记录](./alsa-acceptance-2026-09-23.md)。
+  当前源码工作树的局部构建另见 [2026-09-23 native 运行态改动复核](./alsa-runtime-smoke-2026-09-23.md)。
   [ALSA 计划](./alsa-output-plan.md)记录了仍需要的结构性运行时/缓冲工作。
 - UPnP 共用 Core 队列、源与缓存流程；其 CUE/SACD 物化与 Direct/普通播放隔离。
   [UPnP 计划](./upnp-output-plan.md)记录了 AudioSys 播放、抽取比对与初步长跑证据，以及仍未完成的

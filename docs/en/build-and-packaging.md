@@ -16,10 +16,12 @@ The only formal product is **Linux x86-64 Node Core + Web Control**.
 ## Environment
 
 - Linux x86-64
-- Node `>=22.19.0`; formal build and bundled-runtime reference `24.18.0`
+- **Runtime requirement**: Core validates the actual Node runtime at startup and needs at least `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2,35-39`); bundled-runtime carries its own reference Node
+- **Build requirement**: packaging any Core flavor requires the current process Node to be **exactly `24.18.0`**, for `system` and `bundled` alike (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`, `core/atom/runtime/nodeRuntime.ts:1`)
 - pnpm `>=10`
 - Rust stable
-- ALSA headers, Clang, pkg-config, libarchive-tools
+- ALSA headers, Clang, pkg-config
+- `libarchive-tools`: needed only by the CI dependency install line (`.github/workflows/dev.yml:54`); no repository script uses it (packaging and extraction both use GNU `tar`), so local builds can omit it
 
 ## Packaging
 
@@ -43,7 +45,7 @@ and rejects native artifacts requiring newer than glibc 2.31. The default has no
 pnpm package:core:debian11 --without-diretta
 ```
 
-To include Diretta, supply SDK 150 and select an x86-64 library variant (`v2`, `v3`, or `v4`):
+To include Diretta, supply SDK 150 and select an x86-64 library variant (`v2`, `v3`, or `v4/zen4`):
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
@@ -66,8 +68,9 @@ out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]
 ```
 
 The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
-Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible date is required. `runtime.json` also records a
-human-readable `buildDate`.
+Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible build **content** is required; set `ATOM_BUILD_TIME=HHMMSS`
+as well when the artifact **name** must also be reproducible. `runtime.json` only records the human-readable
+`buildDate` (date), so fixing `ATOM_BUILD_DATE` alone already reproduces byte-identical content.
 
 `<commit>` is the 8-character short commit (from `git rev-parse HEAD`, or the `commit=` field of the
 `SOURCE_COMMIT` file shipped inside a source package). It always matches `runtime.json.atomCommit`
@@ -148,8 +151,24 @@ on the remote, so a tag always points at a commit that is findable in the shared
 
 ## Release identity
 
-`runtime.json` records the Atom version, build date, commit/dirty state, platform/arch, Node
-contract, protocol/schema versions, capabilities, and the Diretta SDK release when applicable.
+`runtime.json` records only Atom's own identity and the runtime contract. The field list follows
+`scripts/atom/stage-core-system.ts:227-262`:
+
+- `productName`
+- `atomVersion`
+- `buildDate`
+- `atomCommit`
+- `sourceDirty`
+- platform / arch
+- Node range/reference/bundled state (`nodeRange` / `nodeReference` / `nodeBundled`)
+- `betterSqlite3`: the `better-sqlite3` version actually staged into the artifact
+- Core protocol version
+- data schema versions
+- `capabilities` (including the `diretta` capability bit)
+- `diretta`: whether this artifact carries Diretta
+- `direttaSdkRelease`: **always present**; `null` for builds without Diretta (the pinned SDK release otherwise)
+- `direttaCpuVariant`: `v2` / `v3` / `v4` / `zen4`; `null` without Diretta
+
 Formal releases should have `sourceDirty=false`.
 
 ## Diretta
@@ -162,13 +181,17 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
     --require-diretta --diretta-variant=v2
 ```
 
-The SDK itself is not bundled.
+The SDK release must match the version pinned by the repository; a missing or mismatched SDK fails
+before staging (`scripts/atom/build-core-native.ts:51-56`). The SDK itself is not bundled.
 
 ## CI and gates
 
 `.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.18.0`
-and Rust stable. The Debian 11 container is a separate packaging environment. Record the actual
-build environment, source commit, and artifact hash for a release.
+and Rust stable. The workflow runs `pnpm typecheck`, `pnpm test`, `pnpm build`, and
+`pnpm package:core` in order, then uploads
+`out/splayer-atom-core-*-system-linux-x64.tar.gz` with `actions/upload-artifact`
+(`.github/workflows/dev.yml:62-78`). The Debian 11 container is a separate packaging environment.
+Record the actual build environment, source commit, and artifact hash for a release.
 
 Recommended release gates:
 

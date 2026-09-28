@@ -1,6 +1,6 @@
 # ALSA 源保真播放完整实施方案
 
-> 最后更新：2026-09-23
+> 最后更新：2026-09-28
 
 日期：2026-09-20。
 
@@ -81,6 +81,12 @@ direct 模式的软件保证止于向已协商的 ALSA HW 接口提交的数据�
 本节记录实施前的审计基线；其中 CPAL、隐式全路径 limiter 和欠载静音填充等描述不代表
 当前实现。后续改造已落地的范围见文首状态，表中的最终处理仍用于核对尚未完成的设计项。
 
+**状态（2026-09-23 复核）**：已落地——CPAL 依赖已移除，`audio_output.rs` 已改写为 ALSA
+processed PCM 设备协商（138 行），`source.rs` 已删除，隐式全路径 limiter 已移出普通解码器，
+静音填充已关闭。未落地——`shared.rs` 未删除（541 行，仍是有界块队列），
+`direct_runtime.rs` 未删除（708 行），`playback.rs` 仍是 processed PCM 的 `PlaybackHandle`
+而非合并 runtime，`error.rs` 尚无模式冲突类别。表中相应行已按此标注。
+
 当前 `decoder.rs` 将解码结果送入输出设备格式的 `f32` resampler，再进入 DSP。
 `process_audio_chunk()` 在 tempo bypass 时仍调用阈值为 `0.98` 的 `OutputLimiter`。
 `audio_output.rs` 优先沿用设备默认格式/声道，不支持源采样率时回退默认配置，输出回调再次
@@ -90,28 +96,29 @@ direct 模式的软件保证止于向已协商的 ALSA HW 接口提交的数据�
 但本项目只有 Linux 目标，而新实现需要直接掌握 HW 身份、有效位、Native DSD、短写和
 设备排空语义；保留 CPAL 会增加第二套本地设备与生命周期实现，没有独立产品用途。
 
-| 现有代码/职责                                             | 最终处理                                       | 理由与必须保留的部分                                                               |
-| --------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `audio_output.rs`、CPAL 依赖                              | 删除；由唯一 `alsa/` 后端替代                  | 两种模式共用设备枚举、稳定 ID、协商与 writer                                       |
-| `playback.rs` 的 `PlaybackHandle`                         | 删除旧实现；承载合并后的 native runtime        | 软件音量迁入 processed producer，输出回调不再拥有增益                              |
-| `source.rs`、`shared.rs`                                  | 删除旧播放队列、消费计数和静音填充             | 两种模式输出都进入新的有界样本块队列；processed 的浮点 scratch 仍可存在            |
-| `decoder.rs`                                              | 拆出探测、解码与可复用处理步骤，删除旧线程编排 | 元数据、解码器和处理能力保留，不能整体删除功能                                     |
-| `direct_pcm.rs`                                           | 保留并改造                                     | 精确整数解码、重排、seek、CUE/staging；共享 FFmpeg 底层                            |
-| `direct_dsd.rs`                                           | 保留并改造，仅 direct 使用                     | 解耦容器逻辑序列与 transport 分组，保留 strict 约束                                |
-| `direct_runtime.rs`                                       | 合并进唯一 native runtime 后删除旧文件         | 避免 normal/direct 两套完整播放器                                                  |
-| `player/mod.rs`、`transition.rs`、`background.rs`         | 保留控制职责，精简重复状态/线程                | 保留 load token、输出代次与事件；DSP 状态只属于 processed，fade 改为处理图中的包络 |
-| `equalizer.rs`、`loudness.rs`、`tempo.rs`                 | 保留算法和必要依赖，适配 processed             | 包括 `signalsmith-stretch`；direct 不实例化、不调用这些处理                        |
-| `OutputLimiter`                                           | 移出普通解码器，改为 processed 显式削波保护    | 不能成为所有音源必经步骤；保护开关和实际生效状态可见                               |
-| 播放 resampler                                            | 迁移为 processed 专属 PCM rate 适配            | 不在 direct 的整数/DSD 路径初始化，也不偷偷 remix                                  |
-| `device_watcher/`                                         | 删除占位后端与 watcher 接口                    | 当前固定返回不支持；显式刷新和输出错误承担实际职责                                 |
-| `core/services/device.ts`                                 | 精简为旧设置兼容入口                           | 不拥有自动恢复/reinit；主动切换与显式重建统一由 Core playback session 协调         |
-| `metadata/`、`scanner.rs`、`cue/`、`sacd/`、`dsd/` reader | 保留                                           | 扫描、标签、封面、歌词、分轨、DST/DSD 仍有真实消费者                               |
-| `media_extract.rs`                                        | 保留，与处理模式隔离                           | UPnP strict extraction 不得经过 DSP/量化                                           |
-| `dsd/dsd2pcm.rs`                                          | 删除转换器及专属测试                           | 两种模式都不接受 DSD-to-PCM，不删除整个 `dsd/`                                     |
-| `midi/`、`rustysynth`、`midi` feature                     | 删除未接入的合成实现                           | 当前未发现生产调用；两种模式不扩大为 MIDI 产品                                     |
-| `hdcd/`、`mqa/`、`dts/` 独立处理/检测模块                 | 删除无生产消费者的模块与专属测试               | 当前只有独立测试引用；保留真实格式识别/标签/解码消费者                             |
-| `error.rs`                                                | 保留分类，替换 CPAL 分支，增加模式冲突原因     | 模式不可用、设备错误不能误归为网络故障                                             |
-| Core resolver/session/cache/provider/stats/ListenBrainz   | 保留并接入新 runtime                           | 不重建业务播放系统；时间与生效状态从同一 authority 得到                            |
+| 现有代码/职责                                             | 最终处理                                       | 理由与必须保留的部分                                                                                              |
+| --------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| CPAL 依赖                                                 | 已移除；由唯一 `alsa/` 后端替代                | 两种模式共用设备枚举、稳定 ID、协商与 writer                                                                      |
+| `audio_output.rs`                                         | 未落地删除；现状为 ALSA processed 设备协商     | 已无 CPAL fallback，但 `player/mod.rs:9`、`transition.rs:5` 仍直接使用                                            |
+| `playback.rs` 的 `PlaybackHandle`                         | 未落地合并 runtime；现状是 processed PCM 句柄  | 55 行，持有 `AlsaProcessedPcmStream`（`playback.rs:1-11`）；唯一 `PlaybackRuntime` 在 `player/mod.rs:105`         |
+| `source.rs`、`shared.rs`                                  | `source.rs` 已删除；`shared.rs` 未删除         | `shared.rs` 541 行，仍是有界块队列（`AudioChunk`/`PreparedPcmChunk`）                                             |
+| `decoder.rs`                                              | 拆出探测、解码与可复用处理步骤，删除旧线程编排 | 元数据、解码器和处理能力保留，不能整体删除功能                                                                    |
+| `direct_pcm.rs`                                           | 保留并改造                                     | 精确整数解码、重排、seek、CUE/staging；共享 FFmpeg 底层                                                           |
+| `direct_dsd.rs`                                           | 保留并改造，仅 direct 使用                     | 解耦容器逻辑序列与 transport 分组，保留 strict 约束                                                               |
+| `direct_runtime.rs`                                       | 未落地“合并后删除”；仍在册 708 行              | 被 `player/mod.rs:12-13`、`transition.rs:8`、`bindings/player.rs:13` 使用                                         |
+| `player/mod.rs`、`transition.rs`、`background.rs`         | 保留控制职责，精简重复状态/线程                | 保留 load token、输出代次与事件；DSP 状态只属于 processed，fade 改为处理图中的包络                                |
+| `equalizer.rs`、`loudness.rs`、`tempo.rs`                 | 保留算法和必要依赖，适配 processed             | 包括 `signalsmith-stretch`；direct 不实例化、不调用这些处理                                                       |
+| `OutputLimiter`                                           | 移出普通解码器，改为 processed 显式削波保护    | 不能成为所有音源必经步骤；保护开关和实际生效状态可见                                                              |
+| 播放 resampler                                            | 迁移为 processed 专属 PCM rate 适配            | 不在 direct 的整数/DSD 路径初始化，也不偷偷 remix                                                                 |
+| `device_watcher/`                                         | 删除占位后端与 watcher 接口                    | 当前固定返回不支持；显式刷新和输出错误承担实际职责                                                                |
+| `core/services/device.ts`                                 | 精简为旧设置兼容入口                           | 不拥有自动恢复/reinit；主动切换与显式重建统一由 Core playback session 协调                                        |
+| `metadata/`、`scanner.rs`、`cue/`、`sacd/`、`dsd/` reader | 保留                                           | 扫描、标签、封面、歌词、分轨、DST/DSD 仍有真实消费者                                                              |
+| `media_extract.rs`                                        | 保留，与处理模式隔离                           | UPnP strict extraction 不得经过 DSP/量化                                                                          |
+| `dsd/dsd2pcm.rs`                                          | 删除转换器及专属测试                           | 两种模式都不接受 DSD-to-PCM，不删除整个 `dsd/`                                                                    |
+| `midi/`、`rustysynth`、`midi` feature                     | 删除未接入的合成实现                           | 当前未发现生产调用；两种模式不扩大为 MIDI 产品                                                                    |
+| `hdcd/`、`mqa/`、`dts/` 独立处理/检测模块                 | 删除无生产消费者的模块与专属测试               | 当前只有独立测试引用；保留真实格式识别/标签/解码消费者                                                            |
+| `error.rs`                                                | 保留分类；未落地“模式冲突原因”                 | `AudioErrorKind` 仅六类，无模式冲突（`error.rs:11-19`）；direct 拒绝仍是字符串 `bail!`（`player/mod.rs:389-396`） |
+| Core resolver/session/cache/provider/stats/ListenBrainz   | 保留并接入新 runtime                           | 不重建业务播放系统；时间与生效状态从同一 authority 得到                                                           |
 
 审计结论以本次仓库调用关系为依据。实施删除前再次检查生产引用、feature 和测试，发现真实
 消费者时先迁移职责；“文件还在”和“有自己的单元测试”都不是保留运行时功能的充分理由。
@@ -141,31 +148,40 @@ Core playbackSession / resolver / preload / cache
           所选 HW                  所选 Target
 ```
 
-目录按真实职责组织，不建立通用输出插件框架：
+目录按真实职责组织，不建立通用输出插件框架。**状态（2026-09-23 复核）**：实际没有
+`pcm_decode.rs` 与 `pcm_processing.rs`；processed 编排落在 `alsa/processed_pcm.rs` +
+`alsa/processed_prepare.rs`，PCM 探测/解码仍由 `direct_pcm.rs` 承担，`media_probe.rs` 已落地。
 
 ```text
 native/audio-engine-core/src/
   alsa/
-    mod.rs          本地 transport 入口
-    device.rs       HW 枚举、身份解析与受约束打开
-    format.rs       参数协商、PCM/DSD 槽位适配
-    output.rs       单所有者写入线程、命令、进度与 drain
-  pcm_decode.rs     从现有 direct_pcm 提取的 FFmpeg 打开/解码/精确 seek
-  pcm_processing.rs processed 处理编排、参数快照、时延/媒体时间映射
-  equalizer.rs      现有 EQ 算法，仅 processed 使用
-  loudness.rs       现有归一化分析，仅 processed 使用
-  tempo.rs          现有变速/变调，仅 processed 使用
-  direct_pcm.rs     整数精确约束、源块、分轨与 staging
-  direct_dsd.rs     DSD reader、源块、分轨与 staging
-  playback.rs       由现有 DirectPlayback 演进的唯一 PlaybackRuntime
-  media_probe.rs    从 decoder 拆出的元数据探测，无输出与 DSP 依赖
-  diretta/          现有 SDK transport
-  player/          N-API 之下的控制、加载代次和事件协调
+    mod.rs               本地 transport 入口（模块声明）
+    device.rs            HW 枚举、身份解析与受约束打开
+    format.rs            仅 PCM：格式候选、协商与整数打包
+    dsd.rs               仅 DSD：DSD 格式协商与分组打包
+    output.rs            单所有者写入线程、命令、进度与 drain
+    writer.rs            共用 AlsaFrameWriter 的提交、短写与取消
+    processed_pcm.rs     processed PCM 控制循环与 writer 编排
+    processed_prepare.rs processed 最终字节准备：增益、削波保护与 packing
+    direct_pcm.rs        ALSA direct PCM 控制循环
+    direct_dsd.rs        ALSA direct DSD 控制循环
+  direct_pcm.rs          整数精确解码、源块、分轨与 staging
+  direct_dsd.rs          DSD reader、源块、分轨与 staging
+  playback.rs            processed PCM 的 PlaybackHandle（55 行）
+  equalizer.rs           现有 EQ 算法，仅 processed 使用
+  loudness.rs            现有归一化分析，仅 processed 使用
+  tempo.rs               现有变速/变调，仅 processed 使用
+  media_probe.rs         从 decoder 拆出的元数据探测，无输出与 DSP 依赖
+  diretta/               现有 SDK transport
+  player/                N-API 之下的控制、加载代次和事件协调
 ```
 
-`PlaybackRuntime` 用有限枚举持有 `Alsa`、`DirettaPcm`、`DirettaDsd`。共同操作仅覆盖
-现有 load/play/pause/stop/seek/stage/monitor，具体设备语义留在 transport。不要引入
-Output registry、第二个 Core session、多个活动播放器或独立 output daemon。
+`PlaybackRuntime` 定义在 `player/mod.rs:105-108`，形如
+`enum PlaybackRuntime { Processed(ProcessedRuntime), Direct(DirectPlayback) }`；
+`DirettaPcm`/`DirettaDsd` 属于另一个枚举 `DirectMonitor`（`direct_runtime.rs:48-50`），
+不是 `PlaybackRuntime` 的成员。共同操作仅覆盖现有 load/play/pause/stop/seek/stage/monitor，
+具体设备语义留在 transport。不要引入 Output registry、第二个 Core session、多个活动播放器
+或独立 output daemon。
 
 FFmpeg 底层可以返回整数/浮点及 packed/planar frame；严格整数 adapter 仍只接受精确整数
 表示。ALSA 在 producer 层选择 direct adapter 或 processed 处理图，再进入相同 ALSA
@@ -213,8 +229,10 @@ PCM 重采样/量化。ALSA 插件层的自动转换在两模式中均关闭。
 5. 提交 hw/sw params 后读取实际配置与有效位。所有关键字段通过校验才开始写入。
 6. 正在播放的源格式变化要停止旧配置并重新协商，不能在旧格式下继续解释新 frame。
 
-支持 8/16/20/24/32-bit 常见整数源。U8 可通过减去偏置和精确扩位表示；20/24-bit 必须
-区分有效位和存储位。超出该整数范围的音源明确不支持，不偷偷按 32-bit 截断。
+实际解码只接受 `Signed16`/`Signed32`/`Float32` 三种样本表示（`direct_pcm.rs:18-22`）；
+`AV_SAMPLE_FMT_U8`/`U8P` 在 strict reader 探测处直接 `bail`（`direct_pcm.rs:244`），全仓库
+没有 U8 减偏置扩位实现。20/24-bit 必须区分有效位和存储位。超出该整数范围的音源明确不支持，
+不偷偷按 32-bit 截断。
 
 PCM transport 至少实现 `S16_LE`、`S24_3LE`、`S24_LE`、`S32_LE`；设备支持时可原样
 使用相应浮点格式。整数优先不需额外重排且足够精确的格式，再尝试其它无损表示；不为了
@@ -326,9 +344,11 @@ PCM。解析后使用受控 HW 配置打开并核验 PCM 类型/设备信息，�
 硬件序列号；重名/身份歧义时要求重新选择，不悄悄选择第一个同名设备。显示名只用于展示，
 旧名字只在唯一匹配时迁移。旧 `default`/`plughw` 选择失效，保持未选输出状态。
 
-`outputDevice = null` 表示未选择，删除“系统默认”的注释与行为。保持已有首次启动只有
-一个唯一 HW 候选才自动选择的规则；已选择设备丢失后不能套用首次选择逻辑换到另一设备。
-ALSA `isDefault` 不再代表桌面默认，返回 false。设备列表刷新不能暂停/重开当前音频设备。
+`outputDevice = null` 表示未选择。原计划“删除‘系统默认’的注释与行为”**未落地**：
+`shared/types/settings.ts:51` 的“null 为系统默认”注释仍在，`src/web/HeadlessApp.vue:268`
+仍渲染 `<option value="">系统默认</option>`。保持已有首次启动只有一个唯一 HW 候选才自动
+选择的规则；已选择设备丢失后不能套用首次选择逻辑换到另一设备。ALSA `isDefault` 不再代表
+桌面默认，返回 false。设备列表刷新不能暂停/重开当前音频设备。
 
 采用直接 `alsa-lib` 调用，优先使用 Rust `alsa` crate；只有绑定缺失时补局部 FFI。
 `RW_INTERLEAVED + nonblocking writei + poll` 是本方案基线。独立线程持有 PCM handle，
@@ -432,14 +452,18 @@ FFmpeg seek 只把解码器定位到可恢复的包/帧；继续解码并精确�
 
 ## 7. 错误与恢复策略
 
-在现有 native 错误分类和 Core `ErrorCode` 中增加必要的稳定 reason，不靠字符串关键词
-判断。沿用当前错误事件/响应 envelope，只向 Core/Web 暴露稳定 reason 与安全的格式信息；
-用于淘汰旧 callback 的 output generation 仅留在 native/Core 内部，不成为协议状态。
+**状态（2026-09-23 复核）**：Core `ErrorCode` 已有稳定 reason（如
+`OUTPUT_FORMAT_UNSUPPORTED`），但 native `AudioErrorKind` 只有 NetworkUnreachable、
+SourceNotFound、DecodeFailed、Device、Cancelled、Other 六类（`error.rs:11-19`），没有
+“模式冲突”类别；direct 的模式拒绝仍由 `anyhow::bail!` 字符串给出（`player/mod.rs:389-396`）。
+在 native 侧增加必要的稳定 reason、不靠字符串关键词判断属于**未落地目标**。沿用当前错误
+事件/响应 envelope，只向 Core/Web 暴露稳定 reason 与安全的格式信息；用于淘汰旧 callback 的
+output generation 仅留在 native/Core 内部，不成为协议状态。
 
 | 情况                             | 行为                                                                                                          |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `EAGAIN`、可重试 `EINTR`、短写   | writer poll/继续未写部分；不丢块、不重复写、不生成静音                                                        |
-| rate/channel/format/sbits 不匹配 | `unsupported_output_format`，停止该次 load，展示源与设备不匹配项                                              |
+| rate/channel/format/sbits 不匹配 | `OUTPUT_FORMAT_UNSUPPORTED`（`shared/types/errors.ts:61`），停止该次 load，展示源与设备不匹配项               |
 | 设备不存在/被占用/权限不足       | 设备类错误，停止；不当作 URL 失效或无限跳曲                                                                   |
 | XRUN                             | direct 立即判定本次连续直通失效；processed 最多做一次有界 recover，明确记录 discontinuity，失败再上报设备错误 |
 | suspend、运行中设备失效          | 停止当前 runtime 并上报设备类原因                                                                             |
@@ -629,8 +653,9 @@ Core 已保存配置，不创建一个无人消费的后台 DSP 线程。
 保留 DSP/软件音量的现有 HTTP/WS、插件及 N-API 能力，迁移到 processed producer。
 任何样本处理修改都在 Core 执行时检查同一份 `sampleProcessingAvailable` 派生能力，native
 继续作为 Direct 的最后一道防线；direct path 下
-无论用户把音量设为 1 还是 0，命令都明确返回 `processing_unavailable`，不改保存参数、
-不偷偷切模式。没有活动 runtime 时，仅当 ALSA 偏好为 processed 才允许编辑休眠参数。
+无论用户把音量设为 1 还是 0，命令都明确返回 `output_processing_unavailable`（HTTP 409，
+`core/atom/headless/routes.ts:133`；`core/services/playbackSession.ts:1864` 的内部 throw
+文案为 `processing_unavailable`），不改保存参数、不偷偷切模式。没有活动 runtime 时，仅当 ALSA 偏好为 processed 才允许编辑休眠参数。
 直通下也不允许通过通用 settings API、重置 EQ 或键盘快捷键绕过约束。
 
 不为音量、EQ、tempo 等普通参数命令增加状态版本或 CAS。多客户端同时操作时，以 Core
@@ -665,17 +690,22 @@ direct 导致软件音量失效。已有 Diretta/UPnP 选择不改变，只初�
 
 以下是完成同一个目标的依赖顺序，不是发布批次，也不把后面的条目留作可选补丁。
 
-| 工作                     | 主要文件                                                                                                              | 完成要求                                                                         |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 提取独立探测/PCM 解码    | `decoder.rs`、`direct_pcm.rs`、新增 `media_probe.rs`/`pcm_decode.rs`                                                  | 探测不依赖播放/DSP；整数 strict 与有损适配边界明确                               |
-| 迁移 PCM DSP             | 新增 `pcm_processing.rs`、`equalizer.rs`、`loudness.rs`、`tempo.rs` 与原 resampler/limiter                            | 现有功能在 processed 生效，direct 不构造处理图；参数、延迟、尾部和时间映射可核验 |
-| 修正 DSD reader 边界     | `direct_dsd.rs`、`diretta/`                                                                                           | 共享逻辑序列与 transport 分组解耦；Diretta 样本/位序证据回归通过                 |
-| 实现 ALSA 后端           | 新增 `alsa/`、Cargo manifests/lock                                                                                    | 精确参数、整数打包、有损适配、Native DSD、短写与可取消 writer 全部可用           |
-| 合并 native 生命周期     | `playback.rs`、`direct_runtime.rs`、`player/*`、N-API `bindings/player.rs`                                            | 唯一 runtime；进度/drain/boundary/取消语义通过测试                               |
-| 接入 Core 输入与失败策略 | `playerLoad.ts`、`playbackPreloader.ts`、`directGapless.ts`、`playbackSession.ts`、`device.ts`、`corePlayerEvents.ts` | 本地/在线/CUE/SACD/输出切换一致；缓存引用安全                                    |
-| 协议与迁移               | `shared/types/*`、`shared/utils/outputDevice.ts`、Core routes/WS/plugins/store                                        | 模式事务、参数保存和能力同源；旧配置迁移 processed，直通拒绝 DSP 请求            |
-| 删除旧实现及专属测试     | 第 2 节文件、native re-export、Cargo/features                                                                         | 删除 CPAL/旧线程编排/隐式处理，保留并测试迁移后的 DSP 算法                       |
-| 构建与文档同步           | native build/staging、native flavor 测试、AGENTS/native/部署/硬件文档及中英文对应内容                                 | 普通构建无需 SDK；Diretta SDK provenance 不变；文档不声称尚未取得的实机证据      |
+**状态（2026-09-23 复核）**：ALSA 后端、processed producer 迁移、Core 输入与失败策略、
+协议与迁移已落地；计划中的 `pcm_decode.rs`/`pcm_processing.rs` 文件名未采用，实际落在
+`media_probe.rs`、`direct_pcm.rs`、`alsa/processed_pcm.rs`、`alsa/processed_prepare.rs`；
+“删除旧实现及专属测试”仍未完成（见第 2 节未落地项）。
+
+| 工作                     | 主要文件                                                                                                                                     | 完成要求                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 提取独立探测/PCM 解码    | `decoder.rs`、`direct_pcm.rs`、`media_probe.rs`（已落地；未采用 `pcm_decode.rs`）                                                            | 探测不依赖播放/DSP；整数 strict 与有损适配边界明确                               |
+| 迁移 PCM DSP             | `alsa/processed_pcm.rs`、`alsa/processed_prepare.rs`（已落地，计划名 `pcm_processing.rs` 未采用）、`equalizer.rs`、`loudness.rs`、`tempo.rs` | 现有功能在 processed 生效，direct 不构造处理图；参数、延迟、尾部和时间映射可核验 |
+| 修正 DSD reader 边界     | `direct_dsd.rs`、`diretta/`                                                                                                                  | 共享逻辑序列与 transport 分组解耦；Diretta 样本/位序证据回归通过                 |
+| 实现 ALSA 后端           | 新增 `alsa/`、Cargo manifests/lock                                                                                                           | 精确参数、整数打包、有损适配、Native DSD、短写与可取消 writer 全部可用           |
+| 合并 native 生命周期     | `playback.rs`、`direct_runtime.rs`、`player/*`、N-API `bindings/player.rs`（未落地：`direct_runtime.rs` 未删除）                             | 唯一 runtime；进度/drain/boundary/取消语义通过测试                               |
+| 接入 Core 输入与失败策略 | `playerLoad.ts`、`playbackPreloader.ts`、`directGapless.ts`、`playbackSession.ts`、`device.ts`、`corePlayerEvents.ts`                        | 本地/在线/CUE/SACD/输出切换一致；缓存引用安全                                    |
+| 协议与迁移               | `shared/types/*`、`shared/utils/outputDevice.ts`、Core routes/WS/plugins/store                                                               | 模式事务、参数保存和能力同源；旧配置迁移 processed，直通拒绝 DSP 请求            |
+| 删除旧实现及专属测试     | 第 2 节文件、native re-export、Cargo/features                                                                                                | 删除 CPAL/旧线程编排/隐式处理，保留并测试迁移后的 DSP 算法                       |
+| 构建与文档同步           | native build/staging、native flavor 测试、AGENTS/native/部署/硬件文档及中英文对应内容                                                        | 普通构建无需 SDK；Diretta SDK provenance 不变；文档不声称尚未取得的实机证据      |
 
 删除测试时仅删除已移除产品行为的断言；原本验证取消、错误分类、输出互斥、分轨和 provider
 行为的测试要迁移到新实现。当前一些测试匹配 CPAL feature 和源代码字符串，需替换为新

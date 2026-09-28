@@ -11,7 +11,7 @@ live in the [roadmap](./atom-roadmap.md). This guide covers development workflow
 - pnpm `>=10`
 - Rust stable
 - Linux x86-64
-- `libasound2-dev`, `pkg-config`, `clang`, `libarchive-tools`
+- `libasound2-dev`, `pkg-config`, `clang` (`libarchive-tools` is only needed by the CI dependency install line; local builds can omit it)
 
 Formal builds and bundled-runtime artifacts use reference Node `24.18.0`. The runtime support
 range and release reference are defined in `core/atom/runtime/nodeRuntime.ts`.

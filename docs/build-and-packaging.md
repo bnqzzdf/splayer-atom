@@ -16,10 +16,12 @@
 ## 环境
 
 - Linux x86-64
-- Node `>=22.19.0`，正式构建与 bundled-runtime reference 仍为 `24.18.0`
+- **运行时要求**：Core 在启动时校验实际 Node runtime，最低 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2,35-39`）；bundled-runtime 自带 reference Node
+- **构建要求**：打包任何 flavor 的 Core 产物都要求当前进程 Node **恰好为 `24.18.0`**，`system` 与 `bundled` 都不例外（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`、`core/atom/runtime/nodeRuntime.ts:1`）
 - pnpm `>=10`
 - Rust stable
-- ALSA headers、Clang、pkg-config、libarchive-tools
+- ALSA headers、Clang、pkg-config
+- `libarchive-tools`：仅 CI 的依赖安装行需要（`.github/workflows/dev.yml:54`）；仓库脚本没有使用它（打包与解包都用 GNU `tar`），本地构建可以省略
 
 ## 完整构建
 
@@ -108,7 +110,7 @@ pnpm release:tag --dry-run  # 只做检查，不落标签
 
 ## runtime.json
 
-发布身份只记录 Atom 自身与运行契约，包括：
+发布身份只记录 Atom 自身与运行契约。字段清单以 `scripts/atom/stage-core-system.ts:227-262` 为准：
 
 - `productName`
 - `atomVersion`
@@ -116,11 +118,14 @@ pnpm release:tag --dry-run  # 只做检查，不落标签
 - `atomCommit`
 - `sourceDirty`
 - platform / arch
-- Node range/reference/bundled 状态
+- Node range/reference/bundled 状态（`nodeRange` / `nodeReference` / `nodeBundled`）
+- `betterSqlite3`：staging 时实际打包的 `better-sqlite3` 版本
 - Core protocol version
 - data schema versions
-- capabilities
-- Diretta SDK release（仅 Diretta build）
+- `capabilities`（其中含 `diretta` 能力位）
+- `diretta`：本次产物是否带 Diretta
+- `direttaSdkRelease`：**该字段总是存在**；不带 Diretta 的构建写 `null`（有 Diretta 时为固定 SDK release）
+- `direttaCpuVariant`：`v2` / `v3` / `v4` / `zen4`；不带 Diretta 时为 `null`
 
 正式 release 应从 clean worktree 构建，因此 `sourceDirty=false`。
 
@@ -172,7 +177,10 @@ Diretta SDK 150 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本�
 ## CI
 
 `.github/workflows/dev.yml` 在 `ubuntu-24.04` Linux x86-64 环境中使用 Node `24.18.0`
-与 Rust stable 构建 Core/Web。Debian 11 容器是单独的打包环境；发布时应记录实际使用的构建环境、源码提交与产物 hash。
+与 Rust stable 构建 Core/Web。该 workflow 依次执行 `pnpm typecheck`、`pnpm test`、
+`pnpm build`、`pnpm package:core`，并用 `actions/upload-artifact` 上传
+`out/splayer-atom-core-*-system-linux-x64.tar.gz`（`.github/workflows/dev.yml:62-78`）。
+Debian 11 容器是单独的打包环境；发布时应记录实际使用的构建环境、源码提交与产物 hash。
 
 ## 发布前门禁
 

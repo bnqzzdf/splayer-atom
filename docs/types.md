@@ -2,40 +2,44 @@
 
 > 最后更新：2026-09-28
 
-插件在事件回调和处理器入参里收到的数据类型，完整字段集中列在这里。带 `?` 的字段为可选。
+插件在处理器入参里收到的数据类型，完整字段集中列在这里。带 `?` 的字段为可选。
 
 ## 曲目
 
 ### Track
 
-一首歌曲的完整信息。控制插件的 [`trackChange`](/plugins/control) 事件载荷与菜单点击（[`menuClick`](/plugins/control#菜单扩展)）入参的 `track` 均为此对象。
+一首歌曲的完整信息。菜单点击（[`menuClick`](/plugins/control#菜单扩展)）处理器入参的 `track` 即为此对象；`trackChange` 事件载荷属协议保留，当前 Core 不下发。
 
-| 字段            | 类型                               | 说明                                  |
-| --------------- | ---------------------------------- | ------------------------------------- |
-| `id`            | `string`                           | 曲目 ID                               |
-| `extId`         | `string?`                          | 二级 ID                               |
-| `source`        | [`TrackSource`](#tracksource)      | 歌曲来源                              |
-| `path`          | `string?`                          | 本地文件路径（仅本地歌曲）            |
-| `cuePath`       | `string?`                          | CUE 文件路径                          |
-| `cueAudioPath`  | `string?`                          | CUE 指向的音频文件路径                |
-| `cueStartMs`    | `number?`                          | CUE 分轨起始时间（毫秒）              |
-| `cueEndMs`      | `number?`                          | CUE 分轨结束时间（毫秒）              |
-| `serverId`      | `string?`                          | 流媒体服务器实例 ID（仅 `streaming`） |
-| `originalId`    | `string?`                          | 流媒体服务器原生 ID（仅 `streaming`） |
-| `title`         | `string`                           | 标题                                  |
-| `comment`       | `string?`                          | 注释 / 副标题                         |
-| `artists`       | [`Artist[]`](#artist)              | 歌手                                  |
-| `album`         | [`Album`](#album)`?`               | 专辑                                  |
-| `track`         | `number?`                          | 曲目编号                              |
-| `duration`      | `number`                           | 时长（毫秒）                          |
-| `cover`         | `string?`                          | 封面地址                              |
-| `coverOriginal` | `string?`                          | 原始封面地址                          |
-| `fileSize`      | `number?`                          | 文件大小（字节）                      |
-| `mtime`         | `number?`                          | 修改时间（Unix 毫秒）                 |
-| `ctime`         | `number?`                          | 创建时间（Unix 毫秒）                 |
-| `quality`       | [`AudioQuality`](#audioquality)`?` | 音质信息                              |
-| `fee`           | [`TrackFee`](#trackfee)`?`         | 付费标记                              |
-| `cloud`         | `boolean?`                         | 是否云盘歌曲                          |
+| 字段              | 类型                               | 说明                                                                  |
+| ----------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| `id`              | `string`                           | 曲目 ID                                                               |
+| `extId`           | `string?`                          | 二级 ID                                                               |
+| `mediaId`         | `string?`                          | 平台媒体文件 ID，用于解析播放地址                                     |
+| `source`          | [`TrackSource`](#tracksource)      | 歌曲来源                                                              |
+| `path`            | `string?`                          | 本地文件路径（仅本地歌曲）                                            |
+| `cuePath`         | `string?`                          | CUE 文件路径                                                          |
+| `cueAudioPath`    | `string?`                          | CUE 指向的音频文件路径                                                |
+| `cueStartMs`      | `number?`                          | CUE 分轨起始时间（毫秒）                                              |
+| `cueEndMs`        | `number?`                          | CUE 分轨结束时间（毫秒）                                              |
+| `cueStartFrame75` | `number?`                          | CUE 分轨起点的原始 75fps 整数帧位置，用于精确切轨                     |
+| `cueEndFrame75`   | `number?`                          | 下一条 INDEX 01 的原始 75fps 整数帧位置；最后一轨省略并播放到物理 EOF |
+| `serverId`        | `string?`                          | 流媒体服务器实例 ID（仅 `streaming`）                                 |
+| `originalId`      | `string?`                          | 流媒体服务器原生 ID（仅 `streaming`）                                 |
+| `title`           | `string`                           | 标题                                                                  |
+| `comment`         | `string?`                          | 注释 / 副标题                                                         |
+| `artists`         | [`Artist[]`](#artist)              | 歌手                                                                  |
+| `album`           | [`Album`](#album)`?`               | 专辑                                                                  |
+| `track`           | `number?`                          | 曲目编号                                                              |
+| `disc`            | `number?`                          | 碟片编号                                                              |
+| `duration`        | `number`                           | 时长（毫秒）                                                          |
+| `cover`           | `string?`                          | 封面地址                                                              |
+| `coverOriginal`   | `string?`                          | 原始封面地址                                                          |
+| `fileSize`        | `number?`                          | 文件大小（字节）                                                      |
+| `mtime`           | `number?`                          | 修改时间（Unix 毫秒）                                                 |
+| `ctime`           | `number?`                          | 创建时间（Unix 毫秒）                                                 |
+| `quality`         | [`AudioQuality`](#audioquality)`?` | 音质信息                                                              |
+| `fee`             | [`TrackFee`](#trackfee)`?`         | 付费标记                                                              |
+| `cloud`           | `boolean?`                         | 是否云盘歌曲                                                          |
 
 ### TrackSource
 
@@ -79,7 +83,7 @@
 
 ### LyricLine
 
-一行歌词。控制插件的 [`lyricChange`](/plugins/control) 事件载荷 `lines` 即 `LyricLine[]`。
+一行歌词。协议保留类型：当前 Core 不下发 `lyricChange` 事件，其 `lines` 载荷即 `LyricLine[]`。
 
 | 字段              | 类型                                     | 说明                                           |
 | ----------------- | ---------------------------------------- | ---------------------------------------------- |

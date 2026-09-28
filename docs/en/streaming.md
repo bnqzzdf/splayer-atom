@@ -1,6 +1,6 @@
 # Streaming Services
 
-> Last updated: 2026-09-23
+> Last updated: 2026-09-28
 
 In addition to local music and online providers, SPlayer Atom Core can connect to self-hosted streaming servers and browse your private library.
 
@@ -16,10 +16,10 @@ In addition to local music and online providers, SPlayer Atom Core can connect t
 
 ## Adding a server
 
-1. Open **Settings → Streaming** and enable streaming.
-2. Add a server and select Subsonic, Jellyfin, or Emby.
+1. Open **Settings → Media Sources** and turn on the **Enable streaming** switch.
+2. Add a server and select a type (Navidrome, OpenSubsonic, Airsonic, Gonic, LMS, Subsonic, Jellyfin, or Emby — eight in total).
 3. Enter its URL, username, and password.
-4. Save. Core connects and exposes tracks, albums, artists, and playlists to Web Control.
+4. On save, Core activates and connects automatically only when there is no active server yet (the first server); an additional server is not connected automatically and must be switched to manually. Once connected, its tracks, albums, artists, and playlists are exposed to Web Control.
 
 You can configure and switch between multiple servers. Browsing data is cached locally for faster subsequent access.
 

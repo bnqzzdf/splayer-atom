@@ -1,6 +1,6 @@
 # Direct CUE 无缝播放实施方案
 
-> 最后更新：2026-09-23
+> 最后更新：2026-09-28
 
 本文记录 SPlayer Atom 的 Diretta Source Direct CUE 无缝播放方案及当前实现状态。
 

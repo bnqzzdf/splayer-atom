@@ -564,7 +564,9 @@ POST /library/folders/pins
 DELETE /library/folders/pins
 ```
 
-`scan` 通过显式 mode 同时表示增量作用域扫描与显式作用域重扫；它使用唯一的现有扫描器状态机。`location` 表示为本地曲目解析出的 Core 侧 Folder 导航目标，并且必须对 Web 隐藏 CUE/SACD 物理路径解析。`material` 表示对一个受支持补充素材的、经过校验的 Folder 域读取；在该实现更适合现有资产供给架构的地方，实现可以使用单独的缩略图/内容 route 或引用形式。
+以上路由实际挂载在 `/api` 前缀下（`core/server/index.ts` 的 `app.route("/api", buildCoreControlRoutes())`），表内路径省略了该前缀。
+
+`scan` 接收 `FolderScanRequest { path, incremental }`（`shared/types/folderBrowser.ts`）：`incremental` 为 `true` 时做增量作用域扫描，为 `false` 时做显式作用域重扫；它使用唯一的现有扫描器状态机。`location` 表示为本地曲目解析出的 Core 侧 Folder 导航目标，并且必须对 Web 隐藏 CUE/SACD 物理路径解析。`material` 表示对一个受支持补充素材的、经过校验的 Folder 域读取；在该实现更适合现有资产供给架构的地方，实现可以使用单独的缩略图/内容 route 或引用形式。
 `directory/thumbnail` 从首选的本地 cover/front/folder 插画或已规范的本地封面惰性解析一个子目录卡片图片，然后仅返回有界缩略图。`playlist-track` 是当用户把一个已展开的虚拟分轨加入本地歌单时所用的窄口径 CUE/SACD 拆分变更：Core 规范化该容器并仅持久化所选稳定曲目 id。
 
 `browse` 从一开始就是分页/游标式的。其可选 `filter` 在分页**之前**应用于当前目录的直接子项，并且绝不深入子目录。即使 Web 也对渲染做虚拟化，包含数千个直接条目的目录也不得要求单个巨大的 JSON 响应。游标属于当前目录快照/顺序，响应包含足够信息让 Web 知道是否还有更多条目可用。目录/媒体/素材分组与确定性排序必须在各页之间保持稳定。
@@ -627,7 +629,7 @@ Open containing folder     (resolvable local Track only)
 
 SongList、PlayerBar、Full Player、QueuePopover、QueuePanel、本地歌单/专辑/歌手、合集与 History 应消费该共享曲目操作模型，而不是各自重新实现通用子集。非本地曲目不显示“打开所在文件夹”。
 
-替换完成后，以下当前代码树投影将被移除：
+替换已经完成，以下旧代码树投影均已移除（源码中已不存在，也没有任何引用）：
 
 - `src/utils/folderTree.ts`；
 - `src/types/folder.ts`；
@@ -635,7 +637,7 @@ SongList、PlayerBar、Full Player、QueuePopover、QueuePanel、本地歌单/�
 - `libraryStore.folderCount`；
 - Folder 页面的 `expanded`、递归 `findFolder` 与 `STree` 用法。
 
-如果本项工作之后 `STree.vue` 没有其它真实消费者，就把它作为死代码移除，而不是保留一个未使用的兼容组件。
+`STree.vue` 也已作为死代码移除。
 
 ## 15. 失败行为
 

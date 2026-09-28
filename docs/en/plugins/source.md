@@ -1,6 +1,6 @@
 # Source Plugins
 
-> Last updated: 2026-09-16
+> Last updated: 2026-09-28
 
 A source plugin (`@type source`) provides playable URLs when the built-in provider cannot return one. It can also supply fallback lyrics, covers, and comments for online, local, and streaming tracks.
 
@@ -115,7 +115,7 @@ Return:
 | `quality` | `Quality` |          | Actual quality if downgraded             |
 | `expire`  | `number`  |          | URL expiration timestamp in milliseconds |
 
-Throw an error when no result exists. The player tries the next plugin. Handlers normally time out after 20 seconds and are cancelled after a track change.
+Throw an error when no result exists. The player tries the next plugin. `musicUrl` normally times out after 20 seconds; on timeout the router cancels the request and reports `PLUGIN_REQUEST_TIMEOUT` (the plugin itself is not notified; `PLUGIN_CANCELLED` is a host-side result code and late results are discarded by the caller).
 
 ## Supporting multiple platforms
 
@@ -256,14 +256,14 @@ splayer.on("musicPic", async ({ musicInfo }) => {
 
 ### Trigger order
 
-- Lyrics fallback applies to online, local, and streaming tracks. Built-in providers or the streaming server are tried first; plugins follow in user priority order.
+- Lyrics fallback applies to online, local, and streaming tracks. Built-in providers or the streaming server are tried first; plugins are then tried by the Web layer in plugin-list order (registry / installation order), skipping disabled or not-ready plugins.
 - Cover fallback applies only when a track from any source has no cover at all.
 - Comment sources appear only when they declare both `musicSearch` and `musicComment`.
 - Source plugins receive network permission automatically.
 
 ## Priority and updates
 
-Multiple source plugins can be enabled for one platform. They are tried by the priority configured in Plugin Management. Declare `@updateUrl` for host-managed updates; LX scripts can use `updateAlert`. See [Plugin Updates](/en/plugins/update).
+Multiple source plugins can be enabled for one platform. They are tried in registry order (installation/load order). A user-configurable priority (`plugins.priority.*`) is **not implemented yet**: the registry has the lookup but no caller, and neither an HTTP route nor a UI entry can set it. Declare `@updateUrl` for host-managed updates; LX scripts can use `updateAlert`. See [Plugin Updates](/en/plugins/update).
 
 ## LX compatibility
 

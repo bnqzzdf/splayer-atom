@@ -39,7 +39,7 @@ Diretta discovery 成功只说明能够发现 Target，不证明 Host 进程具�
 
 `diretta-sys/src/bridge.cpp` 的 SDK pull callback 只借用 Direct ring 已准备好的 payload。实时回调中禁止 discovery、格式协商、日志、mutex、动态分配和可避免的 sample copy。SDK release callback 后 Direct ring 才允许复用 in-flight slot。
 
-PCM Direct 仅接受 strict integer PCM storage（S16/S32；24-bit source 可作为保留有效位的 S32 transport slot）。float PCM 明确拒绝。DSF/DFF 只允许为 wire bit-order 做逐字节 bit reversal，并必须保持逻辑 DSD bit sequence 不变。
+Diretta Source Direct 下，PCM Direct 仅接受 strict integer PCM storage（S16/S32；24-bit source 可作为保留有效位的 S32 transport slot），float PCM 明确拒绝；ALSA Direct 路径则接受 Float32（`alsa/format.rs` 的 `pack_direct_pcm`、`alsa/direct_pcm.rs` 的零拷贝 transport）。DSF/DFF 只允许为 wire bit-order 做逐字节 bit reversal，并必须保持逻辑 DSD bit sequence 不变。
 
 ## 验收
 

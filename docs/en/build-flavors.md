@@ -67,7 +67,9 @@ in that run.
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz` and requires a compatible system Node `>=22.19.0`.
+Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`.
+
+At **runtime** that artifact requires a system Node `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2`). This differs from the **build** requirement: packaging any flavor requires the build process Node to be **exactly `24.18.0`** (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`).
 
 ## bundled-runtime
 

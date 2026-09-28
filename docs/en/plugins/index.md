@@ -1,6 +1,6 @@
 # Plugin Overview and Architecture
 
-> Last updated: 2026-09-16
+> Last updated: 2026-09-28
 
 SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A plugin interacts with Core only through the injected global `splayer` object.
 
@@ -68,7 +68,7 @@ install → parse manifest → enable → create vm → run → register() → r
 | `error`    | Load/runtime failure or repeated host crashes |
 | `disabled` | Disabled by the user                          |
 
-The host restarts after crashes or hangs using 2s, 8s, and 30s backoff. After three consecutive failures it enters `error`. A single plugin runtime failure affects only that plugin.
+The host restarts after crashes or hangs using 2s, 8s, and 30s backoff. Only the fourth loss (more than three restart attempts) marks the plugins as `error`. A single plugin runtime failure affects only that plugin.
 
 ## Manifest
 
@@ -89,7 +89,7 @@ Metadata is declared in a leading JSDoc block:
 
 | Field          | Required | Description                                                                    |
 | -------------- | -------- | ------------------------------------------------------------------------------ |
-| `@name`        |          | Display name, max 24 characters; a compatibility name is generated if omitted  |
+| `@name`        |          | Display name, max 64 characters; a compatibility name is generated if omitted  |
 | `@version`     |          | Version; defaults to `0.0.0`                                                   |
 | `@id`          |          | Stable identity, preferably reverse-domain style; derived from name if omitted |
 | `@description` |          | Summary                                                                        |
@@ -134,18 +134,18 @@ The current host level is **3**. A plugin requiring a newer level is rejected wi
 - No Node built-ins, `require`, `import`, DOM, or browser-host API.
 - Available globals include `splayer`, `Buffer`, URL APIs, text encoders, Base64 APIs, promises, microtasks, timers, and a forwarded `console`.
 - Network access is available only through `splayer.request` and only for HTTP(S).
-- Top-level synchronous execution has a five-second limit. Put expensive work in asynchronous handlers.
+- Top-level synchronous execution has a ten-second limit. Put expensive work in asynchronous handlers.
 
 ## Common APIs
 
 ### Properties
 
-| Property             | Type     | Description               |
-| -------------------- | -------- | ------------------------- |
-| `splayer.pluginId`   | `string` | Assigned plugin ID        |
-| `splayer.apiLevel`   | `number` | Host API level            |
-| `splayer.locale`     | `string` | UI locale such as `en-US` |
-| `splayer.appVersion` | `string` | Application version       |
+| Property             | Type     | Description                           |
+| -------------------- | -------- | ------------------------------------- |
+| `splayer.pluginId`   | `string` | Assigned plugin ID                    |
+| `splayer.apiLevel`   | `number` | The plugin's own declared `@apiLevel` |
+| `splayer.locale`     | `string` | UI locale such as `en-US`             |
+| `splayer.appVersion` | `string` | Application version                   |
 
 ### `splayer.request(url, options?)`
 
@@ -202,7 +202,7 @@ Synchronously reads a plugin setting or returns `undefined`. Control plugins dec
 | Limit                   | Value      |
 | ----------------------- | ---------- |
 | Host load timeout       | 10 seconds |
-| Top-level execution     | 5 seconds  |
+| Top-level execution     | 10 seconds |
 | Default request timeout | 15 seconds |
 | Maximum request timeout | 60 seconds |
 | Remote import size      | About 9 MB |
@@ -224,20 +224,25 @@ Moving the portable edition's complete `app-data` directory preserves all plugin
 
 ## Error codes
 
-| Code                        | Meaning                                     |
-| --------------------------- | ------------------------------------------- |
-| `PLUGIN_ACTION_UNSUPPORTED` | Handler not registered                      |
-| `PLUGIN_SCRIPT_ERROR`       | Syntax or runtime error                     |
-| `PLUGIN_INVALID_MANIFEST`   | Invalid manifest field                      |
-| `PLUGIN_API_LEVEL_MISMATCH` | API level newer than the host               |
-| `PLUGIN_REQUEST_TIMEOUT`    | Request timeout                             |
-| `PLUGIN_CANCELLED`          | Cancelled, for example after a track change |
-| `PLUGIN_NETWORK_ERROR`      | Network error                               |
-| `PLUGIN_URL_NOT_ALLOWED`    | Disallowed URL scheme                       |
-| `PLUGIN_INVALID_RESULT`     | Invalid handler result                      |
-| `PLUGIN_NOT_READY`          | Plugin is not ready                         |
-| `PLUGIN_WORKER_CRASHED`     | Host process crashed                        |
-| `PLUGIN_HANDLER_ERROR`      | Default handler error                       |
+| Code                        | Meaning                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `PLUGIN_UNKNOWN`            | Unknown error                                                                                     |
+| `PLUGIN_NOT_FOUND`          | Plugin not found                                                                                  |
+| `PLUGIN_DISABLED`           | Plugin is disabled                                                                                |
+| `PLUGIN_NOT_READY`          | Plugin is not ready                                                                               |
+| `PLUGIN_ACTION_UNSUPPORTED` | Handler not registered                                                                            |
+| `PLUGIN_LOAD_TIMEOUT`       | Load timeout (fork to ready signal)                                                               |
+| `PLUGIN_SCRIPT_ERROR`       | Syntax or runtime error                                                                           |
+| `PLUGIN_INVALID_MANIFEST`   | Invalid manifest field                                                                            |
+| `PLUGIN_API_LEVEL_MISMATCH` | Incompatible level (newer than host, or a control plugin below 2)                                 |
+| `PLUGIN_REQUEST_TIMEOUT`    | Request timeout                                                                                   |
+| `PLUGIN_CANCELLED`          | Cancelled, for example after a track change                                                       |
+| `PLUGIN_NETWORK_ERROR`      | Network error                                                                                     |
+| `PLUGIN_URL_NOT_ALLOWED`    | Disallowed URL scheme                                                                             |
+| `PLUGIN_PERMISSION_DENIED`  | Missing permission such as `network` or `control`                                                 |
+| `PLUGIN_WORKER_CRASHED`     | Host process crashed                                                                              |
+| `PLUGIN_HANDLER_ERROR`      | Default handler error                                                                             |
+| `PLUGIN_INVALID_RESULT`     | Invalid handler result; thrown only by the lx compatibility layer, not part of `PluginErrorCodes` |
 
 ## Debugging
 

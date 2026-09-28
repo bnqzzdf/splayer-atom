@@ -27,7 +27,7 @@ features:
     details: 当前唯一正式发布平台，提供 system-runtime 与 bundled-runtime tar.gz artifact。
 ---
 
-> 最后更新：2026-09-10
+> 最后更新：2026-09-28
 
 ## 产品边界
 

@@ -25,7 +25,9 @@ Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进
 
 - [ ] 在干净的候选 Core 产物中验证 [ALSA 输出方案](./alsa-output-plan.md) 的变更。
       [FC4 本地模块复测](./alsa-gap-fixes-2026-09-23.md) 已通过短时 Processed 变调/变速播放、
-      变调/变速 seek 与 Direct 基础播放。在该候选上检查受支持的模式、格式、切换与资源趋势；
+      变调/变速 seek 与 Direct 基础播放。同一源码工作树的
+      [2026-09-23 native 运行态改动复核](./alsa-runtime-smoke-2026-09-23.md) 另记录了 Processed
+      seek 与 Direct 基础播放的局部 smoke。在该候选上检查受支持的模式、格式、切换与资源趋势；
       若观察到具体故障再行排查。共享 `AlsaFrameWriter`、单一运行期归属以及有界解码/DSP 队列均已
       实现。各自独立的模式控制循环、参数版本跟踪，以及对单个上游解码帧的任意上限都不是验收门禁。
 - [ ] 在干净候选上完成目标设备的 ALSA 格式与生命周期检查。独立的 PCM/DSD 对比已在 USB 提交层

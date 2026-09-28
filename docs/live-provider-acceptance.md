@@ -5,7 +5,7 @@
 本文定义 Netease、QM、KG、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 
 状态（仓库记录，2026-09-23）：Core/Web 已接入五个平台；QM/KG 扫码、Cookie、搜索、详情和 Core 音源路径，以及 Qobuz 浏览器 OAuth 和仅 token 登录已实现。
-这些新路径尚未针对本仓库候选包完成真实账号验收。Debian 11 两种模式的产物启动验收不等于平台账号或音频硬件验收。UPnP 方案记录了 Netease/TIDAL 的部分真实在线播放；
+这些新路径尚未针对本仓库候选包完成真实账号验收。Debian 11 两种模式的产物启动验收不等于平台账号或音频硬件验收。[UPnP 方案](./upnp-output-plan.md) 第 12 节「真机」记录了 Netease/TIDAL 的部分真实在线播放，[Qobuz OAuth 方案](./qobuz-oauth-plan.md) 第七节记录了 Qobuz 浏览器 OAuth 的真机验证结果；它们属于各自方案的记录，不替代本文件的候选包验收矩阵；
 本文件尚无覆盖以下完整矩阵的候选包验收结果，
 仍见 [Roadmap](./atom-roadmap.md)。
 

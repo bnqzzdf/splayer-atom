@@ -1,6 +1,6 @@
 # Using Plugins
 
-> Last updated: 2026-09-16
+> Last updated: 2026-09-28
 
 SPlayer Atom keeps the plugin model inherited from SPlayer-Next and runs it in Node Core. Plugins can extend **music sources** (resolve playable track URLs) and **control** (reverse playback control, plugin settings, and track-menu actions). SPlayer-Next plugins that do not depend on Desktop/Electron-only APIs and stay within the currently documented API can generally continue to work. This page is for plugin users. Authors should start with [Plugin Development](/en/plugins/).
 
@@ -17,7 +17,7 @@ Scripts distributed with a `gz_` prefix are detected and decompressed automatica
 ## Enable, disable, and uninstall
 
 - Newly installed plugins are enabled automatically.
-- Multiple plugins may be enabled at once. If several support the same source, Core selects one by priority.
+- Multiple plugins may be enabled at once. If several support the same source, Core tries them in registry order (installation/load order); a user-configurable priority is not implemented yet.
 - A control plugin can expose settings from its plugin card.
 - **Uninstalling deletes the script and its local data and cannot be undone.**
 

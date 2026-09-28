@@ -135,8 +135,10 @@ sudo tar -xzf "$ARCHIVE" -C /opt/splayer-atom-core
 # bundled-runtime uses the corresponding bundled archive and the same target layout
 ```
 
-选择由目标 Git 提交构建的 artifact。部署前核对其中 `runtime.json` 的 `atomCommit`；文件名中的
-产品版本和构建日期不能精确标识源码修订。
+Pick the artifact built from the intended Git commit. The artifact filename carries the 8-character
+commit, so it can be used to filter first; the authoritative record is still `atomCommit` in
+`runtime.json` inside the archive, so verify against that before deploying (same convention as
+"a tarball alone tells you which commit it was built from" in [Build and Packaging](./build-and-packaging.md)).
 
 4. Replace the new artifact's empty `data/` with a copy of the pre-upgrade durable state. Copy rather than move it so the rollback directory remains independently recoverable.
 

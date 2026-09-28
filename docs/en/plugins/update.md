@@ -1,8 +1,8 @@
 # Plugin Updates
 
-> Last updated: 2026-09-10
+> Last updated: 2026-09-28
 
-SPlayer Atom Core checks plugin versions and Web Control presents the user-approved update action. A plugin declares `@updateUrl`, Core downloads the script and compares `@version`, and applying an update preserves enabled state, settings, storage, and priority.
+SPlayer Atom Core checks plugin versions and Web Control presents the user-approved update action. A plugin declares `@updateUrl`, Core downloads the script and compares `@version`, and applying an update preserves enabled state, settings, and storage.
 
 ## Workflow
 
@@ -28,11 +28,11 @@ Checks run silently at application startup and can also be started from each plu
  */
 ```
 
-| Field        | Description                                                       |
-| ------------ | ----------------------------------------------------------------- |
-| `@updateUrl` | Stable HTTPS raw `.js` URL; localhost HTTP is allowed for testing |
-| `@version`   | Numeric dotted version compared segment by segment                |
-| `@changelog` | Notes shown from the newly fetched script; use literal `\n`       |
+| Field        | Description                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| `@updateUrl` | Stable HTTPS raw `.js` URL; `http://localhost` and `http://127.0.0.1` are allowed for testing |
+| `@version`   | Numeric dotted version compared segment by segment                                            |
+| `@changelog` | Notes shown from the newly fetched script; use literal `\n`                                   |
 
 Point `@updateUrl` at a stable location such as a file on the repository's main branch. The changelog shown to users comes from the remote new script, not the installed copy.
 
@@ -45,7 +45,7 @@ lx.send(lx.EVENT_NAMES.updateAlert, {
 });
 ```
 
-LX alerts do not include a version. If the URL is a web page rather than raw JavaScript, the app opens it; the user must locate the new script's raw URL and install it again from Plugin Management.
+LX `updateAlert` carries `log` and `updateUrl`; the host compatibility layer also accepts `version`, so without one the card only indicates that an update exists. If the URL is a web page rather than raw JavaScript, the update fails with a failure toast and the app does **not** open that address automatically; the user can open it manually through the View Update link in the dialog, then locate the new script's raw URL and install it again from Plugin Management.
 
 ## Applying an update
 

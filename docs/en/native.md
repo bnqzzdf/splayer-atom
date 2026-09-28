@@ -1,6 +1,6 @@
 # Native Modules
 
-> Last updated: 2026-09-20
+> Last updated: 2026-09-28
 
 SPlayer Atom native code exists only for the Linux x86-64 Node Core runtime.
 
@@ -29,7 +29,7 @@ pnpm build:native
 pnpm build:native --dev
 ```
 
-The formal `core-audio` flavor uses ALSA on Linux. The build checks `audio-engine.node` with `ldd` and rejects PipeWire/PulseAudio dynamic dependencies in the Core artifact.
+The formal `core-audio` flavor uses ALSA on Linux. The build checks `audio-engine.node` with `ldd` and rejects PipeWire/PulseAudio dynamic dependencies in the Core artifact. It likewise rejects dynamic OpenSSL dependencies in `streaming-api.node`, so the shipped artifact never depends on a host libssl.
 
 ## Diretta
 

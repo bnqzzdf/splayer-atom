@@ -1,6 +1,6 @@
 # UPnP 源保真输出实施方案
 
-> 最后更新：2026-09-23
+> 最后更新：2026-09-28
 
 状态（当前代码，2026-09-23）：`core/atom/upnp/` 的 discovery、transport、
 output、media 模块及 Core 播放接入已实现；CUE/SACD/DSD 的软件对照和部分
@@ -241,10 +241,11 @@ provider 协议，也不解析 manifest。
 若 resolver 已返回本地 path/cache path，直接服务。若仍为 HTTP(S)，首版先完整物化后提供给
 Renderer，不做边下边播 relay。
 
-`core/atom/directInput.ts` 已有 exact HTTP bytes -> `.part` -> rename 的实现。实现时先
-复用其可复用部分；如果 Diretta 专属 temp/lifecycle 使直接复用不成立，再提取最小的 Atom-owned
-exact-byte helper。Diretta 和 UPnP 仍分别拥有 temp root 与 cleanup lifecycle，不复制下载实现，
-也不让 UPnP 依赖 Diretta 目录语义。
+exact HTTP bytes -> `.part` -> rename 的 primitive 在 `core/atom/exactInput.ts`
+（`writeExactHttpInput`，`:63`/`:78`/`:111`）；`core/atom/directInput.ts:6`/`:65` 只是它的
+调用方，不是该实现的归属。实现时先复用其可复用部分；如果 Diretta 专属 temp/lifecycle 使
+直接复用不成立，再提取最小的 Atom-owned exact-byte helper。Diretta 和 UPnP 仍分别拥有
+temp root 与 cleanup lifecycle，不复制下载实现，也不让 UPnP 依赖 Diretta 目录语义。
 
 ### 临时资源生命周期
 
@@ -283,8 +284,12 @@ INDEX 00/01、pregap 与多 FILE 语义，不另造 Track identity。
 
 首版 CUE representation 改为 PCM WAV/WAVE_FORMAT_EXTENSIBLE，而不是为了 UPnP 新增 FLAC
 encoder。复用现有 strict integer `DirectPcmDecoder`，只做精确 seek/decode/crop 和 WAV header
-写入；不经过 swr/f32/dither。以后真实 Renderer 兼容性证明 FLAC 必要时，可在同一 extraction
-seam 增加 FLAC writer，而 Core、UPnP protocol 和 media server 均无需改变。
+写入；不经过 swr/f32/dither。**边界规则差异**：UPnP 的 CUE 边界是四舍五入映射
+（`native/audio-engine-core/src/media_extract.rs:59-64` 的
+`cue_frame_to_sample = (frame75 * rate + 37) / 75`），与 Direct 播放路径要求的“frame75 整除
+75”不同，因此这里复用解码器但不继承 Direct 的整除裁切语义。以后真实 Renderer 兼容性证明
+FLAC 必要时，可在同一 extraction seam 增加 FLAC writer，而 Core、UPnP protocol 和 media
+server 均无需改变。
 
 ### SACD ISO
 
@@ -317,7 +322,7 @@ native/audio-engine-core/src/media_extract.rs
 cue/*
 DirectPcmDecoder / DirectPcmFrame
 SacdTrackReader
-DsfReader / DffReader（仅在其已独立验证的能力范围内）
+DsfReader + reverse_byte（`media_extract.rs:14`；写出端为 `DsfWriter`，`media_extract.rs:420`）
 现有 DST decoder（已通过独立全轨 correctness gate）
 ```
 

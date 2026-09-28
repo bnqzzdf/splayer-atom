@@ -727,8 +727,12 @@ POST /library/folders/pins
 DELETE /library/folders/pins
 ```
 
-`scan` represents both incremental scoped scan and explicit scoped rescan through an explicit mode;
-it uses the single existing scanner state machine. `location` represents a Core-resolved Folder
+These routes are actually mounted under the `/api` prefix (`app.route("/api",
+buildCoreControlRoutes())` in `core/server/index.ts`); the paths above omit that prefix.
+
+`scan` takes a `FolderScanRequest { path, incremental }` (`shared/types/folderBrowser.ts`):
+`incremental: true` performs an incremental scoped scan and `incremental: false` an explicit scoped
+rescan; it uses the single existing scanner state machine. `location` represents a Core-resolved Folder
 navigation target for a local Track and must hide CUE/SACD physical-path parsing from Web.
 `material` represents a validated Folder-domain read of one supported supplementary material; the
 implementation may use a separate thumbnail/content route or reference form where that fits the
@@ -814,7 +818,8 @@ SongList, PlayerBar, Full Player, QueuePopover, QueuePanel, local playlists/albu
 collections, and History should consume this shared Track action model instead of independently
 reimplementing the common subset. Non-local Tracks do not show “Open containing folder”.
 
-The following current tree projection is removed once the replacement is complete:
+The replacement is complete: the following old tree projections have all been removed (they no
+longer exist in the source and have no remaining references):
 
 - `src/utils/folderTree.ts`;
 - `src/types/folder.ts`;
@@ -822,8 +827,7 @@ The following current tree projection is removed once the replacement is complet
 - `libraryStore.folderCount`;
 - Folder-page `expanded`, recursive `findFolder`, and `STree` usage.
 
-If `STree.vue` has no other real consumer after this work, remove it as dead code rather than
-keeping an unused compatibility component.
+`STree.vue` was also removed as dead code.
 
 ## 15. Failure behavior
 

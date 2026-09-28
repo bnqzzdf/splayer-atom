@@ -1,6 +1,6 @@
 # 原生模块
 
-> 最后更新：2026-09-20
+> 最后更新：2026-09-28
 
 SPlayer Atom 的原生运行时只服务于 Linux x86-64 Node Core。
 
@@ -29,7 +29,10 @@ pnpm build:native
 pnpm build:native --dev
 ```
 
-正式 Core native flavor 使用 `core-audio`，Linux 输出后端为 ALSA。构建脚本会用 `ldd` 检查 `audio-engine.node`，禁止正式 Core artifact 携带 PipeWire/PulseAudio 动态依赖。
+正式 Core native flavor 使用 `core-audio`，Linux 输出后端为 ALSA。构建脚本会用 `ldd` 检查两个自研 addon，任一门禁不通过即失败：
+
+- `audio-engine.node`：禁止携带 PipeWire/PulseAudio 动态依赖（`libpipewire*` / `libpulse*`，`scripts/atom/build-core-native.ts:124-128`）；
+- `streaming-api.node`：禁止携带 OpenSSL 动态依赖（`libssl.so` / `libcrypto.so`，`scripts/atom/build-core-native.ts:132-138`）。
 
 ## audio-engine-core
 

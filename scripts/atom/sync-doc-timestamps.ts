@@ -63,6 +63,12 @@ const stampLineFor = (file: string, date: string): string =>
 
 /** 该文件最后一次正文修订的日期 */
 const contentRevisionDate = (file: string): string => {
+  const today = new Date().toISOString().slice(0, 10);
+  // 工作树里有未提交的正文改动时按"今天"算：否则会出现"改完提交，时间戳才过期"的错位，
+  // 逼着人再补一次提交。只改时间戳行本身不算正文改动（下面同样剥掉再比）。
+  const head = git(["show", `HEAD:${file}`]);
+  const working = readFileSync(path.join(root, file), "utf8");
+  if (head && withoutStamp(head) !== withoutStamp(working)) return today;
   const entries = git(["log", `--max-count=${MAX_COMMITS}`, "--format=%H %cs", "--", file])
     .split("\n")
     .map((line) => line.trim())

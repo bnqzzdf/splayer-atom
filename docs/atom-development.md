@@ -11,7 +11,7 @@
 - pnpm `>=10`
 - Rust stable
 - Linux x86-64
-- `libasound2-dev`、`pkg-config`、`clang`、`libarchive-tools`
+- `libasound2-dev`、`pkg-config`、`clang`（`libarchive-tools` 只有 CI 的依赖安装行需要，本地构建可省略）
 
 正式构建与 bundled-runtime 产物使用 reference Node `24.18.0`。运行时支持范围与发布参考版本定义在
 `core/atom/runtime/nodeRuntime.ts`。

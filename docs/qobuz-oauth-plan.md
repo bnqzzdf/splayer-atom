@@ -1,11 +1,11 @@
 # Qobuz 一键 OAuth 登录 · 实施方案（可直接执行）
 
-> 最后更新：2026-09-24
+> 最后更新：2026-09-28
 
 > 状态：**已实现，并已在真机端到端验证通过**（2026-09-23，目标机 `10.0.0.190`）。
 > 第二节的未知点已解出（见下表 #9~#11）；兑换**成功**时的真实响应形状也已实测，见「七、真机验证结果」。
 >
-> 目标 UX：设置 →「在线平台账户」→ Qobuz → 点一次「用浏览器登录」→ 浏览器里正常登录
+> 目标 UX：设置 →「在线平台账号」→ Qobuz → 点一次「用浏览器登录」→ 浏览器里正常登录
 > → **自动完成**。没有 Console、没有 F12、没有复制粘贴。
 
 ---
@@ -51,12 +51,12 @@ POST /api.json/0.2/user/login   (form: app_id + code_autorisation)
 
 ```rust
 /// 起一次性本地回调监听并返回授权 URL。
-/// 返回 { url, port }；url 已带 ext_app_id 与 redirect_url=http://127.0.0.1:<port>/qobuz/cb
+/// 返回 { url, port }；url 已带 ext_app_id 与 redirect_url=http://{host}:{port}/qobuz/cb/{state}?state={state}
 pub async fn auth_oauth_start(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError>
 ```
 
 - 端口取随机空闲端口，监听 `127.0.0.1`，**只在登录期间存活**，拿到回调或超时（建议 180s）即关闭。
-- 只接受 `GET /qobuz/cb`，从 query 取 `code_autorisation`；其余请求回 404。
+- 只接受路径**逐字符等于** `/qobuz/cb/{state}` 的请求（即 `GET /qobuz/cb/<state>`）；state 同时出现在路径与 query 中，`code_autorisation` 从 query 取；其余请求回 404。
 
 ```rust
 /// 等待回调、兑换 token、落库。
@@ -64,10 +64,8 @@ pub async fn auth_oauth_start(&self, params: &HashMap<String, Value>) -> Result<
 pub async fn auth_oauth_await(&self, params: &HashMap<String, Value>) -> Result<Value, StreamingError>
 ```
 
-- 兑换必须走 **`self.request(...)` 的签名路径**（`signed = true`）——浏览器那条路能成，正是因为它带着签名；
-  事实 #8 表明不带签名的请求一律 401。
-- 若确认兑换端点无需签名，仍建议保持 signed=true，避免依赖未签名通道。
-- 成功后复用现有 `core/apis/qobuz/index.ts::authLogin` 的落库逻辑（`setQobuzAuth`），**不要另写一套**。
+- 兑换**不需要签名**：实现直接 `GET oauth/callback`（`code` + `private_key` 走 query，app_id 走 `X-App-Id` 头），与事实 #11 及 §7.1 的实测一致——不签名也能兑换成功。
+- 成功后复用现有 `core/apis/qobuz/index.ts::persistQobuzSession` 的落库逻辑（内部调用 `setQobuzAuth`），**不要另写一套**。
 
 **注意**：`auth_oauth_start` / `auth_oauth_await` 需在 `core/apis/qobuz/index.ts::callQobuz` 的
 action 分派里登记（与 `auth_login` 同级），否则前端调不到。
@@ -90,7 +88,7 @@ action 分派里登记（与 `auth_login` 同级），否则前端调不到。
 ## 四、验证清单（缺一不可）
 
 > 本地已验证 ✅ / 需真机 ❗：
-> ✅ `cargo test -p streaming-api` 24 passed（含 3 个真实 TCP 回调端到端用例：
+> ✅ `cargo test -p streaming-api` 32 passed（含 7 个真实 TCP 回调 listener 用例，例如：
 > 无关请求 404 后继续等待、拒绝授权、state 不匹配被拒）
 > ✅ `cargo build` / `pnpm typecheck` / `pnpm test:web`(108) / `pnpm test:node`(390；1 个
 > `coreSourceIdentity` 失败源于解包目录无 `.git`，基线一致) / eslint / prettier
@@ -138,7 +136,7 @@ Qobuz 不可能回传它没收到的东西 ⇒ 真实回跳必然被拒、空等
 
 **修法**：前端把 `window.location.hostname`（浏览器实际访问 Core 用的地址）传给
 `auth_oauth_start`；原生据此：
-- host 是回环（`127.*`/`localhost`/`::1`）→ 绑 `127.0.0.1`，保持原约束；
+- host 是回环（`localhost` 或 `127.` 前缀）→ 绑 `127.0.0.1`，保持原约束；主机名白名单只允许 `[A-Za-z0-9.-]`，`::1` / `[::1]` 会被判为非法参数直接报错；
 - 否则 → 绑 `0.0.0.0`，并把该 host 写进 `redirect_url`，让 PC 的回跳能打回设备。
 
 ⚠️ 这是对原文「只绑 127.0.0.1」的**有意放宽**。风险由这些因素约束：端口随机、
@@ -157,7 +155,7 @@ Qobuz 不可能回传它没收到的东西 ⇒ 真实回跳必然被拒、空等
 - 配套：`auth_oauth_await` 只能 `take` 走 receiver，**不能 take 整个槽位** ——
   否则 `cancel_tx` 被 drop，监听任务会误以为被取代而立刻放弃这次登录。
 
-以上每条都有对应回归测试（`auth_oauth.rs` 内 `listener_*` 用例），共 28 项。
+以上每条都有对应回归测试（`auth_oauth.rs` 内的 `listener_*` 用例），该文件共 16 项测试。
 
 ## 五、回退方案（若 `redirect_url` 指向 127.0.0.1 被拒）
 
