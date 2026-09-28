@@ -52,7 +52,57 @@ out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]
 
 `<commit>` 是 8 位短提交号（取自 `git rev-parse HEAD`，或源码交付包内 `SOURCE_COMMIT` 的 `commit=`），与 `runtime.json.atomCommit` 以及 Web Control「关于软件」页显示的提交号完全一致——**拿到一个 tar 就能知道它出自哪次提交，不必解包读 `runtime.json`**。
 
+### 提交必须真实存在且已发布
+
+产物名与 `runtime.json` 里的提交是「这份产物出自哪份源码」的唯一凭据，所以它必须是**真实存在**的提交：不只是长得像 SHA，还得是该仓库里真实存在的 commit 对象，并且在**网络远端**（`origin` 等 `http(s)` / `ssh` 地址）上可达。本地路径或 `file://` 的参考仓库一律不算——那种提交只存在于构建机上，别人取不到。
+
+不满足时 staging 直接失败，不会产出带可疑提交号的包。纯源码交付包（不含 `.git`）需要在 `SOURCE_COMMIT` 里自证：
+
+```text
+commit=<sha>
+dirty=false
+date=<iso>
+remote=https://github.com/bnqzzdf/splayer-atom.git
+published=true
+```
+
+`remote` 必须是网络地址，`published=true` 才会被采信；只写 `published=true` 而 `remote` 是本地路径时按未发布处理。
+
+只在本地做试验、明确不需要发布身份时，可以显式跳过检查：
+
+```bash
+pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublished
+```
+
+它**只跳过检查**，不会把身份改成已发布——这样的产物不能作为发布交付。
+
 staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
+
+## 源码交付包
+
+```bash
+pnpm package:source
+```
+
+把当前**已发布提交**的纯导出打成 `out/splayer-atom-dev-<version>-<短提交号>-src-<YYYYMMDD>-<HHMMSS>.tar.gz`，并生成同名 `.sha256`。内容取自提交本身而不是工作树，所以包内 `SOURCE_COMMIT` 与该提交严格对应；包内文件由 `scripts/atom/sourceIdentity.ts` 的同一个渲染函数生成，与构建端解析用的是同一份格式。
+
+要求提交已发布且工作树干净——交付包的全部价值就是「拿到包能按提交取回同一份源码」，自证不了的包不该产出。
+
+从交付包净室构建时，必须先从 `SOURCE_COMMIT` 声明的网络远端取回该提交，并校验解包内容与之一致，再开始构建；构建端的已发布校验会独立再确认一次。
+
+## 发布标签
+
+标签只表达「哪一版」，提交由标签自身指向：
+
+```bash
+pnpm release:tag            # 打本地标签并打印推送命令
+pnpm release:tag --push     # 打标签并推送
+pnpm release:tag --dry-run  # 只做检查，不落标签
+```
+
+标签名为 `v<version>`（取自 `package.json`）。**不要把构建身份写进标签名**：历史标签形如 `1.1.1-5ae8d992-20260925-091129`，名字里的提交来自构建机本地分支，而标签实际指向 `dev` 的另一个提交——名字与被指对象不一致，按标签名反查发布代码只会得到错误答案。
+
+打标签前强制检查：身份已发布、工作树干净、`v<version>` 在本地与远端都不存在。因此标签永远指向一个共享仓库里查得到的提交。
 
 ## runtime.json
 
@@ -130,6 +180,7 @@ pnpm test
 pnpm lint
 pnpm build
 pnpm package:core
+pnpm release:tag --dry-run
 pnpm docs:build
 cargo check --workspace
 cargo test --workspace

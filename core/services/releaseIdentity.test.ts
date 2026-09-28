@@ -17,6 +17,9 @@ const direttaSdkSource = read("scripts/atom/diretta-sdk.ts");
 const artifactNameSource = read("scripts/atom/core-artifact-name.ts");
 const stageSource = read("scripts/atom/stage-core-system.ts");
 const artifactSource = read("scripts/atom/check-core-artifact.ts");
+const sourceIdentitySource = read("scripts/atom/sourceIdentity.ts");
+const tagReleaseSource = read("scripts/atom/tag-release.ts");
+const packageSourceSource = read("scripts/atom/package-source.ts");
 const coreInfoSource = read("core/atom/runtime/coreInfo.ts");
 const musicBrainzSource = read("core/apis/musicbrainz.ts");
 const jellyfinSource = read("core/services/streaming/adapters/jellyfin.ts");
@@ -77,6 +80,42 @@ test("Core package filenames contain product version, build date and build time"
   assert.match(artifactNameSource, /value\.slice\(0, 8\)/);
   // 解析失败要抛错，避免把垃圾写进文件名
   assert.match(artifactNameSource, /产物名需要合法的 commit/);
+});
+
+test("发布身份只用真实且已发布的提交，标签名不携带构建身份", () => {
+  // 提交必须真实存在，而不只是长得像十六进制串
+  assert.match(sourceIdentitySource, /commitExistsInRepo/);
+  assert.match(sourceIdentitySource, /cat-file/);
+  // 只有网络远端上的提交才算已发布；本地路径远端正是历史事故的形态
+  assert.match(sourceIdentitySource, /isNetworkRemoteUrl/);
+  assert.match(sourceIdentitySource, /refs\/remotes\//);
+  // 判不出发布状态时留空，不能默认成已发布
+  assert.match(sourceIdentitySource, /published: undefined/);
+
+  // 产物生成端默认拒绝未发布提交；--allow-unpublished 只跳过检查，不改身份
+  assert.match(stageSource, /sourceIdentity\.published !== true && !allowUnpublished/);
+  assert.match(stageSource, /unpublishedIdentityMessage/);
+
+  // 标签名只由版本号组成，提交由标签自身指向（历史标签把构建身份写进了名字）
+  assert.match(tagReleaseSource, /const tagName = `v\$\{version\}`/);
+  assert.doesNotMatch(tagReleaseSource, /shortCoreCommit|artifactFileName/);
+  // 已发布是发布标签的硬前提，没有绕过开关
+  assert.match(tagReleaseSource, /identity\.published !== true/);
+  assert.doesNotMatch(tagReleaseSource, /allow-unpublished/);
+});
+
+test("源码交付包从已发布提交导出，并复用同一份 SOURCE_COMMIT 格式", () => {
+  // 没有已发布、干净的提交就不该产出交付包
+  assert.match(packageSourceSource, /identity\.published !== true/);
+  assert.match(packageSourceSource, /identity\.dirty/);
+  // 内容取自提交而不是工作树，否则导出的不等于自证的那个提交
+  assert.match(packageSourceSource, /"archive"/);
+  assert.match(packageSourceSource, /identity\.commit/);
+  // 写入端与校验端共用渲染函数，格式不会两头漂
+  assert.match(packageSourceSource, /renderSourceCommitFile/);
+  assert.match(sourceIdentitySource, /export const renderSourceCommitFile/);
+  // 渲染不出 remote= 时直接拒绝，不写自证不了的包
+  assert.match(sourceIdentitySource, /需要网络远端地址/);
 });
 
 test("runtime integrations identify the current product as SPlayer Atom", () => {
