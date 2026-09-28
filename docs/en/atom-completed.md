@@ -23,7 +23,7 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 
 - Diretta exact PCM Source Direct has real-target bit-perfect evidence through 768 kHz; Native
   DSD has real-target logical one-bit verification through DSD512. Mixed PCM/DSD queues completed
-  an overnight transition run. See the [hardware checklist](../hardware-release-checklist.md).
+  an overnight transition run. See the [hardware checklist](./hardware-release-checklist.md).
 - The ALSA HW backend implements Direct/Processed modes, exact PCM/Native DSD, lossy playback and
   existing PCM DSP. Core/Web mode and capability handling is integrated and CPAL output removed.
   The Web controls suppress Direct-only indicators and DSP actions when the actual path disallows
@@ -33,16 +33,16 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   1,414,748 PCM bytes and 5,658,992 DSD bytes. ALSA/Diretta switching, FC4 reconnect,
   systemd restart, SIGTERM and artifact WebSocket reconnection passed in their recorded scope.
   The clean Diretta archive matched all 220 installed non-data files and passed extracted-artifact
-  smoke. See the [2026-09-22 record](../alsa-acceptance-2026-09-22.md).
+  smoke. See the [2026-09-22 record](./alsa-acceptance-2026-09-22.md).
 - `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Both
   passed FC4 retest on installed clean artifact `3e420f78`; see the
-  [2026-09-23 record](../alsa-acceptance-2026-09-23.md). The [ALSA plan](../alsa-output-plan.md)
+  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The [ALSA plan](./alsa-output-plan.md)
   records the structural runtime/buffering work still needed.
 - UPnP shares Core queue, source and cache flow; its CUE/SACD materialization is isolated from
-  Direct/normal playback. The [UPnP plan](../upnp-output-plan.md) records AudioSys playback,
+  Direct/normal playback. The [UPnP plan](./upnp-output-plan.md) records AudioSys playback,
   extraction comparison and initial long-run evidence, as well as the outstanding stability gate.
 - Direct CUE uses Core-owned staging and precise 75 fps boundaries with native gapless handoff.
-  Automated checks are recorded in the [Direct CUE plan](../direct-cue-gapless-plan.md).
+  Automated checks are recorded in the [Direct CUE plan](./direct-cue-gapless-plan.md).
 
 ## Providers, Web and lyrics
 
@@ -52,7 +52,7 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   one-time callback listener and token-only login; Core persists the resulting session.
   `streaming-api` implements Qobuz protocol and TIDAL auth/request/manifest/DASH; Core integrates
   TIDAL JSON/BTS and DASH materialization. Selected real Netease/TIDAL UPnP online paths were
-  recorded in the [UPnP plan](../upnp-output-plan.md). Full real-account acceptance for all five
+  recorded in the [UPnP plan](./upnp-output-plan.md). Full real-account acceptance for all five
   providers still follows the roadmap.
 - Web Control exposes library, playlist, queue, playback, downloads, statistics, cache,
   providers, settings and plugins. The Core-owned Folder Browser now provides paged browsing,
@@ -64,7 +64,7 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   double-click interactions were removed. Device acceptance is still open.
 - Lyric P0/P1 is implemented: explicit-platform fallback, validated candidate selection,
   nonblocking TTML display upgrades, preferred-plugin competition and regression coverage for
-  source quality and YRC/QRC/KRC/TTML spacing. See [lyric improvements](../lyric-improvements.md).
+  source quality and YRC/QRC/KRC/TTML spacing. See [lyric improvements](./lyric-improvements.md).
 
 ## Packaging groundwork
 

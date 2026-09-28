@@ -95,7 +95,7 @@ explicit CPU variant; formal Diretta packaging must pass the required-SDK proven
 producing an artifact. See [Build Flavors](./build-flavors.md#diretta-capability) for the command.
 
 Linux live Diretta connection/playback validation runs the Host process as root. Follow the
-[deployment setup](./core-deployment.md) and [hardware checklist](../hardware-release-checklist.md).
+[deployment setup](./core-deployment.md) and [hardware checklist](./hardware-release-checklist.md).
 
 ## Release development
 
@@ -113,4 +113,4 @@ HTTP/WS endpoints, plugin-host IPC, startup, and termination. Real ALSA/Diretta/
 and long-run behavior require separate hardware acceptance; software checks do not replace it.
 
 See [Build and Packaging](./build-and-packaging.md), [Core Deployment](./core-deployment.md), and
-[Hardware Release Checklist](../hardware-release-checklist.md) for the detailed procedures.
+[Hardware Release Checklist](./hardware-release-checklist.md) for the detailed procedures.

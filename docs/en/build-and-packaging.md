@@ -208,4 +208,4 @@ cargo test --workspace
 git diff --check
 ```
 
-See [Core Deployment](./core-deployment.md) and the [Hardware Release Checklist](../hardware-release-checklist.md).
+See [Core Deployment](./core-deployment.md) and the [Hardware Release Checklist](./hardware-release-checklist.md).
