@@ -80,7 +80,14 @@ interface GenreItem {
   name: string;
 }
 
-const platform = ref<Platform>("qobuz");
+/**
+ * 当前平台。
+ *
+ * 初始值取标签顺序的第一项，而不是写死某个平台：写死会与顺序脱钩——
+ * 顺序一调整，刷新后的默认页就跟着错位（真实反馈：顺序改成 QQ音乐 在前之后，
+ * 刷新仍停在 Qobuz）。若第一项没登录，下面的 watch 会落到首个已登录平台。
+ */
+const platform = ref<Platform>(ALL_PLATFORMS[0]);
 const loading = ref(false);
 const error = ref<string>("");
 const sections = ref<HomeSection[]>([]);

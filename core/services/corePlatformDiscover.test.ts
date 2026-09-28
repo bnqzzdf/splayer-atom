@@ -42,6 +42,17 @@ test("流媒体接入的标签顺序按使用频率排，与共享层那份互�
   );
 });
 
+test("刷新后默认停在第一个标签页，而不是写死某个平台", () => {
+  // 写死 "qobuz" 会与标签顺序脱钩：顺序调整为 QQ音乐 在前之后，刷新仍会停在 Qobuz
+  assert.match(platformHomePageSource, /const platform = ref<Platform>\(ALL_PLATFORMS\[0\]\)/);
+  assert.doesNotMatch(platformHomePageSource, /ref<Platform>\("qobuz"\)/);
+  // 第一项没登录时，落到首个已登录平台
+  assert.match(
+    platformHomePageSource,
+    /if \(list\.length && !list\.includes\(platform\.value\)\) platform\.value = list\[0\];/,
+  );
+});
+
 test("QM 新歌首发走 musicu 且自带取流字段", () => {
   assert.match(qmNewSongSource, /"newsong\.NewSongServer"/);
   assert.match(qmNewSongSource, /"get_new_song_info"/);
