@@ -2,7 +2,7 @@
 
 ## Current status
 
-Last reviewed against source: 2026-09-28 (`a9e175a3`). This date is a documentation/code review,
+Last reviewed against source: 2026-09-28 (`188fcfbc`). This date is a documentation/code review,
 not a new hardware, account, browser or release acceptance run.
 
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
@@ -19,8 +19,10 @@ implemented (`058c0e63`); it is not pending development. The first improvement s
 (`b54265b6`) implements Core-side filename, modification-time and disc/track display sorting,
 physical browse attributes and sort-aware cursor invalidation. The second stage (`a9e175a3`)
 adds Web sorting controls, browser-local default persistence, sort-aware route/history state,
-filter/scroll restoration and containing-folder focus. The remaining first-batch information and
-scope feedback are still pending.
+filter/scroll restoration and containing-folder focus. The third stage now adds physical filename
+and compact file/track information, explicit recursive/current-folder scope feedback, loaded-item
+batch-selection wording and Folder Search truncation feedback (`188fcfbc`). First-batch
+implementation is now complete; plan-level acceptance remains pending.
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -88,7 +90,7 @@ Display order remains separate from Core-owned directory playback order.
 - [x] Implement first-batch Web sorting controls and browser-local preference persistence;
       integrate sort-aware history, filter/scroll restoration and exact containing-folder focus.
       Reuse the existing list/grid persistence rather than implementing it again.
-- [ ] Complete first-batch information and scope feedback: physical filenames and necessary
+- [x] Complete first-batch information and scope feedback: physical filenames and necessary
       track/file fields, explicit recursive/current-directory playback scope, loaded-item batch
       selection wording and the existing Core search-truncation signal.
 - [ ] Verify the first batch against the improvement plan's automated and manual criteria.
