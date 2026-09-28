@@ -1,5 +1,7 @@
 # 原生模块
 
+> 最后更新：2026-09-20
+
 SPlayer Atom 的原生运行时只服务于 Linux x86-64 Node Core。
 
 ## 模块

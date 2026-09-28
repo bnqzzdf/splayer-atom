@@ -1,5 +1,7 @@
 # Native Modules
 
+> Last updated: 2026-09-20
+
 SPlayer Atom native code exists only for the Linux x86-64 Node Core runtime.
 
 ## Modules

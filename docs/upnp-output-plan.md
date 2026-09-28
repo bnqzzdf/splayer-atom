@@ -1,5 +1,7 @@
 # UPnP 源保真输出实施方案
 
+> 最后更新：2026-09-23
+
 状态（当前代码，2026-09-23）：`core/atom/upnp/` 的 discovery、transport、
 output、media 模块及 Core 播放接入已实现；CUE/SACD/DSD 的软件对照和部分
 AudioSys 实机结果见第 12 节。首次混合长播暴露的 media stream FD 泄漏已有

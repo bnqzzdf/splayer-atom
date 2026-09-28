@@ -4,6 +4,8 @@ title: Download and Deployment
 
 # Download and Deployment
 
+> Last updated: 2026-09-28
+
 SPlayer Atom ships only Linux x86-64 Core artifacts. There is no Desktop installer.
 
 Two deployment variants exist:

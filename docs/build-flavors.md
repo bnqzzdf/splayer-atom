@@ -1,5 +1,7 @@
 # SPlayer Atom 构建面（Build Flavors）
 
+> 最后更新：2026-09-28
+
 SPlayer Atom 有两个部署变体：system-runtime 与 bundled-runtime。
 
 ## Core native 构建面

@@ -4,6 +4,8 @@ title: 下载与部署
 
 # 下载与部署
 
+> 最后更新：2026-09-25
+
 SPlayer Atom 只发布 Linux x86-64 Core，不提供 Desktop 安装包。
 
 正式 artifact 有两种部署变体：

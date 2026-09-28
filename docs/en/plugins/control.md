@@ -1,5 +1,7 @@
 # Control Plugins
 
+> Last updated: 2026-09-16
+
 A control plugin (`@type control`) does not provide audio sources. The current Atom Core supports three practical capabilities:
 
 - reverse playback control through `splayer.player.*`;

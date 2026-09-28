@@ -1,5 +1,7 @@
 # 2026-09-22 ALSA 与发布包实测
 
+> 最后更新：2026-09-23
+
 本记录只对应下述 `cecee166` 包。之后的 `c3e135ab` 已在软件中修复 Processed PCM
 seek 和重启后直接 Play；本记录中的 FAIL 是该旧包的实测结果，修复包的硬件复验仍见
 [Roadmap](./atom-roadmap.md)。

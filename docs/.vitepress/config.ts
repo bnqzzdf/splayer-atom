@@ -67,6 +67,12 @@ const zhTheme: DefaultTheme.Config = {
     },
   ],
   outline: { level: [2, 3], label: "文章目录" },
+  // 站点底部的「最后更新」由 git 提交时间自动推导（与文首手写时间戳互为补充：
+  // 文首那份在 GitHub 上可见，这份在文档站里始终准确）
+  lastUpdated: {
+    text: "最后更新",
+    formatOptions: { dateStyle: "medium" },
+  },
   footer: { message: "SPlayer Atom · AGPL-3.0" },
   editLink: {
     pattern: `${repository}/blob/dev/docs/:path?plain=1`,
@@ -121,6 +127,10 @@ const enTheme: DefaultTheme.Config = {
     },
   ],
   outline: { level: [2, 3], label: "On this page" },
+  lastUpdated: {
+    text: "Last updated",
+    formatOptions: { dateStyle: "medium" },
+  },
   footer: { message: "SPlayer Atom · AGPL-3.0" },
   editLink: {
     pattern: `${repository}/blob/dev/docs/:path?plain=1`,

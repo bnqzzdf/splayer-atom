@@ -1,5 +1,7 @@
 # Plugin Overview and Architecture
 
+> Last updated: 2026-09-16
+
 SPlayer Atom Core runs third-party JavaScript plugins in isolated sandboxes. A plugin interacts with Core only through the injected global `splayer` object.
 
 This plugin model is inherited from SPlayer-Next and adapted for the Web + Core runtime. Atom does not operate a plugin market; authors host their own scripts and users install them from raw HTTPS URLs.

@@ -1,5 +1,7 @@
 # Plugin Updates
 
+> Last updated: 2026-09-10
+
 SPlayer Atom Core checks plugin versions and Web Control presents the user-approved update action. A plugin declares `@updateUrl`, Core downloads the script and compares `@version`, and applying an update preserves enabled state, settings, storage, and priority.
 
 ## Workflow

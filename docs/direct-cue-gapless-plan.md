@@ -1,5 +1,7 @@
 # Direct CUE 无缝播放实施方案
 
+> 最后更新：2026-09-23
+
 本文记录 SPlayer Atom 的 Diretta Source Direct CUE 无缝播放方案及当前实现状态。
 
 状态（当前代码，2026-09-23）：Core 的 75fps CUE 坐标、staging/boundary 提交和

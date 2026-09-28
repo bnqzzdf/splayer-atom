@@ -1,5 +1,7 @@
 # SPlayer Atom 构建与打包
 
+> 最后更新：2026-09-28
+
 本文描述当前唯一正式产品：**Linux x86-64 Node Core + Web Control**。
 
 ## 构建面
@@ -182,6 +184,7 @@ pnpm build
 pnpm package:core
 pnpm release:tag --dry-run
 pnpm docs:build
+pnpm docs:stamp:check
 cargo check --workspace
 cargo test --workspace
 git diff --check

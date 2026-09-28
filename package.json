@@ -50,6 +50,8 @@
     "package:source": "tsx scripts/atom/package-source.ts",
     "release:tag": "tsx scripts/atom/tag-release.ts",
     "check:hardware-release": "tsx scripts/atom/check-hardware-release.ts",
+    "docs:stamp": "tsx scripts/atom/sync-doc-timestamps.ts",
+    "docs:stamp:check": "tsx scripts/atom/sync-doc-timestamps.ts --check",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"

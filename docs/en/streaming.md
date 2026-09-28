@@ -1,5 +1,7 @@
 # Streaming Services
 
+> Last updated: 2026-09-23
+
 In addition to local music and online providers, SPlayer Atom Core can connect to self-hosted streaming servers and browse your private library.
 
 ## Supported services

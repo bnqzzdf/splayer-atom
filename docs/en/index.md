@@ -27,6 +27,8 @@ features:
     details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
 
+> Last updated: 2026-09-28
+
 ## Product boundary
 
 SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.

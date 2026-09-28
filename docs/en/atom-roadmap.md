@@ -1,5 +1,7 @@
 # SPlayer Atom Roadmap
 
+> Last updated: 2026-09-28
+
 ## Current status
 
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,

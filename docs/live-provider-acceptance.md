@@ -1,5 +1,7 @@
 # SPlayer Atom 在线服务验收
 
+> 最后更新：2026-09-28
+
 本文定义 Netease、QM、KG、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 
 状态（仓库记录，2026-09-23）：Core/Web 已接入五个平台；QM/KG 扫码、Cookie、搜索、详情和 Core 音源路径，以及 Qobuz 浏览器 OAuth 和仅 token 登录已实现。

@@ -1,5 +1,7 @@
 # SPlayer Atom 路线图
 
+> 最后更新：2026-09-28
+
 ## 当前状态
 
 SPlayer Atom 是一套 Linux x86-64 Node Core，并以 Web Control 作为唯一 UI。Web + Core 迁移、

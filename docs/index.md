@@ -27,6 +27,8 @@ features:
     details: 当前唯一正式发布平台，提供 system-runtime 与 bundled-runtime tar.gz artifact。
 ---
 
+> 最后更新：2026-09-10
+
 ## 产品边界
 
 SPlayer Atom 基于 SPlayer-Next 修改，采用 **Node Core + Web Control** 模式，当前发布目标为 Linux x86-64。

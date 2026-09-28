@@ -1,5 +1,7 @@
 # User Guide
 
+> Last updated: 2026-09-28
+
 SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 Node Core plus a browser-based Web Control. After deploying Core, open the Web page served by Core.
 
 ## Library

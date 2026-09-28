@@ -1,5 +1,7 @@
 # SPlayer Atom Build and Packaging
 
+> Last updated: 2026-09-28
+
 The only formal product is **Linux x86-64 Node Core + Web Control**.
 
 ## Build targets

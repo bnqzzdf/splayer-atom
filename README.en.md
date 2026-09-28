@@ -1,5 +1,7 @@
 # SPlayer Atom
 
+> Last updated: 2026-09-28
+
 [简体中文](./README.md) · **English**
 
 SPlayer Atom is a Linux x86-64 music player adapted from [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next). It uses a **Web + Core** architecture: a background Node Core handles the library, online services, playback queue, and audio outputs, while everyday control happens in the browser-based Web Control.

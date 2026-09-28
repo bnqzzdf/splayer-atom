@@ -1,5 +1,7 @@
 # 使用指南
 
+> 最后更新：2026-09-23
+
 SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览器中的 Web Control 组成。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
 
 ## 曲库

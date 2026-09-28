@@ -1,5 +1,7 @@
 # Source Plugins
 
+> Last updated: 2026-09-16
+
 A source plugin (`@type source`) provides playable URLs when the built-in provider cannot return one. It can also supply fallback lyrics, covers, and comments for online, local, and streaming tracks.
 
 Read [Plugin Overview](/en/plugins/) first for common APIs such as `request`, `storage`, `log`, and `utils`.

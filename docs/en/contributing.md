@@ -1,5 +1,7 @@
 # Contributing
 
+> Last updated: 2026-09-28
+
 Contributions to SPlayer Atom are welcome.
 
 ## Environment

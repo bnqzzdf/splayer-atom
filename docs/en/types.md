@@ -1,5 +1,7 @@
 # Type Reference
 
+> Last updated: 2026-09-28
+
 These are the objects delivered to plugin callbacks and handlers. A `?` marks an optional field.
 
 ## Tracks

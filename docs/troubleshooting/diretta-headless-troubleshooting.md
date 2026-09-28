@@ -1,5 +1,7 @@
 # Diretta Core 排障
 
+> 最后更新：2026-09-28
+
 本页只描述当前正式 Atom Core 的 Diretta Source Direct 路径：Node Core 负责业务与音源 materialization，`audio-engine.node` 调用 `audio-engine-core` 的 strict Direct runtime，`diretta-sys` 是唯一 Diretta Host SDK FFI。旧 Pure Rust Axum Headless、普通 `f32` Diretta output backend 与旧 push FFI 均已退役。
 
 ## 运行边界

@@ -1,5 +1,7 @@
 # Local Folder Browser Plan
 
+> Last updated: 2026-09-28
+
 Status (current tree, 2026-09-23): the Core routes/service, Web Folder view and client, shared
 contracts and automated coverage are implemented and merged into `dev`. The old full-tree Web
 projection has been removed. The real-library, NAS/USB, large-directory and material-viewer

@@ -13,8 +13,14 @@ const stageSource = readFileSync(
   new URL("../../scripts/atom/stage-core-system.ts", import.meta.url),
   "utf8",
 );
+// 根 locale 的部署文档是中文；英文原文在 docs/en/ 下。
+// 安全规则两份都要有，所以两条都断言。
 const deploymentSource = readFileSync(
   new URL("../../docs/core-deployment.md", import.meta.url),
+  "utf8",
+);
+const deploymentEnSource = readFileSync(
+  new URL("../../docs/en/core-deployment.md", import.meta.url),
   "utf8",
 );
 
@@ -50,13 +56,22 @@ test("Core system artifact stages the deployment helper and operator guide", () 
 });
 
 test("Core deployment guide keeps rollback data independent from migrated data", () => {
-  assert.match(deploymentSource, /Do not unpack a new release over the active installation/);
-  assert.match(deploymentSource, /splayer-atom-core\.rollback/);
-  assert.match(deploymentSource, /cp -a \/opt\/splayer-atom-core\.rollback\/data/);
+  // 中文版（站点与 GitHub 的默认文档）
+  assert.match(deploymentSource, /不要把新发布产物直接解包覆盖正在使用的安装/);
+  assert.match(deploymentSource, /不要让旧二进制去读新安装里可能已被迁移的 `data\/`/);
+  assert.match(deploymentSource, /绝不要把「删掉数据库再重新扫描」当作/);
+  // 规则里的路径与 SQLite 备份方式不因语言变化
+  for (const source of [deploymentSource, deploymentEnSource]) {
+    assert.match(source, /splayer-atom-core\.rollback/);
+    assert.match(source, /cp -a \/opt\/splayer-atom-core\.rollback\/data/);
+    assert.match(source, /data\/backups\/migration-\*/);
+    assert.match(source, /VACUUM INTO/);
+  }
+  // 英文副本必须保留同一条规则的英文表述
+  assert.match(deploymentEnSource, /Do not unpack a new release over the active installation/);
   assert.match(
-    deploymentSource,
+    deploymentEnSource,
     /do not run the previous binary against the new installation's possibly migrated `data\/`/i,
   );
-  assert.match(deploymentSource, /data\/backups\/migration-\*/);
-  assert.match(deploymentSource, /Never use "delete the database and rescan"/);
+  assert.match(deploymentEnSource, /Never use "delete the database and rescan"/);
 });

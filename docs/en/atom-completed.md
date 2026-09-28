@@ -1,5 +1,7 @@
 # SPlayer Atom Completed Work
 
+> Last updated: 2026-09-28
+
 This is the completed-work archive for the [Roadmap](./atom-roadmap.md). A recorded test applies
 only to its stated source commit, artifact and equipment. Remaining acceptance stays on the roadmap.
 

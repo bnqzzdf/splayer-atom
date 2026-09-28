@@ -1,5 +1,7 @@
 # SPlayer Atom Core Deployment and Upgrade
 
+> Last updated: 2026-09-28
+
 This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
 
 ## Runtime contract

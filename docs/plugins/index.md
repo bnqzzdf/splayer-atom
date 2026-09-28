@@ -1,5 +1,7 @@
 # 插件总览与架构
 
+> 最后更新：2026-09-16
+
 SPlayer Atom Core 内置插件系统，允许用第三方 JavaScript 扩展音源与控制能力。每个插件都运行在**独立隔离沙箱**中，通过 Core 注入的全局对象 `splayer` 与播放域交互。
 
 这套插件模型从 SPlayer-Next 迁移而来，并针对 Web + Core 运行方式进行了调整。Atom 不提供独立插件市场；插件由作者自行托管，通过 raw HTTPS URL 安装和更新。

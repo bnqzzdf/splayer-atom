@@ -1,5 +1,7 @@
 # SPlayer Atom
 
+> 最后更新：2026-09-28
+
 **简体中文** · [English](./README.en.md)
 
 SPlayer Atom 是在 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 基础上修改的 Linux x86-64 音乐播放器，采用 **Web + Core** 模式：后台 Node Core 负责曲库、在线服务、播放队列和音频输出，日常操作通过浏览器中的 Web Control 完成。

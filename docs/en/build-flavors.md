@@ -1,5 +1,7 @@
 # SPlayer Atom Build Flavors
 
+> Last updated: 2026-09-28
+
 SPlayer Atom has two deployment variants: system-runtime and bundled-runtime.
 
 ## Core native flavor
