@@ -50,8 +50,6 @@ test("Folder actions use concise recursive menu with one current-folder-only sub
 });
 
 test("Folder presentation supports list/grid without changing route semantics", () => {
-  assert.ok(foldersSource.includes('folderViewMode = ref<"list" | "grid">("list")'));
-  assert.ok(foldersSource.includes("atom-folder-view-mode"));
   assert.ok(foldersSource.includes('kind: "directory-grid"'));
   assert.ok(foldersSource.includes("directoryThumbnailUrl(entry.path)"));
   assert.ok(foldersSource.includes('class="absolute right-2 top-2"'));

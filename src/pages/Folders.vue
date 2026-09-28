@@ -20,6 +20,8 @@ import { folderBrowserClient } from "@/core/folderBrowserClient";
 import { subscribeCoreControlEvent } from "@/core/controlEventClient";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { usePlaylistStore } from "@/stores/playlist";
+import { useSettingsStore } from "@/stores/settings";
+import type { FolderViewMode } from "@/types/settings";
 import { toast } from "@/composables/useToast";
 import { formatFileSize } from "@/utils/format";
 import { appendFolderPath, folderPathWithinRoot } from "@/utils/folderPath";
@@ -70,6 +72,7 @@ const route = useRoute();
 const router = useRouter();
 const settingsDialog = useSettingsDialog();
 const playlistStore = usePlaylistStore();
+const settings = useSettingsStore();
 
 const routeText = (value: unknown): string =>
   typeof value === "string" ? value : Array.isArray(value) ? String(value[0] ?? "") : "";
@@ -116,7 +119,12 @@ let searchAbortController: AbortController | null = null;
 
 const filterQuery = ref("");
 let ignoreFilterReload = false;
-const folderViewMode = ref<"list" | "grid">("list");
+const folderViewMode = computed<FolderViewMode>({
+  get: () => settings.appearance.folderViewMode,
+  set: (value) => {
+    settings.appearance.folderViewMode = value;
+  },
+});
 const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
 const batchActive = ref(false);
 const batchSelectedKeys = shallowRef<Set<string>>(new Set());
@@ -1090,8 +1098,6 @@ const onLibraryRevision = (): void => {
 };
 
 onMounted(async () => {
-  const savedViewMode = window.sessionStorage.getItem("atom-folder-view-mode");
-  if (savedViewMode === "grid" || savedViewMode === "list") folderViewMode.value = savedViewMode;
   try {
     scanProgress.value = await folderBrowserClient.scanProgress();
   } catch {
@@ -1120,10 +1126,6 @@ onMounted(async () => {
     }
     if (!loading.value) void refreshCurrent();
   });
-});
-
-watch(folderViewMode, (value) => {
-  window.sessionStorage.setItem("atom-folder-view-mode", value);
 });
 
 onBeforeUnmount(() => {

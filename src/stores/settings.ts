@@ -23,6 +23,7 @@ import { settingsClient } from "@/core/settingsClient";
 
 const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
 const WEB_CONTROL_SETTING_PATHS = new Set(["system.onboardingCompleted", "system.uiZoom"]);
+const LEGACY_FOLDER_VIEW_MODE_KEY = "atom-folder-view-mode";
 const LEGACY_LIBRARY_NAV_KEY = "/library";
 const SONGS_NAV_KEY = "/songs";
 /** 在线平台页；首次随版本引入时定位到首页之后 */
@@ -179,6 +180,7 @@ export const useSettingsStore = defineStore(
     /** 外观 */
     const appearance = reactive<AppearanceSettings>({
       layoutMode: "default",
+      folderViewMode: "list",
       routeTransition: "fade",
       sidebarCollapsed: false,
       sidebarPlaylistCover: false,
@@ -382,6 +384,22 @@ export const useSettingsStore = defineStore(
         if (typeof lyric.detectBackgroundLyrics !== "boolean") {
           lyric.detectBackgroundLyrics = true;
         }
+        // 已有的跨标签设置优先；首次升级时才沿用当前标签页的旧会话值。
+        const saved = JSON.parse(localStorage.getItem(store.$id) || "{}") as {
+          appearance?: { folderViewMode?: unknown };
+        };
+        const persistedMode = saved.appearance?.folderViewMode;
+        const legacyMode = sessionStorage.getItem(LEGACY_FOLDER_VIEW_MODE_KEY);
+        if (persistedMode !== "list" && persistedMode !== "grid") {
+          if (legacyMode === "list" || legacyMode === "grid") {
+            appearance.folderViewMode = legacyMode;
+          } else {
+            appearance.folderViewMode = "list";
+          }
+          // 水合钩子早于自动持久化订阅，迁移结果需要立即写入。
+          store.$persist();
+        }
+        sessionStorage.removeItem(LEGACY_FOLDER_VIEW_MODE_KEY);
         lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, SUPPORTED_LYRIC_PLATFORMS);
         if (lyric.lyricSourcePreference === "qobuz" || lyric.lyricSourcePreference === "tidal") {
           lyric.lyricSourcePreference = "auto";
