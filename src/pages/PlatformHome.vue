@@ -27,18 +27,24 @@ import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
 import {
   fetchQQMusicHotPlaylists,
+  fetchQQMusicNewAlbums,
+  fetchQQMusicNewSongs,
   fetchQQMusicToplist,
   type QMHotPlaylist,
+  type QMNewAlbum,
   type QMToplistGroup,
 } from "@/apis/playlist/qqmusic";
 import {
+  fetchKugouHotArtists,
   fetchKugouHotPlaylists,
   fetchKugouNewSongs,
   fetchKugouRankList,
+  type KGHotArtist,
   type KGHotPlaylist,
   type KGRankGroup,
 } from "@/apis/playlist/kugou";
 import { formatCompact } from "@/utils/format";
+import { qqAlbumCover } from "@/utils/format/qqmusic";
 import {
   ALL_PLATFORMS,
   PLATFORM_LABELS,
@@ -298,15 +304,16 @@ const kgHotPlaylistSection = (playlists: KGHotPlaylist[]): HomeSection => ({
 });
 
 /**
- * KG 新歌首发 → HomeSection。
+ * 「新歌首发」→ HomeSection（QM 与 KG 共用）。
  *
  * 新歌是「歌曲」，但平台首页只有专辑/歌单/歌手三种详情页，没有单曲详情页，
  * 因此与 TIDAL 的 TRACK_LIST 保持同一处理：卡片点击进入该歌曲所属专辑。
- * 歌曲自身仍带着完整的 hash / albumAudioId，进入专辑后即可正常播放。
+ * 歌曲自身仍带着完整的取流字段（KG 是 hash / albumAudioId，QM 是 mid / mediaMid），
+ * 进入专辑后即可正常播放。
  */
-const kgNewSongSection = (tracks: Track[]): HomeSection => ({
-  key: "kg-new-songs",
-  title: t("platformHome.newSongs"),
+const newSongSection = (key: string, title: string, tracks: Track[]): HomeSection => ({
+  key,
+  title,
   variant: "cards",
   items: tracks.slice(0, SHELF_LIMIT).map((track) => {
     const albumId = track.album?.id;
@@ -318,6 +325,45 @@ const kgNewSongSection = (tracks: Track[]): HomeSection => ({
       kind: "album" as const,
     };
   }),
+});
+
+/**
+ * QM 新碟首发 → HomeSection。
+ *
+ * 接口只给专辑 MID，封面按 QM 的图片模板派生（与歌手页专辑列表同一套）。
+ */
+const qmNewAlbumSection = (albums: QMNewAlbum[]): HomeSection => ({
+  key: "qm-new-albums",
+  title: t("platformHome.newAlbums"),
+  variant: "cards",
+  items: albums.slice(0, SHELF_LIMIT).map((album) => ({
+    id: album.id,
+    title: album.name,
+    subtitle: album.artist || album.publishTime || undefined,
+    image: qqAlbumCover(album.id),
+    kind: "album" as const,
+  })),
+});
+
+/**
+ * KG 热门歌手 → HomeSection。
+ *
+ * 走的是歌手卡片（kind: "artist"），点击进歌手详情——热门歌手的 `singerid` 与榜单
+ * `authors[].author_id` 同一 id 空间，现有 artist 模块直接认。
+ */
+const kgHotArtistSection = (artists: KGHotArtist[]): HomeSection => ({
+  key: "kg-hot-artists",
+  title: t("platformHome.hotArtists"),
+  variant: "cards",
+  items: artists.slice(0, SHELF_LIMIT).map((artist) => ({
+    id: artist.id,
+    title: artist.name,
+    subtitle: artist.fansCount
+      ? t("platformHome.fansCount", { count: formatCompact(artist.fansCount, locale.value) })
+      : undefined,
+    image: artist.cover || undefined,
+    kind: "artist" as const,
+  })),
 });
 
 const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
@@ -399,27 +445,37 @@ const load = async (): Promise<void> => {
       genres.value = normalizeGenres("tidal", genreData);
     } else if (platform.value === "qqmusic") {
       // QM 的分类导航就是榜单分组，点击分组只过滤已拉取的目录，不再请求接口
-      const [groups, hotPlaylists] = await Promise.all([
+      const [groups, hotPlaylists, newSongs, newAlbums] = await Promise.all([
         fetchQQMusicToplist(),
-        // 热门歌单拉不到时不影响榜单展示
+        // 下面三个书架任一个拉不到都不该影响榜单展示
         fetchQQMusicHotPlaylists(30).catch(() => [] as QMHotPlaylist[]),
+        fetchQQMusicNewSongs(30).catch(() => [] as Track[]),
+        fetchQQMusicNewAlbums(30).catch(() => [] as QMNewAlbum[]),
       ]);
       const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
+        ...(newSongs.length
+          ? [newSongSection("qm-new-songs", t("platformHome.newSongs"), newSongs)]
+          : []),
+        ...(newAlbums.length ? [qmNewAlbumSection(newAlbums)] : []),
         ...(hotPlaylists.length ? [qmHotPlaylistSection(hotPlaylists)] : []),
         ...normalizeQQMusic(visible),
       ];
       genres.value = groupsToGenres(groups);
     } else {
-      const [groups, hotPlaylists, newSongs] = await Promise.all([
+      const [groups, hotPlaylists, newSongs, hotArtists] = await Promise.all([
         fetchKugouRankList(),
         fetchKugouHotPlaylists(1, 30).catch(() => [] as KGHotPlaylist[]),
         fetchKugouNewSongs(30).catch(() => [] as Track[]),
+        fetchKugouHotArtists(30).catch(() => [] as KGHotArtist[]),
       ]);
       const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
+        ...(newSongs.length
+          ? [newSongSection("kg-new-songs", t("platformHome.newSongs"), newSongs)]
+          : []),
+        ...(hotArtists.length ? [kgHotArtistSection(hotArtists)] : []),
         ...(hotPlaylists.length ? [kgHotPlaylistSection(hotPlaylists)] : []),
-        ...(newSongs.length ? [kgNewSongSection(newSongs)] : []),
         ...normalizeKugou(visible),
       ];
       genres.value = groupsToGenres(groups);

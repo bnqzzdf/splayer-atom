@@ -16,6 +16,7 @@ import comment from "./comment";
 import { rankDetail, rankList } from "./rank";
 import playlistSquare from "./playlist_square";
 import newSong from "./newsong";
+import hotArtist from "./hot_artist";
 
 export const modules: Record<string, KGModule> = {
   lyric,
@@ -28,6 +29,7 @@ export const modules: Record<string, KGModule> = {
   rank_detail: rankDetail,
   hot_playlists: playlistSquare,
   new_songs: newSong,
+  hot_artists: hotArtist,
   user_detail: userDetail,
   login_qr_key: loginQrKey,
   login_qr_check: loginQrCheck,
