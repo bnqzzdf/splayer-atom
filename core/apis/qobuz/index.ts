@@ -1,5 +1,6 @@
 import { clearQobuzAuth, getQobuzAuth, getQobuzAuthStatus, setQobuzAuth } from "./auth";
 import { callStreamingNative } from "@main/apis/streamingNative";
+import { coreLog } from "@main/utils/logger";
 
 export type QobuzParams = Record<string, unknown>;
 
@@ -85,12 +86,23 @@ const authOauthAwait = async (params: QobuzParams): Promise<unknown> => {
   return persistQobuzSession(response);
 };
 
+/**
+ * 登出。
+ *
+ * 远端 `user/logout` 只是尽力而为的令牌吊销：原生侧那句是 `let _ = ...`，返回值被丢弃、
+ * 失败也不影响登出的正确性。但原生 HTTP 客户端超时是 **30 秒**，把它留在关键路径上，
+ * 网络一慢用户就要盯着转圈的「断开连接」等半分钟——而真正决定登录态的是本地凭据。
+ *
+ * 所以这里先清本地（瞬时），远端吊销丢到后台；失败只记日志，不再挡住 UI。
+ * 注意 `nativeAuth()` 必须在清本地之前取：它读的就是即将被删掉的 token。
+ */
 const authLogout = async (): Promise<unknown> => {
-  try {
-    return await callStreamingNative("qobuz", "auth_logout", nativeAuth(), {});
-  } finally {
-    clearQobuzAuth();
-  }
+  const auth = nativeAuth();
+  clearQobuzAuth();
+  void callStreamingNative("qobuz", "auth_logout", auth, {}).catch((error) => {
+    coreLog.warn("[qobuz] 远端登出失败（本地凭据已清除，不影响登出）：", error);
+  });
+  return { status: "success", loggedIn: false };
 };
 
 /**

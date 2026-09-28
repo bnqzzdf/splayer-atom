@@ -25,6 +25,7 @@ const loginPlatformRegistrySource = read(
   new URL("../../src/apis/login/platform.ts", import.meta.url),
 );
 const navUserSource = read(new URL("../../src/components/layout/NavUser.vue", import.meta.url));
+const qobuzApiSource = read(new URL("../apis/qobuz/index.ts", import.meta.url));
 const sharedApisSource = read(new URL("../../shared/types/apis.ts", import.meta.url));
 
 test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
@@ -150,4 +151,43 @@ test("全部五个平台只有一个登录入口：统一的带页签弹窗", ()
   assert.match(navUserSource, /<StreamingLoginDialog v-model:open="loginOpen"/);
   assert.doesNotMatch(navUserSource, /<LoginDialog/);
   assert.match(navUserSource, /login\.managePlatforms/);
+});
+
+test("Qobuz 登出不把远端吊销放在关键路径上", () => {
+  // 远端 user/logout 的返回值在原生侧就是 `let _ =`（丢弃），失败也不影响登出；
+  // 但 Reqwest 客户端超时 30s，实测一次往返约 0.6s —— 本地凭据清除却只要毫秒级。
+  // 所以顺序必须是「先清本地，远端丢后台」，否则断开连接按钮会一直转圈。
+  const logoutBlock = qobuzApiSource.slice(qobuzApiSource.indexOf("const authLogout"));
+  assert.ok(logoutBlock.includes("clearQobuzAuth()"), "authLogout 必须清本地凭据");
+  // 不再 await 原生调用：出现 await callStreamingNative(...auth_logout...) 就是退化回去了
+  assert.doesNotMatch(
+    qobuzApiSource,
+    /await callStreamingNative\(\s*"qobuz",\s*"auth_logout"/,
+    "远端吊销不能 await 在登出路径上",
+  );
+  assert.match(
+    logoutBlock,
+    /void callStreamingNative\("qobuz", "auth_logout", auth, \{\}\)\.catch/,
+  );
+  // nativeAuth() 取的是即将被删掉的 token，必须在清本地之前取
+  assert.ok(
+    logoutBlock.indexOf("const auth = nativeAuth()") < logoutBlock.indexOf("clearQobuzAuth()"),
+    "auth 必须在 clearQobuzAuth() 之前取，否则远端吊销拿不到 token",
+  );
+  assert.match(qobuzApiSource, /const authLogout = async \(\): Promise<unknown> => \{/);
+});
+
+test("断开连接按钮不等多余的会话刷新才复位", () => {
+  const disconnectBlock = platformAccountSource.slice(
+    platformAccountSource.indexOf("const disconnect"),
+  );
+  assert.ok(disconnectBlock.includes("providerClient.clearSession(props.platform)"));
+  // 会话投影由 Core 推送（providerSessions 事件），getSessions 只是兜底：
+  // 一旦写成 `await refreshSession()` 就会把按钮复位推迟一次往返
+  assert.doesNotMatch(
+    platformAccountSource,
+    /await refreshSession\(\);\s*\n\s*toast\.success\(t\("settings\.platformLogin\.toast\.logoutDone"/,
+    "disconnect 不应 await refreshSession 才提示成功",
+  );
+  assert.match(disconnectBlock, /void refreshSession\(\);/);
 });

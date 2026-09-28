@@ -71,12 +71,18 @@ const syncNeteaseStore = async (): Promise<void> => {
 const dialogOpen = ref(false);
 const disconnecting = ref(false);
 
+/**
+ * 断开托管式平台（Qobuz / TIDAL）。
+ *
+ * 这里**不**等 `refreshSession()` 再复位按钮：会话投影由 Core 主动推送
+ * （providerSessions 事件，store 已订阅），`getSessions` 只是兜底核对。
+ * 之前把这次多余的往返放在关键路径上，网络一慢按钮就一直转圈。
+ */
 const disconnect = async (): Promise<void> => {
   if (disconnecting.value) return;
   disconnecting.value = true;
   try {
     await providerClient.clearSession(props.platform);
-    await refreshSession();
     toast.success(t("settings.platformLogin.toast.logoutDone", { name: platformName.value }));
   } catch (error) {
     console.error(`[provider-account] ${props.platform} disconnect failed`, error);
@@ -84,6 +90,7 @@ const disconnect = async (): Promise<void> => {
   } finally {
     disconnecting.value = false;
   }
+  void refreshSession();
 };
 
 watch(dialogOpen, (open) => {
