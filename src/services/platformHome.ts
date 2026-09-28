@@ -21,8 +21,13 @@ import {
 
 export type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou";
 
-/** 支持的平台顺序（也是标签顺序） */
-export const ALL_PLATFORMS: Platform[] = ["qobuz", "tidal", "qqmusic", "kugou"];
+/**
+ * 平台标签顺序（也是「已登录平台」的展示顺序）。
+ *
+ * 与 `@shared/types/platform` 的同名常量**不是**同一份：那份管搜索页与标签编辑器、
+ * 含网易云；这份只管「流媒体接入」页的标签，按使用频率排。
+ */
+export const ALL_PLATFORMS: Platform[] = ["qqmusic", "qobuz", "tidal", "kugou"];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   qobuz: "Qobuz",

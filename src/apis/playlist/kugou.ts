@@ -166,3 +166,34 @@ export const fetchKugouNewSongs = async (limit?: number): Promise<Track[]> => {
   if (body.code !== 200) throw new Error(body.message || `KG 新歌请求失败: ${body.code}`);
   return kgSongsToTracks(body.songs);
 };
+
+/** KG 热门歌手条目 */
+export interface KGHotArtist {
+  /** 歌手 ID，与榜单 authors[].author_id 同一 id 空间，可直接进歌手详情 */
+  id: string;
+  name: string;
+  cover: string;
+  coverOriginal: string;
+  fansCount: number;
+  songCount: number;
+  albumCount: number;
+}
+
+interface HotArtistsResponse {
+  code?: number;
+  message?: string;
+  page?: number;
+  total?: number;
+  artists?: KGHotArtist[];
+}
+
+/**
+ * 获取 KG 热门歌手
+ * @param limit - 返回条数（用于首页书架）
+ * @returns 歌手列表；其 id 可直接用于 artist/kugou/<id>
+ */
+export const fetchKugouHotArtists = async (limit = 30): Promise<KGHotArtist[]> => {
+  const body = await kgApi.hot_artists<HotArtistsResponse>({ page: 1, limit });
+  if (body.code !== 200) throw new Error(body.message || `KG 热门歌手请求失败: ${body.code}`);
+  return body.artists ?? [];
+};
