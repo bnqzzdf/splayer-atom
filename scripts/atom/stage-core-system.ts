@@ -25,7 +25,11 @@ import {
   shortCoreCommit,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE, type DirettaCpuVariant } from "./diretta-sdk";
-import { resolveSourceIdentity, sourceIdentityFailureMessage } from "./sourceIdentity";
+import {
+  resolveSourceIdentity,
+  sourceIdentityFailureMessage,
+  unpublishedIdentityMessage,
+} from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const outputDir = path.join(root, "out", "core-system");
@@ -38,6 +42,7 @@ const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
 const bundleNode = args.delete("--bundle-node");
+const allowUnpublished = args.delete("--allow-unpublished");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
@@ -102,8 +107,17 @@ const sourceIdentity = resolveSourceIdentity(root);
 if (!sourceIdentity) fail(sourceIdentityFailureMessage());
 const atomCommit = sourceIdentity.commit;
 const sourceDirty = sourceIdentity.dirty;
+// 产物名与 runtime.json 里的提交必须对外界可复现，所以默认只接受已发布的提交。
+// 需要本地试验产物时显式加 --allow-unpublished：它只跳过检查，不会把身份改成已发布。
+if (sourceIdentity.published !== true && !allowUnpublished) {
+  fail(unpublishedIdentityMessage(sourceIdentity));
+}
+if (sourceIdentity.published !== true) {
+  console.warn("[CoreStage] ⚠ --allow-unpublished：本产物带未发布提交，不能作为发布交付");
+}
 console.log(
-  `[CoreStage] 源码身份: ${shortCoreCommit(atomCommit)} dirty=${sourceDirty} (来源=${sourceIdentity.origin})`,
+  `[CoreStage] 源码身份: ${shortCoreCommit(atomCommit)} dirty=${sourceDirty} ` +
+    `published=${sourceIdentity.published ?? "unknown"} (来源=${sourceIdentity.origin})`,
 );
 
 const nativeBuild = JSON.parse(readFileSync(nativeBuildFile, "utf8")) as {

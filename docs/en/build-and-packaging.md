@@ -72,8 +72,77 @@ human-readable `buildDate`.
 and the commit shown on the Web Control's About page — **a tarball alone tells you which commit it
 was built from**, with no need to unpack and read `runtime.json`.
 
-Both contain the same Core JS, Web Control, project-built addons, runtime dependencies (including
-`better-sqlite3`), protocol, and data schema.
+### The commit must exist and be published
+
+The commit in the artifact name and in `runtime.json` is the only evidence of which source a build
+came from, so it must be **real**: not merely SHA-shaped, but an actual commit object in the
+repository and reachable from a **network remote** (`origin` and friends on `http(s)`/`ssh`). A
+local-path or `file://` reference repository never counts — such a commit exists only on the build
+host.
+
+Staging fails otherwise instead of producing a tarball with an untraceable commit. A source package
+without `.git` must prove the commit itself:
+
+```text
+commit=<sha>
+dirty=false
+date=<iso>
+remote=https://github.com/bnqzzdf/splayer-atom.git
+published=true
+```
+
+`published=true` is honored only together with a network `remote`; with a local-path `remote` the
+identity is treated as unpublished.
+
+For local experiments that explicitly do not need a release identity:
+
+```bash
+pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublished
+```
+
+It **only skips the check**; it never turns the identity into a published one, and such an artifact
+must not be delivered as a release.
+
+Both flavors contain the same Core JS, Web Control, project-built addons, runtime dependencies
+(including `better-sqlite3`), protocol, and data schema.
+
+## Source packages
+
+```bash
+pnpm package:source
+```
+
+Exports the current **published commit** into
+`out/splayer-atom-dev-<version>-<shortCommit>-src-<YYYYMMDD>-<HHMMSS>.tar.gz` plus a `.sha256`
+sidecar. The content comes from the commit itself rather than the worktree, so the `SOURCE_COMMIT`
+inside the package corresponds exactly to it, and the file is rendered by the same function in
+`scripts/atom/sourceIdentity.ts` that the build side parses.
+
+The commit must be published and the worktree clean: the entire value of a source package is
+"fetching the same source by commit from the package", so one that cannot prove itself must not be
+produced.
+
+A clean-room build from such a package must first fetch that commit from the network remote declared
+in `SOURCE_COMMIT` and verify the unpacked tree matches it before building; the build side re-checks
+publication independently.
+
+## Release tags
+
+A tag states _which release_, and the commit is what the tag points at:
+
+```bash
+pnpm release:tag            # create the local tag and print the push command
+pnpm release:tag --push     # create and push it
+pnpm release:tag --dry-run  # check only
+```
+
+The tag name is `v<version>` from `package.json`. **Never put the build identity in a tag name**:
+historical tags looked like `1.1.1-5ae8d992-20260925-091129`, where the commit came from a
+build-host-only branch while the tag actually pointed at a different `dev` commit — the name and the
+target disagreed, so resolving release code by tag name gives a wrong answer.
+
+Tagging enforces a published identity, a clean worktree, and the absence of `v<version>` locally and
+on the remote, so a tag always points at a commit that is findable in the shared repository.
 
 ## Release identity
 
@@ -107,6 +176,7 @@ pnpm test
 pnpm lint
 pnpm build
 pnpm package:core
+pnpm release:tag --dry-run
 pnpm docs:build
 cargo check --workspace
 cargo test --workspace

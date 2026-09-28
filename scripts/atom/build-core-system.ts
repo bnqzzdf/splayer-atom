@@ -9,12 +9,13 @@ import {
   resolveCoreBuildDate,
   resolveCoreBuildTime,
 } from "./core-artifact-name";
-import { resolveSourceIdentity } from "./sourceIdentity";
+import { resolveSourceIdentity, unpublishedIdentityMessage } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
 const bundleNode = args.delete("--bundle-node");
+const allowUnpublished = args.delete("--allow-unpublished");
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
@@ -24,6 +25,11 @@ const buildDate = resolveCoreBuildDate();
 const buildTime = resolveCoreBuildTime();
 const sourceIdentity = resolveSourceIdentity(root);
 const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate, ATOM_BUILD_TIME: buildTime };
+
+// native 构建很慢，身份不合格就在这里失败，不要等跑完再报同样的错
+if (sourceIdentity && sourceIdentity.published !== true && !allowUnpublished) {
+  throw new Error(unpublishedIdentityMessage(sourceIdentity));
+}
 
 if (process.versions.node !== CORE_NODE_REFERENCE) {
   throw new Error(
@@ -64,6 +70,7 @@ run(bundleNode ? "生成 bundled-runtime tar.gz" : "生成 system-runtime tar.gz
   "scripts/atom/stage-core-system.ts",
   "--archive",
   ...(bundleNode ? ["--bundle-node"] : []),
+  ...(allowUnpublished ? ["--allow-unpublished"] : []),
 ]);
 run("验收最终 tar artifact", bin("tsx"), [
   "scripts/atom/check-core-artifact.ts",

@@ -47,6 +47,8 @@
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "package:core": "tsx scripts/atom/build-core-system.ts",
     "package:core:bundled": "tsx scripts/atom/build-core-system.ts --bundle-node",
+    "package:source": "tsx scripts/atom/package-source.ts",
+    "release:tag": "tsx scripts/atom/tag-release.ts",
     "check:hardware-release": "tsx scripts/atom/check-hardware-release.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
