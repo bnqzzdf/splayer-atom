@@ -8,7 +8,7 @@
 >
 > **Scope note**: this document is a **1.1.0-era record** — the artifact fingerprint, build environment,
 > deployment state, and verification results all come from the delivery around 2026-09-23. The current
-> `package.json` version is already **1.1.2**, and the artifact naming rule has changed since
+> `package.json` version is already **1.1.3**, and the artifact naming rule has changed since
 > (the filename in §1 and the rule example in §5 are labeled under the then-current and the current
 > convention respectively). For the current rule, see
 > [Build and packaging](./build-and-packaging.md) and `scripts/atom/core-artifact-name.ts`.
