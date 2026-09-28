@@ -1906,6 +1906,8 @@
     "newSongs": "New Releases",
     "newAlbums": "New Albums",
     "ncmNewAlbums": "New Albums",
+    "ncmSpecialRanks": "Featured Charts",
+    "ncmGlobalRanks": "Global Media Charts",
     "hotArtists": "Popular Artists",
     "fansCount": "{count} fans",
     "ranks": "Ranks",

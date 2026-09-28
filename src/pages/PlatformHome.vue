@@ -10,11 +10,11 @@
  *   TIDAL: { rows: [{ modules: [{ type, items }] }] }
  *   QQ音乐: 榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
  *   酷狗:   榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
- *   网易云: 新碟上架 + 热门歌手两排书架（各自带地区标签与「更多」）
+ *   网易云: 新碟上架 + 热门歌手两排书架 + 榜单目录（特色榜 / 全球媒体榜）
  * 页面只渲染 HomeSection，不关心平台差异。
  *
- * QM/KG 的卡片指向「榜单」，点击后进入 collection 页的 rank 类型详情
- * （services/collection/qqmusic|kugou 已支持 type === "rank"）。
+ * QM/KG/网易的卡片指向「榜单」，点击后进入 collection 页的 rank 类型详情
+ * （services/collection/ 已支持 type === "rank"；网易的榜单 id 就是歌单 id）。
  *
  * 书架分区（QM 热门歌单 / KG 精选歌单 + 新歌首发 / 网易新碟上架 + 热门歌手）
  * 排在榜单之前；这些接口为什么走该通道，在 core 侧对应模块的注释里有说明。
@@ -45,7 +45,13 @@ import {
   type KGHotPlaylist,
   type KGRankGroup,
 } from "@/apis/playlist/kugou";
-import { fetchNeteaseHotArtists, fetchNeteaseNewAlbums } from "@/apis/playlist/netease";
+import {
+  fetchNeteaseHotArtists,
+  fetchNeteaseNewAlbums,
+  fetchNeteaseToplist,
+  type NcmToplist,
+  type NcmToplistEntry,
+} from "@/apis/playlist/netease";
 import { formatCompact } from "@/utils/format";
 import {
   ALL_PLATFORMS,
@@ -58,6 +64,7 @@ import {
   qobuzSectionEndpoint,
   qobuzSectionTitle,
   kgHotArtistToItem,
+  ncmToplistToItem,
   qmNewAlbumToItem,
   shelfDefaultTab,
   str,
@@ -156,9 +163,13 @@ const currentAuthed = computed(() =>
   Boolean(providerSessions.sessions[platform.value]?.authenticated),
 );
 
-/** QM/KG 的这排标签是榜单分组而非流派——决定它渲染在页面顶部还是「榜单」区里 */
+/**
+ * 这排标签是「榜单分组」而非流派的平台——决定它渲染在页面顶部还是「榜单」区里。
+ *
+ * 网易也进这一组：它的榜单目录按官方「排行榜」页拆成云音乐特色榜 / 全球媒体榜两栏。
+ */
 const isRankGroupPlatform = computed(
-  () => platform.value === "qqmusic" || platform.value === "kugou",
+  () => platform.value === "qqmusic" || platform.value === "kugou" || platform.value === "netease",
 );
 
 /** 页面顶部的流派筛选行：只有 Qobuz/TIDAL 有（它们的 genre 作用于整页） */
@@ -445,6 +456,37 @@ const ncmHotArtistSection = (artists: CoverItem[]): HomeSection =>
     items: artists.slice(0, SHELF_LIMIT).map((artist) => coverToNeteaseItem(artist, "artist")),
   });
 
+/** 网易榜单分组（栏目名是界面文案，判据在 apis/playlist/netease.ts） */
+interface NcmRankGroup {
+  id: string;
+  name: string;
+  items: NcmToplistEntry[];
+}
+
+/**
+ * 网易榜单目录 → 分组。
+ *
+ * 结构对齐 QM/KG：每个分组一个分区、整片挂「榜单」大类标题，
+ * 于是那排分组按钮（全部 / 云音乐特色榜 / 全球媒体榜）也自动作用于这里。
+ * 分组判据在 apis/playlist/netease.ts（ToplistType），中文栏目名在这里给。
+ */
+const ncmRankGroups = (toplist: NcmToplist): NcmRankGroup[] => [
+  { id: "ncm-special", name: t("platformHome.ncmSpecialRanks"), items: toplist.special },
+  { id: "ncm-global", name: t("platformHome.ncmGlobalRanks"), items: toplist.global },
+];
+
+/** 网易榜单分组 → HomeSection */
+const normalizeNeteaseRanks = (groups: NcmRankGroup[]): HomeSection[] =>
+  groups
+    .filter((group) => group.items.length > 0)
+    .map((group) => ({
+      key: group.id,
+      title: group.name,
+      group: t("platformHome.ranks"),
+      variant: "cards",
+      items: group.items.map(ncmToplistToItem),
+    }));
+
 const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
   if (p === "qobuz") {
     const items = asArray(asRecord(asRecord(data).genres).items);
@@ -563,17 +605,25 @@ const load = async (): Promise<void> => {
       ];
       genres.value = groupsToGenres(groups);
     } else {
-      // 网易云：两个书架都是「一份地区一份列表」，任一拉不到都不该影响另一个
-      const [newAlbums, hotArtists] = await Promise.all([
+      // 网易云：两个书架各是「一份地区一份列表」，榜单目录是另一条通路，
+      // 三者任一拉不到都不该影响其余部分（书架在前、榜单在后，与 QM/KG 一致）
+      const [newAlbums, hotArtists, toplist] = await Promise.all([
         fetchNeteaseNewAlbums(30, shelfTab("ncm-new-albums")).catch(() => [] as CoverItem[]),
         fetchNeteaseHotArtists(30, Number(shelfTab("ncm-hot-artists"))).catch(
           () => [] as CoverItem[],
         ),
+        fetchNeteaseToplist().catch(() => null),
       ]);
+      const rankGroups = toplist ? ncmRankGroups(toplist) : [];
+      const visibleRankGroups = genreParam
+        ? rankGroups.filter((group) => group.id === genreParam)
+        : rankGroups;
       sections.value = [
         ...(newAlbums.length ? [ncmNewAlbumSection(newAlbums)] : []),
         ...(hotArtists.length ? [ncmHotArtistSection(hotArtists)] : []),
+        ...normalizeNeteaseRanks(visibleRankGroups),
       ];
+      genres.value = groupsToGenres(rankGroups);
     }
     if (!sections.value.length) error.value = t("platformHome.empty");
   } catch (err) {

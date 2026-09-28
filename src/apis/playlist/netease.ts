@@ -191,3 +191,43 @@ export const fetchNeteaseHotArtists = async (
   const body = await neteaseApi.artist_list<NcmArtistsResponse>({ area, offset, limit });
   return (body?.artists ?? []).map((raw) => artistToCoverItem(toArtist(raw)));
 };
+
+/** 榜单目录条目（核心侧 toplist 模块已瘦身过） */
+export interface NcmToplistEntry {
+  id: string;
+  name: string;
+  cover?: string;
+  updateFrequency?: string;
+  trackCount?: number;
+  /** S 飙升 / N 新歌 / O 原创 / H 热歌；其余榜单为空 */
+  toplistType?: string;
+}
+
+/** 榜单目录，按官方「排行榜」页的两栏拆开 */
+export interface NcmToplist {
+  /** 云音乐特色榜：飙升/新歌/原创/热歌 */
+  special: NcmToplistEntry[];
+  /** 全球媒体榜：其余全部榜单 */
+  global: NcmToplistEntry[];
+}
+
+/**
+ * 获取网易榜单目录
+ *
+ * 官方「排行榜」页把榜单分成两栏，但上游只给一个扁平数组：
+ * 前四个（飙升/新歌/原创/热歌）的 `ToplistType` 是 S/N/O/H，其余为空，
+ * 这就是判据（实测 63 个榜单里只有这 4 个带值）。分组属于平台领域规则，
+ * 所以放在这里；中文栏目名由页面按 i18n 给。
+ *
+ * 榜单 id 就是歌单 id，歌曲列表走现有歌单通路（见 services/collection/netease.ts）。
+ *
+ * @returns 拆好的两栏榜单
+ */
+export const fetchNeteaseToplist = async (): Promise<NcmToplist> => {
+  const body = await neteaseApi.toplist<{ list?: NcmToplistEntry[] }>({});
+  const list = body?.list ?? [];
+  return {
+    special: list.filter((item) => Boolean(item.toplistType)),
+    global: list.filter((item) => !item.toplistType),
+  };
+};

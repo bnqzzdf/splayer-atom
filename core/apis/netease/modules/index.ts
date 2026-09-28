@@ -77,6 +77,7 @@ import recommend_songs from "./recommend_songs";
 import personalized from "./personalized";
 import recommend_resource from "./recommend_resource";
 import top_artists from "./top_artists";
+import toplist from "./toplist";
 import album_new from "./album_new";
 
 // 歌单 / 喜欢
@@ -173,6 +174,7 @@ export const modules: Record<string, NeteaseModule> = {
   personalized,
   recommend_resource,
   top_artists,
+  toplist,
   album_new,
 
   playlist_detail,

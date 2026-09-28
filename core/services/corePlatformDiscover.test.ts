@@ -22,6 +22,8 @@ const ncmModulesSource = read("core/apis/netease/modules/index.ts");
 const ncmNewAlbumSource = read("core/apis/netease/modules/album_new.ts");
 const ncmArtistListSource = read("core/apis/netease/modules/artist_list.ts");
 const ncmTopArtistSource = read("core/apis/netease/modules/top_artists.ts");
+const ncmToplistSource = read("core/apis/netease/modules/toplist.ts");
+const ncmCollectionSource = read("src/services/collection/netease.ts");
 const qmPlaylistApiSource = read("src/apis/playlist/qqmusic.ts");
 const kgPlaylistApiSource = read("src/apis/playlist/kugou.ts");
 const ncmPlaylistApiSource = read("src/apis/playlist/netease.ts");
@@ -290,4 +292,56 @@ test("新增文案中英文齐备", () => {
   assert.equal(zh.hotArtists, "热门歌手");
   assert.equal(zh.ranks, "榜单");
   assert.equal((zhLocale.platformHome.region as Record<string, string>).all, "全部");
+});
+
+test("网易榜单目录走 /api/toplist，且只留前端用得到的字段", () => {
+  assert.match(ncmToplistSource, /request\("\/api\/toplist"/);
+  assert.match(ncmModulesSource, /toplist,/);
+  // 上游一次给 63 个榜单 × 60+ 字段（含大段封面 id）；实测瘦身后 10.3 KB
+  assert.match(ncmToplistSource, /toplistType: asString\(raw\?\.ToplistType\)/);
+  assert.match(ncmPlaylistApiSource, /neteaseApi\.toplist</);
+  // 榜单 id 就是歌单 id，取歌复用歌单通路，不另开一个模块
+  assert.doesNotMatch(codeOnly(ncmToplistSource), /playlist\/detail|track\/all/);
+});
+
+test("网易榜单按 ToplistType 拆两栏，判据不写死在页面里", () => {
+  // 实测 63 个榜单里只有飙升/新歌/原创/热歌带 ToplistType（S/N/O/H）
+  assert.match(
+    ncmPlaylistApiSource,
+    /special: list\.filter\(\(item\) => Boolean\(item\.toplistType\)\)/,
+  );
+  assert.match(ncmPlaylistApiSource, /global: list\.filter\(\(item\) => !item\.toplistType\)/);
+  // 页面只负责栏目名与渲染
+  assert.match(platformHomePageSource, /t\("platformHome\.ncmSpecialRanks"\)/);
+  assert.match(platformHomePageSource, /t\("platformHome\.ncmGlobalRanks"\)/);
+});
+
+test("网易榜单进「榜单」区，与 QM/KG 共用分组筛选与 rank 跳转", () => {
+  // 网易也要进榜单分组平台集合，否则那排分组按钮不会渲染在「榜单」标题下
+  assert.match(
+    platformHomePageSource,
+    /platform\.value === "qqmusic" \|\| platform\.value === "kugou" \|\| platform\.value === "netease"/,
+  );
+  assert.match(
+    platformHomePageSource,
+    /const rankGroups = toplist \? ncmRankGroups\(toplist\) : \[\]/,
+  );
+  assert.match(platformHomePageSource, /genres\.value = groupsToGenres\(rankGroups\)/);
+  assert.match(platformHomePageSource, /\.\.\.normalizeNeteaseRanks\(visibleRankGroups\)/);
+  // 卡片按榜单类型跳转（collection 的 rank 分支）
+  assert.match(platformHomeServiceSource, /export const ncmToplistToItem/);
+  assert.match(platformHomeServiceSource, /kind: "rank"/);
+  // 网易的 rank 复用歌单通路：榜单 id 本身就是歌单 id
+  assert.match(ncmCollectionSource, /if \(type !== "playlist" && type !== "rank"\)/);
+});
+
+test("网易榜单栏目文案中英齐备", () => {
+  for (const locale of [zhLocale, enLocale]) {
+    for (const key of ["ncmSpecialRanks", "ncmGlobalRanks"]) {
+      assert.equal(typeof locale.platformHome[key], "string", `缺少 platformHome.${key}`);
+    }
+  }
+  const zh = zhLocale.platformHome as Record<string, string>;
+  assert.equal(zh.ncmSpecialRanks, "云音乐特色榜");
+  assert.equal(zh.ncmGlobalRanks, "全球媒体榜");
 });

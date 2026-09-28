@@ -453,6 +453,30 @@ export const coverToNeteaseItem = (cover: CoverItem, kind: "album" | "artist"): 
   kind,
 });
 
+/**
+ * 网易榜单目录条目 → 榜单卡片。
+ *
+ * 网易的榜单 id 就是歌单 id（飙升榜 19723756 直接用 `playlist/detail` 能打开），
+ * 所以和 QM/KG 一样用 `kind: "rank"` 走 collection 的 rank 类型。
+ * 副标题沿用 QM 那条约定：先写曲目数，再写更新频率。
+ */
+export const ncmToplistToItem = (entry: {
+  id: string;
+  name: string;
+  cover?: string;
+  updateFrequency?: string;
+  trackCount?: number;
+}): HomeItem => ({
+  id: entry.id,
+  title: entry.name,
+  subtitle:
+    [entry.trackCount ? `${entry.trackCount} 首` : "", entry.updateFrequency]
+      .filter(Boolean)
+      .join(" · ") || undefined,
+  image: entry.cover || undefined,
+  kind: "rank",
+});
+
 // ---------- 渲染与跳转 ----------
 
 /** HomeItem → CoverCard / CoverList 使用的 CoverItem */

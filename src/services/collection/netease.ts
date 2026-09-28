@@ -29,7 +29,10 @@ export const loadNeteaseCollection = async (
     );
     return;
   }
-  if (type !== "playlist") {
+  // rank（平台排行榜）与 playlist 走同一条通路：网易的榜单 id 本身就是歌单 id
+  // （实测 playlist/detail?id=19723756 直接返回飙升榜），所以不必另做取歌实现，
+  // 只把 type 原样带出去，让详情页按榜单语义展示。
+  if (type !== "playlist" && type !== "rank") {
     options.onUpdate(null);
     return;
   }
