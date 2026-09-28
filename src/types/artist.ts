@@ -12,6 +12,12 @@ export interface CoverItem {
   subtitle?: string;
   /** 歌曲数量 */
   trackCount: number;
+  /**
+   * 左上角角标（Hi-Res / Atmos 这类音质标记）。
+   *
+   * 只有平台确实声明了该规格时才有值：判不出来就不打标，避免错标。
+   */
+  badge?: string;
 }
 
 /** 歌手详情 */

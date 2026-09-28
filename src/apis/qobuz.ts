@@ -161,3 +161,19 @@ export const discoverIndex = (params?: { genre_id?: string; limit?: number; offs
 /** 分类（流派）导航：`{ genres: { items: [{id,name,slug,color}], total } }` */
 export const genreList = (params?: { locale?: string }) =>
   qobuzCall<{ genres?: { items?: unknown[]; total?: number } }>("genre_list", params);
+
+/**
+ * 单个发现分区（分区「查看全部」用它翻页）。
+ *
+ * 返回 `{ has_more, items }`（比 `discover_index` 少一层 containers）。
+ * `section` 必须是原生白名单里的端点名——容器键到端点名的映射在
+ * `services/platformHome.ts`，两边拼写并不一致（snake_case ↔ camelCase）。
+ */
+export const discoverSection = (
+  section: string,
+  params?: { genre_id?: string; limit?: number; offset?: number },
+) =>
+  qobuzCall<{ items?: unknown[]; has_more?: boolean }>("discover_section", {
+    section,
+    ...params,
+  });
