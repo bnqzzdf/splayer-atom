@@ -2,8 +2,9 @@
 
 ## Current status
 
-Last reviewed against source: 2026-09-28 (`188fcfbc`). This date is a documentation/code review,
-not a new hardware, account, browser or release acceptance run.
+Last reviewed against source: 2026-09-28 (`3c349f0a`). This update includes the recorded
+Folder Browser first-batch browser/library acceptance below; it is not a new output-hardware,
+provider-account or release acceptance run.
 
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
 ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
@@ -14,15 +15,18 @@ bundled packages can be built with or without Diretta. Confirmed implementation 
 
 Folder Browser's existing implementation includes paged browsing, pinned folders, physical-name
 search, current-directory filtering, list/grid views, materials, scoped scanning, recursive actions
-and batch actions for loaded media/container tracks. List/grid preference persistence is also
+and batch actions for media/container tracks. List/grid preference persistence is also
 implemented (`058c0e63`); it is not pending development. The first improvement stage
 (`b54265b6`) implements Core-side filename, modification-time and disc/track display sorting,
 physical browse attributes and sort-aware cursor invalidation. The second stage (`a9e175a3`)
 adds Web sorting controls, browser-local default persistence, sort-aware route/history state,
-filter/scroll restoration and containing-folder focus. The third stage now adds physical filename
-and compact file/track information, explicit recursive/current-folder scope feedback, loaded-item
-batch-selection wording and Folder Search truncation feedback (`188fcfbc`). First-batch
-implementation is now complete; plan-level acceptance remains pending.
+per-folder filter restoration and deterministic return/containing-folder focus. The third stage now adds physical filename
+and compact file/track information, explicit recursive/current-folder scope feedback and Folder
+Search truncation feedback (`188fcfbc`). Acceptance-period fixes then simplified recursive-action
+wording and return focus, changed batch UX to true full-result Select All / Invert Selection
+(`2b3d91de`), and made expanded CUE/SACD containers non-selectable beside their virtual tracks
+while defining “open containing folder” as physical-container navigation (`3c349f0a`).
+First-batch implementation and current real-library/browser functional acceptance are complete.
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -88,17 +92,28 @@ Display order remains separate from Core-owned directory playback order.
       order, with ascending/descending direction, fixed entry groups, lightweight physical
       attributes, sorting before pagination and cursor invalidation for changed results.
 - [x] Implement first-batch Web sorting controls and browser-local preference persistence;
-      integrate sort-aware history, filter/scroll restoration and exact containing-folder focus.
+      integrate sort-aware history, per-folder filter restoration and deterministic return /
+      containing-folder focus.
       Reuse the existing list/grid persistence rather than implementing it again.
 - [x] Complete first-batch information and scope feedback: physical filenames and necessary
-      track/file fields, explicit recursive/current-directory playback scope, loaded-item batch
-      selection wording and the existing Core search-truncation signal.
-- [ ] Verify the first batch against the improvement plan's automated and manual criteria.
-      Record implementation completion separately from real-library/browser acceptance.
+      track/file fields, explicit recursive/current-directory playback scope, full-result batch
+      selection semantics and the existing Core search-truncation signal.
+- [x] Verify the first batch against the improvement plan's functional browser/library criteria.
+      The 2026-09-28 run covered sorting/directions, fixed groups, >200-entry pagination, rapid
+      sort changes, return focus, containing-folder navigation, filtering, Folder Search,
+      batch Select All / Invert Selection, CUE/SACD ordering and physical-container navigation.
+      Final automated gates passed with Node 428/428 and Web 111/111 tests. A real directory with
+      >200 songs was not available for batch-selection UI retest, and Folder Search was observed
+      to be functionally correct but subjectively slow; neither blocks first-batch functional
+      acceptance.
 - [ ] Complete manual browser, NAS/USB, large-directory and material-viewer acceptance for the
       existing Core-owned Folder Browser (original plan sections 17/18), combining the run with
-      first-batch checks where practical. Core/Web implementation and automated coverage exist;
-      the old full-tree projection is removed. No complete real-library acceptance record exists.
+      first-batch checks where practical. The first-batch functional run is recorded, but the
+      broader original-plan matrix still lacks NAS/USB coverage and the very-large direct-entry
+      directory cases.
+- [ ] Profile Folder Search on the real library if its current latency remains noticeable. Keep
+      this as a performance follow-up; do not replace the current correct bounded search with a
+      second library index without measured evidence.
 - [ ] Follow up with the second batch: canonical album/artist/detail navigation, current-subtree
       recursive search and actionable batch failure details. Additional metadata sorting follows
       concrete use cases; second-batch work does not block first-batch acceptance.
@@ -120,11 +135,11 @@ Display order remains separate from Core-owned directory playback order.
 
 1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
 2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Implement the first batch of Folder Browser improvements: Core sorting/pagination, Web
-   navigation state, necessary file information and operation-scope feedback. Reuse the implemented
-   Folder Browser foundation; keep the second batch separate.
-4. Complete all five provider matrices, ListenBrainz, Folder Browser (existing features plus the
-   first batch), responsive Web and long-running multi-Control acceptance.
+3. Complete the broader Folder Browser original-plan acceptance (NAS/USB, very-large directory and
+   material viewer) and profile Folder Search only if its observed latency remains worth fixing.
+   The first-batch functional implementation and acceptance are complete; keep the second batch separate.
+4. Complete all five provider matrices, ListenBrainz, responsive Web and long-running multi-Control
+   acceptance.
 5. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
 
 ## Product scope
