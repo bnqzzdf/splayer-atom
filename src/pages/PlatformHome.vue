@@ -85,7 +85,14 @@ const loading = ref(false);
 const error = ref<string>("");
 const sections = ref<HomeSection[]>([]);
 const genres = ref<GenreItem[]>([]);
-/** 当前筛选的流派；空串表示不筛选 */
+/**
+ * 当前筛选的流派 / 榜单分组；空串表示不筛选。
+ *
+ * 这排标签在两个平台语义不同，所以渲染位置也不同：
+ * - Qobuz/TIDAL：**整页**的流派筛选（换 genre_id 重新拉首页），放在平台标签下方；
+ * - QM/KG：只是**榜单区**的分组筛选，所以挪进「榜单」区里——留在页面顶部时，
+ *   它离被控制的内容隔着几排书架，点了会像没反应。
+ */
 const activeGenre = ref<string>("");
 /**
  * 各书架当前选中的地区/语种（键 = 分区 key，也就是书架标识）。
@@ -128,10 +135,24 @@ const currentAuthed = computed(() =>
   Boolean(providerSessions.sessions[platform.value]?.authenticated),
 );
 
-/** 当前榜单分组名（用于把筛选状态显式显示出来，而不是只靠按钮高亮） */
-const activeGenreName = computed(
-  () => genres.value.find((genre) => genre.id === activeGenre.value)?.name ?? "",
+/** QM/KG 的这排标签是榜单分组而非流派——决定它渲染在页面顶部还是「榜单」区里 */
+const isRankGroupPlatform = computed(
+  () => platform.value === "qqmusic" || platform.value === "kugou",
 );
+
+/** 页面顶部的流派筛选行：只有 Qobuz/TIDAL 有（它们的 genre 作用于整页） */
+const showGenreRow = computed(() => genres.value.length > 0 && !isRankGroupPlatform.value);
+
+/** 榜单分组标签；首个「全部」表示不筛选，也就是默认状态 */
+const rankGroupTabs = computed<GenreItem[]>(() =>
+  isRankGroupPlatform.value ? [{ id: "", name: t("platformHome.allRanks") }, ...genres.value] : [],
+);
+
+/** 第 index 个分区是否是某个大类（目前只有「榜单」）的第一节：分组标题与标签只渲染一次 */
+const isGroupStart = (index: number): boolean => {
+  const current = sections.value[index];
+  return Boolean(current?.group) && current.group !== sections.value[index - 1]?.group;
+};
 
 // ---------- 归一化 ----------
 
@@ -588,8 +609,12 @@ onMounted(async () => {
           </SButton>
         </div>
 
-        <!-- 分类导航（QM/KG 这里是榜单分组） -->
-        <div v-if="genres.length" class="flex flex-wrap gap-1.5">
+        <!--
+          流派筛选：只有 Qobuz/TIDAL 放在这里。
+          QM/KG 的那排标签是榜单分组，只作用于榜单区，已挪到「榜单」标题下面——
+          留在页面顶部时它离被控制的内容隔着几排书架，点了会像没反应。
+        -->
+        <div v-if="showGenreRow" class="flex flex-wrap gap-1.5">
           <button
             v-for="genre in genres"
             :key="genre.id"
@@ -603,20 +628,6 @@ onMounted(async () => {
             @click="selectGenre(genre.id)"
           >
             {{ genre.name }}
-          </button>
-        </div>
-
-        <!--
-          选中某个榜单分组后把状态显式说出来。
-          这排按钮只作用于下方的「榜单」区，而榜单区在几排书架之下，
-          不写出来的话点了会像没反应（真实反馈：看不出按钮生效）。
-        -->
-        <div v-if="activeGenre" class="flex items-center gap-2 text-xs text-on-surface-variant">
-          <span class="rounded-md bg-primary/15 px-2 py-1 text-primary">
-            {{ t("platformHome.rankFiltered", { name: activeGenreName }) }}
-          </span>
-          <button type="button" class="hover:text-primary" @click="selectGenre(activeGenre)">
-            {{ t("platformHome.clearFilter") }}
           </button>
         </div>
 
@@ -644,16 +655,29 @@ onMounted(async () => {
         <!-- 分区列表 -->
         <template v-for="(section, index) in sections" :key="section.key">
           <!--
-            大类标题只在分组切换时出现一次。
-            QM/KG 的榜单分组按钮只作用于这一片，把「榜单」写出来，
-            用户才能看出那排按钮控制的是哪里。
+            大类标题（目前只有「榜单」）在分组切换处渲染一次。
+            榜单分组的筛选标签就挂在这里：它只作用于榜单区，跟着被控制的内容走，
+            用户才不会以为按钮没反应。
           -->
-          <h3
-            v-if="section.group && section.group !== sections[index - 1]?.group"
-            class="mt-1 text-lg font-semibold text-on-surface"
-          >
-            {{ section.group }}
-          </h3>
+          <div v-if="isGroupStart(index)" class="mt-1 flex flex-col gap-2">
+            <h3 class="text-lg font-semibold text-on-surface">{{ section.group }}</h3>
+            <div v-if="rankGroupTabs.length" class="flex flex-wrap gap-1.5">
+              <button
+                v-for="tab in rankGroupTabs"
+                :key="tab.id"
+                type="button"
+                class="rounded-md px-2.5 py-1 text-xs transition-colors"
+                :class="
+                  activeGenre === tab.id
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-on-surface-variant hover:bg-surface-variant/15'
+                "
+                @click="selectGenre(tab.id)"
+              >
+                {{ tab.name }}
+              </button>
+            </div>
+          </div>
           <section class="flex flex-col gap-2.5">
             <!-- 标题行：官方在每个分区右上角都有「查看全部」，这里只在该分区确实还能翻页时给 -->
             <div class="flex items-center justify-between gap-3">

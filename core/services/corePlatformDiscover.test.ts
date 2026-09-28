@@ -141,15 +141,26 @@ test("点地区标签只重载对应书架，且「更多」把书架与地区�
   );
 });
 
-test("榜单分组按钮的效果要看得见（分组标题 + 筛选状态）", () => {
-  // 按钮只作用于榜单区，而榜单区在几排书架之下；不写出来用户会以为按钮失效
-  assert.match(platformHomePageSource, /group: t\("platformHome\.ranks"\)/);
-  assert.match(platformHomePageSource, /section\.group !== sections\[index - 1\]\?\.group/);
+test("榜单分组的筛选标签跟着「榜单」区走，而不是留在页面顶部", () => {
+  // 这排标签只作用于榜单区，而榜单区在几排书架之下：留在顶部点了会像没反应
+  assert.match(platformHomePageSource, /const rankGroupTabs = computed<GenreItem\[\]>/);
+  assert.match(platformHomePageSource, /\{ id: "", name: t\("platformHome\.allRanks"\) \}/);
   assert.match(
     platformHomePageSource,
-    /t\("platformHome\.rankFiltered", \{ name: activeGenreName \}\)/,
+    /const showGenreRow = computed\(\(\) => genres\.value\.length > 0 && !isRankGroupPlatform\.value\)/,
   );
-  assert.match(platformHomePageSource, /@click="selectGenre\(activeGenre\)"/);
+  // 顶部那行只给 Qobuz/TIDAL（它们的 genre 作用于整页）
+  assert.match(platformHomePageSource, /<div v-if="showGenreRow" class="flex flex-wrap gap-1\.5">/);
+  // 榜单区里：分组标题 + 筛选标签
+  assert.match(
+    platformHomePageSource,
+    /<div v-if="isGroupStart\(index\)" class="mt-1 flex flex-col gap-2">/,
+  );
+  assert.match(platformHomePageSource, /v-for="tab in rankGroupTabs"/);
+  assert.match(platformHomePageSource, /@click="selectGenre\(tab\.id\)"/);
+  assert.match(platformHomePageSource, /group: t\("platformHome\.ranks"\)/);
+  // 顶部不再留榜单筛选状态条：标签就在榜单区里，状态就地可见
+  assert.doesNotMatch(platformHomePageSource, /rankFiltered/);
 });
 
 test("热门歌手卡片按歌手类型跳转，而不是被当成歌单", () => {
@@ -159,15 +170,7 @@ test("热门歌手卡片按歌手类型跳转，而不是被当成歌单", () =>
 
 test("新增文案中英文齐备", () => {
   for (const locale of [zhLocale, enLocale]) {
-    for (const key of [
-      "newSongs",
-      "newAlbums",
-      "hotArtists",
-      "fansCount",
-      "ranks",
-      "rankFiltered",
-      "clearFilter",
-    ]) {
+    for (const key of ["newSongs", "newAlbums", "hotArtists", "fansCount", "ranks", "allRanks"]) {
       assert.equal(typeof locale.platformHome[key], "string", `缺少 platformHome.${key}`);
     }
     const region = locale.platformHome.region as Record<string, string>;

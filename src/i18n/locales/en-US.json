@@ -1907,8 +1907,7 @@
     "hotArtists": "Popular Artists",
     "fansCount": "{count} fans",
     "ranks": "Ranks",
-    "rankFiltered": "Ranks: {name}",
-    "clearFilter": "Clear filter",
+    "allRanks": "All",
     "region": {
       "latest": "Latest",
       "mainland": "Mainland",

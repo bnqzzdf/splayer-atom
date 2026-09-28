@@ -1907,8 +1907,7 @@
     "hotArtists": "热门歌手",
     "fansCount": "{count} 粉丝",
     "ranks": "榜单",
-    "rankFiltered": "榜单：{name}",
-    "clearFilter": "清除筛选",
+    "allRanks": "全部",
     "region": {
       "latest": "最新",
       "mainland": "内地",
