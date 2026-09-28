@@ -1,9 +1,10 @@
 # 文件夹浏览改进方案
 
-日期：2026-09-28。代码核对基线：`058c0e63`。
+日期：2026-09-28。代码核对基线：`058c0e63`；第一阶段实现：`b54265b6`。
 
-状态：本方案已纳入开发规划，新增能力尚未实现。第一批为下一步开发范围；第二批为后续
-增强，不作为第一批完成条件。实现与验收状态统一由 [Roadmap](./atom-roadmap.md) 维护。
+状态：本方案已纳入开发规划。第一批第 1 阶段（Core 合同、显示排序、物理属性和游标校验）
+已实现；Web 控件/恢复、信息与范围提示及整体验收仍待后续阶段完成。第二批为后续增强，
+不作为第一批完成条件。实现与验收状态统一由 [Roadmap](./atom-roadmap.md) 维护。
 [原 Folder Browser 方案](./local-folder-browser-plan.md)继续定义目录授权、扫描、容器、
 资料阅读和播放边界；本文补充显示排序及交互规则，不重做已合并的基础功能。
 
@@ -39,15 +40,15 @@
 | 未扫描音频、CUE/SACD 展开、附件阅读       | 已有                                                       | 保持现有语义           |
 | 递归/仅当前目录播放、队列、歌单、局部扫描 | 已有                                                       | 明确范围，不改播放策略 |
 | 音频与容器曲目批量操作                    | 已有，候选限已加载项，排除目录和资料                       | 明确选择范围           |
-| 多种显示排序                              | 未实现，组内固定按物理名称自然升序                         | 第一批新增             |
+| 多种显示排序                              | Core 已实现；Web 控件和偏好接入待下一阶段                  | 第一批继续             |
 | 文件属性与曲目信息展示                    | 已扫描项主标题为歌曲名，缺少直接可见的物理文件名及必要字段 | 第一批补齐             |
 | 搜索上限提示                              | Core 返回 `truncated`，Web 搜索未呈现                      | 第一批补齐             |
 | 目录内递归搜索、音乐库跳转、完整失败列表  | 尚未形成对应完整交互                                       | 第二批增强             |
 
 核对入口：`shared/types/folderBrowser.ts`、`core/services/folderBrowser.ts`、
 `core/atom/folderRoutes.ts`、`src/core/folderBrowserClient.ts`、`src/pages/Folders.vue`、
-`src/stores/settings.ts`。现有 `compareBrowseEntries` 按分组和物理名称排序；
-`compareTracks` 与目录递归逻辑负责播放顺序，两者目前已不同。
+`src/stores/settings.ts`。当前 `compareBrowseEntries` 负责固定分组下的显示排序；
+`compareTracks` 与目录递归逻辑继续负责播放顺序，两者保持独立。
 
 ## 3. 第一批：显示排序
 

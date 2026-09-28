@@ -2,7 +2,7 @@
 
 ## Current status
 
-Last reviewed against source: 2026-09-28 (`058c0e63`). This date is a documentation/code review,
+Last reviewed against source: 2026-09-28 (`b54265b6`). This date is a documentation/code review,
 not a new hardware, account, browser or release acceptance run.
 
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
@@ -15,9 +15,10 @@ bundled packages can be built with or without Diretta. Confirmed implementation 
 Folder Browser's existing implementation includes paged browsing, pinned folders, physical-name
 search, current-directory filtering, list/grid views, materials, scoped scanning, recursive actions
 and batch actions for loaded media/container tracks. List/grid preference persistence is also
-implemented (`058c0e63`); it is not pending development. Browsing still has only grouped natural
-filename order. The new [Folder Browser improvements](./folder-browser-improvements.md) are planned,
-not implemented, and are tracked separately from acceptance of the existing browser.
+implemented (`058c0e63`); it is not pending development. The first improvement stage
+(`b54265b6`) implements Core-side filename, modification-time and disc/track display sorting,
+physical browse attributes and sort-aware cursor invalidation. Web sorting controls,
+navigation-state restoration and the remaining first-batch feedback are still pending.
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -79,7 +80,7 @@ The [original plan](./local-folder-browser-plan.md) defines the implemented foun
 the [improvement plan](./folder-browser-improvements.md) defines the next development work.
 Display order remains separate from Core-owned directory playback order.
 
-- [ ] Implement first-batch Core display sorting: filename, modification time and disc/track
+- [x] Implement first-batch Core display sorting: filename, modification time and disc/track
       order, with ascending/descending direction, fixed entry groups, lightweight physical
       attributes, sorting before pagination and cursor invalidation for changed results.
 - [ ] Implement first-batch Web sorting controls and browser-local preference persistence;
