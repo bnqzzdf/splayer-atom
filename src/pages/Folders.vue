@@ -68,12 +68,6 @@ type ViewRow =
   | { kind: "entry"; key: string; entry: FolderBrowseEntry }
   | { kind: "container-track"; key: string; track: Track; containerPath: string };
 
-type FolderScrollState = {
-  top: number;
-  anchorPath?: string;
-  anchorOffset: number;
-};
-
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -126,10 +120,7 @@ const loadedPath = ref("");
 const loadedFilter = ref("");
 const loadedSort = ref<FolderBrowseSort>("name");
 const loadedOrder = ref<FolderBrowseOrder>("asc");
-const scrollPositions = new Map<string, FolderScrollState>();
 const folderFilters = new Map<string, string>();
-const highlightKey = ref("");
-let highlightTimer: number | null = null;
 let browseGeneration = 0;
 
 const scanProgress = shallowRef<ScanProgress | null>(null);
@@ -323,13 +314,12 @@ const viewRows = computed<ViewRow[]>(() => {
       label: t("folder.subfolders"),
       count: page.value?.counts.directories ?? directories.length,
     });
-    for (let index = 0; index < directories.length; index += 6) {
-      rows.push({
-        kind: "directory-grid",
-        key: `directory-grid:${index}`,
-        entries: directories.slice(index, index + 6),
-      });
-    }
+    // 当前页最多 200 个目录；作为一个网格块渲染，让 focusPath 能直接定位真实卡片。
+    rows.push({
+      kind: "directory-grid",
+      key: "directory-grid",
+      entries: directories,
+    });
   }
   append("tracks", t("folder.tracks"), media, page.value?.counts.media ?? media.length);
   append(
@@ -429,71 +419,6 @@ const pdfUrl = computed(() => {
 const materialHasThumbnail = (material: FolderMaterialEntry): boolean =>
   material.materialType === "image" && !material.path.toLowerCase().endsWith(".gif");
 
-const rowAnchorPath = (row: ViewRow | undefined): string | undefined => {
-  if (!row || row.kind === "section") return undefined;
-  if (row.kind === "entry") return row.entry.path;
-  if (row.kind === "container-track") return row.containerPath;
-  return row.entries[0]?.path;
-};
-
-const rowContainsPath = (row: ViewRow, path: string): boolean => {
-  if (row.kind === "entry") return row.entry.path === path;
-  if (row.kind === "container-track") return row.containerPath === path;
-  if (row.kind === "directory-grid") return row.entries.some((entry) => entry.path === path);
-  return false;
-};
-
-const folderScrollStateKey = (
-  path: string,
-  filter: string,
-  sort: FolderBrowseSort,
-  order: FolderBrowseOrder,
-): string => [path, filter.trim(), sort, order].join("\u0000");
-
-const saveCurrentScroll = (): void => {
-  if (!loadedPath.value || !listRef.value) return;
-  const top = listRef.value.getScrollTop();
-  let anchorIndex = Math.max(0, listRef.value.actualStartIndex);
-  while (anchorIndex < viewRows.value.length && viewRows.value[anchorIndex]?.kind === "section") {
-    anchorIndex++;
-  }
-  const anchorPath = rowAnchorPath(viewRows.value[anchorIndex]);
-  const anchorOffset =
-    anchorPath && anchorIndex < viewRows.value.length
-      ? top - listRef.value.getItemTop(anchorIndex)
-      : 0;
-  scrollPositions.set(
-    folderScrollStateKey(
-      loadedPath.value,
-      loadedFilter.value,
-      loadedSort.value,
-      loadedOrder.value,
-    ),
-    { top, anchorPath, anchorOffset },
-  );
-};
-
-const restoreScroll = async (
-  path: string,
-  filter: string,
-  sort: FolderBrowseSort,
-  order: FolderBrowseOrder,
-): Promise<void> => {
-  const state = scrollPositions.get(folderScrollStateKey(path, filter, sort, order));
-  if (!state || state.top <= 0) return;
-  await nextTick();
-  const list = listRef.value;
-  if (!list) return;
-  if (state.anchorPath) {
-    const anchorIndex = viewRows.value.findIndex((row) => rowContainsPath(row, state.anchorPath!));
-    if (anchorIndex >= 0) {
-      list.scrollTo(list.getItemTop(anchorIndex) + state.anchorOffset);
-      return;
-    }
-  }
-  list.scrollTo(state.top);
-};
-
 const loadRoots = async (): Promise<void> => {
   const data = await folderBrowserClient.getRoots();
   roots.value = data.roots;
@@ -506,19 +431,29 @@ const focusRequestedEntry = async (): Promise<void> => {
   if (!id && !focusPath) return;
   await nextTick();
   const index = viewRows.value.findIndex((row) => {
+    if (row.kind === "directory-grid") {
+      return !!focusPath && row.entries.some((entry) => entry.path === focusPath);
+    }
     if (row.kind === "container-track") return !!id && row.track.id === id;
     if (row.kind !== "entry") return false;
     if (focusPath && row.entry.path === focusPath) return true;
     return row.entry.kind === "track" && !!id && row.entry.track.id === id;
   });
   if (index < 0) return;
-  listRef.value?.scrollToIndex(index, "smooth");
-  highlightKey.value = viewRows.value[index]?.key ?? "";
-  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
-  highlightTimer = window.setTimeout(() => {
-    highlightKey.value = "";
-    highlightTimer = null;
-  }, 2500);
+  const row = viewRows.value[index];
+  const list = listRef.value;
+  if (!list) return;
+  if (row?.kind === "directory-grid" && focusPath) {
+    const scroll = list.scrollRef;
+    const card = scroll
+      ? Array.from(scroll.querySelectorAll<HTMLElement>("[data-folder-grid-path]")).find(
+          (element) => element.dataset.folderGridPath === focusPath,
+        )
+      : undefined;
+    card?.scrollIntoView({ block: "center" });
+  } else {
+    list.scrollToIndex(index);
+  }
 };
 
 const loadContainer = async (): Promise<void> => {
@@ -541,8 +476,7 @@ const loadContainer = async (): Promise<void> => {
   }
 };
 
-const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true): Promise<void> => {
-  saveCurrentScroll();
+const loadCurrent = async (focusOverride?: string): Promise<void> => {
   const generation = ++browseGeneration;
   const target = currentPath.value;
   const activeFilter = filterQuery.value.trim();
@@ -574,20 +508,13 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
     return;
   }
   loading.value = true;
+  let loaded = false;
   try {
-    const scrollStateKey = folderScrollStateKey(target, activeFilter, activeSort, activeOrder);
-    const savedAnchorPath = restoreSavedPosition
-      ? scrollPositions.get(scrollStateKey)?.anchorPath
-      : undefined;
     const explicitFocusPath = requestedContainerPath.value || requestedFocusPath.value;
     const result = await folderBrowserClient.browse({
       path: target,
       limit: 200,
-      focusPath:
-        focusOverride ||
-        explicitFocusPath ||
-        savedAnchorPath ||
-        undefined,
+      focusPath: focusOverride || explicitFocusPath || undefined,
       filter: activeFilter || undefined,
       sort: activeSort,
       order: activeOrder,
@@ -611,7 +538,7 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
       ignoreFilterReload = false;
       folderFilters.set(target, "");
       exitBatch();
-      await loadCurrent(explicitFocusPath, false);
+      await loadCurrent(explicitFocusPath);
       return;
     }
     page.value = result;
@@ -621,10 +548,7 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
     loadedFilter.value = activeFilter;
     loadedSort.value = activeSort;
     loadedOrder.value = activeOrder;
-    if (restoreSavedPosition) {
-      await restoreScroll(target, activeFilter, activeSort, activeOrder);
-    }
-    await loadContainer();
+    loaded = true;
   } catch (value) {
     if (
       generation === browseGeneration &&
@@ -638,6 +562,8 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   } finally {
     if (generation === browseGeneration) loading.value = false;
   }
+  // focus 只能在 loading 结束、SVirtualList 真正挂载后执行。
+  if (loaded && generation === browseGeneration) await loadContainer();
 };
 
 const markDirectoryThumbnailFailed = (path: string): void => {
@@ -649,14 +575,8 @@ const markDirectoryThumbnailFailed = (path: string): void => {
 
 const refreshCurrent = async (): Promise<void> => {
   const target = currentPath.value;
-  saveCurrentScroll();
-  const state = scrollPositions.get(
-    folderScrollStateKey(target, loadedFilter.value, loadedSort.value, loadedOrder.value),
-  );
-  const anchorPath = state?.anchorPath;
-  await loadCurrent(anchorPath, false);
+  await loadCurrent();
   if (currentPath.value !== target || loadedPath.value !== target) return;
-  await restoreScroll(target, loadedFilter.value, loadedSort.value, loadedOrder.value);
 };
 
 const loadMore = async (): Promise<void> => {
@@ -787,7 +707,20 @@ const loadPrevious = async (): Promise<void> => {
   }
 };
 
-const goFolder = async (path: string): Promise<void> => {
+const goFolder = async (path: string, rememberReturnFocus = false): Promise<void> => {
+  if (rememberReturnFocus && currentPath.value) {
+    // 把返回目标写进父目录自己的 history 记录；浏览器后退和应用后退因此共享同一语义。
+    await router.replace({
+      name: "folders",
+      query: {
+        ...route.query,
+        path: currentPath.value,
+        sort: currentSort.value,
+        order: currentOrder.value,
+        focusPath: path,
+      },
+    });
+  }
   await router.push({
     name: "folders",
     query: { path, sort: currentSort.value, order: currentOrder.value },
@@ -1128,7 +1061,7 @@ const handleEntryMenu = (entry: FolderBrowseEntry, key: string): void => {
 };
 
 const activateEntry = async (entry: FolderBrowseEntry): Promise<void> => {
-  if (entry.kind === "directory") await goFolder(entry.path);
+  if (entry.kind === "directory") await goFolder(entry.path, true);
   else if (entry.kind === "cue" || entry.kind === "sacd") await toggleContainer(entry);
   else if (entry.kind === "material") await openMaterial(entry);
   else await runAction(entry.path, "play", false);
@@ -1222,7 +1155,7 @@ watch(searchQuery, (value) => {
 
 const performFilter = useDebounceFn((value: string) => {
   if (!currentPath.value || value.trim() === loadedFilter.value) return;
-  void loadCurrent(undefined, false);
+  void loadCurrent();
 }, 200);
 
 watch(
@@ -1319,7 +1252,6 @@ watch(
         name: "folders",
         query: { ...route.query, path, sort, order },
       });
-      return;
     }
 
     const pathOrSortChanged =
@@ -1337,7 +1269,7 @@ watch(
     if (!path || path !== loadedPath.value || loading.value) return;
     const focusTarget = containerPath || focusPath;
     if (focusTarget && !entries.value.some((entry) => entry.path === focusTarget)) {
-      void loadCurrent(focusTarget, false);
+      void loadCurrent(focusTarget);
       return;
     }
     if (containerPath !== previous[3]) {
@@ -1398,13 +1330,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   searchAbortController?.abort();
   searchAbortController = null;
-  saveCurrentScroll();
   saveViewerState();
   unsubscribeScan?.();
   unsubscribeRevision?.();
   unsubscribePins?.();
   unsubscribeRoots?.();
-  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
 });
 </script>
 
@@ -1753,6 +1683,7 @@ onBeforeUnmount(() => {
               <div
                 v-for="entry in item.entries"
                 :key="entry.path"
+                :data-folder-grid-path="entry.path"
                 class="group relative min-w-0 rounded-xl border border-solid border-primary/10 bg-surface-panel transition-colors hover:bg-primary/6"
               >
                 <button
@@ -1802,11 +1733,8 @@ onBeforeUnmount(() => {
 
           <div
             v-else-if="item.kind === 'container-track'"
-            class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors"
-            :class="[
-              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
-              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
-            ]"
+            class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors hover:bg-primary/6"
+            :class="batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : ''"
             @click="batchActive ? toggleBatchKey(item.key) : undefined"
           >
             <SCheckbox
@@ -1869,11 +1797,8 @@ onBeforeUnmount(() => {
 
           <div
             v-else
-            class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors"
-            :class="[
-              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
-              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
-            ]"
+            class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-primary/6"
+            :class="batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : ''"
             @click="
               batchActive &&
               item.entry.kind !== 'directory' &&

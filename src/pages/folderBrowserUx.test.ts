@@ -59,13 +59,43 @@ test("Folder presentation supports list/grid without changing route semantics", 
 test("Folder display sorting stays route-aware and keeps navigation state isolated", () => {
   assert.ok(foldersSource.includes('sort: currentSort.value'));
   assert.ok(foldersSource.includes('order: currentOrder.value'));
-  assert.ok(foldersSource.includes("folderScrollStateKey("));
   assert.ok(foldersSource.includes("currentSort.value !== loadedSort.value"));
   assert.ok(foldersSource.includes("currentOrder.value !== loadedOrder.value"));
   assert.ok(foldersSource.includes("browseGeneration++"));
   assert.ok(foldersSource.includes("explicitFocusPath"));
   assert.ok(folderClientSource.includes('if (sort) params.set("sort", sort)'));
   assert.ok(folderClientSource.includes('if (order) params.set("order", order)'));
+});
+
+test("Folder route normalization still loads direct containing-folder navigation", () => {
+  const normalization = foldersSource.indexOf("routeFolderSort.value !== sort");
+  const pathChange = foldersSource.indexOf("const pathOrSortChanged", normalization);
+  const earlyReturn = foldersSource.indexOf("return;", normalization);
+  assert.ok(normalization >= 0);
+  assert.ok(pathChange > normalization);
+  assert.ok(earlyReturn < 0 || earlyReturn > pathChange);
+});
+
+test("Folder return focus stays simple and runs only after the list is rendered", () => {
+  assert.equal(foldersSource.includes("scrollPositions"), false);
+  assert.equal(foldersSource.includes("restoreScroll"), false);
+  assert.equal(foldersSource.includes("saveCurrentScroll"), false);
+  assert.equal(foldersSource.includes("highlightKey"), false);
+  assert.equal(foldersSource.includes("highlightTimer"), false);
+  assert.ok(foldersSource.includes("if (generation === browseGeneration) loading.value = false;"));
+  assert.ok(foldersSource.includes("if (loaded && generation === browseGeneration) await loadContainer();"));
+  assert.ok(foldersSource.includes('card?.scrollIntoView({ block: "center" })'));
+  assert.ok(foldersSource.includes("list.scrollToIndex(index);"));
+});
+
+test("Folder child navigation records a deterministic return focus in browser history", () => {
+  assert.ok(foldersSource.includes("const goFolder = async (path: string, rememberReturnFocus = false)"));
+  assert.ok(foldersSource.includes("if (rememberReturnFocus && currentPath.value)"));
+  assert.ok(foldersSource.includes("focusPath: path"));
+  assert.ok(foldersSource.includes('goFolder(entry.path, true)'));
+  assert.ok(foldersSource.includes('data-folder-grid-path="entry.path"'));
+  assert.ok(foldersSource.includes('key: "directory-grid"'));
+  assert.ok(foldersSource.includes("entries: directories"));
 });
 
 test("Folder rows expose physical file identity without inventing unscanned metadata", () => {
