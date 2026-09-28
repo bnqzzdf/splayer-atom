@@ -18,8 +18,13 @@ const qmNewAlbumSource = read("core/apis/qqmusic/modules/newalbum.ts");
 const kgModulesSource = read("core/apis/kugou/modules/index.ts");
 const kgNewSongSource = read("core/apis/kugou/modules/newsong.ts");
 const kgHotArtistSource = read("core/apis/kugou/modules/hot_artist.ts");
+const ncmModulesSource = read("core/apis/netease/modules/index.ts");
+const ncmNewAlbumSource = read("core/apis/netease/modules/album_new.ts");
+const ncmArtistListSource = read("core/apis/netease/modules/artist_list.ts");
+const ncmTopArtistSource = read("core/apis/netease/modules/top_artists.ts");
 const qmPlaylistApiSource = read("src/apis/playlist/qqmusic.ts");
 const kgPlaylistApiSource = read("src/apis/playlist/kugou.ts");
+const ncmPlaylistApiSource = read("src/apis/playlist/netease.ts");
 const platformHomePageSource = read("src/pages/PlatformHome.vue");
 const platformSectionPageSource = read("src/pages/PlatformSection.vue");
 const platformHomeServiceSource = read("src/services/platformHome.ts");
@@ -32,10 +37,12 @@ const enLocale = JSON.parse(read("src/i18n/locales/en-US.json")) as {
 
 test("流媒体接入的标签顺序按使用频率排，与共享层那份互不影响", () => {
   // 这份只管平台页标签（@shared/types/platform 那份管搜索页与标签编辑器、含网易云）
+  // 网易云是后追加的一页，放末尾：既不打扰已有顺序，也不改默认页（仍是第一项）
   assert.match(
     platformHomeServiceSource,
-    /ALL_PLATFORMS: Platform\[\] = \["qqmusic", "qobuz", "tidal", "kugou"\]/,
+    /ALL_PLATFORMS: Platform\[\] = \["qqmusic", "qobuz", "tidal", "kugou", "netease"\]/,
   );
+  assert.match(platformHomeServiceSource, /netease: "网易云音乐"/);
   assert.match(
     platformHomePageSource,
     /ALL_PLATFORMS\.filter\(\(p\) => providerSessions\.sessions\[p\]\?\.authenticated\)/,
@@ -102,8 +109,15 @@ test("KG 热门歌手读 data.info 且按 type 区分地区", () => {
   assert.match(kgPlaylistApiSource, /kgApi\.hot_artists</);
 });
 
-test("四个书架的地区标签与取值都登记在 SHELF_TABS 里", () => {
-  for (const shelf of ["qm-new-songs", "qm-new-albums", "kg-new-songs", "kg-hot-artists"]) {
+test("六个书架的地区标签与取值都登记在 SHELF_TABS 里", () => {
+  for (const shelf of [
+    "qm-new-songs",
+    "qm-new-albums",
+    "kg-new-songs",
+    "kg-hot-artists",
+    "ncm-new-albums",
+    "ncm-hot-artists",
+  ]) {
     assert.ok(platformHomeServiceSource.includes(`"${shelf}": [`), `缺少 ${shelf} 的标签表`);
   }
   // QM 新歌：接口 lanlist 给的顺序（最新 / 内地 / 港台 / 欧美 / 韩国 / 日本）
@@ -179,18 +193,100 @@ test("热门歌手卡片按歌手类型跳转，而不是被当成歌单", () =>
   assert.match(codeOnly(platformHomeServiceSource), /kind: "artist"/);
 });
 
+test("网易新碟上架要有地区与偏移，否则页面只能看「全部」第一页", () => {
+  // area 是网易自己的枚举；早期写死 ALL + offset 0，地区标签与「更多」都无从谈起
+  assert.match(ncmNewAlbumSource, /"\/api\/album\/new"/);
+  assert.match(ncmNewAlbumSource, /ALBUM_AREAS = new Set\(\["ALL", "ZH", "EA", "KR", "JP"\]\)/);
+  assert.match(ncmNewAlbumSource, /offset: Number\(query\.offset \?\? 0\) \|\| 0/);
+  assert.match(ncmModulesSource, /album_new,/);
+  assert.match(ncmPlaylistApiSource, /neteaseApi\.album_new<NcmAlbumsResponse>/);
+});
+
+test("网易热门歌手走 v1 分类接口，而不是没有地区维度的 artist/top", () => {
+  // 路径必须带 v1：不带 v1 的同名路径会静默忽略 area/type，五个地区返回同一份列表
+  assert.match(ncmArtistListSource, /"\/api\/v1\/artist\/list"/);
+  assert.doesNotMatch(codeOnly(ncmArtistListSource), /"\/api\/artist\/list"/);
+  // -1 全部 / 7 华语 / 96 欧美 / 8 日本 / 16 韩国（16 出 BIGBANG、8 出 米津玄師）
+  assert.match(ncmArtistListSource, /ARTIST_AREAS = new Set\(\[-1, 7, 96, 8, 16\]\)/);
+  assert.match(ncmArtistListSource, /offset: Number\(query\.offset \?\? 0\) \|\| 0/);
+  assert.match(ncmModulesSource, /artist_list,/);
+  assert.match(ncmPlaylistApiSource, /neteaseApi\.artist_list<NcmArtistsResponse>/);
+  // artist/top 没有 area，做不出地区标签：热门歌手不能复用它
+  assert.doesNotMatch(codeOnly(ncmTopArtistSource), /area/);
+  assert.doesNotMatch(codeOnly(ncmArtistListSource), /artist\/top/);
+  // 上游不返回 total，分页不能靠它
+  assert.doesNotMatch(codeOnly(ncmArtistListSource), /total/);
+});
+
+test("网易标签页由新碟上架 + 热门歌手两排书架组成，各带地区标签与「更多」", () => {
+  assert.match(platformHomePageSource, /fetchNeteaseNewAlbums\(30, shelfTab\("ncm-new-albums"\)\)/);
+  assert.match(
+    platformHomePageSource,
+    /fetchNeteaseHotArtists\(30, Number\(shelfTab\("ncm-hot-artists"\)\)\)/,
+  );
+  // 两个书架都过 withShelf：地区标签、「更多」的定位信息都从那里来
+  assert.match(platformHomePageSource, /const ncmNewAlbumSection = \(albums: CoverItem\[\]\)/);
+  assert.match(platformHomePageSource, /const ncmHotArtistSection = \(artists: CoverItem\[\]\)/);
+  assert.match(platformHomePageSource, /key: "ncm-new-albums"/);
+  assert.match(platformHomePageSource, /key: "ncm-hot-artists"/);
+  // 歌手卡片要进歌手详情，专辑卡片进专辑详情
+  assert.match(platformHomePageSource, /coverToNeteaseItem\(album, "album"\)/);
+  assert.match(platformHomePageSource, /coverToNeteaseItem\(artist, "artist"\)/);
+  assert.match(platformHomeServiceSource, /export const coverToNeteaseItem/);
+});
+
+test("网易分区页按 shelf + tab 逐页取数，而不是一把取完", () => {
+  // 网易这两个接口自带 offset，能真翻页；QM/KG 没有游标才只能 more: false
+  assert.match(platformSectionPageSource, /fetchNeteaseNewAlbums\(PAGE_SIZE, tab, offset\)/);
+  assert.match(
+    platformSectionPageSource,
+    /fetchNeteaseHotArtists\(PAGE_SIZE, Number\(tab\), offset\)/,
+  );
+  assert.match(platformSectionPageSource, /more: albums\.length >= PAGE_SIZE/);
+  assert.match(platformSectionPageSource, /more: artists\.length >= PAGE_SIZE/);
+});
+
+test("认证失败时的「去登录」按平台分流：只有 Qobuz/TIDAL 有独立登录弹窗", () => {
+  // StreamingLoginDialog 只认 qobuz/tidal，对 QM/KG/网易弹它等于按钮失灵
+  assert.match(platformHomePageSource, /const openLogin = \(\): void =>/);
+  assert.match(platformHomePageSource, /ACCOUNT_SETTINGS_PLATFORMS\.has\(platform\.value\)/);
+  assert.match(platformHomePageSource, /useSettingsDialog\(\)\.show\("network"\)/);
+  assert.match(platformHomePageSource, /@click="openLogin"/);
+  assert.doesNotMatch(platformHomePageSource, /@click="loginDialogOpen = true"/);
+});
+
 test("新增文案中英文齐备", () => {
   for (const locale of [zhLocale, enLocale]) {
-    for (const key of ["newSongs", "newAlbums", "hotArtists", "fansCount", "ranks", "allRanks"]) {
+    for (const key of [
+      "newSongs",
+      "newAlbums",
+      "ncmNewAlbums",
+      "hotArtists",
+      "fansCount",
+      "ranks",
+      "allRanks",
+    ]) {
       assert.equal(typeof locale.platformHome[key], "string", `缺少 platformHome.${key}`);
     }
     const region = locale.platformHome.region as Record<string, string>;
-    for (const key of ["latest", "mainland", "hktw", "western", "korea", "japan", "chinese"]) {
+    for (const key of [
+      "all",
+      "latest",
+      "mainland",
+      "hktw",
+      "western",
+      "korea",
+      "japan",
+      "chinese",
+    ]) {
       assert.equal(typeof region[key], "string", `缺少 platformHome.region.${key}`);
     }
   }
   const zh = zhLocale.platformHome as Record<string, string>;
   assert.equal(zh.newAlbums, "新碟首发");
+  // 网易官方那个书架叫「新碟上架」，与 QM 的「新碟首发」是两个词
+  assert.equal(zh.ncmNewAlbums, "新碟上架");
   assert.equal(zh.hotArtists, "热门歌手");
   assert.equal(zh.ranks, "榜单");
+  assert.equal((zhLocale.platformHome.region as Record<string, string>).all, "全部");
 });

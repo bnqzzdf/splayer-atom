@@ -1,6 +1,8 @@
 import type { Playlist, Track } from "@shared/types/player";
+import type { CoverItem } from "@/types/artist";
 import { netease as neteaseApi } from "@/apis/netease";
-import { ensureOk, songsToTracks, toPlaylist } from "@/utils/format/netease";
+import { ensureOk, songsToTracks, toAlbum, toArtist, toPlaylist } from "@/utils/format/netease";
+import { albumToCoverItem, artistToCoverItem } from "@/utils/format/coverItem";
 import { songsByIds } from "@/apis/song/netease";
 
 /** song_detail 单批上限 */
@@ -140,4 +142,52 @@ export const subscribePlaylist = async (id: string, subscribe: boolean): Promise
  */
 export const reorderPlaylists = async (ids: string[]): Promise<void> => {
   ensureOk(await neteaseApi.playlist_order_update({ ids: JSON.stringify(ids) }));
+};
+
+/** 新碟上架响应：核心侧 album_new 原样透出网易的 albums */
+interface NcmAlbumsResponse {
+  code?: number;
+  albums?: unknown[];
+}
+
+/** 热门歌手响应：核心侧 artist_list 原样透出网易的 artists */
+interface NcmArtistsResponse {
+  code?: number;
+  artists?: unknown[];
+}
+
+/**
+ * 获取网易新碟上架
+ *
+ * 首页那版（recommend/netease.ts 的 fetchNewAlbums）写死了「全部」第一页；
+ * 平台页要地区标签和「更多」，所以这里把 area/offset 传出去。
+ *
+ * @param limit - 返回条数
+ * @param area - 地区：ALL 全部 / ZH 华语 / EA 欧美 / KR 韩国 / JP 日本
+ * @param offset - 偏移量（「更多」翻页用）
+ * @returns 专辑卡片列表；其 id 可直接用于 album/netease/<id>
+ */
+export const fetchNeteaseNewAlbums = async (
+  limit = 30,
+  area = "ALL",
+  offset = 0,
+): Promise<CoverItem[]> => {
+  const body = await neteaseApi.album_new<NcmAlbumsResponse>({ area, offset, limit });
+  return (body?.albums ?? []).map((raw) => albumToCoverItem(toAlbum(raw)));
+};
+
+/**
+ * 获取网易热门歌手
+ * @param limit - 返回条数
+ * @param area - 地区：-1 全部 / 7 华语 / 96 欧美 / 8 日本 / 16 韩国
+ * @param offset - 偏移量（「更多」翻页用）
+ * @returns 歌手卡片列表；其 id 可直接用于 artist/netease/<id>
+ */
+export const fetchNeteaseHotArtists = async (
+  limit = 30,
+  area = -1,
+  offset = 0,
+): Promise<CoverItem[]> => {
+  const body = await neteaseApi.artist_list<NcmArtistsResponse>({ area, offset, limit });
+  return (body?.artists ?? []).map((raw) => artistToCoverItem(toArtist(raw)));
 };

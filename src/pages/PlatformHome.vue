@@ -1,27 +1,29 @@
 <script setup lang="ts">
 /**
- * 在线平台首页（Qobuz / TIDAL / QQ音乐 / 酷狗音乐）
+ * 在线平台首页（Qobuz / TIDAL / QQ音乐 / 酷狗音乐 / 网易云音乐）
  *
  * 只展示**已登录**的平台，每个平台按标签切换，内容为该平台的
  * 分类导航 + 官方首页分区（榜单/新发行/推荐歌单等）。
  *
- * 四类平台的数据结构完全不同，这里统一归一化成 HomeSection：
+ * 五类平台的数据结构完全不同，这里统一归一化成 HomeSection：
  *   Qobuz: { containers: { <key>: { data: { items } } } }
  *   TIDAL: { rows: [{ modules: [{ type, items }] }] }
  *   QQ音乐: 榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
  *   酷狗:   榜单目录 [{ id, name, items: [{ id, name, cover, ... }] }]
+ *   网易云: 新碟上架 + 热门歌手两排书架（各自带地区标签与「更多」）
  * 页面只渲染 HomeSection，不关心平台差异。
  *
  * QM/KG 的卡片指向「榜单」，点击后进入 collection 页的 rank 类型详情
  * （services/collection/qqmusic|kugou 已支持 type === "rank"）。
  *
- * 书架分区（QM 热门歌单 / KG 精选歌单 + 新歌首发）排在榜单之前；
- * 这些接口为什么走该通道，在 core 侧对应模块的注释里有说明。
+ * 书架分区（QM 热门歌单 / KG 精选歌单 + 新歌首发 / 网易新碟上架 + 热门歌手）
+ * 排在榜单之前；这些接口为什么走该通道，在 core 侧对应模块的注释里有说明。
  */
 defineOptions({ name: "PlatformHome" });
 
 import { useProviderSessionsStore } from "@/stores/providerSessions";
 import type { Track } from "@shared/types/player";
+import type { CoverItem } from "@/types/artist";
 import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
@@ -43,13 +45,16 @@ import {
   type KGHotPlaylist,
   type KGRankGroup,
 } from "@/apis/playlist/kugou";
+import { fetchNeteaseHotArtists, fetchNeteaseNewAlbums } from "@/apis/playlist/netease";
 import { formatCompact } from "@/utils/format";
+import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import {
   ALL_PLATFORMS,
   PLATFORM_LABELS,
   SHELF_TABS,
   asArray,
   asRecord,
+  coverToNeteaseItem,
   openPlatformHomeItem,
   qobuzSectionEndpoint,
   qobuzSectionTitle,
@@ -110,6 +115,28 @@ const activeGenre = ref<string>("");
 const activeTabs = ref<Record<string, string>>({});
 /** 登录对话框（认证失效时提供「去登录」入口，而不是只丢一个裸错误串） */
 const loginDialogOpen = ref(false);
+
+/**
+ * 账号入口在设置面板「在线平台账号」区的平台。
+ *
+ * 只有 Qobuz/TIDAL 有独立的流媒体登录弹窗（StreamingLoginDialog 只认这两个），
+ * QM/酷狗/网易云的账号在设置里，所以认证失败时不能统一弹那个对话框——
+ * 对后三者它根本不会渲染，按钮会像坏了一样。
+ */
+const ACCOUNT_SETTINGS_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
+  "qqmusic",
+  "kugou",
+  "netease",
+]);
+
+/** 「去登录」：按平台分流到设置面板或流媒体登录弹窗 */
+const openLogin = (): void => {
+  if (ACCOUNT_SETTINGS_PLATFORMS.has(platform.value)) {
+    useSettingsDialog().show("network");
+    return;
+  }
+  loginDialogOpen.value = true;
+};
 
 /**
  * 判断错误是不是「需要登录」这一类。
@@ -407,6 +434,30 @@ const kgHotArtistSection = (artists: KGHotArtist[]): HomeSection =>
     })),
   });
 
+/**
+ * 网易新碟上架 → HomeSection。
+ *
+ * 地区标签与「更多」都挂在 `ncm-new-albums` 上：地区是接口自己的 area 枚举，
+ * 换地区等于换一份列表，所以和 QM/KG 的书架走同一套 withShelf 机制。
+ */
+const ncmNewAlbumSection = (albums: CoverItem[]): HomeSection =>
+  withShelf({
+    key: "ncm-new-albums",
+    // 用网易自己的叫法「新碟上架」，与 QM 的「新碟首发」区分开
+    title: t("platformHome.ncmNewAlbums"),
+    variant: "cards",
+    items: albums.slice(0, SHELF_LIMIT).map((album) => coverToNeteaseItem(album, "album")),
+  });
+
+/** 网易热门歌手 → HomeSection（点击进歌手详情，网易侧已支持歌手页） */
+const ncmHotArtistSection = (artists: CoverItem[]): HomeSection =>
+  withShelf({
+    key: "ncm-hot-artists",
+    title: t("platformHome.hotArtists"),
+    variant: "cards",
+    items: artists.slice(0, SHELF_LIMIT).map((artist) => coverToNeteaseItem(artist, "artist")),
+  });
+
 const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
   if (p === "qobuz") {
     const items = asArray(asRecord(asRecord(data).genres).items);
@@ -505,7 +556,7 @@ const load = async (): Promise<void> => {
         ...normalizeQQMusic(visible),
       ];
       genres.value = groupsToGenres(groups);
-    } else {
+    } else if (platform.value === "kugou") {
       const [groups, hotPlaylists, newSongs, hotArtists] = await Promise.all([
         fetchKugouRankList(),
         fetchKugouHotPlaylists(1, 30).catch(() => [] as KGHotPlaylist[]),
@@ -524,6 +575,18 @@ const load = async (): Promise<void> => {
         ...normalizeKugou(visible),
       ];
       genres.value = groupsToGenres(groups);
+    } else {
+      // 网易云：两个书架都是「一份地区一份列表」，任一拉不到都不该影响另一个
+      const [newAlbums, hotArtists] = await Promise.all([
+        fetchNeteaseNewAlbums(30, shelfTab("ncm-new-albums")).catch(() => [] as CoverItem[]),
+        fetchNeteaseHotArtists(30, Number(shelfTab("ncm-hot-artists"))).catch(
+          () => [] as CoverItem[],
+        ),
+      ]);
+      sections.value = [
+        ...(newAlbums.length ? [ncmNewAlbumSection(newAlbums)] : []),
+        ...(hotArtists.length ? [ncmHotArtistSection(hotArtists)] : []),
+      ];
     }
     if (!sections.value.length) error.value = t("platformHome.empty");
   } catch (err) {
@@ -651,7 +714,7 @@ onMounted(async () => {
         <div v-else-if="error" class="py-16 text-center text-sm text-on-surface-variant">
           <template v-if="errorNeedsLogin">
             <p>{{ t("platformHome.authRequired", { platform: PLATFORM_LABELS[platform] }) }}</p>
-            <SButton class="mt-3" variant="filled" size="small" @click="loginDialogOpen = true">
+            <SButton class="mt-3" variant="filled" size="small" @click="openLogin">
               {{ t("platformHome.signIn") }}
             </SButton>
             <p class="mt-3 text-xs text-on-surface-variant/60">{{ error }}</p>

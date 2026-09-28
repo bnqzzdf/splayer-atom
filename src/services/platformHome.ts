@@ -21,21 +21,25 @@ import {
   navigateToRank,
 } from "@/utils/navigate";
 
-export type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou";
+export type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou" | "netease";
 
 /**
  * 平台标签顺序（也是「已登录平台」的展示顺序）。
  *
  * 与 `@shared/types/platform` 的同名常量**不是**同一份：那份管搜索页与标签编辑器、
  * 含网易云；这份只管「流媒体接入」页的标签，按使用频率排。
+ *
+ * 网易云排在最后：它是后加的一页，追加在末尾既不动用户已经习惯的标签顺序，
+ * 也不会改掉默认页（默认取 `ALL_PLATFORMS[0]`，仍是 QQ音乐）。
  */
-export const ALL_PLATFORMS: Platform[] = ["qqmusic", "qobuz", "tidal", "kugou"];
+export const ALL_PLATFORMS: Platform[] = ["qqmusic", "qobuz", "tidal", "kugou", "netease"];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   qobuz: "Qobuz",
   tidal: "TIDAL",
   qqmusic: "QQ音乐",
   kugou: "酷狗音乐",
+  netease: "网易云音乐",
 };
 
 /** 归一化后的首页条目 */
@@ -114,6 +118,9 @@ export interface SectionTab {
  * - `kg-new-songs`：移动站 newsong 频道的 `type`（1 华语 / 2 欧美 / 4 韩国 / 5 日本；
  *   传 3 或 6 会被上游回落到华语）
  * - `kg-hot-artists`：歌手目录接口自带的 `enu_list.types`
+ * - `ncm-new-albums`：`album/new` 的 `area`（ALL/ZH/EA/KR/JP），实测换值就换列表
+ * - `ncm-hot-artists`：`/api/v1/artist/list` 的 `area`（-1/7/96/16/8）。注意 v1 前缀
+ *   不能少：不带 v1 的同名路径会静默忽略 area，五个取值返回同一份列表
  */
 export const SHELF_TABS: Record<string, SectionTab[]> = {
   "qm-new-songs": [
@@ -142,6 +149,26 @@ export const SHELF_TABS: Record<string, SectionTab[]> = {
     { value: "2", labelKey: "platformHome.region.western" },
     { value: "6", labelKey: "platformHome.region.korea" },
     { value: "5", labelKey: "platformHome.region.japan" },
+  ],
+  // 网易「新碟上架」的地区就是官方那排标签，取值是它自己的枚举而非数字：
+  // 实测 `album/new` 的 `area` 换一个值就换一份专辑（欧美首条 Ricky Martin、
+  // 韩国 경서、日本 パール兄弟），且 offset 真能翻页。
+  "ncm-new-albums": [
+    { value: "ALL", labelKey: "platformHome.region.all" },
+    { value: "ZH", labelKey: "platformHome.region.chinese" },
+    { value: "EA", labelKey: "platformHome.region.western" },
+    { value: "KR", labelKey: "platformHome.region.korea" },
+    { value: "JP", labelKey: "platformHome.region.japan" },
+  ],
+  // 网易歌手分类的 `area` 是数字枚举：-1 全部 / 7 华语 / 96 欧美 / 8 日本 / 16 韩国。
+  // 8 与 16 与直觉相反（实测 16 出 BIGBANG/EXO，8 出 初音ミク/米津玄師），别按顺序想当然。
+  // 注意只有 `/api/v1/artist/list` 认这个参数，见该模块注释。
+  "ncm-hot-artists": [
+    { value: "-1", labelKey: "platformHome.region.all" },
+    { value: "7", labelKey: "platformHome.region.chinese" },
+    { value: "96", labelKey: "platformHome.region.western" },
+    { value: "16", labelKey: "platformHome.region.korea" },
+    { value: "8", labelKey: "platformHome.region.japan" },
   ],
 };
 
@@ -404,6 +431,23 @@ export const kgHotArtistToItem = (artist: {
   title: artist.name,
   image: artist.cover || undefined,
   kind: "artist",
+});
+
+/**
+ * 网易条目 → HomeItem。
+ *
+ * 网易侧已经有一层自己的归一化（`utils/format/netease` 的 toAlbum/toArtist +
+ * `utils/format/coverItem` 的 albumToCoverItem/artistToCoverItem），专辑与歌手
+ * 都产出 CoverItem；这里只补上「点进去是详情页还是歌手页」，不再解析原始结构。
+ *
+ * @param kind - album 进专辑详情，artist 进歌手详情
+ */
+export const coverToNeteaseItem = (cover: CoverItem, kind: "album" | "artist"): HomeItem => ({
+  id: cover.id,
+  title: cover.title,
+  subtitle: cover.subtitle || undefined,
+  image: cover.cover,
+  kind,
 });
 
 // ---------- 渲染与跳转 ----------

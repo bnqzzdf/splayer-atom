@@ -19,9 +19,11 @@ import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
 import { fetchQQMusicNewAlbums, fetchQQMusicNewSongs } from "@/apis/playlist/qqmusic";
 import { fetchKugouHotArtists, fetchKugouNewSongs } from "@/apis/playlist/kugou";
+import { fetchNeteaseHotArtists, fetchNeteaseNewAlbums } from "@/apis/playlist/netease";
 import {
   asArray,
   asRecord,
+  coverToNeteaseItem,
   homeItemToCoverItem,
   kgHotArtistToItem,
   openPlatformHomeItem,
@@ -94,6 +96,28 @@ const fetchPage = async (): Promise<{ list: HomeItem[]; more: boolean }> => {
     if (shelf === "kg-hot-artists") {
       const artists = await fetchKugouHotArtists(SHELF_PAGE_SIZE, tab);
       return { list: artists.map(kgHotArtistToItem), more: false };
+    }
+    throw new Error(t("platformSection.unsupported"));
+  }
+
+  if (platform.value === "netease") {
+    const shelf = sectionKey.value;
+    const tab = shelfTab.value ?? shelfDefaultTab(shelf) ?? "";
+    // 网易这两个接口自带 offset，能真翻页，所以按 PAGE_SIZE 逐页取；
+    // QM/KG 那边接口一次给全量、没有游标，才只能 `more: false` 一把取完。
+    if (shelf === "ncm-new-albums") {
+      const albums = await fetchNeteaseNewAlbums(PAGE_SIZE, tab, offset);
+      return {
+        list: albums.map((album) => coverToNeteaseItem(album, "album")),
+        more: albums.length >= PAGE_SIZE,
+      };
+    }
+    if (shelf === "ncm-hot-artists") {
+      const artists = await fetchNeteaseHotArtists(PAGE_SIZE, Number(tab), offset);
+      return {
+        list: artists.map((artist) => coverToNeteaseItem(artist, "artist")),
+        more: artists.length >= PAGE_SIZE,
+      };
     }
     throw new Error(t("platformSection.unsupported"));
   }

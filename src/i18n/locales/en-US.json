@@ -1904,11 +1904,13 @@
     "hotPlaylists": "Popular Playlists",
     "newSongs": "New Releases",
     "newAlbums": "New Albums",
+    "ncmNewAlbums": "New Albums",
     "hotArtists": "Popular Artists",
     "fansCount": "{count} fans",
     "ranks": "Ranks",
     "allRanks": "All",
     "region": {
+      "all": "All",
       "latest": "Latest",
       "mainland": "Mainland",
       "hktw": "HK/TW",
