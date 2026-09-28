@@ -23,6 +23,12 @@ const router = createRouter({
           component: () => import("@/pages/PlatformHome.vue"),
         },
         {
+          // 分区「查看全部」：定位信息全在 section 段与 query 里（见 PlatformSection.vue）
+          path: "platforms/:platform/section/:section",
+          name: "platform-section",
+          component: () => import("@/pages/PlatformSection.vue"),
+        },
+        {
           path: "songs",
           name: "songs",
           component: () => import("@/pages/Songs.vue"),
