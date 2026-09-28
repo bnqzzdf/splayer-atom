@@ -90,10 +90,10 @@ export interface SectionMore {
    */
   moduleType?: string;
   /**
-   * 本地书架标识（QM/KG 用）。
+   * 本地书架标识（QM/KG/网易用）。
    *
-   * QM/KG 的这几个书架由前端直接调平台接口拼装，没有像 Qobuz/TIDAL 那样可由
-   * 端点参数表达的分页，所以分区页按这个标识自己去取数（见 SHELF_TABS 与
+   * 这几个书架由前端直接调平台接口拼装，没有像 Qobuz/TIDAL 那样可由端点参数
+   * 表达的分页，所以分区页按这个标识自己去取数（见 SHELF_TABS 与
    * PlatformSection.vue 的 shelf 分支）。
    */
   shelf?: string;
@@ -163,6 +163,9 @@ export const SHELF_TABS: Record<string, SectionTab[]> = {
   // 网易歌手分类的 `area` 是数字枚举：-1 全部 / 7 华语 / 96 欧美 / 8 日本 / 16 韩国。
   // 8 与 16 与直觉相反（实测 16 出 BIGBANG/EXO，8 出 初音ミク/米津玄師），别按顺序想当然。
   // 注意只有 `/api/v1/artist/list` 认这个参数，见该模块注释。
+  //
+  // 「全部」与「华语」的第一页确实一样（实测两页都出 林俊杰/陈奕迅/孙燕姿），
+  // 但 offset 30 起就分岔了——整体热门榜前排本来就是华语歌手，不是参数没生效。
   "ncm-hot-artists": [
     { value: "-1", labelKey: "platformHome.region.all" },
     { value: "7", labelKey: "platformHome.region.chinese" },
