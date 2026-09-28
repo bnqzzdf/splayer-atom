@@ -20,4 +20,4 @@ Both run the same Node Core and Web Control. Debian 11 bundled builds also retai
 `-debian11-without-diretta` or `-debian11-with-diretta-<variant>` suffixes; Diretta is selected
 at build time. See [Build and Packaging](/en/build-and-packaging) for the commands.
 
-Follow [Core Deployment](/core-deployment) for extraction, data directories, systemd, upgrades, and rollback.
+Follow [Core Deployment](/en/core-deployment) for extraction, data directories, systemd, upgrades, and rollback.

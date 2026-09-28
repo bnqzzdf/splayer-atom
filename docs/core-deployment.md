@@ -1,59 +1,51 @@
-# SPlayer Atom Core Deployment and Upgrade
+# SPlayer Atom Core 部署与升级
 
-This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
+本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
 
-## Runtime contract
+## 运行期约定
 
-- Core requires Node `>=22.19.0`.
-- Release/reference validation uses Node `24.18.0`.
-- The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
-- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
-- The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
+- Core 要求 Node `>=22.19.0`。
+- 发布 / 参考版本校验使用 Node `24.18.0`。
+- system-runtime 与 bundled-runtime 变体执行同一套 Core JS / 原生 / 协议约定。
+- bundled-runtime 在 `runtime/bin/node` 内携带发布参考版本 Node `24.18.0`；system-runtime 要求宿主机提供 Node `>=22.19.0`。
+- 当前生产产物仅支持 Linux x86-64。硬件支持范围仍取决于发布验收矩阵。
 
-## glibc and distro compatibility (Debian 11)
+## glibc 与发行版兼容（Debian 11）
 
-This artifact is built inside a **Debian 11 (bullseye) container with glibc 2.31**, and the
-build gates on it: if any native component requires a symbol newer than `GLIBC_2.31`, the
-build aborts instead of shipping an incompatible artifact.
+本产物在 **glibc 2.31 的 Debian 11（bullseye）容器**内构建，构建门禁也依赖这一点：
+任一原生组件若需要高于 `GLIBC_2.31` 的符号，构建会直接中止，而不是发出一个不兼容的产物。
 
-Measured requirements of the shipped native components:
+已发布原生组件的实测需求：
 
-| Component | Highest required glibc symbol |
-| --- | --- |
-| `native/audio-engine.node` | `GLIBC_2.30` |
-| `native/streaming-api.node` | `GLIBC_2.30` |
-| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | `GLIBC_2.29` |
+| 组件                                                   | 最高 glibc 符号需求 |
+| ------------------------------------------------------ | ------------------- |
+| `native/audio-engine.node`                             | `GLIBC_2.30`        |
+| `native/streaming-api.node`                            | `GLIBC_2.30`        |
+| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | `GLIBC_2.29`        |
 
-**The artifact therefore runs on any glibc >= 2.30 x86-64 Linux — Debian 11 and newer.**
+**因此该产物可在任意 glibc >= 2.30 的 x86-64 Linux 上运行——即 Debian 11 及更新版本。**
 
-### Diretta SDK and the glibc floor
+### Diretta SDK 与 glibc 下限
 
-Diretta SDK 150 ships prebuilt `ACQUA` libraries compiled against glibc >= 2.38: they
-reference the C23 integer parsers `__isoc23_strtol` / `__isoc23_strtoll`, which libc only
-provides from glibc 2.38 onward. Linking them on Debian 11 previously produced an
-`audio-engine.node` that failed to load with `undefined symbol: __isoc23_strtol`.
+Diretta SDK 150 附带的预编译 `ACQUA` 库是在 glibc >= 2.38 上编译的：它们引用 C23 的整数解析函数
+`__isoc23_strtol` / `__isoc23_strtoll`，而 libc 从 glibc 2.38 起才提供这两个符号。在 Debian 11 上
+链接它们，此前会得到一个加载失败并报 `undefined symbol: __isoc23_strtol` 的 `audio-engine.node`。
 
-`native/diretta-sys/src/glibc_compat.c` supplies **weak** fallbacks that forward to the
-standard `strtol` / `strtoll` when glibc < 2.38, which lets Diretta support and Debian 11
-compatibility coexist. The reasoning:
+`native/diretta-sys/src/glibc_compat.c` 提供了**弱符号**兜底：当 glibc < 2.38 时转调到标准
+`strtol` / `strtoll`，从而让 Diretta 支持与 Debian 11 兼容得以共存。理由如下：
 
-- The only SDK objects referencing those symbols are `IPAddress.o` and `FileInf.o` —
-  configuration and IP-address parsing, not audio processing. They parse dotted-decimal
-  addresses and plain decimals, never C23's `0b` binary prefix, so forwarding is equivalent
-  on those call sites.
-- Because the definitions are weak and the file is compiled out entirely on glibc >= 2.38,
-  there is no conflict with modern libc versions.
+- SDK 中引用这两个符号的只有 `IPAddress.o` 与 `FileInf.o`——配置与 IP 地址解析，不涉及音频处理。
+  它们解析点分十进制地址与普通十进制数值，不会用到 C23 的 `0b` 二进制前缀，因此在这些调用点上转调等价。
+- 由于定义是弱符号、且在 glibc >= 2.38 时整个文件被条件编译排除，因此与新版 libc 不冲突。
 
-If Diretta later publishes ACQUA libraries built against an older glibc, this shim should
-be removed.
+如果 Diretta 日后发布基于更旧 glibc 构建的 ACQUA 库，应删除这层兼容垫片。
 
-## Installation layout
+## 安装布局
 
-The archive contains the installation root directly — there is no wrapper directory, so
-extracting into a target path yields the layout below:
+归档内容就是安装根，**没有外层目录**；解包到目标路径即得到下面的布局：
 
 ```text
-<installation root>/
+<安装根>/
 ├─ app/
 ├─ renderer/
 ├─ native/
@@ -62,111 +54,118 @@ extracting into a target path yields the layout below:
 ├─ service/
 ├─ docs/
 ├─ data/
-├─ runtime/                      # bundled-runtime only: bin/node
+├─ runtime/                      # 仅 bundled-runtime：bin/node
 ├─ runtime.json
 └─ LICENSE
 ```
 
-`data/` is durable state. It contains the SQLite database, settings and provider/session configuration and must not be discarded during an upgrade. Rebuildable caches stay outside the installation root and follow the Core XDG cache path.
+`data/` 是持久状态，包含 SQLite 数据库、设置以及 provider/session 配置，升级过程中不得丢弃。
+可重建的缓存不放在安装根内，遵循 Core 的 XDG 缓存路径。
 
-## First installation
+## 首次安装
 
-Extract the release into its final location, for example `/opt/splayer-atom-core`, then verify the launcher before installing a service:
+把发布产物解包到最终位置（例如 `/opt/splayer-atom-core`），然后在安装服务之前先验证启动器：
 
 ```bash
 cd /opt/splayer-atom-core
 ./bin/splayer-atom-core
 ```
 
-The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same installation layout (no wrapper directory).
+启动器优先使用显式给出的 `ATOM_NODE_BIN`；其次在存在 bundled 运行时时使用 `runtime/bin/node`；
+否则使用系统 `node` 可执行文件。技术构建命令为：system-runtime 用 `build-core-system.ts`，
+bundled-runtime 用 `build-core-system.ts --bundle-node`；两种归档都解包为同一套安装布局（无外层目录）。
 
-### systemd for ordinary ALSA Core
+### 普通 ALSA Core 的 systemd
 
-Create a dedicated service account according to the host's normal administration policy, then run the included helper as root:
+按主机既有的账户管理策略创建一个专用服务账户，然后以 root 运行包内脚本：
 
 ```bash
 sudo ./service/install-systemd.sh --user splayer-atom
 sudo systemctl enable --now splayer-atom-core
 ```
 
-The helper installs a unit pointing to the actual extracted directory. It does not start or enable the service automatically.
+该脚本安装的 unit 指向实际解包目录。它不会自动启动或启用服务。
 
-The service account must have read/write access to the installation `data/` directory and the configured XDG cache directory, plus the host audio-device permissions required for ALSA.
+服务账户必须对安装目录下的 `data/` 与所配置的 XDG 缓存目录具备读写权限，并具备 ALSA 所需的音频设备权限。
 
-### systemd for Diretta Core
+### Diretta Core 的 systemd
 
-Linux Diretta Host connection/playback validation requires the Host process to run as root. For a Core instance that will expose Diretta Source Direct, install the root-mode unit explicitly:
+Linux 上 Diretta Host 的连接与播放验证要求 Host 进程以 root 运行。对于要对外提供
+Diretta Source Direct 的 Core 实例，需显式安装 root 模式的 unit：
 
 ```bash
 sudo ./service/install-systemd.sh --diretta
 sudo systemctl enable --now splayer-atom-core
 ```
 
-Do not infer a Target fault from a non-root Diretta connection timeout. Diretta hardware acceptance also requires the Target to be exclusively available when connection state is ambiguous.
+不要以非 root 下的 Diretta 连接超时推断 Target 故障。当连接状态不明确时，Diretta 硬件验收还要求
+Target 处于独占可用状态。
 
-## Upgrade procedure
+## 升级步骤
 
-Do not unpack a new release over the active installation. Preserve the complete previous installation so rollback never depends on an old Core reading data already migrated by a newer Core.
+不要把新发布产物直接解包覆盖正在使用的安装。要保留完整的旧安装，使回滚永远不依赖于
+「旧 Core 去读已被新 Core 迁移过的数据」。
 
-Assume the active installation is `/opt/splayer-atom-core`. The archive holds the installation
-root at its top level, so it extracts straight into that path.
+假设当前安装为 `/opt/splayer-atom-core`。归档顶层就是安装根，因此直接解包进该路径即可。
 
-1. Stop Core and confirm the service is inactive.
+1. 停止 Core 并确认服务已停止。
 
 ```bash
 sudo systemctl stop splayer-atom-core
 sudo systemctl is-active splayer-atom-core
 ```
 
-2. Rename the complete current installation to a rollback directory. Keep it intact, including its pre-upgrade `data/`.
+2. 把当前完整安装改名到回滚目录。保持其完整，包括升级前的 `data/`。
 
 ```bash
 sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
 ```
 
-3. Extract the new release into the original installation path.
+3. 把新发布产物解包回原安装路径。
 
 ```bash
 ARCHIVE=/path/to/the-built-system-linux-x64.tar.gz
 sudo mkdir -p /opt/splayer-atom-core
 sudo tar -xzf "$ARCHIVE" -C /opt/splayer-atom-core
-# bundled-runtime uses the corresponding bundled archive and the same target layout
+# bundled-runtime 用对应的 bundled 归档，目标布局相同
 ```
 
-选择由目标 Git 提交构建的 artifact。部署前核对其中 `runtime.json` 的 `atomCommit`；文件名中的
+选择由目标 Git 提交构建的产物。部署前核对其中 `runtime.json` 的 `atomCommit`；文件名中的
 产品版本和构建日期不能精确标识源码修订。
 
-4. Replace the new artifact's empty `data/` with a copy of the pre-upgrade durable state. Copy rather than move it so the rollback directory remains independently recoverable.
+4. 用升级前持久状态的副本替换新产物中空的 `data/`。用复制而非移动，以便回滚目录仍可独立恢复。
 
 ```bash
 sudo rm -rf /opt/splayer-atom-core/data
 sudo cp -a /opt/splayer-atom-core.rollback/data /opt/splayer-atom-core/data
 ```
 
-5. Reinstall the systemd unit from the new artifact using the same mode as the previous installation, then start Core.
+5. 按与旧安装相同的模式，从新产物重装 systemd unit，然后启动 Core。
 
 ```bash
 sudo ./service/install-systemd.sh --user splayer-atom
-# or: sudo ./service/install-systemd.sh --diretta
+# 或: sudo ./service/install-systemd.sh --diretta
 sudo systemctl start splayer-atom-core
 ```
 
-6. Verify `/api/info`, `/api/session`, the Web Control root and the expected library state before removing any rollback copy.
+6. 在删除任何回滚副本之前，核对 `/api/info`、`/api/session`、Web Control 根页以及预期的媒体库状态。
 
-When the copied durable state uses an older known schema, Core performs migration before normal store/database initialization. A migration backup is created under `data/backups/migration-*` only when an existing database or config actually needs migration. SQLite backups use `VACUUM INTO`, and the durable config directory is copied into the same snapshot.
+当复制过来的持久状态使用较旧的已知 schema 时，Core 会在常规 store / 数据库初始化之前执行迁移。
+只有当既有数据库或配置确实需要迁移时，才会在 `data/backups/migration-*` 下生成迁移备份。
+SQLite 备份使用 `VACUUM INTO`，持久配置目录会被复制进同一快照。
 
-Core refuses a database or settings schema newer than the current build supports. Do not work around that refusal by deleting the database or settings file.
+Core 会拒绝比当前构建所能支持的更新的数据库或设置 schema。不要通过删除数据库或设置文件来绕过该拒绝。
 
-## Rollback procedure
+## 回滚步骤
 
-If the new Core fails acceptance, do not run the previous binary against the new installation's possibly migrated `data/`.
+如果新 Core 未通过验收，不要让旧二进制去读新安装里可能已被迁移的 `data/`。
 
-1. Stop the failed Core.
-2. Preserve the failed installation for diagnosis instead of deleting it.
-3. Restore the complete pre-upgrade directory to the original path.
-4. Reinstall its systemd unit if the service definition changed, then start it.
+1. 停掉失败的 Core。
+2. 保留失败的安装用于诊断，不要删除。
+3. 把完整的升级前目录恢复回原路径。
+4. 如果服务定义有变化，重装它的 systemd unit，然后启动。
 
-For example:
+例如：
 
 ```bash
 sudo systemctl stop splayer-atom-core
@@ -174,23 +173,25 @@ sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.failed
 sudo mv /opt/splayer-atom-core.rollback /opt/splayer-atom-core
 cd /opt/splayer-atom-core
 sudo ./service/install-systemd.sh --user splayer-atom
-# or: sudo ./service/install-systemd.sh --diretta
+# 或: sudo ./service/install-systemd.sh --diretta
 sudo systemctl start splayer-atom-core
 ```
 
-This directory-level rollback restores both the previous executable release and its pre-upgrade durable state. The newer installation and any migration backup remain available for diagnosis until the operator intentionally removes them.
+这种目录级回滚会同时恢复旧的可执行版本与其升级前的持久状态。较新的安装与任何迁移备份会保留下来
+用于诊断，直到运维人员主动清理。
 
-## Backup and recovery rules
+## 备份与恢复规则
 
-- Keep at least one complete pre-upgrade installation until the new release passes acceptance.
-- Treat `data/` as authoritative durable state; do not replace it with cache contents.
-- Migration snapshots supplement the complete pre-upgrade directory. They do not replace the requirement to retain the previous release for rollback.
-- Never use "delete the database and rescan" as the production recovery procedure for a failed schema migration.
-- Do not restore only `library.db` while keeping newer provider/settings files unless the recovery case has been explicitly verified. Prefer restoring the complete matching durable snapshot or complete previous installation.
+- 在新版本通过验收之前，至少保留一份完整的升级前安装。
+- 把 `data/` 当作权威持久状态；不要用缓存内容替换它。
+- 迁移快照是对完整升级前目录的补充，不能替代「保留旧版本以便回滚」这一要求。
+- 绝不要把「删掉数据库再重新扫描」当作 schema 迁移失败后的生产恢复流程。
+- 除非该恢复场景已被显式验证过，不要只恢复 `library.db` 而保留较新的 provider / 设置文件。
+  应优先恢复完整匹配的持久快照，或完整的旧安装。
 
-## Service diagnostics
+## 服务诊断
 
-Useful checks after install, upgrade or rollback:
+安装、升级或回滚之后可用的检查：
 
 ```bash
 systemctl status splayer-atom-core
@@ -199,6 +200,8 @@ node --version
 cat /opt/splayer-atom-core/runtime.json
 ```
 
-`runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
+`runtime.json` 同时也是发布溯源记录。诊断安装时请核对 `productName`、`atomVersion`、`atomCommit`、
+`sourceDirty`、协议 / schema 版本以及运行期能力。正式干净发布应记录 `sourceDirty: false`；
+从存在未提交改动的工作树本地构建的归档会显式记录 `true`，而不是假装仅凭 Git 提交就能标识确切的源码树。
 
-Core production logs go to stdout/stderr so systemd/journald remains the deployment log owner. The installation directory should not accumulate production log files.
+Core 生产日志输出到 stdout/stderr，因此部署日志归 systemd/journald 所有。安装目录不应用来堆积生产日志文件。

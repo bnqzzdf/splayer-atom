@@ -11,7 +11,7 @@ hero:
       link: /en/guide
     - theme: alt
       text: Core Deployment
-      link: /core-deployment
+      link: /en/core-deployment
     - theme: alt
       text: GitHub
       link: https://github.com/bnqzzdf/splayer-atom
@@ -31,4 +31,4 @@ features:
 
 SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.
 
-Continue with the [User Guide](/en/guide), [Build and Packaging](/en/build-and-packaging), or [Core Deployment](/core-deployment).
+Continue with the [User Guide](/en/guide), [Build and Packaging](/en/build-and-packaging), or [Core Deployment](/en/core-deployment).

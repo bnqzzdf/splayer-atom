@@ -1,0 +1,204 @@
+# SPlayer Atom Core Deployment and Upgrade
+
+This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
+
+## Runtime contract
+
+- Core requires Node `>=22.19.0`.
+- Release/reference validation uses Node `24.18.0`.
+- The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
+- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
+- The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
+
+## glibc and distro compatibility (Debian 11)
+
+This artifact is built inside a **Debian 11 (bullseye) container with glibc 2.31**, and the
+build gates on it: if any native component requires a symbol newer than `GLIBC_2.31`, the
+build aborts instead of shipping an incompatible artifact.
+
+Measured requirements of the shipped native components:
+
+| Component                                              | Highest required glibc symbol |
+| ------------------------------------------------------ | ----------------------------- |
+| `native/audio-engine.node`                             | `GLIBC_2.30`                  |
+| `native/streaming-api.node`                            | `GLIBC_2.30`                  |
+| `node_modules/better-sqlite3/prebuilds/linux-x64.node` | `GLIBC_2.29`                  |
+
+**The artifact therefore runs on any glibc >= 2.30 x86-64 Linux — Debian 11 and newer.**
+
+### Diretta SDK and the glibc floor
+
+Diretta SDK 150 ships prebuilt `ACQUA` libraries compiled against glibc >= 2.38: they
+reference the C23 integer parsers `__isoc23_strtol` / `__isoc23_strtoll`, which libc only
+provides from glibc 2.38 onward. Linking them on Debian 11 previously produced an
+`audio-engine.node` that failed to load with `undefined symbol: __isoc23_strtol`.
+
+`native/diretta-sys/src/glibc_compat.c` supplies **weak** fallbacks that forward to the
+standard `strtol` / `strtoll` when glibc < 2.38, which lets Diretta support and Debian 11
+compatibility coexist. The reasoning:
+
+- The only SDK objects referencing those symbols are `IPAddress.o` and `FileInf.o` —
+  configuration and IP-address parsing, not audio processing. They parse dotted-decimal
+  addresses and plain decimals, never C23's `0b` binary prefix, so forwarding is equivalent
+  on those call sites.
+- Because the definitions are weak and the file is compiled out entirely on glibc >= 2.38,
+  there is no conflict with modern libc versions.
+
+If Diretta later publishes ACQUA libraries built against an older glibc, this shim should
+be removed.
+
+## Installation layout
+
+The archive contains the installation root directly — there is no wrapper directory, so
+extracting into a target path yields the layout below:
+
+```text
+<installation root>/
+├─ app/
+├─ renderer/
+├─ native/
+├─ node_modules/
+├─ bin/
+├─ service/
+├─ docs/
+├─ data/
+├─ runtime/                      # bundled-runtime only: bin/node
+├─ runtime.json
+└─ LICENSE
+```
+
+`data/` is durable state. It contains the SQLite database, settings and provider/session configuration and must not be discarded during an upgrade. Rebuildable caches stay outside the installation root and follow the Core XDG cache path.
+
+## First installation
+
+Extract the release into its final location, for example `/opt/splayer-atom-core`, then verify the launcher before installing a service:
+
+```bash
+cd /opt/splayer-atom-core
+./bin/splayer-atom-core
+```
+
+The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same installation layout (no wrapper directory).
+
+### systemd for ordinary ALSA Core
+
+Create a dedicated service account according to the host's normal administration policy, then run the included helper as root:
+
+```bash
+sudo ./service/install-systemd.sh --user splayer-atom
+sudo systemctl enable --now splayer-atom-core
+```
+
+The helper installs a unit pointing to the actual extracted directory. It does not start or enable the service automatically.
+
+The service account must have read/write access to the installation `data/` directory and the configured XDG cache directory, plus the host audio-device permissions required for ALSA.
+
+### systemd for Diretta Core
+
+Linux Diretta Host connection/playback validation requires the Host process to run as root. For a Core instance that will expose Diretta Source Direct, install the root-mode unit explicitly:
+
+```bash
+sudo ./service/install-systemd.sh --diretta
+sudo systemctl enable --now splayer-atom-core
+```
+
+Do not infer a Target fault from a non-root Diretta connection timeout. Diretta hardware acceptance also requires the Target to be exclusively available when connection state is ambiguous.
+
+## Upgrade procedure
+
+Do not unpack a new release over the active installation. Preserve the complete previous installation so rollback never depends on an old Core reading data already migrated by a newer Core.
+
+Assume the active installation is `/opt/splayer-atom-core`. The archive holds the installation
+root at its top level, so it extracts straight into that path.
+
+1. Stop Core and confirm the service is inactive.
+
+```bash
+sudo systemctl stop splayer-atom-core
+sudo systemctl is-active splayer-atom-core
+```
+
+2. Rename the complete current installation to a rollback directory. Keep it intact, including its pre-upgrade `data/`.
+
+```bash
+sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.rollback
+```
+
+3. Extract the new release into the original installation path.
+
+```bash
+ARCHIVE=/path/to/the-built-system-linux-x64.tar.gz
+sudo mkdir -p /opt/splayer-atom-core
+sudo tar -xzf "$ARCHIVE" -C /opt/splayer-atom-core
+# bundled-runtime uses the corresponding bundled archive and the same target layout
+```
+
+选择由目标 Git 提交构建的 artifact。部署前核对其中 `runtime.json` 的 `atomCommit`；文件名中的
+产品版本和构建日期不能精确标识源码修订。
+
+4. Replace the new artifact's empty `data/` with a copy of the pre-upgrade durable state. Copy rather than move it so the rollback directory remains independently recoverable.
+
+```bash
+sudo rm -rf /opt/splayer-atom-core/data
+sudo cp -a /opt/splayer-atom-core.rollback/data /opt/splayer-atom-core/data
+```
+
+5. Reinstall the systemd unit from the new artifact using the same mode as the previous installation, then start Core.
+
+```bash
+sudo ./service/install-systemd.sh --user splayer-atom
+# or: sudo ./service/install-systemd.sh --diretta
+sudo systemctl start splayer-atom-core
+```
+
+6. Verify `/api/info`, `/api/session`, the Web Control root and the expected library state before removing any rollback copy.
+
+When the copied durable state uses an older known schema, Core performs migration before normal store/database initialization. A migration backup is created under `data/backups/migration-*` only when an existing database or config actually needs migration. SQLite backups use `VACUUM INTO`, and the durable config directory is copied into the same snapshot.
+
+Core refuses a database or settings schema newer than the current build supports. Do not work around that refusal by deleting the database or settings file.
+
+## Rollback procedure
+
+If the new Core fails acceptance, do not run the previous binary against the new installation's possibly migrated `data/`.
+
+1. Stop the failed Core.
+2. Preserve the failed installation for diagnosis instead of deleting it.
+3. Restore the complete pre-upgrade directory to the original path.
+4. Reinstall its systemd unit if the service definition changed, then start it.
+
+For example:
+
+```bash
+sudo systemctl stop splayer-atom-core
+sudo mv /opt/splayer-atom-core /opt/splayer-atom-core.failed
+sudo mv /opt/splayer-atom-core.rollback /opt/splayer-atom-core
+cd /opt/splayer-atom-core
+sudo ./service/install-systemd.sh --user splayer-atom
+# or: sudo ./service/install-systemd.sh --diretta
+sudo systemctl start splayer-atom-core
+```
+
+This directory-level rollback restores both the previous executable release and its pre-upgrade durable state. The newer installation and any migration backup remain available for diagnosis until the operator intentionally removes them.
+
+## Backup and recovery rules
+
+- Keep at least one complete pre-upgrade installation until the new release passes acceptance.
+- Treat `data/` as authoritative durable state; do not replace it with cache contents.
+- Migration snapshots supplement the complete pre-upgrade directory. They do not replace the requirement to retain the previous release for rollback.
+- Never use "delete the database and rescan" as the production recovery procedure for a failed schema migration.
+- Do not restore only `library.db` while keeping newer provider/settings files unless the recovery case has been explicitly verified. Prefer restoring the complete matching durable snapshot or complete previous installation.
+
+## Service diagnostics
+
+Useful checks after install, upgrade or rollback:
+
+```bash
+systemctl status splayer-atom-core
+journalctl -u splayer-atom-core -n 200 --no-pager
+node --version
+cat /opt/splayer-atom-core/runtime.json
+```
+
+`runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
+
+Core production logs go to stdout/stderr so systemd/journald remains the deployment log owner. The installation directory should not accumulate production log files.

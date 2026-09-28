@@ -78,7 +78,7 @@ const enTheme: DefaultTheme.Config = {
   nav: [
     { text: "Home", link: "/en/" },
     { text: "User Guide", link: "/en/guide" },
-    { text: "Deployment", link: "/core-deployment" },
+    { text: "Deployment", link: "/en/core-deployment" },
     {
       text: "Development",
       items: [
@@ -103,6 +103,7 @@ const enTheme: DefaultTheme.Config = {
     {
       text: "Build and Development",
       items: [
+        { text: "Core Deployment", link: "/en/core-deployment" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
         { text: "Contributing", link: "/en/contributing" },
