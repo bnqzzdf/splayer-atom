@@ -38,61 +38,31 @@ import {
   type KGHotPlaylist,
   type KGRankGroup,
 } from "@/apis/playlist/kugou";
-import { resolveQobuzCover } from "@/utils/format/qobuz";
-import { resolveTidalCover } from "@/utils/format/tidal";
 import { formatCompact } from "@/utils/format";
 import {
-  navigateToAlbum,
-  navigateToArtist,
-  navigateToPlaylist,
-  navigateToRank,
-} from "@/utils/navigate";
+  ALL_PLATFORMS,
+  PLATFORM_LABELS,
+  asArray,
+  asRecord,
+  openPlatformHomeItem,
+  qobuzSectionEndpoint,
+  qobuzSectionTitle,
+  str,
+  tidalModulePath,
+  toQobuzItem,
+  toTidalItem,
+  type HomeItem,
+  type HomeSection,
+  type Platform,
+} from "@/services/platformHome";
 import IconLucideRefreshCw from "~icons/lucide/refresh-cw";
 import IconLucideMusic from "~icons/lucide/music";
 import IconLucideDisc3 from "~icons/lucide/disc-3";
+import IconLucideChevronRight from "~icons/lucide/chevron-right";
 
 const { t, locale } = useI18n();
 const providerSessions = useProviderSessionsStore();
-
-type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou";
-
-/** 支持的平台顺序（也是标签顺序） */
-const ALL_PLATFORMS: Platform[] = ["qobuz", "tidal", "qqmusic", "kugou"];
-
-const PLATFORM_LABELS: Record<Platform, string> = {
-  qobuz: "Qobuz",
-  tidal: "TIDAL",
-  qqmusic: "QQ音乐",
-  kugou: "酷狗音乐",
-};
-
-/** 归一化后的首页条目 */
-interface HomeItem {
-  id: string;
-  title: string;
-  subtitle?: string;
-  image?: string;
-  /**
-   * 决定点击后跳哪种详情页。
-   *
-   * `tag` 表示这是导航标签（如 Qobuz 的 playlists_tags：只有 id/name/slug，
-   * 既没有封面也没有可打开的详情页），只做展示、不响应点击——
-   * 早期把它当歌单处理，导致封面空白且点击请求 playlist_get 报 404。
-   *
-   * `rank` 表示平台官方榜单（QQ音乐 topid / 酷狗 rankid），
-   * 点击进入 collection 页的 rank 类型：展示该榜单的歌曲列表。
-   */
-  kind: "album" | "playlist" | "track" | "artist" | "tag" | "rank";
-}
-
-/** 归一化后的分区 */
-interface HomeSection {
-  key: string;
-  title: string;
-  /** cards：封面卡片；tags：纯标签行 */
-  variant: "cards" | "tags";
-  items: HomeItem[];
-}
+const router = useRouter();
 
 /** 分类（流派）导航项 */
 interface GenreItem {
@@ -143,69 +113,30 @@ const currentAuthed = computed(() =>
 
 // ---------- 归一化 ----------
 
-const qobuzSectionTitle = (key: string): string => {
-  const map: Record<string, string> = {
-    album_of_the_week: "本周专辑",
-    new_releases: "新发行",
-    recent_releases: "近期发行",
-    most_streamed: "最常播放",
-    playlists: "推荐歌单",
-    playlists_tags: "歌单标签",
-    ideal_discography: "理想唱片",
-    press_awards: "媒体推荐",
-    qobuzissims: "Qobuzissims",
-    banners: "焦点",
-  };
-  return map[key] ?? key;
-};
-
-const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-
-const str = (value: unknown): string | undefined => {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return undefined;
-};
-
-/** Qobuz 条目 → HomeItem（专辑与歌单字段不同，按有无 track_count 区分） */
-const toQobuzItem = (raw: unknown): HomeItem | null => {
-  const item = asRecord(raw);
-  const id = str(item.id);
-  const title = str(item.title) ?? str(item.name);
-  if (!id || !title) return null;
-  const artists = asArray(item.artists)
-    .map((a) => str(asRecord(a).name))
-    .filter(Boolean)
-    .join(", ");
-  const image = resolveQobuzCover(item, 300);
-  // 判定「导航标签」：既没有封面、也不是可打开的资源（无 track_count / tracks_count），
-  // 只带 id+name+slug。Qobuz 的 playlists_tags 就是这种。
-  const isTag =
-    !image && item.track_count == null && item.tracks_count == null && item.slug != null;
-  return {
-    id,
-    title,
-    subtitle: artists || str(item.description)?.slice(0, 48),
-    // 复用 format/qobuz 的封面解析：它已覆盖专辑 {large,small} 与歌单 {covers:[...]}
-    // 两种结构，并统一走 /api/proxy/image。
-    image,
-    kind: isTag ? "tag" : item.track_count != null ? "album" : "playlist",
-  };
-};
-
 const normalizeQobuz = (data: unknown): HomeSection[] => {
   const containers = asRecord(asRecord(data).containers);
   return Object.entries(containers)
     .map(([key, value]) => {
-      const items = asArray(asRecord(asRecord(value).data).items)
+      const container = asRecord(value);
+      const itemsData = asRecord(container.data);
+      const items = asArray(itemsData.items)
         .map(toQobuzItem)
         .filter((x): x is HomeItem => x !== null);
       // 全部条目都是标签时，整个分区按标签行渲染
       const variant: HomeSection["variant"] =
         items.length > 0 && items.every((item) => item.kind === "tag") ? "tags" : "cards";
-      return { key, title: qobuzSectionTitle(key), variant, items };
+      // 只有平台说还有更多、且该容器有对应的翻页端点时才给「查看全部」：
+      // 端点是原生白名单里的名字，表里查不到就没法翻页，给了入口也只会在下一页报错。
+      const endpoint = qobuzSectionEndpoint(key);
+      const more =
+        itemsData.has_more === true && endpoint
+          ? {
+              platform: "qobuz" as const,
+              section: key,
+              ...(activeGenre.value ? { genre: activeGenre.value } : {}),
+            }
+          : undefined;
+      return { key, title: qobuzSectionTitle(key), variant, items, ...(more ? { more } : {}) };
     })
     .filter((section) => section.items.length > 0);
 };
@@ -249,54 +180,6 @@ const tidalSectionTitle = (rawTitle: string | undefined, type: string): string =
   return rawTitle ?? tidalModuleTitle(type);
 };
 
-/**
- * TIDAL 条目 → HomeItem。
- *
- * 封面字段按类型分布：歌单在 squareImage（其 image 是矩形编辑图，取 640 会 403）、
- * 专辑在 cover、曲目在 album.cover。这里交给 format/tidal 的 resolveTidalCover，
- * 它已实现该优先级并统一走 /api/proxy/image。
- */
-const toTidalItem = (raw: unknown, moduleType: string): HomeItem | null => {
-  const item = asRecord(raw);
-  // 歌单用 uuid（不是 id）：TIDAL 的 PLAYLIST_LIST 项没有 id 字段，
-  // 早期只读 item.id 会把整个歌单分区静默丢弃。
-  const id = str(item.id) ?? str(item.uuid);
-  const title = str(item.title) ?? str(item.name);
-  if (!id || !title) return null;
-  const artists =
-    asArray(item.artists)
-      .map((a) => str(asRecord(a).name))
-      .filter(Boolean)
-      .join(", ") ||
-    asArray(item.creators)
-      .map((c) => str(asRecord(c).name))
-      .filter(Boolean)
-      .join(", ");
-  const albumCover = str(asRecord(item.album).cover);
-  const kind: HomeItem["kind"] =
-    moduleType === "ALBUM_LIST"
-      ? "album"
-      : moduleType === "TRACK_LIST" || moduleType === "VIDEO_LIST"
-        ? "track"
-        : moduleType === "ARTIST_LIST"
-          ? "artist"
-          : "playlist";
-  // 曲目分区点击进专辑详情，其余按自身类型
-  const targetId = kind === "track" ? (str(asRecord(item.album).id) ?? id) : id;
-  const targetKind: HomeItem["kind"] = kind === "track" ? "album" : kind;
-  return {
-    id: targetId,
-    title,
-    subtitle: artists || undefined,
-    image: resolveTidalCover({
-      squareImage: item.squareImage as never,
-      image: item.image as never,
-      cover: (item.cover ?? albumCover) as never,
-    }),
-    kind: targetKind,
-  };
-};
-
 const normalizeTidal = (data: unknown): HomeSection[] => {
   const rows = asArray(asRecord(data).rows);
   const out: HomeSection[] = [];
@@ -313,11 +196,21 @@ const normalizeTidal = (data: unknown): HomeSection[] => {
         .map((entry) => toTidalItem(entry, type))
         .filter((x): x is HomeItem => x !== null);
       if (!items.length) return;
+      // 官方「View all」走模块自带的 dataApiPath 翻页；分页信息缺失就不给入口
+      const path = tidalModulePath(paged);
+      const total =
+        typeof paged.totalNumberOfItems === "number" ? paged.totalNumberOfItems : undefined;
+      const hasMore = Boolean(path) && (total === undefined || total > items.length);
+      const more =
+        hasMore && path
+          ? { platform: "tidal" as const, section: path, path, moduleType: type }
+          : undefined;
       out.push({
         key: `row-${rowIndex}-${moduleIndex}`,
         title: tidalSectionTitle(str(moduleRecord.title) ?? str(rowRecord.title), type),
         variant: "cards",
         items,
+        ...(more ? { more } : {}),
       });
     });
   });
@@ -451,25 +344,27 @@ const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
 
 // ---------- 点击跳转 ----------
 
+const openItem = (item: HomeItem): void => openPlatformHomeItem(item, platform.value);
+
 /**
- * 打开条目对应的详情页。
+ * 打开某个分区的「查看全部」。
  *
- * 详情页本身已支持 qobuz/tidal（services/collection 里有对应 loader），
- * 所以这里只需把 source/id 传过去。
+ * 只把定位信息放进 query，让分区页可以独立刷新/分享：
+ * Qobuz 用容器键 + 流派（端点名由分区页查表得出），TIDAL 用模块的 dataApiPath。
  */
-const openItem = (item: HomeItem): void => {
-  // 标签不是可打开的资源（它的 id 属于标签而非歌单，直接请求会 404）
-  if (item.kind === "tag") return;
-  const source = platform.value;
-  if (item.kind === "album") {
-    navigateToAlbum(item.title, { source, albumId: item.id });
-  } else if (item.kind === "artist") {
-    navigateToArtist(item.title, { source, artistId: item.id });
-  } else if (item.kind === "rank") {
-    navigateToRank(item.id, { source, name: item.title });
-  } else {
-    navigateToPlaylist(item.id, { source, name: item.title });
-  }
+const openSection = (section: HomeSection): void => {
+  const more = section.more;
+  if (!more) return;
+  void router.push({
+    name: "platform-section",
+    params: { platform: more.platform, section: more.section },
+    query: {
+      title: section.title,
+      ...(more.genre ? { genre: more.genre } : {}),
+      ...(more.path ? { path: more.path } : {}),
+      ...(more.moduleType ? { type: more.moduleType } : {}),
+    },
+  });
 };
 
 // ---------- 加载 ----------
@@ -647,7 +542,19 @@ onMounted(async () => {
 
         <!-- 分区列表 -->
         <section v-for="section in sections" :key="section.key" class="flex flex-col gap-2.5">
-          <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
+          <!-- 标题行：官方在每个分区右上角都有「查看全部」，这里只在该分区确实还能翻页时给 -->
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
+            <button
+              v-if="section.more"
+              type="button"
+              class="flex shrink-0 items-center gap-0.5 text-xs text-on-surface-variant transition-colors hover:text-primary"
+              @click="openSection(section)"
+            >
+              {{ t("platformHome.viewAll") }}
+              <IconLucideChevronRight class="size-3.5" />
+            </button>
+          </div>
 
           <!-- 标签行：导航标签没有封面也没有详情页，只做展示 -->
           <div v-if="section.variant === 'tags'" class="flex flex-wrap gap-1.5">
@@ -671,12 +578,19 @@ onMounted(async () => {
               @click="openItem(item)"
             >
               <div
-                class="aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10 transition-transform duration-200 group-hover:scale-[1.03]"
+                class="relative aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10 transition-transform duration-200 group-hover:scale-[1.03]"
               >
                 <SImg v-if="item.image" :src="item.image" :alt="item.title" class="size-full" />
                 <div v-else class="flex size-full items-center justify-center">
                   <IconLucideDisc3 class="size-7 text-on-surface-variant/30" />
                 </div>
+                <!-- 音质角标：与列表页的音质标签同一套配色，压在深色蒙层上保证可读 -->
+                <span
+                  v-if="item.badge"
+                  class="absolute top-1.5 left-1.5 rounded border border-solid border-amber-500/40 bg-black/45 px-1 text-[10px] leading-[16px] font-bold text-amber-500 backdrop-blur-sm"
+                >
+                  {{ item.badge }}
+                </span>
               </div>
               <p
                 class="mt-1.5 truncate text-xs font-medium text-on-surface group-hover:text-primary"

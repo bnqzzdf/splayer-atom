@@ -1905,6 +1905,7 @@
     "newSongs": "新歌首发",
     "authRequired": "{platform} 需要登录后才能读取首页内容",
     "signIn": "去登录",
+    "viewAll": "查看全部",
     "tidalSection": {
       "hits": "热门精选",
       "newTracks": "新歌",
@@ -1912,5 +1913,9 @@
       "spotlightedUploads": "上传精选",
       "fromOurEditors": "编辑精选"
     }
+  },
+  "platformSection": {
+    "back": "返回",
+    "unsupported": "该分区不支持查看全部"
   }
 }

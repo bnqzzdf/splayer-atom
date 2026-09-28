@@ -1905,6 +1905,7 @@
     "newSongs": "New Releases",
     "authRequired": "Sign in to {platform} to load its home",
     "signIn": "Sign in",
+    "viewAll": "View all",
     "tidalSection": {
       "hits": "The Hits",
       "newTracks": "New Tracks",
@@ -1912,5 +1913,9 @@
       "spotlightedUploads": "Spotlighted Uploads",
       "fromOurEditors": "From our editors"
     }
+  },
+  "platformSection": {
+    "back": "Back",
+    "unsupported": "This section does not support viewing all"
   }
 }

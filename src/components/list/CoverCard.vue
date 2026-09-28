@@ -44,6 +44,14 @@ const actualFallback = computed(() => (props.type === "artist" ? artistFallback 
         :alt="item.title"
         class="w-full aspect-square transition-[transform,filter] duration-300 ease-out group-hover:scale-108 group-hover:brightness-80"
       />
+      <!-- 音质角标：官方也把 Hi-Res 压在封面左上角。
+           压在深色蒙层上，任何封面上都读得清；配色沿用列表里的音质标签。 -->
+      <span
+        v-if="item.badge"
+        class="absolute top-2 left-2 z-2 rounded border border-solid border-amber-500/40 bg-black/45 px-1.5 text-[10px] leading-[18px] font-bold text-amber-500 backdrop-blur-sm"
+      >
+        {{ item.badge }}
+      </span>
       <!-- 业务动作入口 -->
       <div v-if="hasActions" class="absolute top-2 right-2 z-2" @click.stop @pointerdown.stop>
         <SDropdownMenu :items="menuItems" align="end" @select="emit('action', $event)">

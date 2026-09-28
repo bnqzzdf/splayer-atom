@@ -204,9 +204,17 @@ export const userGetFavorites = (
 export const pagesHome = (params?: { device_type?: string; locale?: string }) =>
   tidalCall<{ title?: string; rows?: unknown[] }>("pages_home", params);
 
-/** 指定页面：`pages/{pageId}` */
-export const pagesGet = (pageId: string, params?: { locale?: string }) =>
-  tidalCall("pages_get", { page_id: pageId, ...params });
+/**
+ * 指定页面：`pages/{pageId}`。
+ *
+ * 首页模块的「查看全部」把 `pagedList.dataApiPath`（形如 `pages/data/<uuid>`）
+ * 去掉 `pages/` 前缀后作为 `pageId` 传进来，因此这里同时要放行 `limit` / `offset`；
+ * `deviceType` 与 `pages/home` 一样是必填项，原生层已给默认值 DESKTOP。
+ */
+export const pagesGet = (
+  pageId: string,
+  params?: { locale?: string; limit?: number; offset?: number; device_type?: string },
+) => tidalCall("pages_get", { page_id: pageId, ...params });
 
 /** 分类（流派）导航：返回分类数组，每项含 id/name/image */
 export const genres = (params?: { locale?: string }) => tidalCall<unknown[]>("genres", params);
