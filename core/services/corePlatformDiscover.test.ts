@@ -30,6 +30,7 @@ const ncmPlaylistApiSource = read("src/apis/playlist/netease.ts");
 const platformHomePageSource = read("src/pages/PlatformHome.vue");
 const platformSectionPageSource = read("src/pages/PlatformSection.vue");
 const platformHomeServiceSource = read("src/services/platformHome.ts");
+const streamingLoginDialogSource = read("src/components/modals/StreamingLoginDialog.vue");
 const zhLocale = JSON.parse(read("src/i18n/locales/zh-CN.json")) as {
   platformHome: Record<string, unknown>;
 };
@@ -44,7 +45,19 @@ test("流媒体接入的标签顺序按使用频率排，与共享层那份互�
     platformHomeServiceSource,
     /ALL_PLATFORMS: Platform\[\] = \["qqmusic", "qobuz", "tidal", "kugou", "netease"\]/,
   );
-  assert.match(platformHomeServiceSource, /netease: "网易云音乐"/);
+  assert.match(platformHomeServiceSource, /netease: "网易"/);
+  // 标签用短名，且「流媒体接入」页与登录弹窗必须共用同一套叫法：
+  // 同一个平台在应用里出现两个名字（网易 / 网易云音乐）就是 bug
+  for (const label of [
+    'qqmusic: "QQ"',
+    'qobuz: "Qobuz"',
+    'tidal: "TIDAL"',
+    'kugou: "酷狗"',
+    'netease: "网易"',
+  ]) {
+    assert.match(platformHomeServiceSource, new RegExp(label));
+    assert.match(streamingLoginDialogSource, new RegExp(label));
+  }
   assert.match(
     platformHomePageSource,
     /ALL_PLATFORMS\.filter\(\(p\) => providerSessions\.sessions\[p\]\?\.authenticated\)/,

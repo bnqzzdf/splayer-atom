@@ -47,11 +47,16 @@ import STabs from "@/components/ui/STabs.vue";
 import SAlert from "@/components/ui/SAlert.vue";
 import IconLucideChevronDown from "~icons/lucide/chevron-down";
 
-/** 页签文案：这里要选的是"哪个平台"，简写（NCM/QM/KG）读不出来，所以用全名 */
+/**
+ * 页签文案：这里要选的是"哪个平台"，简写（NCM/QM/KG）读不出来，所以用短名。
+ *
+ * 短名与「流媒体接入」页（services/platformHome.ts 的 PLATFORM_LABELS）保持一致：
+ * 同一个平台在应用里只应有一个叫法。
+ */
 const PLATFORM_TAB_LABELS: Record<Platform, string> = {
-  netease: "网易云音乐",
-  qqmusic: "QQ音乐",
-  kugou: "酷狗音乐",
+  netease: "网易",
+  qqmusic: "QQ",
+  kugou: "酷狗",
   qobuz: "Qobuz",
   tidal: "TIDAL",
 };

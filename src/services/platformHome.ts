@@ -30,16 +30,19 @@ export type Platform = "qobuz" | "tidal" | "qqmusic" | "kugou" | "netease";
  * 含网易云；这份只管「流媒体接入」页的标签，按使用频率排。
  *
  * 网易云排在最后：它是后加的一页，追加在末尾既不动用户已经习惯的标签顺序，
- * 也不会改掉默认页（默认取 `ALL_PLATFORMS[0]`，仍是 QQ音乐）。
+ * 也不会改掉默认页（默认取 `ALL_PLATFORMS[0]`，仍是 QQ）。
+ *
+ * 标签用短名（QQ / 酷狗 / 网易）：五个标签要在一行里排开，全名（QQ音乐 / 酷狗音乐 /
+ * 网易云音乐）会把标签行挤到换行，且与 Qobuz / TIDAL 两个拉丁名长短悬殊。
  */
 export const ALL_PLATFORMS: Platform[] = ["qqmusic", "qobuz", "tidal", "kugou", "netease"];
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   qobuz: "Qobuz",
   tidal: "TIDAL",
-  qqmusic: "QQ音乐",
-  kugou: "酷狗音乐",
-  netease: "网易云音乐",
+  qqmusic: "QQ",
+  kugou: "酷狗",
+  netease: "网易",
 };
 
 /** 归一化后的首页条目 */
