@@ -48,3 +48,33 @@ test("TIDAL 设备码登录拿到码后自动拉起浏览器（与 Qobuz 一键�
   assert.doesNotMatch(openFn[0], /window\.open/);
   assert.match(openFn[0], /verificationUriComplete/);
 });
+
+test("TIDAL 默认走无损那条，设备码（AAC）不得被摆成推荐路径", () => {
+  const start = loginDialogSource.indexOf("<!-- TIDAL Tab -->");
+  const end = loginDialogSource.indexOf("</STabs>");
+  assert.ok(start > 0 && end > start, "未找到 TIDAL 页签");
+  const tab = loginDialogSource.slice(start, end);
+  // 跳过「已连接」区块：未登录时才渲染登录通路（v-else）
+  const loggedOut = tab.slice(tab.indexOf("<template v-else>"));
+
+  // 第一个（主）按钮是官方客户端 PKCE：它才有无损
+  const firstButton = loggedOut.slice(
+    loggedOut.indexOf("<SButton"),
+    loggedOut.indexOf("</SButton>"),
+  );
+  assert.match(firstButton, /@click="onTidalAuthorize"/);
+  assert.match(firstButton, /无损/);
+  // 主按钮不能是设备码那条
+  assert.doesNotMatch(firstButton, /onTidalRequestDeviceCode/);
+
+  // 设备码整块收在折叠里，且必须写明代价
+  assert.match(loggedOut, /@click="tidalDeviceOpen = !tidalDeviceOpen"/);
+  const warn = /<SAlert type="warning">([\s\S]*?)<\/SAlert>/.exec(loggedOut);
+  assert.ok(warn, "设备码通路缺少音质警示");
+  assert.match(warn[1], /AAC/);
+  assert.match(warn[1], /flac/);
+
+  // 实测映射要留在文档里，避免以后有人凭印象"优化"成全自动
+  assert.match(loginDialogSource, /设备码 client → HIGH \/ mp4a\.40\.2/);
+  assert.match(tidalConfigSource, /LIMITED INPUT DEVICE CLIENT|Limited Input Device client/);
+});

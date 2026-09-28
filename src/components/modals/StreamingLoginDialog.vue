@@ -17,11 +17,17 @@
  *   - 邮箱+密码不可用（实测 Qobuz 对该 app_id 连 user/login 都返回 401），故不暴露
  *   - 凭据由 Core 验证并持久化，Control 只读取 providerSessions 投影
  *
- * TIDAL：设备码授权（OAuth2 Device Code Flow）
- *   - 第一步：调用 auth_device_authorization 获取 userCode + verificationUriComplete
- *   - 用户在浏览器打开 link.tidal.com 输入 userCode 完成授权
- *   - 第二步：调用 auth_token_poll 轮询，直到 success/expired/denied
- *   - 也支持用户自定义 Client ID / Client Secret（推荐）
+ * TIDAL：两条通路不可兼得，**默认走无损那条**
+ *   - 主路径（官方移动端 client `YUJf8vfXOxVvzo2W`，PKCE）：拿到 flac 无损。
+ *     代价是回调 com.player.tidal/auth 是浏览器打不开的自定义域，授权码到不了本机，
+ *     必须人工复制地址栏 URL 回填——这是本机拿无损的唯一办法。
+ *   - 备选（设备码 / 公共 Limited Input Device client `fX2JxdmntZWK0ixT`，默认收起）：
+ *     全自动，无需复制，但 TIDAL 只给它 AAC。实测同一账号、同一首歌：
+ *       官方 client → LOSSLESS / flac / 16bit / 44.1kHz
+ *       设备码 client → HIGH / mp4a.40.2（另一首 LOW / mp4a.40.5）
+ *     且设备码接口对官方 client 直接 400（Client is not a Limited Input Device client），
+ *     所以"全自动 + 无损"在 TIDAL 侧拿不到，只能把取舍摆给用户看。
+ *   - 两条路都支持自定义 Client ID / Client Secret
  */
 
 import * as qobuzApi from "@/apis/qobuz";
@@ -102,6 +108,8 @@ const qobuzAdvancedOpen = ref(false);
 const tidalClientId = ref("");
 const tidalClientSecret = ref("");
 const tidalAdvancedOpen = ref(false);
+/** 设备码登录默认收起：它只有 AAC，主路径是官方客户端（无损） */
+const tidalDeviceOpen = ref(false);
 const tidalDeviceInfo = ref<TidalDeviceAuthorizationResponse | null>(null);
 const tidalPollStatus = ref<"idle" | "polling" | "success" | "expired" | "denied" | "error">(
   "idle",
@@ -153,6 +161,7 @@ watch(
     // 保留最近一次的 deviceInfo 但重置轮询状态
     tidalPollStatus.value = "idle";
     tidalPollMessage.value = "";
+    tidalDeviceOpen.value = false;
   },
   { immediate: true },
 );
@@ -623,9 +632,19 @@ const onAccountLoginSuccess = (): void => {
             </SButton>
           </div>
 
-          <!-- 设备码授权流程 -->
+          <!--
+            TIDAL 有两条登录通路，取舍是硬的（实测，不是推测）：
+            · 官方移动端 client（YUJf8vfXOxVvzo2W）→ flac 16/44.1 无损；
+              但它的回调是 com.player.tidal/auth —— 浏览器打不开的自定义域，
+              授权码到不了本机，只能人工把地址栏 URL 复制回来。
+            · 设备码 / 公共 Limited Input Device client（fX2JxdmntZWK0ixT）→ 全自动；
+              但 TIDAL 只给它 AAC：同一账号、同一首歌，官方 client 出 flac，
+              它出 mp4a.40.2。设备码授权接口对官方 client 直接拒绝
+              （400 Client is not a Limited Input Device client），没得绕。
+            所以主路径是"复制一次换无损"，全自动那条降级为备选并写明代价。
+          -->
           <template v-else>
-            <!-- 官方客户端授权码登录（无损，推荐） -->
+            <!-- 主路径：官方移动端 client（无损） -->
             <div class="flex flex-col gap-2">
               <SButton
                 type="primary"
@@ -633,7 +652,7 @@ const onAccountLoginSuccess = (): void => {
                 :loading="tidalPkceStatus === 'waiting'"
                 @click="onTidalAuthorize"
               >
-                使用 TIDAL 网页授权（推荐）
+                用官方客户端授权（无损，推荐）
               </SButton>
               <SAlert v-if="tidalPkceStatus !== 'idle'" :type="tidalPkceType">
                 {{ tidalPkceMessage }}
@@ -662,6 +681,10 @@ const onAccountLoginSuccess = (): void => {
                   <p>1. 点击上方按钮，在打开的 TIDAL 页面登录并授权</p>
                   <p>2. 浏览器会跳到 com.player.tidal/auth 报错页（正常现象）</p>
                   <p>3. 复制地址栏完整 URL，粘贴到上方输入框，点「完成登录」</p>
+                  <p class="mt-1 opacity-70">
+                    为什么不能全自动：官方客户端的回调就是这个打不开的自定义域，浏览器没法把授权码送回本机；
+                    能全自动的设备码登录又被 TIDAL 限成 AAC 有损。要无损，只能这样手动接一次。
+                  </p>
                 </div>
               </template>
             </div>
@@ -703,76 +726,102 @@ const onAccountLoginSuccess = (): void => {
                 </div>
               </div>
             </div>
+            <div class="my-2 border-t border-surface-variant/10"></div>
 
-            <!-- 初始状态：点击获取设备码 -->
-            <div v-if="!tidalDeviceInfo" class="flex flex-col gap-2">
+            <!-- 备选：设备码登录（全自动，但只有 AAC） -->
+            <div class="flex flex-col gap-1">
               <SButton
-                :loading="tidalRequestLoading"
-                type="primary"
-                @click="onTidalRequestDeviceCode"
+                variant="ghost"
+                size="tiny"
+                class="self-start text-on-surface-variant"
+                @click="tidalDeviceOpen = !tidalDeviceOpen"
               >
-                获取设备码
+                <template #icon>
+                  <IconLucideChevronDown
+                    class="size-3.5 transition-transform duration-200"
+                    :class="tidalDeviceOpen ? 'rotate-180' : ''"
+                  />
+                </template>
+                改用设备码登录（自动，无需复制）
               </SButton>
-              <div
-                class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
-              >
-                <p class="mb-1 font-medium text-on-surface">设备码授权说明</p>
-                <p>1. 点击下方按钮生成一次性设备码</p>
-                <p>2. 在打开的 TIDAL 页面输入设备码完成授权</p>
-                <p>3. 授权后本应用自动获取登录态并保持登录</p>
-              </div>
-            </div>
+              <div v-if="tidalDeviceOpen" class="mt-1 flex flex-col gap-2">
+                <SAlert type="warning">
+                  这条路 TIDAL 只给 AAC 有损：实测同一账号、同一首歌，官方客户端得到 flac 16/44.1，
+                  设备码客户端只有 mp4a.40.2。只在对音质没要求、或官方授权走不通时用。
+                </SAlert>
 
-            <!-- 轮询中：显示 userCode + 链接 -->
-            <div v-else class="flex flex-col gap-3">
-              <div class="flex flex-col gap-1.5 rounded-lg bg-surface-variant/10 px-3 py-3">
-                <span class="text-xs text-on-surface-variant">设备码（userCode）</span>
-                <div class="flex items-center gap-2">
-                  <code
-                    class="flex-1 text-base font-mono font-semibold text-on-surface select-all break-all"
+                <!-- 初始状态：点击获取设备码 -->
+                <template v-if="!tidalDeviceInfo">
+                  <SButton
+                    :loading="tidalRequestLoading"
+                    type="primary"
+                    @click="onTidalRequestDeviceCode"
                   >
-                    {{ tidalDeviceInfo.userCode }}
-                  </code>
-                  <SButton variant="secondary" size="small" @click="copyTidalUserCode">
-                    复制
+                    开始设备码登录
                   </SButton>
-                </div>
+                  <div
+                    class="rounded-lg bg-surface-variant/5 px-3 py-2 text-xs leading-relaxed text-on-surface-variant"
+                  >
+                    <p>1. 点上方按钮，浏览器会自动打开 TIDAL 授权页（设备码已填好）</p>
+                    <p>2. 在页面上登录并点「授权」</p>
+                    <p>3. 本窗口自动检测到授权并完成登录，无需回到这里粘贴任何东西</p>
+                  </div>
+                </template>
+
+                <!-- 轮询中：显示 userCode + 链接 -->
+                <template v-else>
+                  <div class="flex flex-col gap-1.5 rounded-lg bg-surface-variant/10 px-3 py-3">
+                    <span class="text-xs text-on-surface-variant">
+                      设备码（浏览器没自动打开时可手动输入）
+                    </span>
+                    <div class="flex items-center gap-2">
+                      <code
+                        class="flex-1 text-base font-mono font-semibold text-on-surface select-all break-all"
+                      >
+                        {{ tidalDeviceInfo.userCode }}
+                      </code>
+                      <SButton variant="secondary" size="small" @click="copyTidalUserCode">
+                        复制
+                      </SButton>
+                    </div>
+                  </div>
+
+                  <SButton
+                    type="primary"
+                    :disabled="tidalPollStatus === 'success'"
+                    @click="openTidalAuthUrl"
+                  >
+                    在浏览器中打开 TIDAL 授权
+                  </SButton>
+
+                  <!-- 状态消息（语义化 SAlert，替代原先的硬编码绿/红配色） -->
+                  <SAlert :type="tidalAlertType">
+                    {{ tidalPollMessage }}
+                  </SAlert>
+
+                  <!-- 失败时重新获取 -->
+                  <SButton
+                    v-if="
+                      tidalPollStatus === 'expired' ||
+                      tidalPollStatus === 'denied' ||
+                      tidalPollStatus === 'error'
+                    "
+                    variant="secondary"
+                    size="small"
+                    @click="onTidalRequestDeviceCode"
+                  >
+                    重新获取设备码
+                  </SButton>
+                  <SButton
+                    v-else-if="tidalPollStatus === 'polling'"
+                    variant="secondary"
+                    size="small"
+                    @click="cleanTidalState"
+                  >
+                    取消
+                  </SButton>
+                </template>
               </div>
-
-              <SButton
-                type="primary"
-                :disabled="tidalPollStatus === 'success'"
-                @click="openTidalAuthUrl"
-              >
-                在浏览器中打开 TIDAL 授权
-              </SButton>
-
-              <!-- 状态消息（语义化 SAlert，替代原先的硬编码绿/红配色） -->
-              <SAlert :type="tidalAlertType">
-                {{ tidalPollMessage }}
-              </SAlert>
-
-              <!-- 失败时重新获取 -->
-              <SButton
-                v-if="
-                  tidalPollStatus === 'expired' ||
-                  tidalPollStatus === 'denied' ||
-                  tidalPollStatus === 'error'
-                "
-                variant="secondary"
-                size="small"
-                @click="onTidalRequestDeviceCode"
-              >
-                重新获取设备码
-              </SButton>
-              <SButton
-                v-else-if="tidalPollStatus === 'polling'"
-                variant="secondary"
-                size="small"
-                @click="cleanTidalState"
-              >
-                取消
-              </SButton>
             </div>
           </template>
         </div>
