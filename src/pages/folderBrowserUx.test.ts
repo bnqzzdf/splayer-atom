@@ -68,6 +68,31 @@ test("Folder display sorting stays route-aware and keeps navigation state isolat
   assert.ok(folderClientSource.includes('if (order) params.set("order", order)'));
 });
 
+test("Folder rows expose physical file identity without inventing unscanned metadata", () => {
+  assert.ok(foldersSource.includes('{{ item.entry.name }}'));
+  assert.ok(foldersSource.includes('t("folder.unscanned")'));
+  assert.ok(foldersSource.includes("trackTechnicalSummary"));
+  assert.ok(foldersSource.includes("virtualTrackTechnicalSummary"));
+  assert.ok(foldersSource.includes('t("folder.containerFile"'));
+  assert.equal(foldersSource.includes("formatTime(item.entry.track.duration || 0)"), false);
+});
+
+test("Folder operation scope and loaded-only batch selection are explicit", () => {
+  assert.ok(foldersSource.includes('t("folder.playRecursive")'));
+  assert.ok(foldersSource.includes("folderOperationScopeHint"));
+  assert.ok(foldersSource.includes('t("folder.selectLoaded")'));
+  assert.ok(foldersSource.includes('t("folder.invertLoaded")'));
+  assert.ok(foldersSource.includes("batchCandidates.value.map((item) => item.key)"));
+});
+
+test("Folder Search keeps truncation independent from pagination and resets it for new queries", () => {
+  assert.ok(foldersSource.includes("searchTruncated.value = false"));
+  assert.ok(foldersSource.includes("result.truncated === true"));
+  assert.ok(foldersSource.includes("searchTruncated.value || result.truncated === true"));
+  assert.ok(foldersSource.includes('v-if="searchTruncated"'));
+  assert.ok(foldersSource.includes('t("folder.searchTruncated")'));
+});
+
 test("Folder scan refreshes once at completion instead of reloading every library batch", () => {
   assert.ok(foldersSource.includes("if (scanCoversCurrent.value) return;"));
   assert.ok(foldersSource.includes('progress.phase === "done"'));

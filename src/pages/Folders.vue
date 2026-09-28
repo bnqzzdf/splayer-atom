@@ -26,6 +26,8 @@ import { useSettingsStore } from "@/stores/settings";
 import type { FolderViewMode } from "@/types/settings";
 import { toast } from "@/composables/useToast";
 import { formatFileSize } from "@/utils/format";
+import { formatTime } from "@/utils/time";
+import { getQualityLabel } from "@/utils/quality";
 import { appendFolderPath, folderPathWithinRoot } from "@/utils/folderPath";
 import * as player from "@/core/player";
 import IconFolder from "~icons/lucide/folder";
@@ -143,6 +145,7 @@ const searchQuery = ref("");
 const searchLoading = ref(false);
 const searchResults = shallowRef<FolderSearchResult[]>([]);
 const searchCursor = ref<string>();
+const searchTruncated = ref(false);
 let searchGeneration = 0;
 let searchAbortController: AbortController | null = null;
 
@@ -159,6 +162,76 @@ const folderSortOptions = computed(() => [
   { label: t("folder.sortMtime"), value: "mtime" },
   { label: t("folder.sortTrack"), value: "track" },
 ]);
+const folderOperationScopeHint = computed(() =>
+  filterQuery.value.trim()
+    ? t("folder.scopeFilteredHint")
+    : t("folder.scopeRecursiveHint"),
+);
+
+const fileExtension = (name: string): string => {
+  const index = name.lastIndexOf(".");
+  return index > 0 && index < name.length - 1 ? name.slice(index + 1).toUpperCase() : "";
+};
+
+const formatFolderMtime = (mtime: number): string =>
+  new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(mtime));
+
+const trackPosition = (track: Track): string => {
+  if (!track.track) return "";
+  return track.disc && track.disc > 1 ? `D${track.disc} · T${track.track}` : `T${track.track}`;
+};
+
+const trackFormatSummary = (entry: Extract<FolderBrowseEntry, { kind: "track" }>): string => {
+  const parts: string[] = [];
+  const extension = fileExtension(entry.name);
+  if (extension) parts.push(extension);
+  if (
+    entry.track.quality?.codec &&
+    entry.track.quality.codec.toLowerCase() !== "unknown"
+  ) {
+    const quality = getQualityLabel(entry.track.quality);
+    if (quality && quality !== extension) parts.push(quality);
+  }
+  return parts.join(" · ");
+};
+
+const trackTechnicalSummary = (
+  entry: Extract<FolderBrowseEntry, { kind: "track" }>,
+): string => {
+  const parts = [
+    trackPosition(entry.track),
+    entry.track.duration > 0 ? formatTime(entry.track.duration) : "",
+    trackFormatSummary(entry),
+  ].filter(Boolean);
+  if (currentSort.value === "mtime") parts.push(formatFolderMtime(entry.mtime));
+  return parts.join(" · ");
+};
+
+const entryTechnicalSummary = (entry: FolderBrowseEntry): string => {
+  if (entry.kind === "track") return trackTechnicalSummary(entry);
+  return currentSort.value === "mtime" ? formatFolderMtime(entry.mtime) : "";
+};
+
+const pathName = (value: string): string => value.split(/[/\\]/).filter(Boolean).pop() ?? value;
+
+const virtualTrackTechnicalSummary = (track: Track): string => {
+  const quality =
+    track.quality?.codec && track.quality.codec.toLowerCase() !== "unknown"
+      ? getQualityLabel(track.quality)
+      : "";
+  const parts = [
+    trackPosition(track),
+    track.duration > 0 ? formatTime(track.duration) : "",
+    quality,
+  ].filter(Boolean);
+  return parts.join(" · ");
+};
 const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
 const batchActive = ref(false);
 const batchSelectedKeys = shallowRef<Set<string>>(new Set());
@@ -1091,6 +1164,7 @@ const performSearch = useDebounceFn(async (query: string) => {
   const value = query.trim();
   searchResults.value = [];
   searchCursor.value = undefined;
+  searchTruncated.value = false;
   if (!value) {
     searchLoading.value = false;
     return;
@@ -1103,6 +1177,7 @@ const performSearch = useDebounceFn(async (query: string) => {
     if (generation !== searchGeneration) return;
     searchResults.value = result.data;
     searchCursor.value = result.nextCursor;
+    searchTruncated.value = result.truncated === true;
   } catch (error) {
     if (generation === searchGeneration && !controller.signal.aborted)
       toast.error(error instanceof Error ? error.message : String(error));
@@ -1132,6 +1207,7 @@ const loadMoreSearch = async (): Promise<void> => {
     if (generation !== searchGeneration || controller.signal.aborted) return;
     searchResults.value = [...searchResults.value, ...result.data];
     searchCursor.value = result.nextCursor;
+    searchTruncated.value = searchTruncated.value || result.truncated === true;
   } catch (value) {
     if (generation === searchGeneration && !controller.signal.aborted) {
       toast.error(value instanceof Error ? value.message : String(value));
@@ -1144,7 +1220,10 @@ const loadMoreSearch = async (): Promise<void> => {
   }
 };
 
-watch(searchQuery, (value) => void performSearch(value));
+watch(searchQuery, (value) => {
+  searchTruncated.value = false;
+  void performSearch(value);
+});
 
 const performFilter = useDebounceFn((value: string) => {
   if (!currentPath.value || value.trim() === loadedFilter.value) return;
@@ -1379,6 +1458,9 @@ onBeforeUnmount(() => {
             size="small"
             @update:checked="toggleBatchAll"
           />
+          <span class="shrink-0 text-sm text-on-surface-variant">
+            {{ t("folder.selectLoaded") }}
+          </span>
           <span class="shrink-0 text-sm tabular-nums text-on-surface-variant">
             {{ t("songList.batch.selected", { count: batchSelectedCount }) }}
           </span>
@@ -1390,7 +1472,7 @@ onBeforeUnmount(() => {
             @click="invertBatchSelection"
           >
             <template #icon><IconArrowLeftRight class="size-3.5" /></template>
-            {{ t("songList.batch.invert") }}
+            {{ t("folder.invertLoaded") }}
           </SButton>
           <SButton
             variant="ghost"
@@ -1443,7 +1525,7 @@ onBeforeUnmount(() => {
             @click="runAction(currentPath, 'play', true)"
           >
             <template #icon><IconPlay /></template>
-            {{ t("common.playAll") }}
+            {{ t("folder.playRecursive") }}
           </SButton>
           <SButton
             variant="secondary"
@@ -1464,6 +1546,9 @@ onBeforeUnmount(() => {
               </SButton>
             </template>
           </SDropdownMenu>
+          <span class="text-xs text-on-surface-variant/60">
+            {{ folderOperationScopeHint }}
+          </span>
           <SInput
             v-model="filterQuery"
             :placeholder="t('folder.filterPlaceholder')"
@@ -1527,6 +1612,12 @@ onBeforeUnmount(() => {
       >
         <div class="mb-3 text-sm font-medium text-on-surface-variant">
           {{ t("folder.searchResults") }}
+        </div>
+        <div
+          v-if="searchTruncated"
+          class="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+        >
+          {{ t("folder.searchTruncated") }}
         </div>
         <div
           v-for="result in searchResults"
@@ -1693,6 +1784,12 @@ onBeforeUnmount(() => {
                   <div class="line-clamp-2 min-h-10 break-words text-sm font-medium">
                     {{ entry.name }}
                   </div>
+                  <div
+                    v-if="currentSort === 'mtime'"
+                    class="mt-1 truncate text-xs text-on-surface-variant/50"
+                  >
+                    {{ formatFolderMtime(entry.mtime) }}
+                  </div>
                 </button>
                 <div v-if="!batchActive" class="absolute right-2 top-2">
                   <SDropdownMenu
@@ -1734,9 +1831,18 @@ onBeforeUnmount(() => {
             >
               <div class="truncate text-sm font-medium">{{ item.track.title }}</div>
               <div class="truncate text-xs text-on-surface-variant/50">
-                {{ item.track.artists.map((artist) => artist.name).join(" / ") }}
+                {{ t("folder.containerFile", { name: pathName(item.containerPath) }) }}
+                <span v-if="item.track.artists.length" class="hidden sm:inline">
+                  · {{ item.track.artists.map((artist) => artist.name).join(" / ") }}
+                </span>
               </div>
             </button>
+            <div
+              v-if="virtualTrackTechnicalSummary(item.track)"
+              class="hidden shrink-0 text-xs tabular-nums text-on-surface-variant/55 lg:block"
+            >
+              {{ virtualTrackTechnicalSummary(item.track) }}
+            </div>
             <SButton
               v-if="!batchActive"
               variant="text"
@@ -1822,6 +1928,7 @@ onBeforeUnmount(() => {
 
             <button
               class="min-w-0 flex-1 text-left"
+              :title="item.entry.path"
               :class="
                 batchActive &&
                 (item.entry.kind === 'directory' || item.entry.kind === 'material')
@@ -1839,27 +1946,59 @@ onBeforeUnmount(() => {
               </div>
               <div class="mt-0.5 truncate text-xs text-on-surface-variant/50">
                 <template v-if="item.entry.kind === 'track'">
-                  {{ item.entry.track.artists.map((artist) => artist.name).join(" / ") }}
-                  <span v-if="item.entry.track.album?.name">
-                    · {{ item.entry.track.album.name }}
+                  {{ item.entry.name }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
+                  <span class="hidden sm:inline">
+                    <template v-if="item.entry.track.artists.length">
+                      · {{ item.entry.track.artists.map((artist) => artist.name).join(" / ") }}
+                    </template>
+                    <template v-if="item.entry.track.album?.name">
+                      · {{ item.entry.track.album.name }}
+                    </template>
                   </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'file'">
-                  {{ formatFileSize(item.entry.size) }}
+                  {{ t("folder.unscanned") }}
+                  <span v-if="fileExtension(item.entry.name)"> · {{ fileExtension(item.entry.name) }}</span>
+                  · {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'cue' || item.entry.kind === 'sacd'">
-                  {{
-                    item.entry.trackCount
-                      ? t("common.totalSongs", { count: item.entry.trackCount })
-                      : item.entry.path
-                  }}
+                  <span v-if="fileExtension(item.entry.name)">{{ fileExtension(item.entry.name) }} · </span>
+                  <span v-if="item.entry.trackCount">
+                    {{ t("common.totalSongs", { count: item.entry.trackCount }) }} ·
+                  </span>
+                  {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'material'">
+                  <span v-if="fileExtension(item.entry.name)">{{ fileExtension(item.entry.name) }} · </span>
                   {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
-                <template v-else>{{ item.entry.path }}</template>
+                <template v-else>
+                  {{ item.entry.path }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
+                </template>
               </div>
             </button>
+
+            <div
+              v-if="entryTechnicalSummary(item.entry)"
+              class="hidden shrink-0 text-xs tabular-nums text-on-surface-variant/55 lg:block"
+            >
+              {{ entryTechnicalSummary(item.entry) }}
+            </div>
 
             <IconChevronRight
               v-if="item.entry.kind === 'directory' && !batchActive"

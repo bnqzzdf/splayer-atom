@@ -70,4 +70,32 @@ describe("Folder Browser Core Protocol client", () => {
       trackId: "cue-track-2",
     });
   });
+
+  it("keeps Folder Search pagination and truncation as separate response states", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [
+            {
+              kind: "file",
+              name: "match.flac",
+              path: "/music/match.flac",
+              parent: "/music",
+              root: "/music",
+            },
+          ],
+          nextCursor: "100",
+          truncated: true,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { folderBrowserClient } = await import("./folderBrowserClient");
+    await expect(folderBrowserClient.search("match")).resolves.toMatchObject({
+      nextCursor: "100",
+      truncated: true,
+    });
+  });
 });
