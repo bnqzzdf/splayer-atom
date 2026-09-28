@@ -46,6 +46,15 @@ let initialOutputPromptHandled = false;
 
 const buttonType = computed<"default" | "cover">(() => (props.cover ? "cover" : "default"));
 const mutedClass = computed(() => (props.cover ? "text-cover/50" : "text-on-surface-variant"));
+/**
+ * 弹层内次要文字（提示语、来源说明）。
+ *
+ * 与 `mutedClass` 分开是因为用途不同：那个给触发按钮的图标（/50 够用），
+ * 这里是要读的小字，封面玻璃弹层是暗底，/50 只有约 4.2:1，提到 /70 才有约 7:1。
+ */
+const popoverMutedClass = computed(() =>
+  props.cover ? "text-cover/70" : "text-on-surface-variant",
+);
 
 const volumePercent = computed(() => Math.round(status.volume * 100));
 const selectedOutputDevice = computed(() =>
@@ -178,13 +187,14 @@ const onMoreMenuSelect = (key: string): void => {
       </template>
       <div class="flex flex-col gap-2">
         <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
-        <div v-if="outputSelectionRequired" class="text-xs text-on-surface-variant">
+        <div v-if="outputSelectionRequired" class="text-xs" :class="popoverMutedClass">
           {{ t("settings.outputDevice.requiredHint") }}
         </div>
-        <OutputDeviceSelector @selected="outputPopoverOpen = false" />
+        <OutputDeviceSelector :cover="cover" @selected="outputPopoverOpen = false" />
         <div
           v-if="settings.player.outputDevice?.startsWith('diretta:')"
-          class="text-xs text-on-surface-variant"
+          class="text-xs"
+          :class="popoverMutedClass"
         >
           Diretta Source Direct
         </div>
@@ -292,13 +302,14 @@ const onMoreMenuSelect = (key: string): void => {
       </template>
       <div class="flex flex-col gap-2">
         <div class="text-sm font-medium">{{ t("settings.outputDevice.label") }}</div>
-        <div v-if="outputSelectionRequired" class="text-xs text-on-surface-variant">
+        <div v-if="outputSelectionRequired" class="text-xs" :class="popoverMutedClass">
           {{ t("settings.outputDevice.requiredHint") }}
         </div>
-        <OutputDeviceSelector @selected="outputPopoverOpen = false" />
+        <OutputDeviceSelector :cover="cover" @selected="outputPopoverOpen = false" />
         <div
           v-if="settings.player.outputDevice?.startsWith('diretta:')"
-          class="text-xs text-on-surface-variant"
+          class="text-xs"
+          :class="popoverMutedClass"
         >
           Diretta Source Direct
         </div>

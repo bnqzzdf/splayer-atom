@@ -89,6 +89,16 @@ test("Web Control exposes one grouped Core-backed output selector", () => {
   assert.match(outputSelectorSource, /AlsaPlaybackModeSelector/);
   assert.match(outputSelectorSource, /selectedOutputDevice\?\.startsWith\('alsa:hw:'\)/);
   assert.doesNotMatch(outputSelectorSource, /services\/client|scanDiretta|window\.api/);
+  // 该弹层在全屏播放器里是封面玻璃弹层（SPopover cover：bg-black/55 恒为暗底）。
+  // 设备列表必须跟着 cover 用封面色——否则浅色主题下 text-on-surface 接近纯黑，
+  // 落在暗玻璃上就看不见了（真实反馈：跟随系统 + 暗背景时输出设备选择看不清）。
+  assert.match(toolbarSource, /<OutputDeviceSelector :cover="cover"/);
+  assert.match(outputSelectorSource, /:class="sectionLabelClass"/);
+  assert.match(
+    outputSelectorSource,
+    /:class="itemClass\(device\.id === status\.selectedOutputDevice\)"/,
+  );
+  assert.match(outputSelectorSource, /<AlsaPlaybackModeSelector :cover="props\.cover" \/>/);
 });
 
 test("ALSA mode is changed only through the Core mode command", () => {

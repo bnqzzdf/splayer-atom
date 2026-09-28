@@ -15,6 +15,8 @@ export interface SSelectProps {
   placeholder?: string;
   /** 全圆角胶囊形 */
   round?: boolean;
+  /** 落在封面玻璃弹层（暗底）上时改用封面色，避免浅色主题下暗底黑字 */
+  cover?: boolean;
 }
 
 const props = withDefaults(defineProps<SSelectProps>(), {
@@ -22,11 +24,19 @@ const props = withDefaults(defineProps<SSelectProps>(), {
   disabled: false,
   placeholder: "",
   round: false,
+  cover: false,
 });
 
 const emit = defineEmits<{
   "update:modelValue": [value: string | number | boolean];
 }>();
+
+/** 触发器配色：封面玻璃弹层恒为暗底，要用封面色，不能用应用主题的 on-surface */
+const triggerColorClass = computed(() =>
+  props.cover
+    ? "text-cover bg-cover/8 border-cover/20 hover:border-cover/40 data-[state=open]:border-cover/50 data-[state=open]:ring-2 data-[state=open]:ring-cover/25"
+    : "text-on-surface bg-field border-on-surface/20 hover:border-on-surface/50 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/25",
+);
 
 const selectedLabel = computed(
   () => props.options.find((o) => o.value === props.modelValue)?.label ?? props.placeholder,
@@ -45,15 +55,16 @@ const handleChange = (val: string) => {
     @update:model-value="handleChange"
   >
     <SelectTrigger
-      class="group flex w-full items-center justify-between gap-2 h-8.5 px-3 text-sm text-on-surface bg-field border border-solid border-on-surface/20 cursor-pointer outline-none focus-visible:outline-none transition-[border-color,box-shadow,opacity] duration-250 hover:border-on-surface/50 data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/25 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
-      :class="round ? 'rounded-full' : 'rounded-lg'"
+      class="group flex w-full items-center justify-between gap-2 h-8.5 px-3 text-sm border border-solid cursor-pointer outline-none focus-visible:outline-none transition-[border-color,box-shadow,opacity] duration-250 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+      :class="[round ? 'rounded-full' : 'rounded-lg', triggerColorClass]"
     >
       <SelectValue class="min-w-0 truncate">
         <span class="truncate">{{ selectedLabel }}</span>
       </SelectValue>
       <SelectIcon as-child>
         <IconLucideChevronDown
-          class="size-3.5 text-on-surface-variant/50 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180"
+          class="size-3.5 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180"
+          :class="cover ? 'text-cover/50' : 'text-on-surface-variant/50'"
         />
       </SelectIcon>
     </SelectTrigger>

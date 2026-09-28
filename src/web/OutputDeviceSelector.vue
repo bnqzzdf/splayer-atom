@@ -16,6 +16,32 @@ const { t } = useI18n();
 const status = useStatusStore();
 const emit = defineEmits<{ selected: [] }>();
 
+/**
+ * 是否落在封面玻璃弹层（全屏播放器的 Toolbar 传 true）。
+ *
+ * 该弹层恒为暗色玻璃（SPopover 的 cover 分支是 bg-black/55），而这里原来用的是
+ * 应用主题的 on-surface 配色：主题跟随系统且系统为浅色时，on-surface 接近纯黑，
+ * 落在暗玻璃上就等于看不见。cover 时整套配色改用封面色（text-cover 系）。
+ */
+const props = withDefaults(defineProps<{ cover?: boolean }>(), { cover: false });
+
+const sectionLabelClass = computed(() =>
+  props.cover ? "text-cover/60" : "text-on-surface-variant",
+);
+const emptyTextClass = computed(() =>
+  props.cover ? "text-cover/50" : "text-on-surface-variant/65",
+);
+const itemClass = (selected: boolean): string => {
+  if (selected) {
+    return props.cover
+      ? "bg-cover/15 text-cover font-medium"
+      : "bg-primary/15 text-primary font-medium";
+  }
+  return props.cover
+    ? "bg-transparent text-cover hover:bg-cover/10"
+    : "bg-transparent text-on-surface hover:bg-on-surface/8";
+};
+
 const refreshing = ref(false);
 const selectingId = ref<string | null>(null);
 
@@ -94,10 +120,10 @@ onMounted(() => {
   <div class="max-h-80 overflow-y-auto -mx-1 px-1">
     <section v-for="group in groups" :key="group.kind" class="mb-3 last:mb-0">
       <div class="mb-1 flex h-7 items-center justify-between px-1.5">
-        <span class="text-xs font-medium text-on-surface-variant">{{ group.label }}</span>
+        <span class="text-xs font-medium" :class="sectionLabelClass">{{ group.label }}</span>
         <SButton
           v-if="group.refreshable"
-          type="default"
+          :type="props.cover ? 'cover' : 'default'"
           variant="ghost"
           circle
           size="tiny"
@@ -117,11 +143,7 @@ onMounted(() => {
           :key="device.id"
           type="button"
           class="relative flex min-h-10 w-full items-center rounded-lg px-2.5 pr-9 text-left text-sm transition-colors border-0 outline-none appearance-none disabled:cursor-wait disabled:opacity-60"
-          :class="
-            device.id === status.selectedOutputDevice
-              ? 'bg-primary/15 text-primary font-medium'
-              : 'bg-transparent text-on-surface hover:bg-on-surface/8'
-          "
+          :class="itemClass(device.id === status.selectedOutputDevice)"
           :disabled="selectingId !== null"
           :title="outputLabel(device, group.devices)"
           @click="onSelect(device.id)"
@@ -129,22 +151,23 @@ onMounted(() => {
           <span class="truncate">{{ outputLabel(device, group.devices) }}</span>
           <IconLucideCheck
             v-if="device.id === status.selectedOutputDevice"
-            class="absolute right-2.5 size-4 shrink-0 text-primary"
+            class="absolute right-2.5 size-4 shrink-0"
+            :class="props.cover ? 'text-cover' : 'text-primary'"
           />
         </button>
       </div>
-      <div v-else class="px-2.5 py-1.5 text-xs text-on-surface-variant/65">
+      <div v-else class="px-2.5 py-1.5 text-xs" :class="emptyTextClass">
         {{ t("settings.outputDevice.noneInGroup") }}
       </div>
       <div
         v-if="group.kind === 'alsa' && status.selectedOutputDevice?.startsWith('alsa:hw:')"
         class="mt-1.5 flex items-center gap-2 px-2.5 py-1"
       >
-        <span class="shrink-0 text-xs text-on-surface-variant">
+        <span class="shrink-0 text-xs" :class="sectionLabelClass">
           {{ t("settings.alsaPlaybackMode.shortLabel") }}
         </span>
         <div class="min-w-0 flex-1">
-          <AlsaPlaybackModeSelector />
+          <AlsaPlaybackModeSelector :cover="props.cover" />
         </div>
       </div>
     </section>

@@ -5,6 +5,14 @@ import { useSettingsStore } from "@/stores/settings";
 
 defineOptions({ inheritAttrs: false });
 
+const props = withDefaults(
+  defineProps<{
+    /** 落在封面玻璃弹层（暗底）上时改用封面色 */
+    cover?: boolean;
+  }>(),
+  { cover: false },
+);
+
 const { t } = useI18n();
 const settings = useSettingsStore();
 const switching = ref(false);
@@ -32,6 +40,7 @@ const onChange = async (value: string | number | boolean): Promise<void> => {
     :model-value="settings.system.player.alsaPlaybackMode"
     :options="options"
     :disabled="switching"
+    :cover="props.cover"
     @update:model-value="onChange"
   />
 </template>
