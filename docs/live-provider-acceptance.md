@@ -1,4 +1,4 @@
-# SPlayer Atom Live Provider Acceptance
+# SPlayer Atom 在线服务验收
 
 本文定义 Netease、QM、KG、Qobuz 与 TIDAL 的真实账号验收记录。静态测试、mock、公开元数据查询和无凭据软件 harness 不能把这些项目标记为完成。
 

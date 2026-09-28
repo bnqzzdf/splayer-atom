@@ -1,18 +1,13 @@
-# Local Folder Browser Plan
+# SPlayer Atom 本地文件夹浏览方案
 
-Status (current tree, 2026-09-23): the Core routes/service, Web Folder view and client, shared
-contracts and automated coverage are implemented and merged into `dev`. The old full-tree Web
-projection has been removed. The real-library, NAS/USB, large-directory and material-viewer
-acceptance in section 18 has not been recorded as complete; see the
-[Roadmap](./atom-roadmap.md).
+状态（当前代码树，2026-09-23）：Core 路由/服务、Web Folder 视图与客户端、共享契约与自动化覆盖均已实现并合并进 `dev`。旧的整树 Web 投影已被移除。第 18 节中的真实曲库、NAS/USB、大目录与素材查看器验收尚未记录为完成；参见
+[Roadmap](./atom-roadmap.md)。
 
-## 1. Purpose
+## 1. 目的
 
-SPlayer Atom's Folder view exists only for **audio browsing and playback**. It is not a general
-file manager and will not grow file-management operations such as rename, move, copy, arbitrary
-directory deletion, or unrestricted host-filesystem browsing.
+SPlayer Atom 的 Folder 视图只为**音频浏览与播放**而存在。它不是通用的文件管理器，也不会扩展出重命名、移动、复制、任意目录删除或不受限制的主机文件系统浏览等文件管理操作。
 
-The current Folder view is a Web-side projection of the scanned library:
+当前的 Folder 视图是已扫描曲库在 Web 侧的投影：
 
 ```text
 all library Tracks
@@ -22,96 +17,74 @@ all library Tracks
   -> STree flattening/rendering
 ```
 
-That model has three concrete problems:
+该模型有三个具体问题：
 
-1. A newly configured music directory does not become useful in Folder view until the library scan
-   completes, even though the files already exist on the Core host.
-2. The fixed tree column gives long directory names too little space.
-3. Large libraries pay the cost of building and maintaining a complete tree even though the user
-   only interacts with one directory at a time.
+1. 新配置的音乐目录在曲库扫描完成之前无法在 Folder 视图中派上用场，尽管这些文件已经存在于 Core 主机上。
+2. 固定的树列给长目录名的空间太小。
+3. 大曲库即使每次只与一个目录交互，也要付出构建并维护完整树的代价。
 
-The replacement is a **Core-owned local folder browser**. The filesystem determines what can be
-browsed immediately; the library database enriches those entries with canonical metadata as it
-becomes available.
+替代方案是**由 Core 拥有的本地文件夹浏览器**。文件系统决定哪些内容可以立即浏览；曲库数据库在规范元数据可用时用其丰富这些条目。
 
-This is one complete replacement, not a staged product mode. Implementation may use multiple
-atomic commits for review and rollback, but the old tree model is removed when this work lands.
+这是一次完整的替换，而不是分阶段的产品模式。实现过程中可以使用多个用于审查与回滚的原子提交，但本项工作落地时旧树模型即被移除。
 
-## 2. Product boundary
+## 2. 产品边界
 
-### In scope
+### 范围内
 
-- Browse configured local-library roots and their descendants.
-- Navigate one directory level at a time with breadcrumb, browser back/forward, refresh, and stable
-  route state.
-- Pin frequently used folders to the Folder home without changing their filesystem location.
-- Search configured Folder roots by physical directory/file name independently from metadata search.
-- Filter the **current directory only** without recursively searching descendants.
-- Display supported audio files immediately, including files that have not been scanned yet.
-- Use canonical scanned metadata when it exists and refresh the current view as scanning enriches
-  the library.
-- Scan or force-rescan the current folder recursively when the user explicitly wants its content
-  indexed and metadata-enriched without scanning every configured root.
-- Play one file, one CUE/SACD virtual track, one container, or a directory recursively.
-- Offer explicit current-folder-only playback/queue actions alongside the default recursive folder
-  actions.
-- Add files, containers, or directories to the queue / play next.
-- Create a local playlist from files, containers, or directories.
-- Open the containing Folder Browser location for a local Track and focus the exact ordinary,
-  CUE, or SACD entry.
-- Expand CUE and SACD containers on demand before a full-library scan has indexed them.
-- Show read-only supplementary album materials that live beside the music, including artwork,
-  booklets, rip logs, release notes, and similar supported text documents.
-- Handle multiple roots, temporarily unavailable roots, symlinks, long names, very large
-  directories, and deterministic recursive ordering.
-- Offer both list and cover/grid presentation for the same route-driven Folder model without
-  reintroducing a tree hierarchy.
+- 浏览已配置的本地曲库根目录及其后代。
+- 借助面包屑、浏览器后退/前进、刷新和稳定路由状态逐层导航目录。
+- 将常用文件夹固定到 Folder 主页，而不改变其文件系统位置。
+- 按物理目录/文件名搜索已配置的 Folder 根目录，与元数据搜索相互独立。
+- **仅过滤当前目录**，不递归搜索后代。
+- 立即显示受支持的音频文件，包括尚未扫描的文件。
+- 在规范扫描元数据存在时使用它，并在扫描丰富曲库时刷新当前视图。
+- 当用户明确希望当前文件夹的内容被索引并做元数据丰富、而不想扫描每个已配置根目录时，对当前文件夹递归扫描或强制重扫。
+- 播放单个文件、单个 CUE/SACD 虚拟分轨、单个容器，或递归播放一个目录。
+- 在默认的递归文件夹操作之外，提供显式的“仅当前文件夹”播放/队列操作。
+- 将文件、容器或目录添加到队列 / 下一首播放。
+- 从文件、容器或目录创建本地歌单。
+- 为本地曲目打开其所处的 Folder Browser 位置，并聚焦到确切的普通、CUE 或 SACD 条目。
+- 在整库扫描尚未索引它们之前，按需展开 CUE 与 SACD 容器。
+- 显示与音乐并列存放的只读补充专辑素材，包括插图、小册子、抓轨日志、发行说明及类似受支持的文本文档。
+- 处理多个根目录、暂时不可用的根目录、符号链接、超长名称、超大目录以及确定性的递归顺序。
+- 为同一个路由驱动的 Folder 模型同时提供列表和封面/网格呈现，而不重新引入树形层级。
 
-### Permanently out of scope for Folder view
+### Folder 视图永久排除在外
 
-- Renaming, moving, copying, or arbitrary deletion of files or directories.
-- Creating directories.
-- Editing, renaming, moving, copying, or deleting supplementary materials.
-- Browsing arbitrary Core-host paths that are not reachable through a configured library root.
-- Becoming a Linux file explorer.
+- 重命名、移动、复制文件或目录，或对其做任意删除。
+- 创建目录。
+- 编辑、重命名、移动、复制或删除补充素材。
+- 浏览无法通过已配置曲库根目录到达的任意 Core 主机路径。
+- 成为 Linux 文件浏览器。
 
-Existing music-domain operations elsewhere in Atom, such as tag editing or deleting an individual
-library track, are not broadened by this work.
+Atom 其它位置已有的音乐领域操作，例如标签编辑或删除单条曲库曲目，不因本项工作而扩大范围。
 
-## 3. Ownership model
+## 3. 归属模型
 
-Core owns:
+Core 拥有：
 
-- configured library roots and path authorization;
-- filesystem enumeration;
-- supported-media classification;
-- association between physical files and canonical library Tracks;
-- CUE/SACD resolution;
-- supplementary-material classification, authorization, thumbnail/content serving, and text
-  decoding;
-- recursive folder ordering;
-- pinned-folder persistence and validation;
-- Folder hierarchy search;
-- queue construction and playback commands;
-- canonicalization required by durable playlist operations;
-- scoped scan validation and execution;
-- local-Track-to-Folder-location resolution;
-- library-content revision events.
+- 已配置的曲库根目录与路径授权；
+- 文件系统枚举；
+- 受支持媒体的分类；
+- 物理文件与规范曲库曲目之间的关联；
+- CUE/SACD 解析；
+- 补充素材的分类、授权、缩略图/内容供给与文本解码；
+- 递归文件夹排序；
+- 固定文件夹的持久状态与校验；
+- Folder 层级搜索；
+- 队列构建与播放命令；
+- 持久歌单操作所需的规范化；
+- 作用域扫描的校验与执行；
+- 本地曲目到 Folder 位置的解析；
+- 曲库内容修订事件。
 
-Web owns only presentation and navigation state. It requests one directory at a time and sends
-high-level actions such as “play this directory” or “add this container to the queue”. Web does not
-walk directories, parse CUE/SACD, construct recursive queues, or rebuild a global folder tree.
-Per-client transient presentation state such as scroll position and an open booklet's page/zoom
-remains Web-owned. Current-directory filter text and list/grid presentation choice are also
-Web-owned presentation state; they never become Core music-domain state.
+Web 仅拥有呈现与导航状态。它一次请求一个目录，并发送诸如“播放此目录”或“将此容器加入队列”这类高层操作。Web 不遍历目录、不解析 CUE/SACD、不构建递归队列，也不重建全局文件夹树。滚动位置、打开的小册子页码/缩放等每客户端瞬态呈现状态仍归 Web 所有。当前目录过滤文本与列表/网格呈现选择同样是 Web 拥有的呈现状态；它们永远不会成为 Core 的音乐领域状态。
 
-## 4. Browse semantics
+## 4. 浏览语义
 
-The Folder page starts with the configured `library.scanDirs`. Each root is identified by its
-canonical configured path and displayed using its basename plus the full path when disambiguation is
-needed.
+Folder 页面从已配置的 `library.scanDirs` 开始。每个根目录由其规范配置路径标识，并以其 basename 显示，在需要消歧时附带完整路径。
 
-Opening a root or directory returns only its direct children:
+打开一个根目录或目录只返回其直接子项：
 
 ```text
 Folder
@@ -121,49 +94,37 @@ Folder
   direct supplementary materials
 ```
 
-No full-tree projection is created. A normal browse operation must not recursively walk the root.
+不会创建整树投影。普通浏览操作不得递归遍历根目录。
 
-The route stores the current folder path so browser back/forward and page refresh return to the same
-location. The server validates the path on every request; route state is never authorization.
+路由存储当前文件夹路径，因此浏览器后退/前进与页面刷新都会回到同一位置。服务器在每次请求时校验路径；路由状态永远不是授权。
 
-### Folder home and pinned folders
+### Folder 主页与固定文件夹
 
-Folder home shows configured library roots plus an optional **Pinned folders** section. Pinning is a
-navigation shortcut only: it does not copy/move media, create another scan root, or change library
-ownership.
+Folder 主页显示已配置的曲库根目录，以及一个可选的 **Pinned folders** 区域。固定只是导航快捷方式：它不复制/移动媒体、不创建另一个扫描根目录，也不改变曲库归属。
 
-- Any reachable directory under a configured library root can be pinned/unpinned.
-- Pin records are persisted by Core because Atom has one Core state shared by multiple Web Controls.
-- Core stores canonical root-relative identity/path information and revalidates it when read; a
-  missing/offline target remains a visible unavailable pin rather than being silently discarded.
-- Duplicate pins resolve to one entry; roots themselves may also be pinned if useful.
-- Pin/unpin is available from the Folder directory action menu and the Folder header.
-- The UI should name this concept “Pinned folders” / “固定的文件夹” rather than reusing music
-  Favorites terminology.
+- 已配置曲库根目录下任何可达目录都可以被固定/取消固定。
+- 固定记录由 Core 持久化，因为 Atom 有一个由多个 Web Control 共享的 Core 状态。
+- Core 存储规范的根相对身份/路径信息，并在读取时重新校验；缺失/离线目标会保留为可见的不可用固定项，而不会被静默丢弃。
+- 重复固定解析为一个条目；如有需要，根目录本身也可以被固定。
+- 固定/取消固定可从 Folder 目录操作菜单与 Folder 头部使用。
+- UI 应将此概念命名为 “Pinned folders” / “固定的文件夹”，而不要复用音乐 Favorites 术语。
 
-Pinned folders are not a new hierarchy. Selecting one navigates to the normal route-driven Folder
-view and uses the same browse, authorization, scan, playback, and material behavior.
+固定文件夹不是新的层级。选择其中一个会导航到普通的、路由驱动的 Folder 视图，并使用相同的浏览、授权、扫描、播放与素材行为。
 
-### Folder hierarchy search
+### Folder 层级搜索
 
-Folder Browser has its own physical-name search. It is intentionally separate from global Library
-Search:
+Folder Browser 有自己的物理名称搜索。它有意与全局 Library Search 分离：
 
-- Library Search searches canonical metadata such as title, album, and artist.
-- Folder Search searches directory names and supported media/material filenames under configured
-  roots.
+- Library Search 搜索标题、专辑、歌手等规范元数据。
+- Folder Search 搜索已配置根目录下的目录名与受支持的媒体/素材文件名。
 
-Search is Core-owned so Web never recursively walks roots. Results contain enough path context to
-disambiguate duplicate names and navigate directly to the containing Folder location. Search does
-not probe media metadata and does not require the files to have been scanned into the library.
+搜索由 Core 拥有，因此 Web 从不递归遍历根目录。结果包含足够的路径上下文以消歧同名项，并直接导航到所在的 Folder 位置。搜索不探测媒体元数据，也不要求文件已被扫描进曲库。
 
-Folder Search must be bounded and cancellable. It should stream/page results or otherwise enforce a
-result limit so a broad query over a very large library cannot create an unbounded response. It
-follows the same unavailable-root and symlink/path authorization rules as normal Folder browsing.
+Folder Search 必须有界且可取消。它应流式/分页返回结果，或以其它方式强制结果上限，使得对超大曲库的宽泛查询不会产生无界响应。它遵循与普通 Folder 浏览相同的不可用根目录与符号链接/路径授权规则。
 
-### Current-directory filter
+### 当前目录过滤
 
-Folder Search and Folder Filter solve different user problems and must remain visibly distinct:
+Folder Search 与 Folder Filter 解决不同的用户问题，必须保持可见的区别：
 
 ```text
 Folder Filter
@@ -173,52 +134,38 @@ Folder Search
   "I do not know where the folder/file is; search configured roots recursively."
 ```
 
-The current-directory filter:
+当前目录过滤器：
 
-- matches **direct children of the current directory only**;
-- never traverses a child directory;
-- applies to direct child directory names, physical media/container filenames, supplementary
-  material filenames, and canonical display fields already available for direct Tracks where
-  practical;
-- clears immediately back to the unfiltered current directory;
-- does not change the Folder route or create a separate search-results page;
-- is restored with the current history/session navigation state when the user enters a child and
-  comes back.
+- 仅匹配**当前目录的直接子项**；
+- 从不遍历子目录；
+- 适用于直接子目录名、物理媒体/容器文件名、补充素材文件名，以及在可行时适用于直接曲目已有的规范显示字段；
+- 立即清除回未过滤的当前目录；
+- 不改变 Folder 路由，也不创建单独的搜索结果页；
+- 当用户进入子目录再返回时，随当前历史/会话导航状态一起恢复。
 
-The filter cannot be implemented as a Web-only filter over currently loaded rows because normal
-browse is paginated. If a 12,000-item directory has a matching entry outside the current page, Web
-must still return the correct result. Core therefore applies the current-directory filter before
-pagination:
+该过滤器不能实现为对当前已加载行的纯 Web 过滤，因为普通浏览是分页的。如果一个含 12,000 项的目录中有匹配条目落在当前页之外，Web 仍必须返回正确结果。因此 Core 在分页之前应用当前目录过滤器：
 
 ```text
 browse(path, filter?, cursor?, limit?, focus?)
 ```
 
-The filter scope is still one physical directory, so it must not inherit the recursive traversal
-cost of Folder Search.
+过滤范围仍然是一个物理目录，因此它不得继承 Folder Search 的递归遍历成本。
 
-### UI layout
+### UI 布局
 
-- Remove the fixed desktop tree column and the mobile tree drawer.
-- Use the main content width for directory and media rows.
-- The breadcrumb is the authoritative current-location display. Do not repeat the current folder
-  name plus full physical path as a second permanent header block.
-- Long current-directory names may wrap to two lines; they must not be truncated merely because of
-  a narrow navigation column.
-- Breadcrumb may collapse middle ancestors when space is limited, while keeping the current
-  directory visible.
-- Directories appear before media entries and use natural name ordering.
-- The page shows useful current-directory counts rather than computing a global recursive folder
-  count.
-- Supplementary materials are grouped separately from playable media so documents and artwork do
-  not become fake Tracks or interfere with playback ordering.
-- Empty, unavailable, loading, scan-enrichment, and container-error states are explicit.
-- Navigating into a child directory and then back restores the previous directory's scroll position
-  instead of jumping to the top.
-- Entering a normal directory shows a lightweight current-directory filter control. Folder home
-  keeps the recursive Folder Search entry instead.
+- 移除固定的桌面树列与移动端树抽屉。
+- 目录与媒体行使用主内容宽度。
+- 面包屑是权威的当前位置显示。不要把当前文件夹名加完整物理路径重复为第二个常驻头部区块。
+- 过长的当前目录名可以换行成两行；它们不得仅因导航列狭窄而被截断。
+- 空间受限时面包屑可以折叠中间祖先，同时保持当前目录可见。
+- 目录出现在媒体条目之前，并使用自然名称排序。
+- 页面显示有用的当前目录计数，而不是计算全局递归文件夹计数。
+- 补充素材与可播放媒体分组显示，使文档和插图不会变成假曲目，也不会干扰播放顺序。
+- 空、不可用、加载中、扫描丰富中与容器错误这些状态都是显式的。
+- 导航进入子目录后再返回会恢复上一目录的滚动位置，而不是跳到顶部。
+- 进入普通目录时显示轻量的当前目录过滤控件。Folder 主页保留递归 Folder Search 入口。
 
-The primary Folder header should be intentionally small:
+Folder 主头部应有意保持精简：
 
 ```text
 Folder > root > ... > current
@@ -226,93 +173,60 @@ Folder > root > ... > current
 [ Play all ] [ Scan ] [...]                    [ Filter current folder... ] [ List/Grid ]
 ```
 
-The full physical path remains available through breadcrumb title/tooltip or other secondary
-diagnostic affordance, but is not permanently repeated under the breadcrumb.
+完整物理路径仍可通过面包屑标题/tooltip 或其它次要诊断入口获得，但不会常驻重复显示在面包屑下方。
 
-`Scan` means recursive incremental scan of the current subtree. Force-rescan remains a lower
-frequency action under the overflow menu rather than occupying another primary button.
+`Scan` 表示对当前子树进行递归增量扫描。强制重扫仍是溢出菜单下的低频操作，而不占用另一个主按钮。
 
-### List and cover/grid presentation
+### 列表与封面/网格呈现
 
-List remains the default and most information-dense mode. It is preferred for long filenames,
-classical-music structures, CUE/SACD, and directories with many direct media files.
+列表仍是默认且信息密度最高的模式。对于长文件名、古典音乐结构、CUE/SACD 以及包含许多直接媒体文件的目录，它是首选。
 
-Folder Browser also provides a cover/grid mode for album-like child directories:
+Folder Browser 还为类专辑的子目录提供封面/网格模式：
 
-- the route and Core browse semantics do not change;
-- the grid primarily changes the **direct child directory** presentation;
-- direct Tracks/containers may remain in the normal compact list even while child directories use
-  a grid;
-- child directory artwork prefers a suitable local cover/front/folder image, then a reliable
-  canonical album cover association, then a normal Folder placeholder;
-- supplementary materials retain their dedicated material presentation;
-- switching list/grid never creates a second hierarchy or reintroduces a tree view.
+- 路由与 Core 浏览语义不变；
+- 网格主要改变**直接子目录**的呈现；
+- 即使子目录使用网格，直接曲目/容器也可以保持普通的紧凑列表；
+- 子目录封面优先使用合适的本地 cover/front/folder 图片，其次是可靠的规范专辑封面关联，最后使用普通 Folder 占位图；
+- 补充素材保留其专属的素材呈现；
+- 切换列表/网格永远不会创建第二个层级，也不会重新引入树视图。
 
-The presentation choice is Web UI state. It may be remembered per Web Control, but it is not
-persisted as canonical Core library state.
+呈现选择是 Web UI 状态。它可以按 Web Control 记忆，但不会作为规范 Core 曲库状态持久化。
 
-The mixed directory/media view should use a dedicated Folder Browser list rather than forcing
-unscanned filesystem entries into the existing `SongList` contract.
+混合的目录/媒体视图应使用专属的 Folder Browser 列表，而不是把未扫描的文件系统条目强塞进现有的 `SongList` 契约。
 
-Folder scroll restoration belongs to Web navigation history/session state, not Core persistence.
-Likewise, an image/PDF/text viewer may remember its current image, PDF page/zoom, or text scroll
-position for the current Web session. These viewer positions are convenience state only and do not
-become library metadata.
+Folder 滚动恢复属于 Web 导航历史/会话状态，而不是 Core 持久状态。同样，图片/PDF/文本查看器可以为当前 Web 会话记住其当前图片、PDF 页码/缩放或文本滚动位置。这些查看器位置只是便利状态，不会成为曲库元数据。
 
-## 5. Filesystem visibility and scan enrichment
+## 5. 文件系统可见性与扫描丰富
 
-Adding a library root makes it browsable immediately. A full or incremental scan is not a
-prerequisite for Folder view.
+添加曲库根目录会使其立即可浏览。完整或增量扫描不是 Folder 视图的前提。
 
-For each direct media file Core attempts to associate the physical file with an existing canonical
-Track:
+对于每个直接媒体文件，Core 尝试将物理文件与现有规范曲目关联：
 
-- If a canonical Track exists, browse output includes that Track and Web renders its title, artist,
-  album, cover, quality, duration, and existing track actions.
-- If it has not been scanned, browse output contains a lightweight filesystem entry: path, filename,
-  extension, size, and mtime. Browsing does **not** probe all such files just to fill metadata.
+- 如果规范曲目存在，浏览输出包含该曲目，Web 渲染其标题、歌手、专辑、封面、质量、时长以及已有的曲目操作。
+- 如果尚未扫描，浏览输出包含轻量文件系统条目：path、filename、extension、size 与 mtime。浏览**不会**仅仅为了填充元数据而探测所有此类文件。
 
-When an unscanned ordinary file is played, Core may create a transient local playback Track and let
-the existing playback load/probe path enrich the active queue item. This does not create a second
-library authority.
+当播放未扫描的普通文件时，Core 可以创建一个瞬态本地播放曲目，并让现有的播放加载/探测路径丰富活动队列项。这不会创建第二个曲库权威。
 
-Scanner batch writes remain the canonical library-indexing path. As scan batches, tag changes, file
-deletions, targeted canonicalization, and similar library mutations commit, Core publishes a small
-library-content revision/change event. An open Folder page refreshes only its current directory when
-that revision changes; it does not refetch and rebuild the complete local library.
+扫描器批量写入仍是规范的曲库索引路径。当扫描批次、标签变更、文件删除、定向规范化以及类似的曲库变更提交时，Core 发布一个小型曲库内容修订/变更事件。打开的 Folder 页面在该修订变化时仅刷新其当前目录；它不会重新获取并重建完整的本地曲库。
 
-### Scan this folder
+### 扫描此文件夹
 
-Because Folder Browser can play unscanned media, it also needs an explicit way to promote the
-current directory into fully indexed library content. The Folder page therefore provides:
+因为 Folder Browser 可以播放未扫描的媒体，它也需要一种显式方式将当前目录提升为完整索引的曲库内容。因此 Folder 页面提供：
 
-- **Scan this folder**: recursively scan the current directory and all descendants using incremental
-  rules, so unchanged indexed files are skipped.
-- **Rescan this folder**: recursively force metadata re-read for the current directory and all
-  descendants.
+- **Scan this folder**：使用增量规则递归扫描当前目录及其所有后代，因此未变化的已索引文件会被跳过。
+- **Rescan this folder**：对当前目录及其所有后代递归强制重新读取元数据。
 
-These are library-indexing actions, not prerequisites for playback. Their purpose is to populate or
-refresh canonical metadata, covers, Album/Artist/Search projections, CUE virtual tracks, and SACD
-virtual tracks for the selected subtree.
+这些是曲库索引操作，不是播放的前提。其目的是为所选子树填充或刷新规范元数据、封面、Album/Artist/Search 投影、CUE 虚拟分轨与 SACD 虚拟分轨。
 
-Scoped scanning must reuse the existing scanner authority, progress model, batch upsert path, CUE /
-SACD handling, and library revision events. It must **not** introduce a second scanner or a parallel
-scan scheduler. While any global or scoped scan is active, another scan request is not started; the
-Folder UI shows the active scan state instead.
+作用域扫描必须复用现有扫描器权威、进度模型、批量 upsert 路径、CUE / SACD 处理与曲库修订事件。它**不得**引入第二个扫描器或并行的扫描调度器。当任何全局或作用域扫描处于活动状态时，不会启动另一个扫描请求；Folder UI 改为显示活动扫描状态。
 
-The scan scope is part of correctness, not just performance. Incremental records, stale-file
-comparison, removal detection, CUE synchronization, and SACD synchronization must all be restricted
-to the selected subtree. A scoped scan of `/music/A` must never infer that tracks under
-`/music/B` were deleted merely because they were outside the traversal. The same unavailable-path
-safety used by full scans applies inside the scoped subtree.
+扫描范围是正确性的一部分，而不仅仅是性能。增量记录、陈旧文件比较、删除检测、CUE 同步与 SACD 同步都必须限制在所选子树内。对 `/music/A` 的作用域扫描绝不能仅仅因为 `/music/B` 下的曲目在遍历范围之外就推断它们被删除。完整扫描所用的同一套不可用路径安全措施同样适用于作用域子树内部。
 
-The current Folder page should show scoped progress when the active scan covers that directory. A
-completed scan refreshes the current directory through the normal library revision mechanism rather
-than a separate Folder-only refresh path.
+当活动扫描覆盖该目录时，当前 Folder 页面应显示作用域进度。扫描完成后通过常规曲库修订机制刷新当前目录，而不是通过单独的 Folder 专用刷新路径。
 
-## 6. Physical-source identity
+## 6. 物理来源身份
 
-Folder browsing needs one shared definition of the physical local source:
+Folder 浏览需要对物理本地来源有一个共享定义：
 
 ```text
 ordinary local Track -> track.path
@@ -320,65 +234,50 @@ CUE virtual Track    -> track.cuePath / track.cueAudioPath as appropriate
 SACD virtual Track   -> physical ISO path derived from the virtual path
 ```
 
-The SACD virtual-path parsing and physical-source mapping now live in
-`core/utils/localPhysicalSource.ts`. Folder browsing and other Core consumers reuse that helper
-instead of maintaining another physical-source rule.
+SACD 虚拟路径解析与物理来源映射现在位于 `core/utils/localPhysicalSource.ts`。Folder 浏览与其它 Core 消费者复用该 helper，而不是维护另一套物理来源规则。
 
-The folder service should not call `getAllTracks()` and filter the complete library on every browse.
-After `readdir` identifies the direct physical files, the database layer should resolve canonical
-Tracks for those physical paths in bounded batches. This keeps the cost proportional to the current
-directory without adding a new derived filesystem index to the database unless measurements prove
-one is necessary.
+folder 服务不应在每次浏览时调用 `getAllTracks()` 并过滤整个曲库。在 `readdir` 识别出直接物理文件之后，数据库层应以有界批次为这些物理路径解析规范曲目。这使成本与当前目录成正比，而不会向数据库新增派生的文件系统索引，除非测量结果证明
+确有必要。
 
-## 7. Supported media and containers
+## 7. 受支持的媒体与容器
 
-Folder Browser and scanner must share one supported-media definition so a file cannot be visible to
-one path but silently unsupported by the other.
+Folder Browser 与扫描器必须共享同一个受支持媒体定义，使一个文件不会对一条路径可见、却被另一条路径静默判定为不受支持。
 
-### Ordinary audio
+### 普通音频
 
-Supported ordinary audio files are immediately visible and playable before scanning. Playback uses
-the existing Core local-source path and media probing.
+受支持的普通音频文件在扫描前即可见且可播放。播放使用现有的 Core 本地来源路径与媒体探测。
 
 ### CUE
 
-CUE is treated as a media container, not as a generic text file.
+CUE 被视为媒体容器，而不是通用文本文件。
 
-- If canonical CUE virtual Tracks already exist, use them.
-- If they do not exist, opening or playing the CUE performs targeted Core-side CUE resolution using
-  the existing parser and the referenced audio duration.
-- A successfully resolved CUE hides its backing whole-file audio entry from the same folder to
-  prevent duplicate playback.
-- If CUE resolution fails, the backing audio must remain visible/playable; a malformed CUE must not
-  make otherwise valid audio disappear.
-- Container playback and recursive folder playback enqueue the virtual CUE Tracks in cue order.
+- 如果规范 CUE 虚拟分轨已存在，则使用它们。
+- 如果不存在，打开或播放该 CUE 会使用现有解析器与所引用音频时长执行定向的 Core 侧 CUE 解析。
+- 成功解析的 CUE 会在同一文件夹中隐藏其背后的整文件音频条目，以防止重复播放。
+- 如果 CUE 解析失败，背后的音频必须保持可见/可播放；一个格式错误的 CUE 不得让其它本应有效的音频消失。
+- 容器播放与递归文件夹播放按 cue 顺序将虚拟 CUE 分轨入队。
 
 ### SACD ISO
 
-SACD ISO is also a media container.
+SACD ISO 同样是媒体容器。
 
-- If canonical SACD virtual Tracks already exist, use them.
-- Otherwise opening or playing the ISO calls the existing Core/native SACD probe on demand.
-- Successful resolution exposes virtual tracks in disc order.
-- The physical ISO is not also enqueued once virtual tracks have been resolved.
-- A probe failure leaves the ISO visible as an unavailable/error container and does not mutate or
-  delete any existing canonical SACD Tracks.
+- 如果规范 SACD 虚拟分轨已存在，则使用它们。
+- 否则打开或播放该 ISO 会按需调用现有的 Core/native SACD 探测。
+- 成功解析会按碟片顺序暴露虚拟分轨。
+- 一旦虚拟分轨已解析，物理 ISO 不会被同时入队。
+- 探测失败会让 ISO 保留为不可用/错误容器，并且不会变更或删除任何已有的规范 SACD 分轨。
 
-On-demand CUE/SACD resolution for browsing/playback may remain transient. Operations that require
-durable Track identity use the canonicalization rule below.
+用于浏览/播放的按需 CUE/SACD 解析可以保持瞬态。需要持久曲目身份的操作使用下面的规范化规则。
 
-## 8. Supplementary album materials
+## 8. 补充专辑素材
 
-Folder Browser should represent the physical music collection, not only playable audio. Artwork,
-booklets, rip logs, checksum/release notes, and similar files often contain important information
-for classical releases, box sets, SACD rips, and carefully archived CD rips.
+Folder Browser 应呈现物理音乐收藏，而不仅仅是可播放音频。插图、小册子、抓轨日志、校验和/发行说明以及类似文件，对于古典发行、套装盒、SACD 抓轨与精心归档的 CD 抓轨往往包含重要信息。
 
-These files are exposed as **read-only supplementary materials**. Supporting them does not widen the
-Folder feature into file management.
+这些文件以**只读补充素材**的形式暴露。支持它们不会把 Folder 功能扩大为文件管理。
 
-### Supported material classes
+### 受支持的素材类别
 
-The complete contract recognizes a deliberately small, explicit allowlist:
+完整契约识别一份有意保持精简的显式允许清单：
 
 ```text
 image
@@ -391,20 +290,15 @@ text
   txt / log / nfo / md
 ```
 
-`cue` is never treated as text material; it remains a music container. Audio/SACD files likewise
-remain media entries. Executables, archives, Office documents, arbitrary binary files, SVG, HTML,
-and scripts are not exposed by Folder Browser.
+`cue` 永远不会被当作文本素材；它仍然是音乐容器。音频/SACD 文件同样仍是媒体条目。可执行文件、归档、Office 文档、任意二进制文件、SVG、HTML 与脚本不会由 Folder Browser 暴露。
 
-The allowlist is a product/security boundary rather than a generic MIME browser. Adding another
-material type requires an explicit safe viewing use case.
+该允许清单是产品/安全边界，而不是通用 MIME 浏览器。新增另一种素材类型需要明确的安全查看用例。
 
-### Directory scope and grouping
+### 目录范围与分组
 
-Materials are discovered from the **current directory only**. Normal navigation does not recurse
-through descendants to collect artwork or documents. This keeps the meaning local to the album or
-disc being viewed and prevents a box-set root from loading hundreds of child-directory scans.
+素材仅从**当前目录**发现。普通导航不会递归穿过后代去收集插图或文档。这使含义局限于正在查看的专辑或碟片，并防止一个套装盒根目录加载数百次子目录扫描。
 
-The UI groups materials separately from directories and playable media:
+UI 将素材与目录、可播放媒体分开分组：
 
 ```text
 Folder actions
@@ -423,76 +317,58 @@ Supplementary materials
   Release Notes.txt
 ```
 
-Image materials may use a thumbnail grid/strip; PDF and text materials use compact document rows.
-The exact responsive presentation can vary, but material rows never participate in Track sorting,
-queue construction, playlist creation, or recursive playback.
+图片素材可以使用缩略图网格/条带；PDF 与文本素材使用紧凑的文档行。确切的自适应呈现可以有所不同，但素材行永远不会参与曲目排序、队列构建、歌单创建或递归播放。
 
-### Images
+### 图片
 
-- Folder listing returns only material metadata and a bounded thumbnail URL/reference.
-- Thumbnails use an appropriately sized cached/derived image; the Folder page must not eagerly load
-  original multi-megapixel scans.
-- Opening an image loads the original only on demand in a read-only viewer.
-- The viewer may move between the supported images in the current directory without rescanning or
-  recursively collecting images from child directories.
-- Animated GIF may be displayed by the browser, but Folder Browser does not add editing,
-  transformation, or animation controls.
+- Folder 列表只返回素材元数据与有界的缩略图 URL/引用。
+- 缩略图使用尺寸合适的缓存/派生图片；Folder 页面不得急切加载原始的数百万像素扫描件。
+- 打开图片时才在只读查看器中按需加载原图。
+- 查看器可以在当前目录中受支持的图片之间移动，而无需重新扫描或从子目录递归收集图片。
+- 动图 GIF 可由浏览器显示，但 Folder Browser 不添加编辑、变换或动画控件。
 
 ### PDF
 
-- PDF is exposed as a read-only booklet/document.
-- Content delivery supports byte ranges/streaming so opening a large scanned booklet does not read
-  the whole file into Core memory or require one giant Web response.
-- Prefer the browser's safe PDF rendering capability or an equivalently isolated read-only viewer;
-  Atom does not parse PDF content into library metadata.
+- PDF 以只读小册子/文档的形式暴露。
+- 内容供给支持字节范围/流式传输，因此打开大型扫描小册子不会把整个文件读入 Core 内存，也不要求单个巨大的 Web 响应。
+- 优先使用浏览器安全的 PDF 渲染能力或等效隔离的只读查看器；Atom 不把 PDF 内容解析为曲库元数据。
 
-### Text materials
+### 文本素材
 
-`txt`, `log`, `nfo`, and `md` are displayed as **plain text** in a read-only monospace viewer. `md`
-is not rendered as trusted HTML and text content never executes markup or scripts.
+`txt`、`log`、`nfo` 与 `md` 在只读等宽查看器中以**纯文本**显示。`md` 不会作为受信任 HTML 渲染，文本内容永远不会执行标记或脚本。
 
-Core performs bounded best-effort decoding rather than blindly calling UTF-8 on every file:
+Core 执行有界的最佳努力解码，而不是盲目对每个文件调用 UTF-8：
 
-1. honor an explicit UTF BOM when present;
-2. accept valid UTF-8;
-3. use a small, deterministic legacy-text fallback suitable for common rip logs / release notes;
-4. if decoding remains unreliable, report an unsupported/undecodable-text state rather than
-   returning corrupt or executable content.
+1. 存在显式 UTF BOM 时遵循它；
+2. 接受有效 UTF-8；
+3. 使用适合常见抓轨日志/发行说明的小型、确定性传统文本回退；
+4. 如果解码仍不可靠，报告不受支持/无法解码的文本状态，而不是返回损坏或可执行的内容。
 
-The concrete decoder can reuse existing project dependencies or a small dedicated decoder, but the
-policy remains Core-owned and deterministic.
+具体解码器可以复用现有项目依赖或一个小型专用解码器，但策略仍归 Core 所有且是确定性的。
 
-Text viewing must have an explicit size limit for eager reads. Oversized text/log files still appear
-as materials with their size, but are opened through bounded/ranged reads (or an explicit
-too-large-to-preview state) rather than loading an unbounded file into Core/Web memory.
+文本查看必须对急切读取有显式大小限制。过大的文本/日志文件仍会作为素材连同其大小出现，但会通过有界/范围读取打开（或显示显式的过大无法预览状态），而不是把无界文件加载进 Core/Web 内存。
 
-### Authorization and content serving
+### 授权与内容供给
 
-Folder materials must not reuse or introduce an unrestricted endpoint such as
-`/filesystem/file?path=/anything`.
+Folder 素材不得复用或引入诸如 `/filesystem/file?path=/anything` 这样的不受限制端点。
 
-For every thumbnail or material-content request Core revalidates that:
+对于每个缩略图或素材内容请求，Core 都会重新校验：
 
-- the logical path belongs to a configured library root;
-- symlink resolution follows the same allowed-root policy as Folder navigation;
-- the requested file still exists and is a regular supported material;
-- the material class/extension and served content type match the allowlist;
-- range and size limits are enforced.
+- 逻辑路径属于已配置的曲库根目录；
+- 符号链接解析遵循与 Folder 导航相同的允许根目录策略；
+- 所请求文件仍然存在，并且是受支持的常规素材；
+- 素材类别/扩展名与所供给的内容类型符合允许清单；
+- 范围与大小限制得到强制执行。
 
-Material URLs/references are therefore Folder-domain capabilities, not general host-file access.
-Deleting or editing a material from the viewer is permanently out of scope.
+因此，素材 URL/引用是 Folder 域的能力，而不是通用的主机文件访问。从查看器删除或编辑素材永久排除在范围之外。
 
-Materials do not need library scanning or database indexing to appear. They are live filesystem
-content and become visible after a normal Folder refresh. Existing scanner cover discovery may still
-use image files as it does today, but Folder material browsing must not create a second material
-index in the library database.
+素材不需要曲库扫描或数据库索引即可出现。它们是实时的文件系统内容，在普通 Folder 刷新后即变得可见。现有扫描器封面发现仍可像今天一样使用图片文件，但 Folder 素材浏览不得在曲库数据库中创建第二个素材索引。
 
-## 9. Playback and queue operations
+## 9. 播放与队列操作
 
-### Unified action terminology
+### 统一的操作术语
 
-Track, Folder, Album, Playlist, Queue, and other multi-Track surfaces should use one consistent
-language:
+曲目、Folder、专辑、歌单、队列以及其它多曲目界面应使用一致的语言：
 
 ```text
 Play
@@ -512,36 +388,23 @@ Add to playlist...
   chooser rather than replacing the add-to-existing action
 ```
 
-Chinese product copy should use **播放 / 接下来播放 / 添加到队列 / 添加到歌单…**. “下一首播放” is
-too narrow for Folder/Album/Playlist operations because the inserted object may contain many
-Tracks. Internal route/function names such as `play-next` may remain implementation details; the
-user-facing action is “接下来播放”.
+中文产品文案应使用 **播放 / 接下来播放 / 添加到队列 / 添加到歌单…**。“下一首播放”对于 Folder/专辑/歌单操作来说过于狭窄，因为插入的对象可能包含许多曲目。诸如 `play-next` 这样的内部路由/函数名可以保留为实现细节；面向用户的操作是“接下来播放”。
 
-Queue and Playlist are separate concepts: queue actions alter the transient playback sequence;
-playlist actions alter durable playlist membership. Folder UI must not use “新建歌单” as a substitute
-for “添加到歌单…”.
+队列与歌单是两个独立概念：队列操作改变瞬态播放顺序；歌单操作改变持久歌单成员关系。Folder UI 不得用“新建歌单”替代“添加到歌单…”。
 
-Folder-level actions are Core commands. Web never expands a directory into a Track array itself.
+Folder 级操作是 Core 命令。Web 从不自行把目录展开为曲目数组。
 
-Required actions:
+必需的操作：
 
-- Play now / replace queue from a file, container, or directory; directory actions are recursive by
-  default.
-- Play next group / **接下来播放** from a file, container, or directory; directory actions are
-  recursive by default.
-- Add to queue from a file, container, or directory; directory actions are recursive by default.
-- Shuffle-play a directory using the existing player shuffle semantics rather than a second Folder
-  shuffle state.
-- Secondary directory actions provide **current folder only** variants for Play / Play Next / Add
-  to Queue / Playlist creation. These use the same Core implementation with `recursive: false`
-  rather than a second playback path.
+- 从文件、容器或目录立即播放/替换队列；目录操作默认递归。
+- 从文件、容器或目录接下来播放；目录操作默认递归。
+- 从文件、容器或目录添加到队列；目录操作默认递归。
+- 使用现有播放器随机语义对目录进行随机播放，而不是第二套 Folder 随机状态。
+- 次要目录操作提供**仅当前文件夹**变体，用于播放 / 接下来播放 / 添加到队列 / 创建歌单。它们使用相同的 Core 实现并传入 `recursive: false`，而不是第二条播放路径。
 
-Recursive remains the primary/default behavior because common music layouts place playable content
-under child directories such as `CD1` / `CD2`. The current-folder-only variants are explicit
-secondary actions, not a hidden global preference.
+递归仍是主要/默认行为，因为常见的音乐布局会把可播放内容放在 `CD1` / `CD2` 之类的子目录下。仅当前文件夹变体是显式的次要操作，而不是隐藏的全局偏好。
 
-The Folder overflow menu should expose the common recursive actions directly and move the
-less-common non-recursive variants under one submenu:
+Folder 溢出菜单应直接暴露常见的递归操作，并把较少使用的非递归变体归入一个子菜单：
 
 ```text
 Shuffle
@@ -559,39 +422,34 @@ Rescan
 Pin to Folder home / Unpin
 ```
 
-`Play all` and incremental `Scan` already exist as primary buttons and should not be redundantly
-repeated in the same overflow menu.
+`Play all` 与增量 `Scan` 已作为主按钮存在，不应在同一溢出菜单中重复出现。
 
-Directory actions recursively enumerate supported media only when the user requests the action.
-They must:
+目录操作仅在用户请求该操作时才递归枚举受支持媒体。它们必须：
 
-- follow the same path-authorization and symlink rules as browsing;
-- resolve CUE/SACD containers without adding their backing physical files twice;
-- reuse canonical Tracks when available;
-- create transient local playback Tracks for unscanned ordinary files;
-- skip unsupported non-audio files;
-- surface real access/parse failures without silently treating an unreadable root as an empty one.
+- 遵循与浏览相同的路径授权与符号链接规则；
+- 解析 CUE/SACD 容器时不把其背后的物理文件重复添加；
+- 可用时复用规范曲目；
+- 为未扫描的普通文件创建瞬态本地播放曲目；
+- 跳过不受支持的非音频文件；
+- 暴露真实的访问/解析失败，而不把不可读的根目录静默当作空目录。
 
-### Deterministic recursive order
+### 确定性的递归顺序
 
-Recursive folder playback has one deterministic order:
+递归文件夹播放有一种确定性顺序：
 
-1. directories use natural name ordering;
-2. traversal is depth-first in that directory order;
-3. within a directory, canonical tracks prefer disc / track / CUE position metadata;
-4. entries without canonical ordering metadata fall back to natural filename order;
-5. virtual CUE/SACD tracks retain their container track order.
+1. 目录使用自然名称排序；
+2. 遍历按该目录顺序深度优先；
+3. 在一个目录内，规范曲目优先使用 disc / track / CUE 位置元数据；
+4. 没有规范排序元数据的条目回退到自然文件名顺序；
+5. 虚拟 CUE/SACD 分轨保持其容器曲目顺序。
 
-The same ordering helper is used by Play, Play next group, Add to Queue, and Add to Playlist so the
-same folder never produces different sequences depending on the action.
+播放、接下来播放、添加到队列与添加到歌单使用同一个排序 helper，因此同一个文件夹绝不会因操作不同而产生不同序列。
 
-With `recursive: false`, the same ordering rules apply to playable entries directly in the selected
-directory, while child directories are not traversed.
+使用 `recursive: false` 时，相同的排序规则应用于所选目录中直接的可播放条目，但不遍历子目录。
 
-## 10. Durable playlist operations
+## 10. 持久歌单操作
 
-A local playlist requires durable canonical Track identity. Therefore “create playlist from
-folder/container/files” performs targeted canonicalization for entries that are not yet indexed:
+本地歌单需要持久的规范曲目身份。因此“从文件夹/容器/文件创建歌单”会对尚未索引的条目执行定向规范化：
 
 ```text
 already canonical
@@ -609,22 +467,15 @@ then
   -> write playlist membership
 ```
 
-This avoids inventing a second playlist representation containing raw filesystem paths. Targeted
-canonicalization also emits the normal library-content revision so Album/Artist/Folder projections
-can refresh consistently.
+这避免了发明第二种包含原始文件系统路径的歌单表示。定向规范化同样发出常规曲库内容修订，使 Album/Artist/Folder 投影能够一致地刷新。
 
-The normal Folder Track/container/folder action is **Add to playlist...**, not “Create playlist”.
-The chooser lists existing local playlists and offers “Create playlist” as an option inside that
-flow. Creating a playlist remains available, but it is not the only durable-playlist action.
+普通的 Folder 曲目/容器/文件夹操作是 **Add to playlist...**，而不是“创建歌单”。选择器列出已有的本地歌单，并在该流程内提供“创建歌单”选项。创建歌单仍然可用，但它不是唯一的持久歌单操作。
 
-## 11. Open containing folder
+## 11. 打开所在文件夹
 
-“Open containing folder” is a general local-Track action, not a playlist-only feature. It should be
-available through one shared local Track action model whenever Core can resolve the Track to a
-configured Folder Browser root.
+“打开所在文件夹”是通用的本地曲目操作，而不是歌单专用功能。只要 Core 能把该曲目解析到已配置的 Folder Browser 根目录，就应通过一个共享的本地曲目操作模型提供它。
 
-Web must not derive CUE/SACD filesystem identity itself. Core resolves a local Track to a Folder
-navigation target containing the information needed to restore context:
+Web 不得自行推导 CUE/SACD 文件系统身份。Core 把本地曲目解析为一个 Folder 导航目标，其中包含恢复上下文所需的信息：
 
 ```text
 ordinary Track
@@ -642,35 +493,27 @@ SACD virtual Track
   -> focus the exact virtual Track
 ```
 
-Navigation should scroll the resolved entry into view and apply a brief focus highlight; merely
-opening a directory with no indication of the originating Track is insufficient for large folders.
-Container and focus state are represented in the Folder route so browser refresh/back/forward keep
-the useful context where practical.
+导航应将解析出的条目滚动到视图中并施加短暂的焦点高亮；仅仅打开一个目录而不指示来源曲目，对大文件夹来说是不够的。容器与焦点状态在 Folder 路由中表示，以便浏览器刷新/后退/前进在可行时保留有用的上下文。
 
-If the configured NAS/USB root is currently unavailable, the action still navigates to its Folder
-location and shows the normal unavailable-root state. It must not silently fall back to an
-unrestricted filesystem browser.
+如果已配置的 NAS/USB 根目录当前不可用，该操作仍会导航到其 Folder 位置并显示常规的不可用根目录状态。它不得静默回退到不受限制的文件系统浏览器。
 
-### Track-action surface coverage
+### 曲目操作界面覆盖
 
-The action must not depend on which page happens to implement its own menu. At minimum, resolvable
-local Tracks expose “Open containing folder” from:
+该操作不得依赖于恰好由哪个页面实现自己的菜单。至少，可解析的本地曲目应从以下位置暴露“打开所在文件夹”：
 
-- the bottom PlayerBar current-track menu;
-- Full Player current-track actions;
-- QueuePopover rows;
-- Full Player QueuePanel rows;
-- local Playlist SongList rows;
-- local Album SongList rows;
-- Artist local-Track rows;
-- local favorites/collections;
-- History rows for local Tracks.
+- 底部 PlayerBar 的当前曲目菜单；
+- Full Player 的当前曲目操作；
+- QueuePopover 行；
+- Full Player 的 QueuePanel 行；
+- 本地歌单 SongList 行；
+- 本地专辑 SongList 行；
+- 歌手本地曲目行；
+- 本地收藏/合集；
+- 本地曲目的 History 行。
 
-Queue/Playlist-specific operations such as “Remove from queue” or “Remove from playlist” are
-contextual additions to the shared Track action model, not reasons to maintain a second independent
-common-action menu.
+诸如“从队列中移除”或“从歌单中移除”这类队列/歌单专用操作，是共享曲目操作模型上的上下文补充，而不是维护第二个独立通用操作菜单的理由。
 
-The user-facing invariant is:
+面向用户的不变式是：
 
 ```text
 see a resolvable local Track
@@ -678,32 +521,26 @@ see a resolvable local Track
   -> "Open containing folder" is available
 ```
 
-Folder itself may omit this action for the row already being displayed in its own containing
-location.
+对于已经显示在其自身所在位置的条目，Folder 本身可以省略该操作。
 
-## 12. Multiple roots, offline storage, and symlinks
+## 12. 多个根目录、离线存储与符号链接
 
-Each configured scan directory is an independent browse root. Roots with the same basename remain
-distinct by full path.
+每个已配置扫描目录都是独立的浏览根目录。basename 相同的根目录仍按完整路径区分。
 
-A configured root that is temporarily unavailable remains visible as **unavailable**. Browsing or a
-folder action must not interpret temporary I/O failure as an empty library and must never delete
-canonical Tracks. This follows the scanner's existing `unavailableDirs` safety rule.
+暂时不可用的已配置根目录保持可见为**不可用**。浏览或文件夹操作不得把临时 I/O 失败解释为空曲库，并且绝不能删除规范曲目。这遵循扫描器现有的 `unavailableDirs` 安全规则。
 
-Folder Browser must align with scanner's current follow-links behavior:
+Folder Browser 必须与扫描器当前的 follow-links 行为保持一致：
 
-- navigation begins only from a configured root;
-- requested logical paths are normalized and must remain lexically under that configured root;
-- `..` or direct requests for unrelated host paths are rejected;
-- a symlink reachable through the configured root may be followed, matching scanner traversal;
-- navigation keeps the root-relative logical path rather than exposing the symlink target as a new
-  unrestricted browse root;
-- symlink cycles are detected/limited during recursive actions.
+- 导航仅从已配置根目录开始；
+- 所请求的逻辑路径会被规范化，并且必须在词法上位于该已配置根目录之下；
+- `..` 或对无关主机路径的直接请求会被拒绝；
+- 通过已配置根目录可达的符号链接可以被跟随，与扫描器遍历一致；
+- 导航保留根相对的逻辑路径，而不是把符号链接目标暴露为新的不受限制浏览根目录；
+- 符号链接环在递归操作期间被检测/限制。
 
-## 13. Core contracts
+## 13. Core 契约
 
-Exact route names may follow existing Control conventions, but the domain contract should provide
-the equivalent of:
+确切的 route 名称可以沿用现有 Control 约定，但领域契约应提供等价于以下内容：
 
 ```text
 GET  /library/folders/roots
@@ -725,30 +562,14 @@ POST /library/folders/pins
 DELETE /library/folders/pins
 ```
 
-`scan` represents both incremental scoped scan and explicit scoped rescan through an explicit mode;
-it uses the single existing scanner state machine. `location` represents a Core-resolved Folder
-navigation target for a local Track and must hide CUE/SACD physical-path parsing from Web.
-`material` represents a validated Folder-domain read of one supported supplementary material; the
-implementation may use a separate thumbnail/content route or reference form where that fits the
-existing asset-serving architecture better.
-`directory/thumbnail` lazily resolves one child-directory card image from preferred local
-cover/front/folder artwork or an already-canonical local cover, then returns only a bounded
-thumbnail. `playlist-track` is the narrow CUE/SACD split mutation used when a user adds one
-expanded virtual track to a local playlist: Core canonicalizes the container and persists only the
-selected stable Track id.
+`scan` 通过显式 mode 同时表示增量作用域扫描与显式作用域重扫；它使用唯一的现有扫描器状态机。`location` 表示为本地曲目解析出的 Core 侧 Folder 导航目标，并且必须对 Web 隐藏 CUE/SACD 物理路径解析。`material` 表示对一个受支持补充素材的、经过校验的 Folder 域读取；在该实现更适合现有资产供给架构的地方，实现可以使用单独的缩略图/内容 route 或引用形式。
+`directory/thumbnail` 从首选的本地 cover/front/folder 插画或已规范的本地封面惰性解析一个子目录卡片图片，然后仅返回有界缩略图。`playlist-track` 是当用户把一个已展开的虚拟分轨加入本地歌单时所用的窄口径 CUE/SACD 拆分变更：Core 规范化该容器并仅持久化所选稳定曲目 id。
 
-`browse` is paginated/cursor-based from the start. Its optional `filter` is applied to the current
-directory's direct children **before** pagination and never descends into child directories. A
-directory containing thousands of direct entries must not require one giant JSON response even
-though Web also virtualizes rendering. The cursor belongs to the current directory snapshot/order
-and responses include enough information for Web to know whether more entries are available.
-Directory/media/material grouping and deterministic ordering must remain stable across pages.
+`browse` 从一开始就是分页/游标式的。其可选 `filter` 在分页**之前**应用于当前目录的直接子项，并且绝不深入子目录。即使 Web 也对渲染做虚拟化，包含数千个直接条目的目录也不得要求单个巨大的 JSON 响应。游标属于当前目录快照/顺序，响应包含足够信息让 Web 知道是否还有更多条目可用。目录/媒体/素材分组与确定性排序必须在各页之间保持稳定。
 
-`search` performs bounded physical directory/file-name search across configured roots without
-turning the database library search into a filesystem search. `pins` stores only validated Folder
-navigation shortcuts.
+`search` 在已配置根目录上执行有界的物理目录/文件名搜索，而不把数据库曲库搜索变成文件系统搜索。`pins` 仅存储经过校验的 Folder 导航快捷方式。
 
-Shared protocol types belong under `shared/types/`. A browse result should distinguish at least:
+共享协议类型属于 `shared/types/`。浏览结果至少应区分：
 
 ```ts
 type FolderBrowseEntry =
@@ -767,38 +588,32 @@ type FolderBrowseEntry =
     };
 ```
 
-The real type can carry the additional presentation/status fields required by the implementation,
-but it must not expose a recursively materialized tree.
+真实类型可以携带实现所需的额外呈现/状态字段，但不得暴露递归物化的树。
 
-## 14. Web implementation
+## 14. Web 实现
 
-`Folders.vue` becomes a route-driven current-directory view.
+`Folders.vue` 变为路由驱动的当前目录视图。
 
-It should:
+它应：
 
-- load roots or one current directory through the Folder Browser client;
-- keep path/container state in the route;
-- show Core-persisted pinned folders on Folder home and support pin/unpin actions;
-- provide recursive Folder name/path search on Folder home / its dedicated entry;
-- provide an independent current-directory filter that does not recurse and is applied before
-  pagination;
-- render direct directories and mixed media entries;
-- support list/grid presentation of the same current-directory data without changing Core
-  hierarchy semantics;
-- render current-directory supplementary materials in a separate read-only section and open them in
-  bounded image/PDF/text viewers;
-- refresh the current view on the Core library-content revision event;
-- expose recursive incremental scan and force-rescan for the current directory without creating a
-  second scan state;
-- consume Core-resolved “open containing folder” targets and restore container/focus state;
-- load additional browse/search pages on demand while preserving stable ordering;
-- restore per-history-entry Folder scroll position when navigating back/forward;
-- retain image/PDF/text viewer position (including PDF page/zoom) for the current Web session where
-  practical;
-- delegate all recursive/media-resolution actions to Core;
-- preserve existing player/queue feedback patterns.
+- 通过 Folder Browser 客户端加载根目录或某一个当前目录；
+- 把路径/容器状态保留在路由中；
+- 在 Folder 主页显示 Core 持久化的固定文件夹，并支持固定/取消固定操作；
+- 在 Folder 主页/其专属入口提供递归的 Folder 名称/路径搜索；
+- 提供一个独立的当前目录过滤器，它不递归，并在分页之前应用；
+- 渲染直接目录与混合媒体条目；
+- 支持对同一当前目录数据使用列表/网格呈现，而不改变 Core 层级语义；
+- 在独立的只读区块中渲染当前目录的补充素材，并在有界的图片/PDF/文本查看器中打开它们；
+- 在 Core 曲库内容修订事件上刷新当前视图；
+- 为当前目录暴露递归增量扫描与强制重扫，而不创建第二个扫描状态；
+- 消费 Core 解析出的“打开所在文件夹”目标并恢复容器/焦点状态；
+- 按需加载更多浏览/搜索页，同时保持稳定排序；
+- 在后退/前进导航时恢复每个历史条目的 Folder 滚动位置；
+- 在可行时，为当前 Web 会话保留图片/PDF/文本查看器位置（包括 PDF 页码/缩放）；
+- 把所有递归/媒体解析操作委托给 Core；
+- 保留现有播放器/队列反馈模式。
 
-The shared local Track menu should expose the unified common actions:
+共享的本地曲目菜单应暴露统一的通用操作：
 
 ```text
 Play
@@ -808,212 +623,149 @@ Add to playlist...
 Open containing folder     (resolvable local Track only)
 ```
 
-SongList, PlayerBar, Full Player, QueuePopover, QueuePanel, local playlists/albums/artists,
-collections, and History should consume this shared Track action model instead of independently
-reimplementing the common subset. Non-local Tracks do not show “Open containing folder”.
+SongList、PlayerBar、Full Player、QueuePopover、QueuePanel、本地歌单/专辑/歌手、合集与 History 应消费该共享曲目操作模型，而不是各自重新实现通用子集。非本地曲目不显示“打开所在文件夹”。
 
-The following current tree projection is removed once the replacement is complete:
+替换完成后，以下当前代码树投影将被移除：
 
-- `src/utils/folderTree.ts`;
-- `src/types/folder.ts`;
-- `libraryStore.folderTree`;
-- `libraryStore.folderCount`;
-- Folder-page `expanded`, recursive `findFolder`, and `STree` usage.
+- `src/utils/folderTree.ts`；
+- `src/types/folder.ts`；
+- `libraryStore.folderTree`；
+- `libraryStore.folderCount`；
+- Folder 页面的 `expanded`、递归 `findFolder` 与 `STree` 用法。
 
-If `STree.vue` has no other real consumer after this work, remove it as dead code rather than
-keeping an unused compatibility component.
+如果本项工作之后 `STree.vue` 没有其它真实消费者，就把它作为死代码移除，而不是保留一个未使用的兼容组件。
 
-## 15. Failure behavior
+## 15. 失败行为
 
-The implementation must distinguish:
+实现必须区分：
 
-- empty directory;
-- unavailable directory/root;
-- unauthorized/out-of-root path;
-- file disappeared between browse and play;
-- unsupported media;
-- malformed CUE;
-- SACD probe failure;
-- scoped scan rejected because another scan is already active;
-- local Track no longer resolves under a configured Folder root;
-- pinned folder target no longer exists or its root is unavailable;
-- Folder search is cancelled, times out, or encounters an unavailable root;
-- current-directory filter returns no direct matches;
-- browse/search cursor becomes stale after filesystem mutation;
-- material disappeared after listing;
-- material type/content no longer matches the supported allowlist;
-- text material cannot be decoded safely;
-- material preview exceeds its configured eager-read limit;
-- canonicalization/database failure.
+- 空目录；
+- 不可用目录/根目录；
+- 未授权/越出根目录的路径；
+- 文件在浏览与播放之间消失；
+- 不受支持的媒体；
+- 格式错误的 CUE；
+- SACD 探测失败；
+- 作用域扫描因另一个扫描已处于活动状态而被拒绝；
+- 本地曲目不再能在已配置 Folder 根目录下解析；
+- 固定文件夹目标不再存在或其根目录不可用；
+- Folder 搜索被取消、超时或遇到不可用根目录；
+- 当前目录过滤器没有返回直接匹配项；
+- 文件系统变更后浏览/搜索游标变为陈旧；
+- 素材在列表之后消失；
+- 素材类型/内容不再符合受支持允许清单；
+- 文本素材无法被安全解码；
+- 素材预览超出其配置的急切读取限制；
+- 规范化/数据库失败。
 
-Failures from one entry must not corrupt the library or cause unrelated entries to disappear.
-Recursive queue/playlist actions report skipped/failed entries explicitly when partial progress is
-allowed; operations that must be atomic, such as durable playlist membership commit, must not leave
-an internally inconsistent playlist.
+单个条目的失败不得损坏曲库，也不得导致无关条目消失。递归队列/歌单操作在允许部分进展时显式报告被跳过/失败的条目；必须保持原子性的操作，例如持久歌单成员关系提交，不得留下内部不一致的歌单。
 
-## 16. Performance requirements
+## 16. 性能要求
 
-Normal browsing cost is proportional to the **current directory**, not the complete library.
+普通浏览成本与**当前目录**成正比，而不是与完整曲库成正比。
 
-Specifically:
+具体而言：
 
-- no `buildFolderTree(allTracks)` equivalent;
-- no global recursive directory walk on page load or normal navigation;
-- direct-directory browse responses are paginated/cursor-based; virtualization is not treated as a
-  substitute for transport pagination;
-- current-directory filter is applied Core-side before pagination and remains proportional to the
-  current directory rather than recursively traversing descendants;
-- Folder Search is bounded/cancellable and never materializes the complete hierarchy in Web;
-- no eager metadata probe of every unscanned file in the current directory;
-- no eager original-image/PDF/text-content load during directory listing;
-- material discovery is current-directory-only and does not recursively collect descendant
-  materials;
-- image list rendering uses bounded thumbnails; original images, PDF pages, and text content load
-  only when opened;
-- large PDF/text content uses range/bounded reads rather than unbounded Core memory buffers;
-- no descendant Track arrays stored on every ancestor folder;
-- direct-directory lists remain virtualized for unusually large single directories;
-- recursive filesystem traversal occurs only for explicit recursive user actions or the scanner;
-- database association uses bounded queries/batches against the direct physical entries.
+- 没有等价于 `buildFolderTree(allTracks)` 的操作；
+- 页面加载或普通导航时没有全局递归目录遍历；
+- 直接目录浏览响应是分页/游标式的；虚拟化不被当作传输分页的替代品；
+- 当前目录过滤器在 Core 侧于分页之前应用，并保持与当前目录成正比，而不是递归遍历后代；
+- Folder Search 是有界/可取消的，并且从不在 Web 中物化完整层级；
+- 不对当前目录中每个未扫描文件做急切元数据探测；
+- 目录列表期间不急切加载原始图片/PDF/文本内容；
+- 素材发现仅限当前目录，不递归收集后代素材；
+- 图片列表渲染使用有界缩略图；原始图片、PDF 页面与文本内容仅在打开时加载；
+- 大型 PDF/文本内容使用范围/有界读取，而不是无界的 Core 内存缓冲；
+- 不在每个祖先文件夹上存储后代曲目数组；
+- 对于异常巨大的单个目录，直接目录列表保持虚拟化；
+- 递归文件系统遍历仅发生在显式递归用户操作或扫描器执行时；
+- 数据库关联针对直接物理条目使用有界查询/批次。
 
-The implementation should be validated with both the current ~20k-track scale and synthetic
-large-directory cases so performance claims are measured rather than inferred from DOM
-virtualization alone.
+实现应同时以当前约 2 万曲目的规模与合成大目录用例进行验证，使性能结论是被测量出来的，而不仅仅是从 DOM 虚拟化推断而来。
 
-## 17. Acceptance criteria
+## 17. 验收标准
 
-The replacement is complete only when all of the following pass:
+只有当以下全部通过时，替换才算完成：
 
-1. Adding a valid library root makes it visible and navigable immediately without waiting for a
-   scan.
-2. Unscanned ordinary audio can be played, inserted as “接下来播放”, and queued.
-3. “Scan this folder” incrementally scans only the current subtree, recursively, and enriches the
-   open Folder view without scanning unrelated configured roots.
-4. “Rescan this folder” forces metadata refresh only for the current subtree.
-5. Scoped scan deletion/removal detection cannot delete or invalidate Tracks outside its subtree,
-   and scoped/global scans continue to share one scanner state machine.
-6. Scan progress enriches an open folder view without waiting for the complete scan and without
-   rebuilding the entire local library in Web.
-7. Scanned and unscanned entries do not duplicate the same physical audio.
-8. CUE can be opened and played before a full scan; valid CUE hides the backing whole-file duplicate,
-   while malformed CUE does not hide otherwise playable audio.
-9. SACD ISO can be opened and played before a full scan and uses the same virtual-track semantics as
-   the canonical scanner result.
-10. Recursive Play / 接下来播放 / Queue / Playlist produce the same deterministic ordering and do
-    not duplicate CUE/SACD backing files.
-11. Creating a playlist from unscanned content canonicalizes the required Tracks and persists valid
-    playlist membership.
-12. “Open containing folder” is available as a shared action for resolvable local Tracks rather than
-    only inside playlists.
-13. Opening the containing folder focuses the exact ordinary Track; CUE/SACD virtual Tracks navigate
-    through their physical container and focus the exact virtual Track without Web parsing virtual
-    paths.
-14. Browser refresh/back/forward preserves useful folder/container/focus context after an
-    “Open containing folder” navigation.
-15. Multiple configured roots with duplicate basenames remain distinguishable.
-16. Temporarily unavailable NAS/USB roots show an unavailable state and never cause library
-    deletion.
-17. “Open containing folder” for a Track on an unavailable configured root reaches that unavailable
-    Folder location instead of exposing an unrestricted host path.
-18. Symlink navigation matches scanner reachability, rejects path escape, and recursive actions
-    cannot loop indefinitely.
-19. Browser back/forward and page refresh preserve the current directory/container location.
-20. Frequently used directories can be pinned/unpinned, appear on Folder home across Web Controls,
-    and still navigate through the normal authorized Folder route; unavailable pins remain visible
-    as unavailable rather than being silently deleted.
-21. Folder Search finds matching physical directory/supported filenames without requiring library
-    indexing, disambiguates duplicate names by path, and does not become a metadata-search alias.
-22. Recursive Folder Play / 接下来播放 / Queue / Playlist remain the primary actions, while explicit
-    current-folder-only variants use the same Core action path with child traversal disabled.
-23. Returning from a child folder restores the previous directory scroll position; current-session
-    image/PDF/text viewer state can restore useful position such as PDF page/zoom without becoming
-    Core library metadata.
-24. A single directory with thousands of direct entries is transported in bounded browse pages and
-    remains usable with Web virtualization; Folder Search results are likewise bounded/pageable.
-25. Supported image, PDF, and text materials in the current directory appear without a library
-    scan and remain separate from playable Track/container ordering.
-26. Image lists use thumbnails and load full-resolution scans only on demand.
-27. PDF viewing supports bounded/range delivery and does not require loading the entire PDF into
-    Core memory before viewing.
-28. `txt` / `log` / `nfo` / `md` materials are shown as non-executable plain text with deterministic
-    best-effort decoding; oversized text cannot create an unbounded read.
-29. Unsupported/binary files remain hidden from Folder Browser, and material endpoints cannot read
-    a file outside configured library roots.
-30. Recursive Play / Queue / Playlist ignore supplementary materials completely.
-31. Long directory names are readable without the old fixed-width tree limitation.
-32. A large library no longer constructs or stores a complete Web-side folder tree.
-33. Existing local playback, queue authority, scanner deletion safety, CUE playback boundaries,
-    SACD playback, Albums/Artists, and playlist persistence continue to pass their relevant tests.
-34. The old Folder tree projection and any now-unused tree-only code are removed rather than kept as
-    a fallback implementation.
-35. Product UI consistently uses 播放 / 接下来播放 / 添加到队列 / 添加到歌单… for Track and
-    multi-Track operations; “下一首播放” is not used for group insertion.
-36. Folder Track rows offer “添加到歌单…” for existing playlists, with playlist creation available
-    inside that flow rather than as the only playlist action; raw translation keys such as
-    `common.play` never appear in the rendered menu.
-37. The normal Folder header does not repeat the current folder name/full path beneath the
-    breadcrumb; its primary actions remain limited to Play all, incremental Scan, overflow, current
-    filter, and presentation switch.
-38. The Folder overflow menu exposes common recursive actions directly and groups all
-    non-recursive variants under one “Current folder only” submenu instead of repeating four long
-    top-level labels.
-39. Current-directory Filter matches only direct children, never descends into subdirectories, and
-    returns correct results even when matching entries fall outside the currently loaded browse
-    page.
-40. Folder Filter and recursive Folder Search remain separate interactions: filtering does not
-    replace the route with a search-results view, while search may return descendants across
-    configured roots.
-41. Returning from a child folder restores the parent folder's filter and useful scroll position.
-42. Folder supports both list and cover/grid presentation without reintroducing a tree; switching
-    presentation does not alter route, ordering, queue semantics, or canonical library state.
-43. “Open containing folder” is available from the shared local Track action model in PlayerBar,
-    Full Player, QueuePopover, QueuePanel, local SongList/Playlist/Album/Artist, collections, and
-    History where the Track is resolvable.
-44. Context-specific Track actions such as queue/playlist removal are additions to the shared
-    common Track actions, not independent replacements that hide “Open containing folder”.
+1. 添加一个有效曲库根目录会使其立即可见且可导航，无需等待扫描。
+2. 未扫描的普通音频可以被播放、作为“接下来播放”插入并入队。
+3. “Scan this folder”仅对当前子树递归增量扫描，并丰富打开的 Folder 视图，而不扫描无关的已配置根目录。
+4. “Rescan this folder”仅对当前子树强制刷新元数据。
+5. 作用域扫描的删除/移除检测不能删除或使子树之外的曲目失效，并且作用域/全局扫描继续共享同一个扫描器状态机。
+6. 扫描进度会丰富已打开的文件夹视图，而无需等待完整扫描，也不会在 Web 中重建整个本地曲库。
+7. 已扫描与未扫描条目不重复同一份物理音频。
+8. CUE 可以在完整扫描之前打开并播放；有效 CUE 隐藏背后的整文件重复项，而格式错误的 CUE 不会隐藏本应可播放的音频。
+9. SACD ISO 可以在完整扫描之前打开并播放，并使用与规范扫描器结果相同的虚拟分轨语义。
+10. 递归播放 / 接下来播放 / 队列 / 歌单产生相同的确定性排序，并且不重复 CUE/SACD 背后的文件。
+11. 从未扫描内容创建歌单会规范化所需曲目并持久化有效的歌单成员关系。
+12. “打开所在文件夹”作为共享操作对可解析的本地曲目可用，而不仅仅在歌单内部可用。
+13. 打开所在文件夹会聚焦到确切的普通曲目；CUE/SACD 虚拟分轨通过其物理容器导航并聚焦到确切的虚拟分轨，而无需 Web 解析虚拟路径。
+14. 在“打开所在文件夹”导航之后，浏览器刷新/后退/前进保留有用的文件夹/容器/焦点上下文。
+15. 多个 basename 重复的已配置根目录保持可区分。
+16. 暂时不可用的 NAS/USB 根目录显示不可用状态，并且绝不导致曲库删除。
+17. 对位于不可用已配置根目录上的曲目执行“打开所在文件夹”会到达该不可用 Folder 位置，而不是暴露不受限制的主机路径。
+18. 符号链接导航与扫描器可达性一致，拒绝路径逃逸，并且递归操作不会无限循环。
+19. 浏览器后退/前进与页面刷新保留当前目录/容器位置。
+20. 常用目录可以被固定/取消固定，跨 Web Control 出现在 Folder 主页，并且仍然通过普通的已授权 Folder 路由导航；不可用的固定项保持可见为不可用，而不是被静默删除。
+21. Folder Search 无需曲库索引即可找到匹配的物理目录/受支持文件名，按路径消歧重名，并且不会变成元数据搜索的别名。
+22. 递归 Folder 播放 / 接下来播放 / 队列 / 歌单仍是主要操作，而显式的仅当前文件夹变体使用同一个 Core 操作路径并禁用子目录遍历。
+23. 从子文件夹返回会恢复上一目录的滚动位置；当前会话的图片/PDF/文本查看器状态可以恢复有用位置，例如 PDF 页码/缩放，而不会成为 Core 曲库元数据。
+24. 单个包含数千个直接条目的目录以有界浏览页传输，并在 Web 虚拟化下保持可用；Folder Search 结果同样有界/可分页。
+25. 当前目录中受支持的图片、PDF 与文本素材无需曲库扫描即可出现，并与可播放曲目/容器排序保持分离。
+26. 图片列表使用缩略图，仅在按需时才加载全分辨率扫描件。
+27. PDF 查看支持有界/范围供给，并且不需要在查看之前把整个 PDF 加载进 Core 内存。
+28. `txt` / `log` / `nfo` / `md` 素材以不可执行的纯文本显示，并使用确定性最佳努力解码；过大的文本不能产生无界读取。
+29. 不受支持/二进制文件对 Folder Browser 保持隐藏，并且素材端点不能读取已配置曲库根目录之外的文件。
+30. 递归播放 / 队列 / 歌单完全忽略补充素材。
+31. 长目录名可读，不受旧的固定宽度树限制。
+32. 大曲库不再构建或存储完整的 Web 侧文件夹树。
+33. 现有本地播放、队列权威、扫描器删除安全、CUE 播放边界、SACD 播放、专辑/歌手与歌单持久化继续通过其相关测试。
+34. 旧 Folder 树投影以及任何现已不再使用的树专用代码被移除，而不是作为回退实现保留。
+35. 产品 UI 对曲目与多曲目操作一致使用播放 / 接下来播放 / 添加到队列 / 添加到歌单…；“下一首播放”不用于分组插入。
+36. Folder 曲目行为现有歌单提供“添加到歌单…”，歌单创建在该流程内可用，而不是作为唯一的歌单操作；诸如 `common.play` 这样的原始翻译键永远不会出现在渲染出来的菜单中。
+37. 普通 Folder 头部不在面包屑下方重复当前文件夹名/完整路径；其主要操作仍限于 Play all、增量 Scan、溢出菜单、当前过滤器与呈现切换。
+38. Folder 溢出菜单直接暴露常见的递归操作，并把所有非递归变体归入一个“Current folder only”子菜单，而不是重复四个冗长的顶级标签。
+39. 当前目录 Filter 仅匹配直接子项，绝不深入子目录，并且即使匹配条目落在当前已加载的浏览页之外也能返回正确结果。
+40. Folder Filter 与递归 Folder Search 保持为两种不同的交互：过滤不会把路由替换为搜索结果视图，而搜索可以跨已配置根目录返回后代。
+41. 从子文件夹返回会恢复父文件夹的过滤器与有用的滚动位置。
+42. Folder 同时支持列表与封面/网格呈现，而不重新引入树；切换呈现不改变路由、排序、队列语义或规范曲库状态。
+43. 在 PlayerBar、Full Player、QueuePopover、QueuePanel、本地 SongList/歌单/专辑/歌手、合集与 History 中，凡曲目可解析之处，“打开所在文件夹”均可从共享本地曲目操作模型使用。
+44. 诸如队列/歌单移除这类上下文相关的曲目操作，是对共享通用曲目操作的补充，而不是隐藏“打开所在文件夹”的独立替代品。
 
-## 18. Verification
+## 18. 验证
 
-At minimum, implementation should add proportional automated coverage for:
+至少，实现应为以下内容添加成比例的自动化覆盖：
 
-- root/path authorization and symlink handling;
-- current-directory enumeration and canonical Track association;
-- ordinary unscanned playback resolution;
-- CUE/SACD on-demand resolution and duplicate suppression;
-- scoped incremental scan / force-rescan boundaries and deletion safety;
-- deterministic recursive ordering;
-- unavailable-root behavior;
-- targeted canonicalization and playlist persistence;
-- local Track containing-folder resolution, including CUE/SACD focus targets;
-- pinned-folder persistence, unavailable-target behavior, and cross-Web-Control visibility;
-- bounded Folder hierarchy search and duplicate-name path disambiguation;
-- Core-side current-directory filtering before pagination, including matches beyond the first page;
-- proof that Folder Filter never descends into child directories and remains separate from
-  recursive Folder Search;
-- recursive versus current-folder-only actions using one Core action implementation;
-- paginated/cursor browse stability across large direct directories;
-- Folder scroll restoration and session-only material-viewer position restoration;
-- current-directory filter restoration when navigating into a child folder and back;
-- list/grid presentation equivalence for navigation and actions;
-- shared Track-action coverage across PlayerBar, Full Player, QueuePopover, QueuePanel, SongList,
-  local Playlist/Album/Artist, collections, and History;
-- unified “接下来播放” queue insertion semantics for one-Track and multi-Track objects;
-- add-to-existing-playlist flow from Folder Track/container/folder actions;
-- supplementary-material allowlist and root authorization;
-- image thumbnail/original lazy loading;
-- PDF range/bounded serving;
-- text decoding, escaping/plain-text rendering, and oversized-log handling;
-- proof that materials never enter queue/playlist recursive ordering;
-- library revision refresh behavior;
-- route navigation state;
-- removal of the old full-tree projection.
+- 根目录/路径授权与符号链接处理；
+- 当前目录枚举与规范曲目关联；
+- 普通未扫描播放解析；
+- CUE/SACD 按需解析与重复抑制；
+- 作用域增量扫描 / 强制重扫的边界与删除安全；
+- 确定性递归排序；
+- 不可用根目录行为；
+- 定向规范化与歌单持久化；
+- 本地曲目所在文件夹解析，包括 CUE/SACD 焦点目标；
+- 固定文件夹持久化、不可用目标行为与跨 Web Control 可见性；
+- 有界 Folder 层级搜索与重名路径消歧；
+- Core 侧在分页之前执行的当前目录过滤，包括首屏之外的匹配项；
+- 证明 Folder Filter 绝不深入子目录，并与递归 Folder Search 保持分离；
+- 递归与仅当前文件夹操作使用同一个 Core 操作实现；
+- 在大型直接目录上分页/游标浏览的稳定性；
+- Folder 滚动恢复与仅会话内的素材查看器位置恢复；
+- 进入子文件夹再返回时的当前目录过滤器恢复；
+- 列表/网格呈现在导航与操作上的等价性；
+- 跨 PlayerBar、Full Player、QueuePopover、QueuePanel、SongList、本地歌单/专辑/歌手、合集与 History 的共享曲目操作覆盖；
+- 单曲目与多曲目对象统一的“接下来播放”队列入队语义；
+- 从 Folder 曲目/容器/文件夹操作发起的加入现有歌单流程；
+- 补充素材允许清单与根目录授权；
+- 图片缩略图/原图惰性加载；
+- PDF 范围/有界供给；
+- 文本解码、转义/纯文本渲染与过大日志处理；
+- 证明素材永远不会进入队列/歌单递归排序；
+- 曲库修订刷新行为；
+- 路由导航状态；
+- 移除旧的整树投影。
 
-Real-library acceptance should include a large mixed-format hierarchy with PCM, Native DSD, CUE,
-SACD ISO, cover/back/scan images, PDF booklets, UTF-8 and legacy-encoded rip logs/release notes,
-multiple roots, one temporarily unavailable root, long folder names, one oversized text/PDF
-material, and a large single-directory case.
+真实曲库验收应包含一个大型混合格式层级，其中有 PCM、Native DSD、CUE、SACD ISO、cover/back/scan 图片、PDF 小册子、UTF-8 与传统编码的抓轨日志/发行说明、多个根目录、一个暂时不可用的根目录、长文件夹名、一份过大的文本/PDF 素材，以及一个大单目录用例。
 
-Real UX acceptance should additionally include the existing PhilipsDUO-style case with hundreds of
-direct child folders: filter the current 200+ item list without descending, switch list/grid,
-enter one result and return with filter/scroll preserved, then compare that flow against recursive
-Folder Search to verify the two interactions remain clearly distinct.
+真实 UX 验收还应包含现有的 PhilipsDUO 风格用例，其中有数百个直接子文件夹：对当前 200+ 项列表进行过滤而不深入，切换列表/网格，进入一个结果再返回并保留过滤器/滚动，然后把该流程与递归 Folder Search 对比，以验证这两种交互保持清晰的区别。

@@ -1,29 +1,29 @@
-# SPlayer Atom Development Setup
+# SPlayer Atom 开发环境
 
-Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
-live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.
+项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
+开发工作流与约定。
 
-## Requirements
+## 环境要求
 
 - Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
 - Linux x86-64
-- `libasound2-dev`, `pkg-config`, `clang`, `libarchive-tools`
+- `libasound2-dev`、`pkg-config`、`clang`、`libarchive-tools`
 
-Formal builds and bundled-runtime artifacts use reference Node `24.18.0`. The runtime support
-range and release reference are defined in `core/atom/runtime/nodeRuntime.ts`.
+正式构建与 bundled-runtime 产物使用 reference Node `24.18.0`。运行时支持范围与发布参考版本定义在
+`core/atom/runtime/nodeRuntime.ts`。
 
-## Start development
+## 开始开发
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-`pnpm dev` builds the native addons in debug mode, starts Node Core, and starts the standalone Web Vite dev server.
+`pnpm dev` 以 debug 模式构建 native addon、启动 Node Core，并启动独立的 Web Vite dev server。
 
-## Repository layout
+## 仓库结构
 
 ```text
 core/                    Node Core runtime and services
@@ -37,20 +37,19 @@ scripts/atom/            Core build, staging and release checks
 docs/                    Atom documentation
 ```
 
-`@main/*` is the TypeScript alias for the `core/` tree.
+`@main/*` 是 `core/` 目录树的 TypeScript 别名。
 
-## Change and commit conventions
+## 变更与提交约定
 
-- `origin` is the development and release repository.
-- Commit titles use Conventional Commits with a one-line Chinese summary (`<type>: <summary>`).
-- Add a commit body only when explicitly requested.
-- Do not format or rewrite unrelated dirty files.
-- Use concise JSDoc for JS/TS when useful (`@param name - ...`, `@returns`); other languages use
-  their native documentation conventions. Avoid decorative comments and obvious restatements.
-- `.prettierrc.yaml` defines formatting. Follow existing Vue/Pinia/router/VueUse/i18n auto-import
-  and component auto-registration patterns.
+- `origin` 是开发与发布仓库。
+- 提交标题使用 Conventional Commits，并配一行中文摘要（`<type>: <summary>`）。
+- 仅在明确要求时添加提交正文。
+- 不要格式化或改写无关的脏文件。
+- JS/TS 在有用时使用简洁 JSDoc（`@param name - ...`、`@returns`）；其它语言使用各自的文档约定。
+  避免装饰性注释与显而易见的复述。
+- `.prettierrc.yaml` 定义格式化。遵循现有的 Vue/Pinia/router/VueUse/i18n 自动导入与组件自动注册模式。
 
-## Common gates
+## 常用门禁
 
 ```bash
 pnpm typecheck
@@ -63,18 +62,16 @@ cargo test --workspace
 git diff --check
 ```
 
-Use proportional checks while iterating. Architecture or release changes should run the full set.
+迭代时按比例选择检查范围。架构或发布变更应运行完整集合。
 
-## Core/Web implementation
+## Core/Web 实现
 
-Extend `buildCoreControlRoutes()` and the existing HTTP/WS clients for Control operations.
-Shared protocol types live in `shared/types/`. Music-domain settings are Core-owned; browser-local
-display preferences remain in Web Control.
+为 Control 操作扩展 `buildCoreControlRoutes()` 与现有 HTTP/WS 客户端。共享协议类型位于
+`shared/types/`。音乐域设置由 Core 持有；浏览器本地显示偏好保留在 Web Control。
 
-Use the 300 px cover for blurred, sampled, and list rendering; use original images only where
-visibly required.
+模糊、采样与列表渲染使用 300 px 封面；仅在视觉上确有必要时使用原图。
 
-## Native development
+## Native 开发
 
 ```bash
 pnpm build:native --dev
@@ -82,20 +79,19 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-The project-built addons are `audio-engine.node` and `streaming-api.node`. Required third-party
-native dependencies such as `better-sqlite3` are packaged separately. See [Native Modules](./native.md)
-and [Build Flavors](./build-flavors.md) for module responsibilities and dependency checks.
+项目自建的 addon 是 `audio-engine.node` 与 `streaming-api.node`。所需第三方 native 依赖（例如
+`better-sqlite3`）单独打包。模块职责与依赖检查见[原生模块](./native.md)与[构建面](./build-flavors.md)。
 
 ## Diretta
 
-Normal builds do not require the proprietary SDK. Diretta builds set `DIRETTA_SDK_ROOT` and an
-explicit CPU variant; formal Diretta packaging must pass the required-SDK provenance gate before
-producing an artifact. See [Build Flavors](./build-flavors.md#diretta-capability) for the command.
+普通构建不需要专有 SDK。Diretta 构建设置 `DIRETTA_SDK_ROOT` 与显式的 CPU 变体；正式 Diretta 打包
+必须先通过 required-SDK provenance 门禁，才能产出产物。命令见
+[构建面](./build-flavors.md#diretta-能力)。
 
-Linux live Diretta connection/playback validation runs the Host process as root. Follow the
-[deployment setup](./core-deployment.md) and [hardware checklist](./hardware-release-checklist.md).
+Linux 实机 Diretta 连接/播放验收以 root 运行 Host 进程。遵循[部署设置](./core-deployment.md)与
+[硬件清单](./hardware-release-checklist.md)。
 
-## Release development
+## 发布开发
 
 ```bash
 pnpm package:core
@@ -103,12 +99,12 @@ pnpm package:core:bundled
 pnpm package:core:debian11 --without-diretta
 ```
 
-The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4|zen4` with SDK 150 set
-through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-bundled-build).
+Debian 11 构建器还接受 `--with-diretta --diretta-variant=v2|v3|v4|zen4`，SDK 150 通过
+`DIRETTA_SDK_ROOT` 指定；见[构建面](./build-flavors.md#debian-11-bundled-构建)。
 
-Validate the final Linux x86-64 `tar.gz`, including runtime metadata, native addon loading, Web root,
-HTTP/WS endpoints, plugin-host IPC, startup, and termination. Real ALSA/Diretta/PCM/Native-DSD/UPnP
-and long-run behavior require separate hardware acceptance; software checks do not replace it.
+验收最终的 Linux x86-64 `tar.gz`，包括运行时元数据、native addon 加载、Web 根页、HTTP/WS 端点、
+plugin-host IPC、启动与终止。真实的 ALSA/Diretta/PCM/Native-DSD/UPnP 与长跑行为需要单独的硬件验收；
+软件检查不能替代它。
 
-See [Build and Packaging](./build-and-packaging.md), [Core Deployment](./core-deployment.md), and
-[Hardware Release Checklist](./hardware-release-checklist.md) for the detailed procedures.
+详细流程见[构建与打包](./build-and-packaging.md)、[Core 部署](./core-deployment.md)与
+[硬件发布验收清单](./hardware-release-checklist.md)。

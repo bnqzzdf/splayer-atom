@@ -1,107 +1,91 @@
-# SPlayer Atom Roadmap
+# SPlayer Atom 路线图
 
-## Current status
+## 当前状态
 
-SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
-ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
-Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
-tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
-bundled packages can be built with or without Diretta. Confirmed implementation milestones are in
-[Atom Completed](./atom-completed.md).
+SPlayer Atom 是一套 Linux x86-64 Node Core，并以 Web Control 作为唯一 UI。Web + Core 迁移、
+ALSA HW Direct / Processed 路径、Diretta Source Direct、UPnP 输出、Core 拥有的 Folder Browser、
+Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进入当前代码树。Netease、QQ音乐、
+酷狗、Qobuz 与 TIDAL 的 Core/Web 路径均已具备。Debian 11 bundled 包可以在带或不带 Diretta 的
+情况下构建。已确认的实现里程碑见 [Atom 已完成](./atom-completed.md)。
 
-This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
-hardware, real-account, browser and release acceptance require a recorded run. The
-[2026-09-22 ALSA record](./alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
-the [2026-09-23 FC4 retest](./alsa-acceptance-2026-09-23.md) covers the two fixes in installed
-artifact commit `3e420f78`. A later [local-module ALSA retest](./alsa-gap-fixes-2026-09-23.md)
-covers source changes through `53284360`; it is not an installed Core artifact. The no-hardware-pause
-fallback branch is retained for devices that need it and has software verification only.
-Identify each new artifact by its recorded Git commit, not by the package version alone.
+本路线图跟踪剩余工作与验收。代码只能确立某条路径是否存在；硬件、真实账户、浏览器与发布验收
+需要一次记录的运行。[2026-09-22 ALSA 记录](./alsa-acceptance-2026-09-22.md) 覆盖产物提交
+`cecee166`；[2026-09-23 FC4 复测](./alsa-acceptance-2026-09-23.md) 覆盖已安装产物提交
+`3e420f78` 中的两处修复。之后的 [本地模块 ALSA 复测](./alsa-gap-fixes-2026-09-23.md) 覆盖
+截至 `53284360` 的源码变更；它不是已安装的 Core 产物。无硬件暂停的兜底分支为需要它的设备保留，
+且仅做过软件验证。每个新产物都应以其记录的 Git 提交来标识，而不是只看包版本号。
 
-Lasting constraints are in `AGENTS.md`; workflows are in the
-[development guide](./atom-development.md).
+长期约束见 `AGENTS.md`；工作流程见[开发指南](./atom-development.md)。
 
-## Open work and acceptance
+## 未完成工作与验收
 
-### ALSA and output
+### ALSA 与输出
 
-- [ ] Validate the [ALSA output plan](./alsa-output-plan.md) changes in a clean candidate Core
-      artifact. The [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short
-      Processed pitch/speed playback, pitch/speed seek and Direct basic playback. Check the
-      supported modes, formats, transitions and resource trend on that candidate; investigate
-      a specific failure if observed. Shared `AlsaFrameWriter`, single runtime ownership and
-      bounded decoded/DSP queues are implemented. Separate mode control loops, parameter-version
-      tracking and an arbitrary cap on one upstream decoder frame are not acceptance gates.
-- [ ] Complete target-device ALSA format and lifecycle checks on the clean candidate. Independent
-      PCM/DSD comparisons already establish exact data at the USB submission layer. Final DAC
-      bit-test or digital capture is needed only for a device-specific end-to-end claim; the
-      product's software guarantee ends at the ALSA HW submission boundary. A device without
-      hardware pause is needed only to claim its fallback path has been verified on that device.
-- [ ] Repeat UPnP hardware checks on the release candidate. The 2026-09-22 FC4 run discovered no
-      renderer; earlier AudioSys checks covered common formats, CUE, SACD, DSD and output switching.
-      The media listener passed 100 repeated aborted pulls on 2026-09-23, but no AudioSys Renderer
-      is currently available. Finish the second real-renderer long-run resource check in the
-      [UPnP plan](./upnp-output-plan.md) and record the final compatibility matrix.
-- [ ] Complete real Diretta CUE gapless acceptance in the
-      [Direct CUE plan](./direct-cue-gapless-plan.md), including adjacent PCM/DSD segments, seek,
-      queue changes and long-running boundary behavior.
+- [ ] 在干净的候选 Core 产物中验证 [ALSA 输出方案](./alsa-output-plan.md) 的变更。
+      [FC4 本地模块复测](./alsa-gap-fixes-2026-09-23.md) 已通过短时 Processed 变调/变速播放、
+      变调/变速 seek 与 Direct 基础播放。在该候选上检查受支持的模式、格式、切换与资源趋势；
+      若观察到具体故障再行排查。共享 `AlsaFrameWriter`、单一运行期归属以及有界解码/DSP 队列均已
+      实现。各自独立的模式控制循环、参数版本跟踪，以及对单个上游解码帧的任意上限都不是验收门禁。
+- [ ] 在干净候选上完成目标设备的 ALSA 格式与生命周期检查。独立的 PCM/DSD 对比已在 USB 提交层
+      确立精确数据。只有在需要针对特定设备给出端到端结论时，才需要最终的 DAC bit-test 或数字
+      采集；产品的软件保证止于 ALSA HW 提交边界。只有在需要声明其兜底路径已在该设备上验证时，
+      才需要一台没有硬件暂停的设备。
+- [ ] 在发布候选上重做 UPnP 硬件检查。2026-09-22 的 FC4 运行没有发现渲染器；更早的 AudioSys
+      检查覆盖了常见格式、CUE、SACD、DSD 与输出切换。媒体监听器于 2026-09-23 通过了 100 次
+      重复的终止拉取，但当前没有可用的 AudioSys Renderer。完成
+      [UPnP 方案](./upnp-output-plan.md) 中第二次真实渲染器长时运行资源检查，并记录最终的兼容性矩阵。
+- [ ] 完成真实 Diretta CUE 无缝验收，见
+      [Direct CUE 方案](./direct-cue-gapless-plan.md)，包括相邻 PCM/DSD 段、seek、
+      队列变更与长时运行的边界行为。
 
-### Providers and Web Control
+### Provider 与 Web Control
 
-- [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
-      for Netease, QM, KG, Qobuz and TIDAL on the intended artifact. The QM/KG product paths and
-      Qobuz browser OAuth/token-only login are implemented but have no real-account acceptance run
-      for this tree. Existing UPnP notes verify selected real Netease/TIDAL online paths, not
-      complete provider matrices.
-- [ ] Add a bounded real-token ListenBrainz acceptance record for Now Playing, permanent listens,
-      401/429 handling, offline retry and restart. The current code implements these paths, but
-      the former completion checkbox had no corresponding run record in the repository.
-- [ ] Complete manual browser, NAS/USB, large-directory and material-viewer acceptance for the
-      merged [Core-owned Folder Browser](./local-folder-browser-plan.md). Its Core/Web implementation
-      and automated tests are present; the old full-tree projection has been removed.
-- [ ] Complete responsive Web Control acceptance at the representative viewports and actual mobile
-      devices in the [responsive plan](./web-responsive-plan.md). The layout is implemented; no
-      complete device/interaction acceptance record is in the repository.
-- [ ] Record long-running use with multiple real Web Controls across refresh, disconnect and
-      reconnect. The artifact smoke passed multiple WebSocket clients and reconnection; that is
-      narrower than long-running browser acceptance.
+- [ ] 在目标产物上，针对 [provider 验收标准](./live-provider-acceptance.md)记录 Netease、QM、KG、
+      Qobuz 与 TIDAL 的完整真实账户验收。QM/KG 产品路径与 Qobuz 浏览器 OAuth/仅 token 登录均已
+      实现，但本代码树没有真实账户验收运行。已有的 UPnP 记录验证了部分真实 Netease/TIDAL 在线
+      路径，而不是完整的 provider 矩阵。
+- [ ] 为 Now Playing、永久收听、401/429 处理、离线重试与重启补一份有界的真实 token ListenBrainz
+      验收记录。当前代码实现了这些路径，但此前的完成勾选项在仓库中没有对应的运行记录。
+- [ ] 为已合并的 [Core 拥有的 Folder Browser](./local-folder-browser-plan.md) 完成手动浏览器、
+      NAS/USB、大目录与素材查看器验收。它的 Core/Web 实现与自动化测试都已具备；旧的整树投影已被移除。
+- [ ] 在[响应式方案](./web-responsive-plan.md)中的代表性视口与实际移动设备上完成响应式
+      Web Control 验收。布局已实现；仓库中没有完整的设备/交互验收记录。
+- [ ] 记录多个真实 Web Control 在刷新、断开与重连情况下的长时运行使用。产物冒烟测试已通过
+      多个 WebSocket 客户端与重连；这比长时运行的浏览器验收范围更窄。
 
-### Release
+### 发布
 
-- [ ] Build a clean artifact from the intended Git commit and complete the
-      [hardware checklist](./hardware-release-checklist.md) and
-      [deployment checklist](./core-deployment.md) on that same candidate, including install,
-      upgrade and rollback. The `cecee166` archive passed file comparison and extracted-artifact
-      smoke, but its observed seek/restart failures prevent closing final acceptance. Debian 11
-      bundled builds without Diretta and with SDK 150 Diretta v3 passed build/artifact smoke on
-      2026-09-23 from a dirty working tree; they are not clean release candidates or hardware
-      acceptance. v2/v4 remain selectable but have not been built in this record.
-- [ ] After those gates pass, prepare the stable release with artifact commit, hash, capabilities
-      and acceptance results recorded.
+- [ ] 从目标 Git 提交构建一个干净产物，并在同一候选上完成
+      [硬件清单](./hardware-release-checklist.md)与
+      [部署清单](./core-deployment.md)，包括安装、升级与回滚。`cecee166` 归档通过了文件对比与
+      解包产物冒烟，但观察到的 seek/重启失败使其无法关闭最终验收。不带 Diretta 与带 SDK 150
+      Diretta v3 的 Debian 11 bundled 构建于 2026-09-23 在脏工作树上通过了构建/产物冒烟；
+      它们不是干净的发布候选，也不算硬件验收。v2/v4 仍可选，但本次记录中未构建。
+- [ ] 上述门禁通过后，准备稳定版发布，并记录产物提交、hash、能力集与验收结果。
 
-## Current priorities
+## 当前优先级
 
-1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
-2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Complete all five provider matrices, ListenBrainz, Folder Browser, responsive Web and
-   long-running multi-Control acceptance.
-4. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
+1. 用一个干净候选产物验证 ALSA 行为与资源趋势；修复观察到的故障。
+2. 完成目标设备的 ALSA 检查，以及尚未完成的 UPnP/Diretta CUE 硬件验收。
+3. 完成全部五个 provider 矩阵、ListenBrainz、Folder Browser、响应式 Web 与
+   长时运行多 Control 验收。
+4. 在一个干净候选上执行安装、升级、回滚与最终硬件检查，然后发布。
 
-## Product scope
+## 产品范围
 
-The current release targets one user on a trusted home/LAN network. Authentication, pairing, TLS
-and stricter browser-origin controls require a later accepted product requirement.
+当前发布面向可信家庭/局域网中的单个用户。身份认证、配对、TLS 与更严格的浏览器来源控制
+需要后续通过的产品需求。
 
-## Related documents
+## 相关文档
 
-| Document                                                                                           | Purpose                                                 |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [Atom Completed](./atom-completed.md)                                                              | Confirmed implementation and bounded acceptance history |
-| [Development guide](./atom-development.md)                                                         | Environment, checks and conventions                     |
-| [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)               | Core/Web artifacts and variants                         |
-| [Core deployment](./core-deployment.md)                                                            | systemd, durable data, install, upgrade and rollback    |
-| [Hardware checklist](./hardware-release-checklist.md)                                              | ALSA, Diretta and UPnP release checks                   |
-| [Provider acceptance](./live-provider-acceptance.md)                                               | Real-account criteria                                   |
-| [ALSA plan](./alsa-output-plan.md), [UPnP plan](./upnp-output-plan.md)                             | Output implementation and remaining checks              |
-| [Folder Browser plan](./local-folder-browser-plan.md), [responsive plan](./web-responsive-plan.md) | Web feature and device criteria                         |
-| [Direct CUE plan](./direct-cue-gapless-plan.md), [lyric plan](./lyric-improvements.md)             | Gapless and lyric implementation                        |
+| 文档                                                                                          | 用途                                |
+| --------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [Atom 已完成](./atom-completed.md)                                                            | 已确认的实现与有界验收历史          |
+| [开发指南](./atom-development.md)                                                             | 环境、检查与约定                    |
+| [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md)                        | Core/Web 产物与变体                 |
+| [Core 部署](./core-deployment.md)                                                             | systemd、持久状态、安装、升级与回滚 |
+| [硬件清单](./hardware-release-checklist.md)                                                   | ALSA、Diretta 与 UPnP 发布检查      |
+| [Provider 验收](./live-provider-acceptance.md)                                                | 真实账户验收标准                    |
+| [ALSA 方案](./alsa-output-plan.md)、[UPnP 方案](./upnp-output-plan.md)                        | 输出实现与剩余检查                  |
+| [Folder Browser 方案](./local-folder-browser-plan.md)、[响应式方案](./web-responsive-plan.md) | Web 功能与设备验收标准              |
+| [Direct CUE 方案](./direct-cue-gapless-plan.md)、[歌词方案](./lyric-improvements.md)          | 无缝与歌词实现                      |

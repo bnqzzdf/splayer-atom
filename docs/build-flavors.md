@@ -1,28 +1,28 @@
-# SPlayer Atom Build Flavors
+# SPlayer Atom 构建面（Build Flavors）
 
-SPlayer Atom has two deployment variants: system-runtime and bundled-runtime.
+SPlayer Atom 有两个部署变体：system-runtime 与 bundled-runtime。
 
-## Core native flavor
+## Core native 构建面
 
-The Linux x86-64 Core build produces two project-owned native addons:
+Linux x86-64 Core 构建产出两个自研 native addon：
 
 - `audio-engine.node`
 - `streaming-api.node`
 
-Required third-party native dependencies, including `better-sqlite3`, are packaged separately.
+必需的第三方 native 依赖（含 `better-sqlite3`）单独打包。
 
-The audio addon uses the `core-audio` feature set with ALSA. The build rejects PipeWire/PulseAudio
-dynamic dependencies in the formal artifact.
+音频 addon 在 ALSA 下使用 `core-audio` feature 集。构建会在正式产物中拒绝 PipeWire/PulseAudio
+动态依赖。
 
-The streaming addon uses Rustls with system CA certificates and must not dynamically depend on
-OpenSSL (`libssl.so` or `libcrypto.so`). The target system still needs a usable CA certificate store
-for HTTPS provider requests.
+流媒体 addon 使用 Rustls 与系统 CA 证书，且不得动态依赖
+OpenSSL（`libssl.so` 或 `libcrypto.so`）。目标系统仍需有可用的 CA 证书库，
+供 HTTPS provider 请求使用。
 
-## Diretta capability
+## Diretta 能力
 
-Without `DIRETTA_SDK_ROOT`, Core builds without Diretta.
+没有 `DIRETTA_SDK_ROOT` 时，Core 构建不带 Diretta。
 
-With a supported `DIRETTA_SDK_ROOT`, `audio-engine` adds the `diretta` feature. A formal Diretta artifact must use:
+在有受支持的 `DIRETTA_SDK_ROOT` 时，`audio-engine` 会增加 `diretta` feature。正式 Diretta 产物必须使用：
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
@@ -30,16 +30,13 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
     --require-diretta --diretta-variant=v2
 ```
 
-`--diretta-variant` selects the x86-64 Host SDK library flavor (`v2`, `v3`, `v4`, or `zen4`). The
-flavor decides whether the artifact can run on the target CPU at all, not just how fast. The selected
-variant is passed to the native Cargo build and recorded in the artifact metadata. A Diretta build
-must specify it explicitly; it is not silently defaulted to `v2`.
+`--diretta-variant` 选择 x86-64 Host SDK 库变体（`v2`、`v3`、`v4` 或 `zen4`）。变体决定产物究竟能不能在目标 CPU 上运行，而不只是快慢。选定的变体会传给 native Cargo 构建，并记录在产物元数据中。Diretta 构建必须显式指定它，不会静默默认为 `v2`。
 
-The SDK remains external and is not bundled.
+SDK 始终是外部的，不随包捆绑。
 
-## Debian 11 bundled build
+## Debian 11 bundled 构建
 
-The Debian 11 builder uses glibc 2.31 and can package either capability set:
+Debian 11 构建机使用 glibc 2.31，两种能力集都能打包：
 
 ```bash
 pnpm package:core:debian11 --without-diretta
@@ -48,16 +45,15 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-The first mode is the default. The second mode mounts SDK 150 read-only and uses its selected
-`v2`, `v3`, `v4`, or `zen4` x86-64 libraries. The build checks the packaged native modules against glibc
-2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 150's
-ACQUA library receives the required old-glibc integer parsing compatibility symbols at link time;
-the SDK files are not packaged. Mode-specific copies are retained as
-`*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz`.
+第一种模式是默认模式。第二种模式只读挂载 SDK 150，并使用其选定的
+`v2`、`v3`、`v4` 或 `zen4` x86-64 库。构建会按 glibc
+2.31 检查打包后的 native 模块、检查 Diretta 能力元数据，并运行解包产物的 smoke。SDK 150 的
+ACQUA 库在链接时获得旧 glibc 所需的整数解析兼容符号；
+SDK 文件不会被打包。各模式的副本分别保留为
+`*-debian11-without-diretta.tar.gz` 与 `*-debian11-with-diretta-<variant>.tar.gz`。
 
-On 2026-09-23, no-Diretta and Diretta v3 packages passed software smoke from a dirty working tree.
-This does not establish a clean release artifact or Diretta Target playback; v2/v4 were not built
-in that run.
+2026-09-23，无 Diretta 与 Diretta v3 包在脏工作树上通过了软件 smoke。
+这不能确立干净的发布产物，也不代表 Diretta Target 播放；该次运行没有构建 v2/v4。
 
 ## system-runtime
 
@@ -65,7 +61,7 @@ in that run.
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz` and requires a compatible system Node `>=22.19.0`.
+产出 `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`，并要求有兼容的系统 Node `>=22.19.0`。
 
 ## bundled-runtime
 
@@ -73,6 +69,6 @@ Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<var
 pnpm package:core:bundled
 ```
 
-Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
+产出 `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz`，并携带构建时使用的 reference Node runtime。
 
-Both variants contain the same Core JS, Web Control, native addons, protocol version and data schema.
+两个变体包含相同的 Core JS、Web Control、native addons、协议版本与数据 schema。

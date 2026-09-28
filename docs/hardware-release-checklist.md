@@ -1,4 +1,4 @@
-# SPlayer Atom Hardware Release Checklist
+# SPlayer Atom 硬件发布验收清单
 
 本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
 实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。

@@ -1,79 +1,67 @@
-# SPlayer Atom Completed Work
+# SPlayer Atom 已完成事项
 
-This is the completed-work archive for the [Roadmap](./atom-roadmap.md). A recorded test applies
-only to its stated source commit, artifact and equipment. Remaining acceptance stays on the roadmap.
+这是[路线图](./atom-roadmap.md)的已完成事项档案。一条已记录的测试仅适用于其声明的源码提交、产物与
+设备。其余验收仍留在路线图上。
 
-## Web + Core foundation
+## Web + Core 基础
 
-- Music-domain state, settings, library, queue, providers, playback policy, cache, downloads,
-  statistics, plugins and output selection moved to Node Core. Web Control uses Core HTTP/WS
-  commands, snapshots and events.
-- Core sources moved under `core/**`; Electron runtime, preload/renderer IPC, window, tray,
-  desktop lyrics, updater, desktop protocol, desktop-only crates and Windows/macOS packaging were
-  removed. The Web Vite build and Linux x86-64 Core artifacts are the application path.
-- The old Web `window.api`/Host compatibility layer and desktop-only capability branches were
-  removed. Project-built native addons are `audio-engine.node` and `streaming-api.node`.
-- ALSA, Diretta and UPnP enter the same Core playback authority. Core handles CUE/SACD virtual
-  tracks. ListenBrainz sessions and its durable outbox are Core-owned; disabled mode starts no
-  worker, while enabled SQLite/HTTP/retry work runs in an isolated child process.
+- 音乐领域状态、设置、媒体库、队列、provider、播放策略、缓存、下载、统计、插件与输出选择已迁移至
+  Node Core。Web Control 使用 Core HTTP/WS 命令、快照与事件。
+- Core 源码迁移到 `core/**` 下；Electron 运行时、preload/renderer IPC、窗口、托盘、桌面歌词、
+  更新器、桌面协议、仅桌面端的 crate 以及 Windows/macOS 打包均被移除。Web Vite 构建与
+  Linux x86-64 Core 产物即应用路径。
+- 旧的 Web `window.api`/Host 兼容层与仅桌面端的能力分支被移除。项目构建的原生插件为
+  `audio-engine.node` 与 `streaming-api.node`。
+- ALSA、Diretta 与 UPnP 进入同一个 Core 播放权威。Core 处理 CUE/SACD 虚拟轨道。ListenBrainz
+  会话及其持久发件箱由 Core 所有；禁用模式不启动 worker，启用时 SQLite/HTTP/重试工作运行在隔离的
+  子进程中。
 
-## Audio and output implementation
+## 音频与输出实现
 
-- Diretta exact PCM Source Direct has real-target bit-perfect evidence through 768 kHz; Native
-  DSD has real-target logical one-bit verification through DSD512. Mixed PCM/DSD queues completed
-  an overnight transition run. See the [hardware checklist](./hardware-release-checklist.md).
-- The ALSA HW backend implements Direct/Processed modes, exact PCM/Native DSD, lossy playback and
-  existing PCM DSP. Core/Web mode and capability handling is integrated and CPAL output removed.
-  The Web controls suppress Direct-only indicators and DSP actions when the actual path disallows
-  them. Development-time ALSA listening and parameter checks were reported on 2026-09-22.
-- On `cecee166`, FC4 hardware checks passed Direct PCM/DSD64 play, pause, seek and transitions;
-  Processed PCM playback passed but seek failed. Independent USB submission comparisons matched
-  1,414,748 PCM bytes and 5,658,992 DSD bytes. ALSA/Diretta switching, FC4 reconnect,
-  systemd restart, SIGTERM and artifact WebSocket reconnection passed in their recorded scope.
-  The clean Diretta archive matched all 220 installed non-data files and passed extracted-artifact
-  smoke. See the [2026-09-22 record](./alsa-acceptance-2026-09-22.md).
-- `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Both
-  passed FC4 retest on installed clean artifact `3e420f78`; see the
-  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The [ALSA plan](./alsa-output-plan.md)
-  records the structural runtime/buffering work still needed.
-- UPnP shares Core queue, source and cache flow; its CUE/SACD materialization is isolated from
-  Direct/normal playback. The [UPnP plan](./upnp-output-plan.md) records AudioSys playback,
-  extraction comparison and initial long-run evidence, as well as the outstanding stability gate.
-- Direct CUE uses Core-owned staging and precise 75 fps boundaries with native gapless handoff.
-  Automated checks are recorded in the [Direct CUE plan](./direct-cue-gapless-plan.md).
+- Diretta 精确 PCM Source Direct 具备直到 768 kHz 的真实目标 bit-perfect 证据；Native DSD 具备
+  直到 DSD512 的真实目标逻辑一位验证。混合 PCM/DSD 队列完成了整夜切换运行。见
+  [硬件清单](./hardware-release-checklist.md)。
+- ALSA HW 后端实现 Direct/Processed 模式、精确 PCM/Native DSD、有损播放与现有 PCM DSP。
+  Core/Web 模式与能力处理已整合，CPAL 输出已移除。当实际路径不允许时，Web 控件会抑制仅 Direct 的
+  指示器与 DSP 操作。开发期的 ALSA 试听与参数检查报告于 2026-09-22。
+- 在 `cecee166` 上，FC4 硬件检查通过了 Direct PCM/DSD64 的播放、暂停、定位与切换；
+  Processed PCM 播放通过，但定位失败。独立 USB 提交比对匹配了 1,414,748 个 PCM 字节与
+  5,658,992 个 DSD 字节。ALSA/Diretta 切换、FC4 重连、systemd 重启、SIGTERM 与产物 WebSocket
+  重连在其记录范围内通过。干净的 Diretta 归档匹配全部 220 个已安装非数据文件，并通过抽取产物
+  冒烟测试。见 [2026-09-22 记录](./alsa-acceptance-2026-09-22.md)。
+- `c3e135ab` 包含针对 Processed 定位与重启后播放失败的软件修复。二者在已安装的干净产物
+  `3e420f78` 上通过 FC4 复测；见 [2026-09-23 记录](./alsa-acceptance-2026-09-23.md)。
+  [ALSA 计划](./alsa-output-plan.md)记录了仍需要的结构性运行时/缓冲工作。
+- UPnP 共用 Core 队列、源与缓存流程；其 CUE/SACD 物化与 Direct/普通播放隔离。
+  [UPnP 计划](./upnp-output-plan.md)记录了 AudioSys 播放、抽取比对与初步长跑证据，以及仍未完成的
+  稳定性门禁。
+- Direct CUE 使用 Core 所有的暂存与精确的 75 fps 边界，并具备原生无缝衔接。自动化检查记录在
+  [Direct CUE 计划](./direct-cue-gapless-plan.md)中。
 
-## Providers, Web and lyrics
+## Provider、Web 与歌词
 
-- Core exposes credential-free session projections and provider capabilities for Netease, QQ Music,
-  Kugou, Qobuz and TIDAL. QM/KG have Core-backed QR/manual Cookie login, search and collection
-  pages, and Core source resolution with a plugin fallback. Qobuz has browser OAuth with a
-  one-time callback listener and token-only login; Core persists the resulting session.
-  `streaming-api` implements Qobuz protocol and TIDAL auth/request/manifest/DASH; Core integrates
-  TIDAL JSON/BTS and DASH materialization. Selected real Netease/TIDAL UPnP online paths were
-  recorded in the [UPnP plan](./upnp-output-plan.md). Full real-account acceptance for all five
-  providers still follows the roadmap.
-- Web Control exposes library, playlist, queue, playback, downloads, statistics, cache,
-  providers, settings and plugins. The Core-owned Folder Browser now provides paged browsing,
-  unscanned media and CUE/SACD access, scoped scan, pinned folders, search/filter, materials,
-  list/grid views, recursive and batch actions, and shared containing-folder actions. The
-  implementation is merged into `dev`; real-library UX acceptance is still open.
-- Responsive Web layout has shared 768/1280 px breakpoints, mobile navigation, a compact player
-  bar, adaptive lists, full player, settings and dialogs. Approved queue-drag and duplicate song-row
-  double-click interactions were removed. Device acceptance is still open.
-- Lyric P0/P1 is implemented: explicit-platform fallback, validated candidate selection,
-  nonblocking TTML display upgrades, preferred-plugin competition and regression coverage for
-  source quality and YRC/QRC/KRC/TTML spacing. See [lyric improvements](./lyric-improvements.md).
+- Core 暴露面向 Netease、QQ Music、Kugou、Qobuz 与 TIDAL 的无凭据会话投影与 provider 能力。QM/KG
+  具备 Core 支持的二维码/手动 Cookie 登录、搜索与收藏页面，以及带插件回退的 Core 源解析。Qobuz
+  具备浏览器 OAuth，包含一次性回调监听与仅 token 登录；Core 持久化产生的会话。`streaming-api`
+  实现 Qobuz 协议与 TIDAL 认证/请求/manifest/DASH；Core 整合 TIDAL JSON/BTS 与 DASH 物化。
+  部分真实的 Netease/TIDAL UPnP 在线路径记录在 [UPnP 计划](./upnp-output-plan.md)中。全部五个
+  provider 的完整真实账号验收仍按路线图推进。
+- Web Control 暴露媒体库、播放列表、队列、播放、下载、统计、缓存、provider、设置与插件。Core
+  所有的 Folder Browser 现在提供分页浏览、未扫描媒体与 CUE/SACD 访问、范围扫描、固定文件夹、
+  搜索/过滤、素材、列表/网格视图、递归与批量操作，以及共享的所在文件夹操作。实现已合并进 `dev`；
+  真实媒体库的 UX 验收仍未完成。
+- 响应式 Web 布局具备共享的 768/1280 px 断点、移动端导航、紧凑播放栏、自适应列表、完整播放器、
+  设置与对话框。已批准的队列拖拽与重复歌曲行双击交互被移除。设备验收仍未完成。
+- 歌词 P0/P1 已实现：显式平台回退、经校验的候选选择、非阻塞 TTML 显示升级、首选插件竞争，以及
+  针对源质量与 YRC/QRC/KRC/TTML 间距的回归覆盖。见[歌词改进](./lyric-improvements.md)。
 
-## Packaging groundwork
+## 打包基础工作
 
-- Runtime compatibility checks, reference Node runtime, system/bundled variants and Linux CI
-  packaging are in place. Staging checks native loading, plugin-host, HTTP/WS/Web startup and
-  termination. Diretta packaging validates the required SDK; filenames include version and date.
-- The Debian 11 bundled builder now selects an explicit no-Diretta or SDK 150 Diretta variant and
-  checks native glibc requirements and artifact capabilities. On 2026-09-23, no-Diretta and
-  Diretta v3 packages passed container builds and extracted-artifact smoke; all three packaged
-  native modules required at most glibc 2.30. This was a dirty-tree software run, with no
-  Diretta hardware result or v2/v4 build in that record.
-- Durable `data/`, migration backup, upgrade and rollback procedures are documented in
-  [Core deployment](./core-deployment.md). A complete install/upgrade/rollback run on a fixed
-  final candidate remains an open release gate.
+- 运行时兼容性检查、参考 Node 运行时、系统/内置变体与 Linux CI 打包均已就位。暂存会检查原生加载、
+  插件宿主、HTTP/WS/Web 启动与终止。Diretta 打包校验所需的 SDK；文件名包含版本与日期。
+- Debian 11 内置构建器现在会选择显式的无 Diretta 或 SDK 150 Diretta 变体，并检查原生 glibc 需求
+  与产物能力。2026-09-23，无 Diretta 与 Diretta v3 包通过容器构建与抽取产物冒烟测试；全部三个
+  打包的原生模块最多要求 glibc 2.30。这是一次脏工作树的软件运行，该记录中没有 Diretta 硬件结果或
+  v2/v4 构建。
+- 持久 `data/`、迁移备份、升级与回滚流程记录在 [Core 部署](./core-deployment.md)中。在固定的最终
+  候选上完成一次完整的安装/升级/回滚运行仍是未完成的发布门禁。

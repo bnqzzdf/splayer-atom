@@ -1,4 +1,4 @@
-# Qobuz / TIDAL Rust Protocol Engine Guide
+# Qobuz / TIDAL Rust 协议引擎指南
 
 `native/streaming-api` 是 Atom 正式 Node Core 使用的 Qobuz / TIDAL **唯一平台协议实现**。它不是第二个 Core，也不是独立 Headless 产品：Node Core 仍然持有 provider session、用户凭据持久化、Core event、Track/domain normalization、播放策略、cache 与 recovery；Rust 只负责平台协议、认证流程、签名、请求/响应解析和播放源解析。
 

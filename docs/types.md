@@ -6,7 +6,7 @@
 
 ### Track
 
-一首歌曲的完整信息。控制插件的 [`trackChange`](/plugins/control#监听播放事件) 事件载荷与菜单点击（[`menuClick`](/plugins/control#菜单扩展)）入参的 `track` 均为此对象。
+一首歌曲的完整信息。控制插件的 [`trackChange`](/plugins/control) 事件载荷与菜单点击（[`menuClick`](/plugins/control#菜单扩展)）入参的 `track` 均为此对象。
 
 | 字段            | 类型                               | 说明                                  |
 | --------------- | ---------------------------------- | ------------------------------------- |
@@ -77,7 +77,7 @@
 
 ### LyricLine
 
-一行歌词。控制插件的 [`lyricChange`](/plugins/control#监听播放事件) 事件载荷 `lines` 即 `LyricLine[]`。
+一行歌词。控制插件的 [`lyricChange`](/plugins/control) 事件载荷 `lines` 即 `LyricLine[]`。
 
 | 字段              | 类型                                     | 说明                                           |
 | ----------------- | ---------------------------------------- | ---------------------------------------------- |

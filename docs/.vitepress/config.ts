@@ -82,7 +82,7 @@ const enTheme: DefaultTheme.Config = {
     {
       text: "Development",
       items: [
-        { text: "Roadmap", link: "/atom-roadmap" },
+        { text: "Roadmap", link: "/en/atom-roadmap" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
         { text: "Plugin Development", link: "/en/plugins/" },

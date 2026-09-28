@@ -6,7 +6,7 @@ These are the objects delivered to plugin callbacks and handlers. A `?` marks an
 
 ### Track
 
-The `track` payload for [`trackChange`](/en/plugins/control#playback-events) and [`menuClick`](/en/plugins/control#menu-extensions).
+The `track` payload for [`trackChange`](/en/plugins/control) and [`menuClick`](/en/plugins/control#track-menu-extensions).
 
 | Field           | Type                               | Description                            |
 | --------------- | ---------------------------------- | -------------------------------------- |
@@ -77,7 +77,7 @@ NetEase-compatible fee flag: `0` free, `1` VIP, `4` purchase required, and `8` q
 
 ### LyricLine
 
-One parsed lyric line. The `lines` payload in [`lyricChange`](/en/plugins/control#playback-events) is `LyricLine[]`.
+One parsed lyric line. The `lines` payload in [`lyricChange`](/en/plugins/control) is `LyricLine[]`.
 
 | Field             | Type                                     | Description                             |
 | ----------------- | ---------------------------------------- | --------------------------------------- |
