@@ -1906,6 +1906,18 @@
     "newAlbums": "新碟首发",
     "hotArtists": "热门歌手",
     "fansCount": "{count} 粉丝",
+    "ranks": "榜单",
+    "rankFiltered": "榜单：{name}",
+    "clearFilter": "清除筛选",
+    "region": {
+      "latest": "最新",
+      "mainland": "内地",
+      "hktw": "港台",
+      "western": "欧美",
+      "korea": "韩国",
+      "japan": "日本",
+      "chinese": "华语"
+    },
     "authRequired": "{platform} 需要登录后才能读取首页内容",
     "signIn": "去登录",
     "viewAll": "查看全部",

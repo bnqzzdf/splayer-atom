@@ -3,16 +3,19 @@
  *
  * module: newalbum.NewAlbumServer / get_new_album_info
  *
- * 参数名是坑：这个接口要的是 `albumType`，传 `type` 会回 `code=10006`（不是报错文案，
- * 是"参数不认识"），传 `{}` 则回 `code=2000` 且 albums 为空——两者都不报异常，
- * 很容易被当成"没有新碟"。`area` 也可用，效果与 albumType 相同。
+ * 地区参数是 **`area`**，官方那排标签就是它：
+ *   1 内地（total 4395）/ 2 港台（1096）/ 3 欧美（6170）/ 4 韩国（1642）/ 5 日本（1653）
  *
- * 实测 `{albumType: 1, num: 20, page: 1}` → code=0、total=4395、本页 20 张。
+ * 两个踩过的坑：
+ * - 传 `type` 会回 `code=10006`（参数不认识），传 `{}` 则回 `code=2000` 且 albums 为空——
+ *   两者都不抛异常，很容易被当成"没有新碟"；
+ * - `albumType` 会被静默忽略（任何值都返回同一份数据）。当初只用 `area=1` 做过单值测试，
+ *   而它恰好与"不传"等价，于是误判成"该接口不支持地区筛选"。**改参数名时要多值验证**。
  *
  * params:
- * - albumType  地区：1 全部（默认）
- * - num        每页条数，默认 20
- * - page       页码，从 1 开始
+ * - area   地区：1 内地（默认）/ 2 港台 / 3 欧美 / 4 韩国 / 5 日本
+ * - num    每页条数，默认 20
+ * - page   页码，从 1 开始
  */
 
 import { formatSingerName } from "../core/config";
@@ -29,14 +32,14 @@ interface RawNewAlbum {
 }
 
 const newAlbum: QMModule = async (params) => {
-  const albumType = Number(params.albumType ?? params.area ?? 1) || 1;
+  const area = Number(params.area ?? 1) || 1;
   const num = Number(params.num ?? params.limit ?? 20) || 20;
   const page = Number(params.page ?? 1) || 1;
 
   const data = await qmRequest<{ albums?: RawNewAlbum[]; total?: number }>(
     "newalbum.NewAlbumServer",
     "get_new_album_info",
-    { albumType, num, page },
+    { area, num, page },
   );
 
   const albums = (data.albums ?? [])
@@ -51,7 +54,7 @@ const newAlbum: QMModule = async (params) => {
       };
     });
 
-  return { code: 200, albumType, page, total: data.total ?? albums.length, albums };
+  return { code: 200, area, page, total: data.total ?? albums.length, albums };
 };
 
 export default newAlbum;

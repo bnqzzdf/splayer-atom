@@ -1906,6 +1906,18 @@
     "newAlbums": "New Albums",
     "hotArtists": "Popular Artists",
     "fansCount": "{count} fans",
+    "ranks": "Ranks",
+    "rankFiltered": "Ranks: {name}",
+    "clearFilter": "Clear filter",
+    "region": {
+      "latest": "Latest",
+      "mainland": "Mainland",
+      "hktw": "HK/TW",
+      "western": "Western",
+      "korea": "Korea",
+      "japan": "Japan",
+      "chinese": "Chinese"
+    },
     "authRequired": "Sign in to {platform} to load its home",
     "signIn": "Sign in",
     "viewAll": "View all",

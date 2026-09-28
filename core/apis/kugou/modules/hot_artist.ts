@@ -15,6 +15,9 @@
  * 所以可以直接交给现有的歌手详情模块（modules/artist.ts 收 `id` / `author_id`）。
  *
  * params:
+ * - type   地区/语种，取值与接口自带的 `enu_list.types` 一致：
+ *          1 华语（默认）/ 2 欧美 / 6 韩国 / 5 日本（另有 7 粤语 / 8 闽南语 可扩展）。
+ *          0（全部）实测与 1 相同，因此默认用 1。
  * - page   页码，从 1 开始，默认 1
  * - limit  返回条数，默认 30
  */
@@ -43,9 +46,10 @@ interface SingerListResp {
 const hotArtist: KGModule = async (params) => {
   const page = Number(params.page ?? 1) || 1;
   const limit = Number(params.limit ?? 30) || 30;
+  const type = Number(params.type ?? 1) || 1;
 
   const body = await kgRequest<SingerListResp>(
-    `http://mobilecdnbj.kugou.com/api/v5/singer/list?sort=1&page=${page}&pagesize=${limit}&plat=0`,
+    `http://mobilecdnbj.kugou.com/api/v5/singer/list?sort=1&page=${page}&pagesize=${limit}&plat=0&type=${type}`,
   );
   const data = body.data ?? {};
 
@@ -67,7 +71,7 @@ const hotArtist: KGModule = async (params) => {
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  return { code: 200, page, total: data.total ?? artists.length, artists };
+  return { code: 200, page, type, total: data.total ?? artists.length, artists };
 };
 
 export default hotArtist;

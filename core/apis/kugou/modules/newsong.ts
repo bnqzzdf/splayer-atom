@@ -9,6 +9,9 @@
  * 因此复用 core/song 的归一化，保证新歌与榜单的取流字段（hash / albumAudioId）一致。
  *
  * params:
+ * - type   地区/语种：1 华语（默认）/ 2 欧美 / 4 韩国 / 5 日本。
+ *          实测 3 与 6 会被上游回落到华语（响应里的 `type` 字段变回 1），因此不对外暴露；
+ *          非数字或空值同样回落，所以这里只透传正整数。
  * - limit  截断条数（用于首页书架），不传则返回全部
  */
 
@@ -23,12 +26,15 @@ interface NewSongResp {
 
 const newSong: KGModule = async (params) => {
   const whole = typeof params.limit === "number" ? Number(params.limit) : undefined;
+  const type = Number(params.type ?? 1) || 1;
 
-  const body = await kgRequest<NewSongResp>("http://m.kugou.com/newsong/index&json=true");
+  const body = await kgRequest<NewSongResp>(
+    `http://m.kugou.com/newsong/index&json=true&type=${type}`,
+  );
   const all = (body.newSongList ?? []).map((song) => normalizeKgAuthorSong(song));
   const songs = whole && whole > 0 ? all.slice(0, whole) : all;
 
-  return { code: 200, total: all.length, songs };
+  return { code: 200, type, total: all.length, songs };
 };
 
 export default newSong;

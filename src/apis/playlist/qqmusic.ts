@@ -171,10 +171,15 @@ interface NewAlbumsResponse {
 /**
  * 获取 QM 新碟首发
  * @param limit - 返回条数
+ * @param area - 地区：1 内地 / 2 港台 / 3 欧美 / 4 韩国 / 5 日本
  * @returns 专辑列表；封面由调用方用 `qqAlbumCover(id)` 按尺寸派生
  */
-export const fetchQQMusicNewAlbums = async (limit = 30): Promise<QMNewAlbum[]> => {
-  const body = await qmApi.new_albums<NewAlbumsResponse>({ num: limit, page: 1 });
+export const fetchQQMusicNewAlbums = async (
+  limit = 30,
+  area = 1,
+  page = 1,
+): Promise<QMNewAlbum[]> => {
+  const body = await qmApi.new_albums<NewAlbumsResponse>({ num: limit, area, page });
   if (body.code !== 200) throw new Error(body.message || `QM 新碟请求失败: ${body.code}`);
   return body.albums ?? [];
 };

@@ -10,8 +10,10 @@
  *   TIDAL: { rows: [{ modules: [{ type, title, pagedList: { items, dataApiPath } }] }] }
  */
 import type { CoverItem } from "@/types/artist";
+import type { Track } from "@shared/types/player";
 import { resolveQobuzCover } from "@/utils/format/qobuz";
 import { resolveTidalCover } from "@/utils/format/tidal";
+import { qqAlbumCover } from "@/utils/format/qqmusic";
 import {
   navigateToAlbum,
   navigateToArtist,
@@ -83,7 +85,68 @@ export interface SectionMore {
    * 而「点进去是专辑还是歌单」全靠它，所以必须从首页带到分区页。
    */
   moduleType?: string;
+  /**
+   * 本地书架标识（QM/KG 用）。
+   *
+   * QM/KG 的这几个书架由前端直接调平台接口拼装，没有像 Qobuz/TIDAL 那样可由
+   * 端点参数表达的分页，所以分区页按这个标识自己去取数（见 SHELF_TABS 与
+   * PlatformSection.vue 的 shelf 分支）。
+   */
+  shelf?: string;
+  /** 该书架当前的地区值，分区页据此取同一地区的完整列表 */
+  tab?: string;
 }
+
+/** 分区内的地区/语种标签 */
+export interface SectionTab {
+  /** 传给平台的取值（QM `type`/`area`、KG `type`） */
+  value: string;
+  /** i18n key；标签文案由组件翻译，避免服务层依赖 i18n 实例 */
+  labelKey: string;
+}
+
+/**
+ * 各书架可选的地区/语种，以及默认值（数组第一项）。
+ *
+ * 取值全部来自实测，不是抄官方页面的猜测：
+ * - `qm-new-songs`：musicu `get_new_song_info` 自己下发的 `lanlist`（最新/内地/港台/欧美/韩国/日本）
+ * - `qm-new-albums`：`newalbum…get_new_album_info` 的 `area`，total 依次 4395/1096/6170/1642/1653
+ * - `kg-new-songs`：移动站 newsong 频道的 `type`（1 华语 / 2 欧美 / 4 韩国 / 5 日本；
+ *   传 3 或 6 会被上游回落到华语）
+ * - `kg-hot-artists`：歌手目录接口自带的 `enu_list.types`
+ */
+export const SHELF_TABS: Record<string, SectionTab[]> = {
+  "qm-new-songs": [
+    { value: "5", labelKey: "platformHome.region.latest" },
+    { value: "1", labelKey: "platformHome.region.mainland" },
+    { value: "6", labelKey: "platformHome.region.hktw" },
+    { value: "2", labelKey: "platformHome.region.western" },
+    { value: "4", labelKey: "platformHome.region.korea" },
+    { value: "3", labelKey: "platformHome.region.japan" },
+  ],
+  "qm-new-albums": [
+    { value: "1", labelKey: "platformHome.region.mainland" },
+    { value: "2", labelKey: "platformHome.region.hktw" },
+    { value: "3", labelKey: "platformHome.region.western" },
+    { value: "4", labelKey: "platformHome.region.korea" },
+    { value: "5", labelKey: "platformHome.region.japan" },
+  ],
+  "kg-new-songs": [
+    { value: "1", labelKey: "platformHome.region.chinese" },
+    { value: "2", labelKey: "platformHome.region.western" },
+    { value: "4", labelKey: "platformHome.region.korea" },
+    { value: "5", labelKey: "platformHome.region.japan" },
+  ],
+  "kg-hot-artists": [
+    { value: "1", labelKey: "platformHome.region.chinese" },
+    { value: "2", labelKey: "platformHome.region.western" },
+    { value: "6", labelKey: "platformHome.region.korea" },
+    { value: "5", labelKey: "platformHome.region.japan" },
+  ],
+};
+
+/** 该书架默认选中的地区值 */
+export const shelfDefaultTab = (shelf: string): string | undefined => SHELF_TABS[shelf]?.[0]?.value;
 
 /** 归一化后的分区 */
 export interface HomeSection {
@@ -94,6 +157,17 @@ export interface HomeSection {
   items: HomeItem[];
   /** 该分区在平台侧还有更多条目时才给出，用于渲染「查看全部」 */
   more?: SectionMore;
+  /** 分区内的地区/语种标签（有才渲染那一行） */
+  tabs?: SectionTab[];
+  /** 当前选中的地区值，用于高亮标签 */
+  activeTab?: string;
+  /**
+   * 分区所属的大类标题（目前只用于 QM/KG 的榜单）。
+   *
+   * 顶部的榜单分组按钮只作用于榜单区，而榜单区在几排书架之下——加一个「榜单」
+   * 分组标题，用户才能看出那些按钮到底在控制什么。
+   */
+  group?: string;
 }
 
 // ---------- 宽松取值 ----------
@@ -276,6 +350,61 @@ export const tidalModulePath = (pagedList: unknown): string | undefined => {
   const stripped = path.replace(/^pages\//, "");
   return stripped.includes("/") ? stripped : undefined;
 };
+
+// ---------- QM/KG 书架的条目映射 ----------
+//
+// 平台首页的书架与「查看全部」分区页都要把同一批原始条目变成卡片，
+// 映射写两份必然会漂，所以统一放这里。
+
+/**
+ * 新歌 → 专辑卡片。
+ *
+ * 新歌是「歌曲」，但平台首页与分区页都只有专辑/歌单/歌手三种详情页，没有单曲页，
+ * 因此点进所属专辑——歌曲自带完整取流字段（KG 是 hash/albumAudioId，QM 是
+ * mid/mediaMid），进入专辑即可播放。
+ */
+export const trackToAlbumItem = (track: Track): HomeItem => {
+  const albumId = track.album?.id;
+  return {
+    id: albumId ?? track.id,
+    title: track.title,
+    subtitle: track.artists?.map((artist) => artist.name).join(", ") || undefined,
+    image: track.cover,
+    kind: "album",
+  };
+};
+
+/** QM 新碟 → 专辑卡片（接口只给 MID，封面按 QM 的图片模板派生） */
+export const qmNewAlbumToItem = (album: {
+  id: string;
+  name: string;
+  artist?: string;
+  publishTime?: string;
+}): HomeItem => ({
+  id: album.id,
+  title: album.name,
+  subtitle: album.artist || album.publishTime || undefined,
+  image: qqAlbumCover(album.id),
+  kind: "album",
+});
+
+/**
+ * KG 热门歌手 → 歌手卡片。
+ *
+ * 副标题（粉丝数）由调用方按当前语言补，服务层不依赖 i18n 实例。
+ * `singerid` 与榜单 `authors[].author_id` 同一 id 空间，`kind: "artist"`
+ * 会走现有的歌手详情页。
+ */
+export const kgHotArtistToItem = (artist: {
+  id: string;
+  name: string;
+  cover?: string;
+}): HomeItem => ({
+  id: artist.id,
+  title: artist.name,
+  image: artist.cover || undefined,
+  kind: "artist",
+});
 
 // ---------- 渲染与跳转 ----------
 
