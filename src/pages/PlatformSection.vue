@@ -17,25 +17,33 @@ import type { CoverItem } from "@/types/artist";
 import CoverList from "@/components/list/CoverList.vue";
 import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
+import { fetchQQMusicNewAlbums, fetchQQMusicNewSongs } from "@/apis/playlist/qqmusic";
+import { fetchKugouHotArtists, fetchKugouNewSongs } from "@/apis/playlist/kugou";
 import {
   asArray,
   asRecord,
   homeItemToCoverItem,
+  kgHotArtistToItem,
   openPlatformHomeItem,
+  qmNewAlbumToItem,
   qobuzSectionEndpoint,
+  shelfDefaultTab,
   toQobuzItem,
   toTidalItem,
+  trackToAlbumItem,
   type HomeItem,
   type Platform,
 } from "@/services/platformHome";
 import IconLucideArrowLeft from "~icons/lucide/arrow-left";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const router = useRouter();
 const route = useRoute();
 
 /** 每页条数：与首页一次拉取的量级一致，避免首屏过重 */
 const PAGE_SIZE = 30;
+/** QM/KG 的书架接口一次给全量（40~99 条）、没有游标分页，所以一次多取一些 */
+const SHELF_PAGE_SIZE = 60;
 
 const platform = computed(() => String(route.params.platform ?? "") as Platform);
 const sectionKey = computed(() => String(route.params.section ?? ""));
@@ -44,6 +52,8 @@ const genre = computed(() => (route.query.genre ? String(route.query.genre) : un
 /** TIDAL 首页模块的数据路径（已去掉 `pages/` 前缀） */
 const tidalPath = computed(() => (route.query.path ? String(route.query.path) : undefined));
 const tidalModuleType = computed(() => (route.query.type ? String(route.query.type) : ""));
+/** QM/KG 书架的地区值 */
+const shelfTab = computed(() => (route.query.tab ? String(route.query.tab) : undefined));
 
 const homeItems = ref<HomeItem[]>([]);
 const loading = ref(false);
@@ -59,10 +69,35 @@ const items = computed<CoverItem[]>(() => homeItems.value.map(homeItemToCoverIte
 /**
  * 取一页。
  *
- * 两个平台的分页响应形状刚好一致：都直接给 `items`，并且都能判断「还有没有下一页」
- * （Qobuz 用 `has_more`，TIDAL 用 `totalNumberOfItems`）。
+ * Qobuz 与 TIDAL 的分页响应形状刚好一致：都直接给 `items`，并且都能判断「还有没有
+ * 下一页」（Qobuz 用 `has_more`，TIDAL 用 `totalNumberOfItems`）。
+ *
+ * QM/KG 的书架是另一回事：条目由前端调平台接口拼装，接口一次给全量、没有游标分页，
+ * 所以那边一次取 `SHELF_PAGE_SIZE` 条就结束（`more: false`）。
  */
 const fetchPage = async (): Promise<{ list: HomeItem[]; more: boolean }> => {
+  if (platform.value === "qqmusic" || platform.value === "kugou") {
+    const shelf = sectionKey.value;
+    const tab = Number(shelfTab.value ?? shelfDefaultTab(shelf) ?? 1) || 1;
+    if (shelf === "qm-new-songs") {
+      const tracks = await fetchQQMusicNewSongs(SHELF_PAGE_SIZE, tab);
+      return { list: tracks.map(trackToAlbumItem), more: false };
+    }
+    if (shelf === "qm-new-albums") {
+      const albums = await fetchQQMusicNewAlbums(SHELF_PAGE_SIZE, tab);
+      return { list: albums.map(qmNewAlbumToItem), more: false };
+    }
+    if (shelf === "kg-new-songs") {
+      const tracks = await fetchKugouNewSongs(SHELF_PAGE_SIZE, tab);
+      return { list: tracks.map(trackToAlbumItem), more: false };
+    }
+    if (shelf === "kg-hot-artists") {
+      const artists = await fetchKugouHotArtists(SHELF_PAGE_SIZE, tab);
+      return { list: artists.map(kgHotArtistToItem), more: false };
+    }
+    throw new Error(t("platformSection.unsupported"));
+  }
+
   if (platform.value === "qobuz") {
     const endpoint = qobuzSectionEndpoint(sectionKey.value);
     if (!endpoint) throw new Error(t("platformSection.unsupported"));
@@ -81,7 +116,11 @@ const fetchPage = async (): Promise<{ list: HomeItem[]; more: boolean }> => {
 
   const path = tidalPath.value;
   if (!path) throw new Error(t("platformSection.unsupported"));
-  const data = asRecord(await tidalApi.pagesGet(path, { limit: PAGE_SIZE, offset }));
+  // TIDAL 的模块数据端点是少数**必须**带 locale 的接口（缺了回 400
+  // "locale or deviceType missing"），所以这里显式带上当前语言。
+  const data = asRecord(
+    await tidalApi.pagesGet(path, { limit: PAGE_SIZE, offset, locale: locale.value }),
+  );
   const list = asArray(data.items)
     .map((entry) => toTidalItem(entry, tidalModuleType.value))
     .filter((entry): entry is HomeItem => entry !== null);
@@ -140,7 +179,7 @@ const goBack = (): void => {
   else void router.push({ name: "platforms" });
 };
 
-watch([platform, sectionKey, tidalPath, genre], () => void load(), { immediate: true });
+watch([platform, sectionKey, tidalPath, genre, shelfTab], () => void load(), { immediate: true });
 </script>
 
 <template>

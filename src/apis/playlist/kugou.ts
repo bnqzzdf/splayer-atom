@@ -157,12 +157,45 @@ export const fetchKugouHotPlaylists = async (
 /**
  * 获取 KG 新歌首发
  * @param limit - 截断条数（用于首页书架）
+ * @param type - 地区/语种：1 华语 / 2 欧美 / 4 韩国 / 5 日本
  * @returns Track 列表
  */
-export const fetchKugouNewSongs = async (limit?: number): Promise<Track[]> => {
+export const fetchKugouNewSongs = async (limit?: number, type = 1): Promise<Track[]> => {
   const body = await kgApi.new_songs<{ code?: number; message?: string; songs?: KGSong[] }>(
-    limit ? { limit } : {},
+    limit ? { limit, type } : { type },
   );
   if (body.code !== 200) throw new Error(body.message || `KG 新歌请求失败: ${body.code}`);
   return kgSongsToTracks(body.songs);
+};
+
+/** KG 热门歌手条目 */
+export interface KGHotArtist {
+  /** 歌手 ID，与榜单 authors[].author_id 同一 id 空间，可直接进歌手详情 */
+  id: string;
+  name: string;
+  cover: string;
+  coverOriginal: string;
+  fansCount: number;
+  songCount: number;
+  albumCount: number;
+}
+
+interface HotArtistsResponse {
+  code?: number;
+  message?: string;
+  page?: number;
+  total?: number;
+  artists?: KGHotArtist[];
+}
+
+/**
+ * 获取 KG 热门歌手
+ * @param limit - 返回条数（用于首页书架）
+ * @param type - 地区/语种：1 华语 / 2 欧美 / 6 韩国 / 5 日本
+ * @returns 歌手列表；其 id 可直接用于 artist/kugou/<id>
+ */
+export const fetchKugouHotArtists = async (limit = 30, type = 1): Promise<KGHotArtist[]> => {
+  const body = await kgApi.hot_artists<HotArtistsResponse>({ page: 1, limit, type });
+  if (body.code !== 200) throw new Error(body.message || `KG 热门歌手请求失败: ${body.code}`);
+  return body.artists ?? [];
 };

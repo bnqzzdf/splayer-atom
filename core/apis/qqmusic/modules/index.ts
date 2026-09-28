@@ -19,12 +19,16 @@ import user_detail from "./user_detail";
 import song_url from "./song_url";
 import comment from "./comment";
 import { login_qr_key, login_qr_check } from "./login_qr";
+import newSong from "./newsong";
+import newAlbum from "./newalbum";
 
 export const modules: Record<string, QMModule> = {
   hot_search,
   leaderboard,
   toplist,
   hot_playlists: playlistSquare,
+  new_songs: newSong,
+  new_albums: newAlbum,
   lyric,
   match,
   search,

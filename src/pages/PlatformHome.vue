@@ -27,14 +27,19 @@ import * as qobuzApi from "@/apis/qobuz";
 import * as tidalApi from "@/apis/tidal";
 import {
   fetchQQMusicHotPlaylists,
+  fetchQQMusicNewAlbums,
+  fetchQQMusicNewSongs,
   fetchQQMusicToplist,
   type QMHotPlaylist,
+  type QMNewAlbum,
   type QMToplistGroup,
 } from "@/apis/playlist/qqmusic";
 import {
+  fetchKugouHotArtists,
   fetchKugouHotPlaylists,
   fetchKugouNewSongs,
   fetchKugouRankList,
+  type KGHotArtist,
   type KGHotPlaylist,
   type KGRankGroup,
 } from "@/apis/playlist/kugou";
@@ -42,15 +47,20 @@ import { formatCompact } from "@/utils/format";
 import {
   ALL_PLATFORMS,
   PLATFORM_LABELS,
+  SHELF_TABS,
   asArray,
   asRecord,
   openPlatformHomeItem,
   qobuzSectionEndpoint,
   qobuzSectionTitle,
+  kgHotArtistToItem,
+  qmNewAlbumToItem,
+  shelfDefaultTab,
   str,
   tidalModulePath,
   toQobuzItem,
   toTidalItem,
+  trackToAlbumItem,
   type HomeItem,
   type HomeSection,
   type Platform,
@@ -70,13 +80,34 @@ interface GenreItem {
   name: string;
 }
 
-const platform = ref<Platform>("qobuz");
+/**
+ * 当前平台。
+ *
+ * 初始值取标签顺序的第一项，而不是写死某个平台：写死会与顺序脱钩——
+ * 顺序一调整，刷新后的默认页就跟着错位（真实反馈：顺序改成 QQ音乐 在前之后，
+ * 刷新仍停在 Qobuz）。若第一项没登录，下面的 watch 会落到首个已登录平台。
+ */
+const platform = ref<Platform>(ALL_PLATFORMS[0]);
 const loading = ref(false);
 const error = ref<string>("");
 const sections = ref<HomeSection[]>([]);
 const genres = ref<GenreItem[]>([]);
-/** 当前筛选的流派；空串表示不筛选 */
+/**
+ * 当前筛选的流派 / 榜单分组；空串表示不筛选。
+ *
+ * 这排标签在两个平台语义不同，所以渲染位置也不同：
+ * - Qobuz/TIDAL：**整页**的流派筛选（换 genre_id 重新拉首页），放在平台标签下方；
+ * - QM/KG：只是**榜单区**的分组筛选，所以挪进「榜单」区里——留在页面顶部时，
+ *   它离被控制的内容隔着几排书架，点了会像没反应。
+ */
 const activeGenre = ref<string>("");
+/**
+ * 各书架当前选中的地区/语种（键 = 分区 key，也就是书架标识）。
+ *
+ * 与顶部的 `activeGenre` 是两回事：那是整页的榜单分组/流派筛选，
+ * 这是每个书架自己的地区标签（官方每个书架右上/下方都有一排）。
+ */
+const activeTabs = ref<Record<string, string>>({});
 /** 登录对话框（认证失效时提供「去登录」入口，而不是只丢一个裸错误串） */
 const loginDialogOpen = ref(false);
 
@@ -110,6 +141,25 @@ const platformTabs = computed(() =>
 const currentAuthed = computed(() =>
   Boolean(providerSessions.sessions[platform.value]?.authenticated),
 );
+
+/** QM/KG 的这排标签是榜单分组而非流派——决定它渲染在页面顶部还是「榜单」区里 */
+const isRankGroupPlatform = computed(
+  () => platform.value === "qqmusic" || platform.value === "kugou",
+);
+
+/** 页面顶部的流派筛选行：只有 Qobuz/TIDAL 有（它们的 genre 作用于整页） */
+const showGenreRow = computed(() => genres.value.length > 0 && !isRankGroupPlatform.value);
+
+/** 榜单分组标签；首个「全部」表示不筛选，也就是默认状态 */
+const rankGroupTabs = computed<GenreItem[]>(() =>
+  isRankGroupPlatform.value ? [{ id: "", name: t("platformHome.allRanks") }, ...genres.value] : [],
+);
+
+/** 第 index 个分区是否是某个大类（目前只有「榜单」）的第一节：分组标题与标签只渲染一次 */
+const isGroupStart = (index: number): boolean => {
+  const current = sections.value[index];
+  return Boolean(current?.group) && current.group !== sections.value[index - 1]?.group;
+};
 
 // ---------- 归一化 ----------
 
@@ -227,6 +277,8 @@ const normalizeQQMusic = (groups: QMToplistGroup[]): HomeSection[] =>
   groups.map((group) => ({
     key: `qm-${group.id}`,
     title: group.name,
+    // 榜单区整片挂同一个分组标题，用户才知道顶部那排按钮在控制什么
+    group: t("platformHome.ranks"),
     variant: "cards",
     items: group.items.map((item) => ({
       id: item.id,
@@ -244,6 +296,7 @@ const normalizeKugou = (groups: KGRankGroup[]): HomeSection[] =>
   groups.map((group) => ({
     key: `kg-${group.id}`,
     title: group.name,
+    group: t("platformHome.ranks"),
     variant: "cards",
     items: group.items.map((item) => ({
       id: item.id,
@@ -298,27 +351,61 @@ const kgHotPlaylistSection = (playlists: KGHotPlaylist[]): HomeSection => ({
 });
 
 /**
- * KG 新歌首发 → HomeSection。
+ * 给 QM/KG 的书架挂上地区标签与「更多」入口。
+ *
+ * 只有 SHELF_TABS 里登记过的书架才有标签；标签与取值都来自实测（见该常量的注释）。
+ * 「更多」把分区页当作「同一书架 + 同一地区」的完整列表。
+ */
+const withShelf = (section: HomeSection): HomeSection => {
+  const tabs = SHELF_TABS[section.key];
+  if (!tabs) return section;
+  const activeTab = shelfTab(section.key);
+  return {
+    ...section,
+    tabs,
+    activeTab,
+    more: { platform: platform.value, section: section.key, tab: activeTab },
+  };
+};
+
+/**
+ * 「新歌首发」→ HomeSection（QM 与 KG 共用）。
  *
  * 新歌是「歌曲」，但平台首页只有专辑/歌单/歌手三种详情页，没有单曲详情页，
  * 因此与 TIDAL 的 TRACK_LIST 保持同一处理：卡片点击进入该歌曲所属专辑。
- * 歌曲自身仍带着完整的 hash / albumAudioId，进入专辑后即可正常播放。
+ * 歌曲自身仍带着完整的取流字段（KG 是 hash / albumAudioId，QM 是 mid / mediaMid），
+ * 进入专辑后即可正常播放。
  */
-const kgNewSongSection = (tracks: Track[]): HomeSection => ({
-  key: "kg-new-songs",
-  title: t("platformHome.newSongs"),
-  variant: "cards",
-  items: tracks.slice(0, SHELF_LIMIT).map((track) => {
-    const albumId = track.album?.id;
-    return {
-      id: albumId ?? track.id,
-      title: track.title,
-      subtitle: track.artists?.map((artist) => artist.name).join(", ") || undefined,
-      image: track.cover,
-      kind: "album" as const,
-    };
-  }),
-});
+const newSongSection = (key: string, title: string, tracks: Track[]): HomeSection =>
+  withShelf({
+    key,
+    title,
+    variant: "cards",
+    items: tracks.slice(0, SHELF_LIMIT).map(trackToAlbumItem),
+  });
+
+/** QM 新碟首发 → HomeSection */
+const qmNewAlbumSection = (albums: QMNewAlbum[]): HomeSection =>
+  withShelf({
+    key: "qm-new-albums",
+    title: t("platformHome.newAlbums"),
+    variant: "cards",
+    items: albums.slice(0, SHELF_LIMIT).map(qmNewAlbumToItem),
+  });
+
+/** KG 热门歌手 → HomeSection（歌手卡片，点击进歌手详情） */
+const kgHotArtistSection = (artists: KGHotArtist[]): HomeSection =>
+  withShelf({
+    key: "kg-hot-artists",
+    title: t("platformHome.hotArtists"),
+    variant: "cards",
+    items: artists.slice(0, SHELF_LIMIT).map((artist) => ({
+      ...kgHotArtistToItem(artist),
+      subtitle: artist.fansCount
+        ? t("platformHome.fansCount", { count: formatCompact(artist.fansCount, locale.value) })
+        : undefined,
+    })),
+  });
 
 const normalizeGenres = (p: Platform, data: unknown): GenreItem[] => {
   if (p === "qobuz") {
@@ -399,27 +486,41 @@ const load = async (): Promise<void> => {
       genres.value = normalizeGenres("tidal", genreData);
     } else if (platform.value === "qqmusic") {
       // QM 的分类导航就是榜单分组，点击分组只过滤已拉取的目录，不再请求接口
-      const [groups, hotPlaylists] = await Promise.all([
+      const [groups, hotPlaylists, newSongs, newAlbums] = await Promise.all([
         fetchQQMusicToplist(),
-        // 热门歌单拉不到时不影响榜单展示
+        // 下面三个书架任一个拉不到都不该影响榜单展示
         fetchQQMusicHotPlaylists(30).catch(() => [] as QMHotPlaylist[]),
+        fetchQQMusicNewSongs(30, Number(shelfTab("qm-new-songs"))).catch(() => [] as Track[]),
+        fetchQQMusicNewAlbums(30, Number(shelfTab("qm-new-albums"))).catch(
+          () => [] as QMNewAlbum[],
+        ),
       ]);
       const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
+        ...(newSongs.length
+          ? [newSongSection("qm-new-songs", t("platformHome.newSongs"), newSongs)]
+          : []),
+        ...(newAlbums.length ? [qmNewAlbumSection(newAlbums)] : []),
         ...(hotPlaylists.length ? [qmHotPlaylistSection(hotPlaylists)] : []),
         ...normalizeQQMusic(visible),
       ];
       genres.value = groupsToGenres(groups);
     } else {
-      const [groups, hotPlaylists, newSongs] = await Promise.all([
+      const [groups, hotPlaylists, newSongs, hotArtists] = await Promise.all([
         fetchKugouRankList(),
         fetchKugouHotPlaylists(1, 30).catch(() => [] as KGHotPlaylist[]),
-        fetchKugouNewSongs(30).catch(() => [] as Track[]),
+        fetchKugouNewSongs(30, Number(shelfTab("kg-new-songs"))).catch(() => [] as Track[]),
+        fetchKugouHotArtists(30, Number(shelfTab("kg-hot-artists"))).catch(
+          () => [] as KGHotArtist[],
+        ),
       ]);
       const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
+        ...(newSongs.length
+          ? [newSongSection("kg-new-songs", t("platformHome.newSongs"), newSongs)]
+          : []),
+        ...(hotArtists.length ? [kgHotArtistSection(hotArtists)] : []),
         ...(hotPlaylists.length ? [kgHotPlaylistSection(hotPlaylists)] : []),
-        ...(newSongs.length ? [kgNewSongSection(newSongs)] : []),
         ...normalizeKugou(visible),
       ];
       genres.value = groupsToGenres(groups);
@@ -450,6 +551,20 @@ const onLoginDialogClose = async (open: boolean): Promise<void> => {
 
 const selectGenre = async (id: string): Promise<void> => {
   activeGenre.value = activeGenre.value === id ? "" : id;
+  await load();
+};
+
+/** 某书架当前生效的地区值（没选过就用 SHELF_TABS 的第一项） */
+const shelfTab = (key: string): string => activeTabs.value[key] ?? shelfDefaultTab(key) ?? "";
+
+/**
+ * 切换某书架的地区标签。
+ *
+ * 这里选择整页重载而不是局部刷新：与 `selectGenre` 一致，且各平台的取数是并发的，
+ * 局部刷新要额外维护「哪些书架在加载」的状态，收益不抵复杂度。
+ */
+const selectShelfTab = async (section: HomeSection, value: string): Promise<void> => {
+  activeTabs.value = { ...activeTabs.value, [section.key]: value };
   await load();
 };
 
@@ -501,8 +616,12 @@ onMounted(async () => {
           </SButton>
         </div>
 
-        <!-- 分类导航 -->
-        <div v-if="genres.length" class="flex flex-wrap gap-1.5">
+        <!--
+          流派筛选：只有 Qobuz/TIDAL 放在这里。
+          QM/KG 的那排标签是榜单分组，只作用于榜单区，已挪到「榜单」标题下面——
+          留在页面顶部时它离被控制的内容隔着几排书架，点了会像没反应。
+        -->
+        <div v-if="showGenreRow" class="flex flex-wrap gap-1.5">
           <button
             v-for="genre in genres"
             :key="genre.id"
@@ -541,72 +660,116 @@ onMounted(async () => {
         </div>
 
         <!-- 分区列表 -->
-        <section v-for="section in sections" :key="section.key" class="flex flex-col gap-2.5">
-          <!-- 标题行：官方在每个分区右上角都有「查看全部」，这里只在该分区确实还能翻页时给 -->
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
-            <button
-              v-if="section.more"
-              type="button"
-              class="flex shrink-0 items-center gap-0.5 text-xs text-on-surface-variant transition-colors hover:text-primary"
-              @click="openSection(section)"
-            >
-              {{ t("platformHome.viewAll") }}
-              <IconLucideChevronRight class="size-3.5" />
-            </button>
-          </div>
-
-          <!-- 标签行：导航标签没有封面也没有详情页，只做展示 -->
-          <div v-if="section.variant === 'tags'" class="flex flex-wrap gap-1.5">
-            <span
-              v-for="item in section.items"
-              :key="`${section.key}-${item.id}`"
-              class="rounded-md bg-surface-variant/15 px-2.5 py-1 text-xs text-on-surface-variant"
-            >
-              {{ item.title }}
-            </span>
-          </div>
-
-          <!-- 封面卡片 -->
-          <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            <button
-              v-for="item in section.items"
-              :key="`${section.key}-${item.id}`"
-              type="button"
-              class="group min-w-0 text-left"
-              :title="item.title"
-              @click="openItem(item)"
-            >
-              <div
-                class="relative aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10 transition-transform duration-200 group-hover:scale-[1.03]"
+        <template v-for="(section, index) in sections" :key="section.key">
+          <!--
+            大类标题（目前只有「榜单」）在分组切换处渲染一次。
+            榜单分组的筛选标签就挂在这里：它只作用于榜单区，跟着被控制的内容走，
+            用户才不会以为按钮没反应。
+          -->
+          <div v-if="isGroupStart(index)" class="mt-1 flex flex-col gap-2">
+            <h3 class="text-lg font-semibold text-on-surface">{{ section.group }}</h3>
+            <div v-if="rankGroupTabs.length" class="flex flex-wrap gap-1.5">
+              <button
+                v-for="tab in rankGroupTabs"
+                :key="tab.id"
+                type="button"
+                class="rounded-md px-2.5 py-1 text-xs transition-colors"
+                :class="
+                  activeGenre === tab.id
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-on-surface-variant hover:bg-surface-variant/15'
+                "
+                @click="selectGenre(tab.id)"
               >
-                <SImg v-if="item.image" :src="item.image" :alt="item.title" class="size-full" />
-                <div v-else class="flex size-full items-center justify-center">
-                  <IconLucideDisc3 class="size-7 text-on-surface-variant/30" />
-                </div>
-                <!-- 音质角标：与列表页的音质标签同一套配色，压在深色蒙层上保证可读 -->
-                <span
-                  v-if="item.badge"
-                  class="absolute top-1.5 left-1.5 rounded border border-solid border-amber-500/40 bg-black/45 px-1 text-[10px] leading-[16px] font-bold text-amber-500 backdrop-blur-sm"
-                >
-                  {{ item.badge }}
-                </span>
-              </div>
-              <p
-                class="mt-1.5 truncate text-xs font-medium text-on-surface group-hover:text-primary"
+                {{ tab.name }}
+              </button>
+            </div>
+          </div>
+          <section class="flex flex-col gap-2.5">
+            <!-- 标题行：官方在每个分区右上角都有「查看全部」，这里只在该分区确实还能翻页时给 -->
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-base font-semibold text-on-surface">{{ section.title }}</h2>
+              <button
+                v-if="section.more"
+                type="button"
+                class="flex shrink-0 items-center gap-0.5 text-xs text-on-surface-variant transition-colors hover:text-primary"
+                @click="openSection(section)"
+              >
+                {{ t("platformHome.viewAll") }}
+                <IconLucideChevronRight class="size-3.5" />
+              </button>
+            </div>
+
+            <!-- 地区/语种标签：官方每个书架下面都有一排，切换后只重载这一份列表 -->
+            <div v-if="section.tabs?.length" class="flex flex-wrap gap-1.5">
+              <button
+                v-for="tab in section.tabs"
+                :key="tab.value"
+                type="button"
+                class="rounded-md px-2.5 py-1 text-xs transition-colors"
+                :class="
+                  section.activeTab === tab.value
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-on-surface-variant hover:bg-surface-variant/15'
+                "
+                @click="selectShelfTab(section, tab.value)"
+              >
+                {{ t(tab.labelKey) }}
+              </button>
+            </div>
+
+            <!-- 标签行：导航标签没有封面也没有详情页，只做展示 -->
+            <div v-if="section.variant === 'tags'" class="flex flex-wrap gap-1.5">
+              <span
+                v-for="item in section.items"
+                :key="`${section.key}-${item.id}`"
+                class="rounded-md bg-surface-variant/15 px-2.5 py-1 text-xs text-on-surface-variant"
               >
                 {{ item.title }}
-              </p>
-              <p
-                v-if="item.subtitle"
-                class="truncate text-[11px] text-on-surface-variant/60"
-                :title="item.subtitle"
+              </span>
+            </div>
+
+            <!-- 封面卡片 -->
+            <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              <button
+                v-for="item in section.items"
+                :key="`${section.key}-${item.id}`"
+                type="button"
+                class="group min-w-0 text-left"
+                :title="item.title"
+                @click="openItem(item)"
               >
-                {{ item.subtitle }}
-              </p>
-            </button>
-          </div>
-        </section>
+                <div
+                  class="relative aspect-square w-full overflow-hidden rounded-lg bg-surface-variant/10 transition-transform duration-200 group-hover:scale-[1.03]"
+                >
+                  <SImg v-if="item.image" :src="item.image" :alt="item.title" class="size-full" />
+                  <div v-else class="flex size-full items-center justify-center">
+                    <IconLucideDisc3 class="size-7 text-on-surface-variant/30" />
+                  </div>
+                  <!-- 音质角标：与列表页的音质标签同一套配色，压在深色蒙层上保证可读 -->
+                  <span
+                    v-if="item.badge"
+                    class="absolute top-1.5 left-1.5 rounded border border-solid border-amber-500/40 bg-black/45 px-1 text-[10px] leading-[16px] font-bold text-amber-500 backdrop-blur-sm"
+                  >
+                    {{ item.badge }}
+                  </span>
+                </div>
+                <p
+                  class="mt-1.5 truncate text-xs font-medium text-on-surface group-hover:text-primary"
+                >
+                  {{ item.title }}
+                </p>
+                <p
+                  v-if="item.subtitle"
+                  class="truncate text-[11px] text-on-surface-variant/60"
+                  :title="item.subtitle"
+                >
+                  {{ item.subtitle }}
+                </p>
+              </button>
+            </div>
+          </section>
+        </template>
       </template>
     </div>
 

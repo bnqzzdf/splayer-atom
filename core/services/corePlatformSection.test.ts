@@ -61,7 +61,7 @@ test("TIDAL pages_get 支持 data/<uuid> 路径并补齐分页参数", () => {
   assert.match(tidalDiscoverSource, /segments\.len\(\) <= 2/);
   // 每段都要是纯标识符，不能把任意字符串拼进端点
   assert.match(tidalDiscoverSource, /is_identifier/);
-  // 与 pages/home 一样：deviceType 必填、limit/offset 用于翻页
+  // deviceType / limit / offset：与 pages/home 同一套
   assert.match(
     tidalDiscoverSource,
     /req_params\.insert\("deviceType"\.to_string\(\), device_type\.to_string\(\)\)/,
@@ -74,6 +74,14 @@ test("TIDAL pages_get 支持 data/<uuid> 路径并补齐分页参数", () => {
     tidalDiscoverSource,
     /req_params\.insert\("offset"\.to_string\(\), offset\.to_string\(\)\)/,
   );
+  // locale 是硬要求：模块数据端点缺了回 400，只给 deviceType 不够（实测）
+  assert.match(
+    tidalDiscoverSource,
+    /req_params\.insert\("locale"\.to_string\(\), locale\.to_string\(\)\)/,
+  );
+  assert.match(tidalDiscoverSource, /unwrap_or\("en_US"\)/);
+  // 前端把当前语言带下去，而不是只靠原生默认值
+  assert.match(platformSectionPageSource, /locale: locale\.value/);
 });
 
 test("分区「查看全部」的入口与页面都已接线", () => {

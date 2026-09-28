@@ -84,14 +84,16 @@ impl TidalClient {
         }
 
         let mut req_params = HashMap::new();
-        if let Some(locale) = params
+        // locale 与 deviceType 一样是上游必填：`pages/data/<uuid>` 缺了会回
+        // 400 "locale or deviceType missing"——实测只给 deviceType **不够**，
+        // 必须带 locale。调用方不给就用默认值，别让翻页因为少一个参数整片失败。
+        let locale = params
             .get("locale")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
-        {
-            req_params.insert("locale".to_string(), locale.to_string());
-        }
+            .unwrap_or("en_US");
+        req_params.insert("locale".to_string(), locale.to_string());
 
         let device_type = params
             .get("device_type")
