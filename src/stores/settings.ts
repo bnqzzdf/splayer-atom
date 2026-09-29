@@ -181,6 +181,8 @@ export const useSettingsStore = defineStore(
     const appearance = reactive<AppearanceSettings>({
       layoutMode: "default",
       folderViewMode: "list",
+      folderBrowseSort: "name",
+      folderBrowseOrder: "asc",
       routeTransition: "fade",
       sidebarCollapsed: false,
       sidebarPlaylistCover: false,
@@ -386,8 +388,13 @@ export const useSettingsStore = defineStore(
         }
         // 已有的跨标签设置优先；首次升级时才沿用当前标签页的旧会话值。
         const saved = JSON.parse(localStorage.getItem(store.$id) || "{}") as {
-          appearance?: { folderViewMode?: unknown };
+          appearance?: {
+            folderViewMode?: unknown;
+            folderBrowseSort?: unknown;
+            folderBrowseOrder?: unknown;
+          };
         };
+        let persistAppearanceMigration = false;
         const persistedMode = saved.appearance?.folderViewMode;
         const legacyMode = sessionStorage.getItem(LEGACY_FOLDER_VIEW_MODE_KEY);
         if (persistedMode !== "list" && persistedMode !== "grid") {
@@ -396,10 +403,21 @@ export const useSettingsStore = defineStore(
           } else {
             appearance.folderViewMode = "list";
           }
-          // 水合钩子早于自动持久化订阅，迁移结果需要立即写入。
-          store.$persist();
+          persistAppearanceMigration = true;
         }
         sessionStorage.removeItem(LEGACY_FOLDER_VIEW_MODE_KEY);
+        const persistedSort = saved.appearance?.folderBrowseSort;
+        if (persistedSort !== "name" && persistedSort !== "mtime" && persistedSort !== "track") {
+          appearance.folderBrowseSort = "name";
+          persistAppearanceMigration = true;
+        }
+        const persistedOrder = saved.appearance?.folderBrowseOrder;
+        if (persistedOrder !== "asc" && persistedOrder !== "desc") {
+          appearance.folderBrowseOrder = "asc";
+          persistAppearanceMigration = true;
+        }
+        // 水合钩子早于自动持久化订阅，迁移结果需要立即写入。
+        if (persistAppearanceMigration) store.$persist();
         lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, SUPPORTED_LYRIC_PLATFORMS);
         if (lyric.lyricSourcePreference === "qobuz" || lyric.lyricSourcePreference === "tidal") {
           lyric.lyricSourcePreference = "auto";

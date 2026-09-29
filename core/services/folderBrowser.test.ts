@@ -6,6 +6,7 @@ import {
   rmSync,
   symlinkSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,6 +79,17 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   const ordering10 = path.join(ordering, "10.flac");
   const orderingCd1Track = path.join(orderingCd1, "01.flac");
   const orderingCd2Track = path.join(orderingCd2, "01.flac");
+  const sorting = path.join(root, "sorting");
+  const sortingDir2 = path.join(sorting, "Dir 2");
+  const sortingDir10 = path.join(sorting, "Dir 10");
+  const sortingLoose = path.join(sorting, "A Loose.flac");
+  const sortingUnknown = path.join(sorting, "B Unknown.flac");
+  const sortingIso = path.join(sorting, "C Disc.iso");
+  const sortingDisc2Track1 = path.join(sorting, "X Disc2 Track1.flac");
+  const sortingTrack10 = path.join(sorting, "Y Track10.flac");
+  const sortingTrack2 = path.join(sorting, "Z Track2.flac");
+  const sortingMaterial2 = path.join(sorting, "Material 2.log");
+  const sortingMaterial10 = path.join(sorting, "Material 10.log");
   const outsideTrack = path.join(outsideRoot, "outside.flac");
   const outsideLog = path.join(outsideRoot, "Outside.log");
   const outsideDirectoryLink = path.join(root, "External Link");
@@ -129,6 +141,27 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   writeFileSync(ordering10, "10");
   writeFileSync(orderingCd1Track, "cd1");
   writeFileSync(orderingCd2Track, "cd2");
+  mkdirSync(sorting);
+  mkdirSync(sortingDir2);
+  mkdirSync(sortingDir10);
+  writeFileSync(sortingLoose, "loose");
+  writeFileSync(sortingUnknown, "unknown");
+  writeFileSync(sortingIso, "iso");
+  writeFileSync(sortingDisc2Track1, "disc2-track1");
+  writeFileSync(sortingTrack10, "track10");
+  writeFileSync(sortingTrack2, "track2");
+  writeFileSync(sortingMaterial2, "material2");
+  writeFileSync(sortingMaterial10, "material10");
+  utimesSync(sortingLoose, 1_000, 1_000);
+  utimesSync(sortingUnknown, 2_000, 2_000);
+  utimesSync(sortingIso, 3_000, 3_000);
+  utimesSync(sortingDisc2Track1, 5_000, 5_000);
+  utimesSync(sortingTrack10, 5_000, 5_000);
+  utimesSync(sortingTrack2, 6_000, 6_000);
+  utimesSync(sortingMaterial2, 7_000, 7_000);
+  utimesSync(sortingMaterial10, 8_000, 8_000);
+  utimesSync(sortingDir2, 9_000, 9_000);
+  utimesSync(sortingDir10, 10_000, 10_000);
   writeFileSync(canonicalArtworkTrack, "canonical");
   writeFileSync(outsideTrack, "outside");
   writeFileSync(outsideLog, "outside");
@@ -140,6 +173,7 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   const database = await import("@main/database");
   const { store } = await import("@main/store");
   const folder = await import("./folderBrowser");
+  const { publishLibraryRevision } = await import("./libraryRevision");
   const { resolvePlaybackSource } = await import("./playbackSourceResolver");
 
   try {
@@ -151,6 +185,10 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     const canonicalArtworkStat = statSync(canonicalArtworkTrack);
     const cueActionStat = statSync(cueActionCue);
     const cueActionBackingStat = statSync(cueActionBacking);
+    const sortingUnknownStat = statSync(sortingUnknown);
+    const sortingDisc2Track1Stat = statSync(sortingDisc2Track1);
+    const sortingTrack10Stat = statSync(sortingTrack10);
+    const sortingTrack2Stat = statSync(sortingTrack2);
     database.upsertTracks([
       {
         id: "indexed-track",
@@ -202,6 +240,51 @@ test("Folder Browser browses live media/materials without a completed scan", asy
         mtime: canonicalArtworkStat.mtimeMs,
         ctime: canonicalArtworkStat.ctimeMs,
       },
+      {
+        id: "sorting-unknown",
+        path: sortingUnknown,
+        title: "Unknown track",
+        artists: [],
+        duration: 1000,
+        fileSize: sortingUnknownStat.size,
+        mtime: sortingUnknownStat.mtimeMs,
+        ctime: sortingUnknownStat.ctimeMs,
+      },
+      {
+        id: "sorting-disc2-track1",
+        path: sortingDisc2Track1,
+        title: "Disc 2 track 1",
+        track: 1,
+        disc: 2,
+        artists: [],
+        duration: 1000,
+        fileSize: sortingDisc2Track1Stat.size,
+        mtime: sortingDisc2Track1Stat.mtimeMs,
+        ctime: sortingDisc2Track1Stat.ctimeMs,
+      },
+      {
+        id: "sorting-track10",
+        path: sortingTrack10,
+        title: "Track 10",
+        track: 10,
+        disc: 1,
+        artists: [],
+        duration: 1000,
+        fileSize: sortingTrack10Stat.size,
+        mtime: sortingTrack10Stat.mtimeMs,
+        ctime: sortingTrack10Stat.ctimeMs,
+      },
+      {
+        id: "sorting-track2",
+        path: sortingTrack2,
+        title: "Track 2",
+        track: 2,
+        artists: [],
+        duration: 1000,
+        fileSize: sortingTrack2Stat.size,
+        mtime: sortingTrack2Stat.mtimeMs,
+        ctime: sortingTrack2Stat.ctimeMs,
+      },
     ]);
 
     const page = await folder.browseFolder(root, undefined, 100);
@@ -238,6 +321,244 @@ test("Folder Browser browses live media/materials without a completed scan", asy
       page.entries.some((entry) => entry.path === whole),
       false,
       "valid CUE must hide its whole-file backing audio",
+    );
+
+    const nameAsc = await folder.browseFolder(sorting, undefined, 100);
+    assert.deepEqual(
+      nameAsc.entries.map((entry) => entry.name),
+      [
+        "Dir 2",
+        "Dir 10",
+        "A Loose.flac",
+        "B Unknown.flac",
+        "C Disc.iso",
+        "X Disc2 Track1.flac",
+        "Y Track10.flac",
+        "Z Track2.flac",
+        "Material 2.log",
+        "Material 10.log",
+      ],
+      "default browse order stays grouped natural name ascending",
+    );
+    const nameDesc = await folder.browseFolder(
+      sorting,
+      undefined,
+      100,
+      undefined,
+      undefined,
+      "name",
+      "desc",
+    );
+    assert.deepEqual(
+      nameDesc.entries.map((entry) => entry.name),
+      [
+        "Dir 10",
+        "Dir 2",
+        "Z Track2.flac",
+        "Y Track10.flac",
+        "X Disc2 Track1.flac",
+        "C Disc.iso",
+        "B Unknown.flac",
+        "A Loose.flac",
+        "Material 10.log",
+        "Material 2.log",
+      ],
+      "descending name order must not reverse the fixed entry groups",
+    );
+    const mtimeDesc = await folder.browseFolder(
+      sorting,
+      undefined,
+      100,
+      undefined,
+      undefined,
+      "mtime",
+      "desc",
+    );
+    assert.deepEqual(
+      mtimeDesc.entries.map((entry) => entry.name),
+      [
+        "Dir 10",
+        "Dir 2",
+        "Z Track2.flac",
+        "X Disc2 Track1.flac",
+        "Y Track10.flac",
+        "C Disc.iso",
+        "B Unknown.flac",
+        "A Loose.flac",
+        "Material 10.log",
+        "Material 2.log",
+      ],
+      "mtime ties fall back to stable natural name order inside fixed groups",
+    );
+    const trackAsc = await folder.browseFolder(
+      sorting,
+      undefined,
+      100,
+      undefined,
+      undefined,
+      "track",
+      "asc",
+    );
+    assert.deepEqual(
+      trackAsc.entries.map((entry) => entry.name),
+      [
+        "Dir 2",
+        "Dir 10",
+        "Z Track2.flac",
+        "Y Track10.flac",
+        "X Disc2 Track1.flac",
+        "A Loose.flac",
+        "B Unknown.flac",
+        "C Disc.iso",
+        "Material 2.log",
+        "Material 10.log",
+      ],
+      "track order uses disc/track for scanned audio and keeps unknown media after it",
+    );
+    const trackDesc = await folder.browseFolder(
+      sorting,
+      undefined,
+      100,
+      undefined,
+      undefined,
+      "track",
+      "desc",
+    );
+    assert.deepEqual(
+      trackDesc.entries.map((entry) => entry.name),
+      [
+        "Dir 2",
+        "Dir 10",
+        "X Disc2 Track1.flac",
+        "Y Track10.flac",
+        "Z Track2.flac",
+        "A Loose.flac",
+        "B Unknown.flac",
+        "C Disc.iso",
+        "Material 2.log",
+        "Material 10.log",
+      ],
+      "track descending reverses valid positions without pulling unknown media forward",
+    );
+    const focusedTrackDesc = await folder.browseFolder(
+      sorting,
+      undefined,
+      2,
+      sortingTrack2,
+      undefined,
+      "track",
+      "desc",
+    );
+    assert.ok(
+      focusedTrackDesc.entries.some((entry) => entry.path === sortingTrack2),
+      "focus paging must resolve against the requested sorted result",
+    );
+
+    const sortingDirectoryEntry = nameAsc.entries.find(
+      (entry) => entry.kind === "directory" && entry.path === sortingDir2,
+    );
+    assert.equal(
+      Math.trunc(sortingDirectoryEntry?.mtime ?? -1),
+      Math.trunc(statSync(sortingDir2).mtimeMs),
+    );
+    const sortingTrackEntry = nameAsc.entries.find(
+      (entry) => entry.kind === "track" && entry.path === sortingTrack2,
+    );
+    assert.ok(sortingTrackEntry?.kind === "track");
+    assert.equal(sortingTrackEntry.size, statSync(sortingTrack2).size);
+    assert.equal(Math.trunc(sortingTrackEntry.mtime), Math.trunc(statSync(sortingTrack2).mtimeMs));
+    const sortingContainerEntry = nameAsc.entries.find(
+      (entry) => entry.kind === "sacd" && entry.path === sortingIso,
+    );
+    assert.ok(sortingContainerEntry?.kind === "sacd");
+    assert.equal(sortingContainerEntry.size, statSync(sortingIso).size);
+    assert.equal(Math.trunc(sortingContainerEntry.mtime), Math.trunc(statSync(sortingIso).mtimeMs));
+
+    const sortingFirst = await folder.browseFolder(
+      sorting,
+      undefined,
+      2,
+      undefined,
+      undefined,
+      "mtime",
+      "desc",
+    );
+    assert.ok(sortingFirst.nextCursor);
+    await assert.rejects(
+      () =>
+        folder.browseFolder(
+          sorting,
+          sortingFirst.nextCursor,
+          2,
+          undefined,
+          undefined,
+          "mtime",
+          "asc",
+        ),
+      /FOLDER_CURSOR_INVALID/,
+      "browse cursors cannot be reused under another sort direction",
+    );
+    await assert.rejects(
+      () =>
+        folder.browseFolder(
+          root,
+          sortingFirst.nextCursor,
+          2,
+          undefined,
+          undefined,
+          "mtime",
+          "desc",
+        ),
+      /FOLDER_CURSOR_INVALID/,
+      "browse cursors stay bound to the directory that created them",
+    );
+
+    const parentMtimeBeforeFileTouch = statSync(sorting).mtimeMs;
+    utimesSync(sortingLoose, 11_000, 11_000);
+    assert.equal(
+      statSync(sorting).mtimeMs,
+      parentMtimeBeforeFileTouch,
+      "changing a child file mtime does not update the parent directory mtime on this fixture",
+    );
+    await assert.rejects(
+      () =>
+        folder.browseFolder(
+          sorting,
+          sortingFirst.nextCursor,
+          2,
+          undefined,
+          undefined,
+          "mtime",
+          "desc",
+        ),
+      /FOLDER_CURSOR_STALE/,
+      "result signatures invalidate cursors when a child sort key changes",
+    );
+
+    const revisionFirst = await folder.browseFolder(
+      sorting,
+      undefined,
+      2,
+      undefined,
+      undefined,
+      "track",
+      "asc",
+    );
+    assert.ok(revisionFirst.nextCursor);
+    publishLibraryRevision();
+    await assert.rejects(
+      () =>
+        folder.browseFolder(
+          sorting,
+          revisionFirst.nextCursor,
+          2,
+          undefined,
+          undefined,
+          "track",
+          "asc",
+        ),
+      /FOLDER_CURSOR_STALE/,
+      "library metadata revisions invalidate track-order cursors",
     );
     assert.ok(page.entries.some((entry) => entry.kind === "cue" && entry.path === invalidCue));
     assert.ok(
@@ -289,6 +610,12 @@ test("Folder Browser browses live media/materials without a completed scan", asy
       cueActionPlayback.tracks.some((track) => track.path === cueActionBacking),
       false,
       "Folder actions must not enqueue a CUE backing file beside its virtual tracks",
+    );
+    const openedCue = await folder.openFolderContainer(cueActionCue);
+    assert.deepEqual(
+      openedCue.tracks.map((track) => track.id),
+      ["cue-track-1", "cue-track-2"],
+      "outer folder sorting must not alter the container's virtual track order",
     );
     const playlists = await import("@main/database/playlists");
     const singleTrackPlaylist = playlists.createPlaylist({
@@ -398,6 +725,35 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     const massiveSecond = await folder.browseFolder(massive, massivePage.nextCursor, 500);
     assert.equal(massiveSecond.entries.length, 100);
     assert.ok(massiveSecond.previousCursor);
+    const massiveDesc = await folder.browseFolder(
+      massive,
+      undefined,
+      500,
+      undefined,
+      undefined,
+      "name",
+      "desc",
+    );
+    assert.equal(massiveDesc.entries[0]?.name, "mass-item-0600.flac");
+    assert.equal(massiveDesc.entries.at(-1)?.name, "mass-item-0101.flac");
+    assert.ok(massiveDesc.nextCursor);
+    const massiveDescSecond = await folder.browseFolder(
+      massive,
+      massiveDesc.nextCursor,
+      500,
+      undefined,
+      undefined,
+      "name",
+      "desc",
+    );
+    assert.equal(massiveDescSecond.entries[0]?.name, "mass-item-0100.flac");
+    assert.equal(massiveDescSecond.entries.at(-1)?.name, "mass-item-0001.flac");
+    assert.equal(
+      new Set([...massiveDesc.entries, ...massiveDescSecond.entries].map((entry) => entry.path))
+        .size,
+      600,
+      "sorted pagination must traverse the directory without duplicates or omissions",
+    );
     const focusTarget = path.join(massive, "mass-item-0551.flac");
     const massiveFocused = await folder.browseFolder(massive, undefined, 200, focusTarget);
     assert.ok(massiveFocused.entries.some((entry) => entry.path === focusTarget));
@@ -478,7 +834,6 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.deepEqual(cueLocation, {
       path: root,
       containerPath: cue,
-      focusTrackId: "cue-track",
     });
     const iso = path.join(root, "disc.iso");
     const sacdLocation = folder.resolveTrackFolderLocation({
@@ -492,7 +847,6 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.deepEqual(sacdLocation, {
       path: root,
       containerPath: iso,
-      focusTrackId: "sacd-track",
     });
 
     const duplicateRootA = path.join(root, "Root A", "music");

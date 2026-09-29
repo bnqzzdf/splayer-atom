@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import { DEFAULT_SIDEBAR_NAV_GROUPS } from "@/types/settings";
-import { reconcileHiddenKeys, reconcileNavGroups } from "./settings";
+import { reconcileHiddenKeys, reconcileNavGroups, useSettingsStore } from "./settings";
+
+describe("folder browse display preference", () => {
+  it("defaults to the existing filename ascending presentation", () => {
+    setActivePinia(createPinia());
+    const settings = useSettingsStore();
+    expect(settings.appearance.folderBrowseSort).toBe("name");
+    expect(settings.appearance.folderBrowseOrder).toBe("asc");
+  });
+});
 
 describe("sidebar navigation migration", () => {
   it("将旧默认本地浏览顺序升级为首页、专辑、艺术家、歌曲", () => {

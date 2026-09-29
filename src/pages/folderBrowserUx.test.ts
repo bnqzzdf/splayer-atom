@@ -56,6 +56,80 @@ test("Folder presentation supports list/grid without changing route semantics", 
   assert.equal(foldersSource.includes('class="absolute right-2 top-2 opacity-90"'), false);
 });
 
+test("Folder display sorting stays route-aware and keeps navigation state isolated", () => {
+  assert.ok(foldersSource.includes('sort: currentSort.value'));
+  assert.ok(foldersSource.includes('order: currentOrder.value'));
+  assert.ok(foldersSource.includes("currentSort.value !== loadedSort.value"));
+  assert.ok(foldersSource.includes("currentOrder.value !== loadedOrder.value"));
+  assert.ok(foldersSource.includes("browseGeneration++"));
+  assert.ok(foldersSource.includes("explicitFocusPath"));
+  assert.ok(folderClientSource.includes('if (sort) params.set("sort", sort)'));
+  assert.ok(folderClientSource.includes('if (order) params.set("order", order)'));
+});
+
+test("Folder route normalization still loads direct containing-folder navigation", () => {
+  const normalization = foldersSource.indexOf("routeFolderSort.value !== sort");
+  const pathChange = foldersSource.indexOf("const pathOrSortChanged", normalization);
+  const earlyReturn = foldersSource.indexOf("return;", normalization);
+  assert.ok(normalization >= 0);
+  assert.ok(pathChange > normalization);
+  assert.ok(earlyReturn < 0 || earlyReturn > pathChange);
+});
+
+test("Folder return focus stays simple and runs only after the list is rendered", () => {
+  assert.equal(foldersSource.includes("scrollPositions"), false);
+  assert.equal(foldersSource.includes("restoreScroll"), false);
+  assert.equal(foldersSource.includes("saveCurrentScroll"), false);
+  assert.equal(foldersSource.includes("highlightKey"), false);
+  assert.equal(foldersSource.includes("highlightTimer"), false);
+  assert.ok(foldersSource.includes("if (generation === browseGeneration) loading.value = false;"));
+  assert.ok(foldersSource.includes("if (loaded && generation === browseGeneration) await loadContainer();"));
+  assert.ok(foldersSource.includes('card?.scrollIntoView({ block: "center" })'));
+  assert.ok(foldersSource.includes("list.scrollToIndex(index);"));
+});
+
+test("Folder child navigation records a deterministic return focus in browser history", () => {
+  assert.ok(foldersSource.includes("const goFolder = async (path: string, rememberReturnFocus = false)"));
+  assert.ok(foldersSource.includes("if (rememberReturnFocus && currentPath.value)"));
+  assert.ok(foldersSource.includes("focusPath: path"));
+  assert.ok(foldersSource.includes('goFolder(entry.path, true)'));
+  assert.ok(foldersSource.includes('data-folder-grid-path="entry.path"'));
+  assert.ok(foldersSource.includes('key: "directory-grid"'));
+  assert.ok(foldersSource.includes("entries: directories"));
+});
+
+test("Folder rows expose physical file identity without inventing unscanned metadata", () => {
+  assert.ok(foldersSource.includes('{{ item.entry.name }}'));
+  assert.ok(foldersSource.includes('t("folder.unscanned")'));
+  assert.ok(foldersSource.includes("trackTechnicalSummary"));
+  assert.ok(foldersSource.includes("virtualTrackTechnicalSummary"));
+  assert.ok(foldersSource.includes('t("folder.containerFile"'));
+  assert.equal(foldersSource.includes("formatTime(item.entry.track.duration || 0)"), false);
+});
+
+test("Folder operation scope and batch selection hide pagination details", () => {
+  assert.ok(foldersSource.includes('t("folder.play")'));
+  assert.ok(foldersSource.includes('key: "currentOnly"'));
+  assert.ok(foldersSource.includes('t("folder.selectAll")'));
+  assert.ok(foldersSource.includes('t("folder.invertSelection")'));
+  assert.equal(foldersSource.includes("selectLoaded"), false);
+  assert.equal(foldersSource.includes("invertLoaded"), false);
+  assert.ok(foldersSource.includes("const loadAllBatchEntries = async (): Promise<boolean>"));
+  assert.ok(foldersSource.includes("limit: 500"));
+  assert.ok(foldersSource.includes("} while (cursor);"));
+  assert.ok(foldersSource.includes("previousCursor.value = undefined"));
+  assert.ok(foldersSource.includes("nextCursor.value = undefined"));
+  assert.ok(foldersSource.includes("batchCandidates.value.map((item) => item.key)"));
+});
+
+test("Folder Search keeps truncation independent from pagination and resets it for new queries", () => {
+  assert.ok(foldersSource.includes("searchTruncated.value = false"));
+  assert.ok(foldersSource.includes("result.truncated === true"));
+  assert.ok(foldersSource.includes("searchTruncated.value || result.truncated === true"));
+  assert.ok(foldersSource.includes('v-if="searchTruncated"'));
+  assert.ok(foldersSource.includes('t("folder.searchTruncated")'));
+});
+
 test("Folder scan refreshes once at completion instead of reloading every library batch", () => {
   assert.ok(foldersSource.includes("if (scanCoversCurrent.value) return;"));
   assert.ok(foldersSource.includes('progress.phase === "done"'));
@@ -80,8 +154,11 @@ test("Folder batch management keeps explicit file selection Core-owned", () => {
   assert.ok(
     foldersSource.includes("folderBrowserClient.addBatchToPlaylist(playlistId, batchTargets)"),
   );
-  assert.ok(foldersSource.includes("item.entry.kind !== 'directory'"));
-  assert.ok(foldersSource.includes("item.entry.kind !== 'material'"));
+  assert.ok(
+    foldersSource.includes('(row.entry.kind === "cue" || row.entry.kind === "sacd") &&'),
+  );
+  assert.ok(foldersSource.includes("container.value?.path === row.entry.path"));
+  assert.ok(foldersSource.includes("batchCandidateKeys.has(item.key)"));
   assert.ok(folderClientSource.includes('"/library/folders/batch/playlist"'));
   assert.ok(folderClientSource.includes("/library/folders/batch/"));
 });
@@ -89,6 +166,13 @@ test("Folder batch management keeps explicit file selection Core-owned", () => {
 test("Show in folder remains shared across player and queue surfaces", () => {
   assert.ok(trackMenuSource.includes('id: "openContainingFolder"'));
   assert.ok(trackMenuSource.includes("folderBrowserClient.location(current)"));
+  assert.ok(
+    foldersSource.includes(
+      "const focusPath = containerPath || requestedFocusPath.value;",
+    ),
+  );
+  assert.equal(foldersSource.includes("data-folder-track-id"), false);
+  assert.equal(foldersSource.includes("requestAnimationFrame"), false);
   assert.ok(queuePopoverSource.includes("onOpenContainingFolder(item)"));
   assert.ok(queuePopoverSource.includes("openContainingFolder(track)"));
   assert.ok(queuePanelSource.includes("onOpenContainingFolder(item)"));

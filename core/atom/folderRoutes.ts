@@ -7,6 +7,8 @@ import type {
   FolderBatchActionRequest,
   FolderBatchPlaylistRequest,
   FolderBatchTarget,
+  FolderBrowseOrder,
+  FolderBrowseSort,
   FolderPlaylistRequest,
   FolderPlaylistTrackRequest,
   FolderScanRequest,
@@ -157,6 +159,22 @@ export const buildFolderRoutes = (): Hono => {
   api.get("/library/folders/browse", async (c) => {
     const input = c.req.query("path") ?? "";
     if (!input) return c.json({ error: "path_required" }, 400);
+    const sortValue = c.req.query("sort");
+    const orderValue = c.req.query("order");
+    if (
+      sortValue !== undefined &&
+      sortValue !== "name" &&
+      sortValue !== "mtime" &&
+      sortValue !== "track"
+    ) {
+      return c.json({ error: "FOLDER_BROWSE_SORT_INVALID" }, 400);
+    }
+    if (orderValue !== undefined && orderValue !== "asc" && orderValue !== "desc") {
+      return c.json({ error: "FOLDER_BROWSE_ORDER_INVALID" }, 400);
+    }
+    const sort: FolderBrowseSort =
+      sortValue === "mtime" || sortValue === "track" ? sortValue : "name";
+    const order: FolderBrowseOrder = orderValue === "desc" ? "desc" : "asc";
     try {
       return c.json(
         await browseFolder(
@@ -165,6 +183,8 @@ export const buildFolderRoutes = (): Hono => {
           boundedInt(c.req.query("limit"), 200, 1, 500),
           c.req.query("focus"),
           c.req.query("filter"),
+          sort,
+          order,
         ),
       );
     } catch (error) {

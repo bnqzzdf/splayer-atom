@@ -4,7 +4,9 @@ defineOptions({ name: "Folders" });
 import type {
   FolderBatchTarget,
   FolderBrowseEntry,
+  FolderBrowseOrder,
   FolderBrowsePage,
+  FolderBrowseSort,
   FolderContainerResult,
   FolderDirectoryEntry,
   FolderMaterialEntry,
@@ -24,6 +26,8 @@ import { useSettingsStore } from "@/stores/settings";
 import type { FolderViewMode } from "@/types/settings";
 import { toast } from "@/composables/useToast";
 import { formatFileSize } from "@/utils/format";
+import { formatTime } from "@/utils/time";
+import { getQualityLabel } from "@/utils/quality";
 import { appendFolderPath, folderPathWithinRoot } from "@/utils/folderPath";
 import * as player from "@/core/player";
 import IconFolder from "~icons/lucide/folder";
@@ -53,6 +57,9 @@ import IconList from "~icons/lucide/list";
 import IconLayoutGrid from "~icons/lucide/layout-grid";
 import IconListChecks from "~icons/lucide/list-checks";
 import IconArrowLeftRight from "~icons/lucide/arrow-left-right";
+import IconArrowUp from "~icons/lucide/arrow-up";
+import IconArrowDown from "~icons/lucide/arrow-down";
+import IconArrowUpDown from "~icons/lucide/arrow-up-down";
 import IconX from "~icons/lucide/x";
 
 type ViewRow =
@@ -60,12 +67,6 @@ type ViewRow =
   | { kind: "directory-grid"; key: string; entries: FolderDirectoryEntry[] }
   | { kind: "entry"; key: string; entry: FolderBrowseEntry }
   | { kind: "container-track"; key: string; track: Track; containerPath: string };
-
-type FolderScrollState = {
-  top: number;
-  anchorPath?: string;
-  anchorOffset: number;
-};
 
 const { t } = useI18n();
 const route = useRoute();
@@ -77,10 +78,32 @@ const settings = useSettingsStore();
 const routeText = (value: unknown): string =>
   typeof value === "string" ? value : Array.isArray(value) ? String(value[0] ?? "") : "";
 
+const parseFolderSort = (value: unknown): FolderBrowseSort | null => {
+  const text = routeText(value);
+  return text === "name" || text === "mtime" || text === "track" ? text : null;
+};
+const parseFolderOrder = (value: unknown): FolderBrowseOrder | null => {
+  const text = routeText(value);
+  return text === "asc" || text === "desc" ? text : null;
+};
+const defaultFolderOrder = (sort: FolderBrowseSort): FolderBrowseOrder =>
+  sort === "mtime" ? "desc" : "asc";
+
 const currentPath = computed(() => routeText(route.query.path));
 const requestedContainerPath = computed(() => routeText(route.query.container));
 const requestedFocusId = computed(() => routeText(route.query.focus));
 const requestedFocusPath = computed(() => routeText(route.query.focusPath));
+const routeFolderSort = computed(() => parseFolderSort(route.query.sort));
+const routeFolderOrder = computed(() => parseFolderOrder(route.query.order));
+const currentSort = computed<FolderBrowseSort>(
+  () => routeFolderSort.value ?? settings.appearance.folderBrowseSort,
+);
+const currentOrder = computed<FolderBrowseOrder>(() => {
+  if (routeFolderOrder.value) return routeFolderOrder.value;
+  return routeFolderSort.value
+    ? defaultFolderOrder(routeFolderSort.value)
+    : settings.appearance.folderBrowseOrder;
+});
 
 const roots = shallowRef<FolderRootEntry[]>([]);
 const pins = shallowRef<FolderPinEntry[]>([]);
@@ -95,10 +118,9 @@ const error = ref("");
 const listRef = shallowRef<SVirtualListExposed | null>(null);
 const loadedPath = ref("");
 const loadedFilter = ref("");
-const scrollPositions = new Map<string, FolderScrollState>();
+const loadedSort = ref<FolderBrowseSort>("name");
+const loadedOrder = ref<FolderBrowseOrder>("asc");
 const folderFilters = new Map<string, string>();
-const highlightKey = ref("");
-let highlightTimer: number | null = null;
 let browseGeneration = 0;
 
 const scanProgress = shallowRef<ScanProgress | null>(null);
@@ -116,6 +138,7 @@ const searchQuery = ref("");
 const searchLoading = ref(false);
 const searchResults = shallowRef<FolderSearchResult[]>([]);
 const searchCursor = ref<string>();
+const searchTruncated = ref(false);
 let searchGeneration = 0;
 let searchAbortController: AbortController | null = null;
 
@@ -127,6 +150,71 @@ const folderViewMode = computed<FolderViewMode>({
     settings.appearance.folderViewMode = value;
   },
 });
+const folderSortOptions = computed(() => [
+  { label: t("folder.sortName"), value: "name" },
+  { label: t("folder.sortMtime"), value: "mtime" },
+  { label: t("folder.sortTrack"), value: "track" },
+]);
+
+const fileExtension = (name: string): string => {
+  const index = name.lastIndexOf(".");
+  return index > 0 && index < name.length - 1 ? name.slice(index + 1).toUpperCase() : "";
+};
+
+const formatFolderMtime = (mtime: number): string =>
+  new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(mtime));
+
+const trackPosition = (track: Track): string => {
+  if (!track.track) return "";
+  return track.disc && track.disc > 1 ? `D${track.disc} · T${track.track}` : `T${track.track}`;
+};
+
+const trackFormatSummary = (entry: Extract<FolderBrowseEntry, { kind: "track" }>): string => {
+  const parts: string[] = [];
+  const extension = fileExtension(entry.name);
+  if (extension) parts.push(extension);
+  if (entry.track.quality?.codec && entry.track.quality.codec.toLowerCase() !== "unknown") {
+    const quality = getQualityLabel(entry.track.quality);
+    if (quality && quality !== extension) parts.push(quality);
+  }
+  return parts.join(" · ");
+};
+
+const trackTechnicalSummary = (entry: Extract<FolderBrowseEntry, { kind: "track" }>): string => {
+  const parts = [
+    trackPosition(entry.track),
+    entry.track.duration > 0 ? formatTime(entry.track.duration) : "",
+    trackFormatSummary(entry),
+  ].filter(Boolean);
+  if (currentSort.value === "mtime") parts.push(formatFolderMtime(entry.mtime));
+  return parts.join(" · ");
+};
+
+const entryTechnicalSummary = (entry: FolderBrowseEntry): string => {
+  if (entry.kind === "track") return trackTechnicalSummary(entry);
+  return currentSort.value === "mtime" ? formatFolderMtime(entry.mtime) : "";
+};
+
+const pathName = (value: string): string => value.split(/[/\\]/).filter(Boolean).pop() ?? value;
+
+const virtualTrackTechnicalSummary = (track: Track): string => {
+  const quality =
+    track.quality?.codec && track.quality.codec.toLowerCase() !== "unknown"
+      ? getQualityLabel(track.quality)
+      : "";
+  const parts = [
+    trackPosition(track),
+    track.duration > 0 ? formatTime(track.duration) : "",
+    quality,
+  ].filter(Boolean);
+  return parts.join(" · ");
+};
 const directoryThumbnailFailures = shallowRef<Set<string>>(new Set());
 const batchActive = ref(false);
 const batchSelectedKeys = shallowRef<Set<string>>(new Set());
@@ -225,13 +313,12 @@ const viewRows = computed<ViewRow[]>(() => {
       label: t("folder.subfolders"),
       count: page.value?.counts.directories ?? directories.length,
     });
-    for (let index = 0; index < directories.length; index += 6) {
-      rows.push({
-        kind: "directory-grid",
-        key: `directory-grid:${index}`,
-        entries: directories.slice(index, index + 6),
-      });
-    }
+    // 当前页最多 200 个目录；作为一个网格块渲染，让 focusPath 能直接定位真实卡片。
+    rows.push({
+      kind: "directory-grid",
+      key: "directory-grid",
+      entries: directories,
+    });
   }
   append("tracks", t("folder.tracks"), media, page.value?.counts.media ?? media.length);
   append(
@@ -256,6 +343,12 @@ const batchTargetForRow = (row: ViewRow): { key: string; target: FolderBatchTarg
   }
   if (row.kind !== "entry") return null;
   if (row.entry.kind === "directory" || row.entry.kind === "material") return null;
+  if (
+    (row.entry.kind === "cue" || row.entry.kind === "sacd") &&
+    container.value?.path === row.entry.path
+  ) {
+    return null;
+  }
   return { key: row.key, target: { kind: "path", path: row.entry.path } };
 };
 
@@ -264,6 +357,7 @@ const batchCandidates = computed(() =>
     .map(batchTargetForRow)
     .filter((item): item is { key: string; target: FolderBatchTarget } => item !== null),
 );
+const batchCandidateKeys = computed(() => new Set(batchCandidates.value.map((item) => item.key)));
 const batchSelectedTargets = computed(() =>
   batchCandidates.value
     .filter((item) => batchSelectedKeys.value.has(item.key))
@@ -272,7 +366,10 @@ const batchSelectedTargets = computed(() =>
 const batchSelectedCount = computed(() => batchSelectedTargets.value.length);
 const batchAllSelected = computed(
   () =>
-    batchCandidates.value.length > 0 && batchSelectedCount.value === batchCandidates.value.length,
+    !previousCursor.value &&
+    !nextCursor.value &&
+    batchCandidates.value.length > 0 &&
+    batchSelectedCount.value === batchCandidates.value.length,
 );
 const batchPartialSelected = computed(
   () => batchSelectedCount.value > 0 && !batchAllSelected.value,
@@ -299,12 +396,95 @@ const toggleBatchKey = (key: string): void => {
   batchSelectedKeys.value = next;
 };
 
-const toggleBatchAll = (): void => {
-  if (batchAllSelected.value) setBatchSelection([]);
-  else setBatchSelection(batchCandidates.value.map((item) => item.key));
+const loadAllBatchEntries = async (): Promise<boolean> => {
+  if (
+    !currentPath.value ||
+    loading.value ||
+    loadingMore.value ||
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
+  ) {
+    return false;
+  }
+  if (!previousCursor.value && !nextCursor.value) return true;
+
+  const generation = browseGeneration;
+  const target = currentPath.value;
+  const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
+  const allEntries: FolderBrowseEntry[] = [];
+  let cursor: string | undefined;
+  let lastPage: FolderBrowsePage | null = null;
+  loadingMore.value = true;
+  try {
+    do {
+      const result = await folderBrowserClient.browse({
+        path: target,
+        cursor,
+        limit: 500,
+        filter: activeFilter || undefined,
+        sort: activeSort,
+        order: activeOrder,
+      });
+      if (
+        generation !== browseGeneration ||
+        currentPath.value !== target ||
+        loadedFilter.value !== activeFilter ||
+        currentSort.value !== activeSort ||
+        currentOrder.value !== activeOrder
+      ) {
+        return false;
+      }
+      allEntries.push(...result.entries);
+      lastPage = result;
+      cursor = result.nextCursor;
+    } while (cursor);
+
+    if (!lastPage) return false;
+    entries.value = allEntries;
+    page.value = {
+      ...lastPage,
+      entries: allEntries,
+      previousCursor: undefined,
+      nextCursor: undefined,
+    };
+    previousCursor.value = undefined;
+    nextCursor.value = undefined;
+    return true;
+  } catch (value) {
+    if (
+      generation !== browseGeneration ||
+      currentPath.value !== target ||
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
+    ) {
+      return false;
+    }
+    if (value instanceof Error && value.message === "FOLDER_CURSOR_STALE") {
+      await refreshCurrent();
+    } else {
+      toast.error(value instanceof Error ? value.message : String(value));
+    }
+    return false;
+  } finally {
+    loadingMore.value = false;
+  }
 };
 
-const invertBatchSelection = (): void => {
+const toggleBatchAll = async (): Promise<void> => {
+  if (batchAllSelected.value) {
+    setBatchSelection([]);
+    return;
+  }
+  if (!(await loadAllBatchEntries())) return;
+  setBatchSelection(batchCandidates.value.map((item) => item.key));
+};
+
+const invertBatchSelection = async (): Promise<void> => {
+  if (!(await loadAllBatchEntries())) return;
   setBatchSelection(
     batchCandidates.value
       .filter((item) => !batchSelectedKeys.value.has(item.key))
@@ -326,51 +506,6 @@ const pdfUrl = computed(() => {
 const materialHasThumbnail = (material: FolderMaterialEntry): boolean =>
   material.materialType === "image" && !material.path.toLowerCase().endsWith(".gif");
 
-const rowAnchorPath = (row: ViewRow | undefined): string | undefined => {
-  if (!row || row.kind === "section") return undefined;
-  if (row.kind === "entry") return row.entry.path;
-  if (row.kind === "container-track") return row.containerPath;
-  return row.entries[0]?.path;
-};
-
-const rowContainsPath = (row: ViewRow, path: string): boolean => {
-  if (row.kind === "entry") return row.entry.path === path;
-  if (row.kind === "container-track") return row.containerPath === path;
-  if (row.kind === "directory-grid") return row.entries.some((entry) => entry.path === path);
-  return false;
-};
-
-const saveCurrentScroll = (): void => {
-  if (!loadedPath.value || !listRef.value) return;
-  const top = listRef.value.getScrollTop();
-  let anchorIndex = Math.max(0, listRef.value.actualStartIndex);
-  while (anchorIndex < viewRows.value.length && viewRows.value[anchorIndex]?.kind === "section") {
-    anchorIndex++;
-  }
-  const anchorPath = rowAnchorPath(viewRows.value[anchorIndex]);
-  const anchorOffset =
-    anchorPath && anchorIndex < viewRows.value.length
-      ? top - listRef.value.getItemTop(anchorIndex)
-      : 0;
-  scrollPositions.set(loadedPath.value, { top, anchorPath, anchorOffset });
-};
-
-const restoreScroll = async (path: string): Promise<void> => {
-  const state = scrollPositions.get(path);
-  if (!state || state.top <= 0) return;
-  await nextTick();
-  const list = listRef.value;
-  if (!list) return;
-  if (state.anchorPath) {
-    const anchorIndex = viewRows.value.findIndex((row) => rowContainsPath(row, state.anchorPath!));
-    if (anchorIndex >= 0) {
-      list.scrollTo(list.getItemTop(anchorIndex) + state.anchorOffset);
-      return;
-    }
-  }
-  list.scrollTo(state.top);
-};
-
 const loadRoots = async (): Promise<void> => {
   const data = await folderBrowserClient.getRoots();
   roots.value = data.roots;
@@ -378,24 +513,35 @@ const loadRoots = async (): Promise<void> => {
 };
 
 const focusRequestedEntry = async (): Promise<void> => {
-  const id = requestedFocusId.value;
-  const focusPath = requestedFocusPath.value;
+  const containerPath = requestedContainerPath.value;
+  const id = containerPath ? "" : requestedFocusId.value;
+  const focusPath = containerPath || requestedFocusPath.value;
   if (!id && !focusPath) return;
   await nextTick();
   const index = viewRows.value.findIndex((row) => {
+    if (row.kind === "directory-grid") {
+      return !!focusPath && row.entries.some((entry) => entry.path === focusPath);
+    }
     if (row.kind === "container-track") return !!id && row.track.id === id;
     if (row.kind !== "entry") return false;
     if (focusPath && row.entry.path === focusPath) return true;
     return row.entry.kind === "track" && !!id && row.entry.track.id === id;
   });
   if (index < 0) return;
-  listRef.value?.scrollToIndex(index, "smooth");
-  highlightKey.value = viewRows.value[index]?.key ?? "";
-  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
-  highlightTimer = window.setTimeout(() => {
-    highlightKey.value = "";
-    highlightTimer = null;
-  }, 2500);
+  const row = viewRows.value[index];
+  const list = listRef.value;
+  if (!list) return;
+  if (row?.kind === "directory-grid" && focusPath) {
+    const scroll = list.scrollRef;
+    const card = scroll
+      ? Array.from(scroll.querySelectorAll<HTMLElement>("[data-folder-grid-path]")).find(
+          (element) => element.dataset.folderGridPath === focusPath,
+        )
+      : undefined;
+    card?.scrollIntoView({ block: "center" });
+  } else {
+    list.scrollToIndex(index);
+  }
 };
 
 const loadContainer = async (): Promise<void> => {
@@ -418,11 +564,12 @@ const loadContainer = async (): Promise<void> => {
   }
 };
 
-const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true): Promise<void> => {
-  saveCurrentScroll();
+const loadCurrent = async (focusOverride?: string): Promise<void> => {
   const generation = ++browseGeneration;
   const target = currentPath.value;
   const activeFilter = filterQuery.value.trim();
+  const activeSort = currentSort.value;
+  const activeOrder = currentOrder.value;
   directoryThumbnailFailures.value = new Set();
   loadedPath.value = target;
   error.value = "";
@@ -431,8 +578,11 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
   nextCursor.value = undefined;
   page.value = null;
   container.value = null;
+  loadingMore.value = false;
   if (!target) {
     loadedFilter.value = "";
+    loadedSort.value = activeSort;
+    loadedOrder.value = activeOrder;
     loading.value = true;
     try {
       await loadRoots();
@@ -446,26 +596,37 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
     return;
   }
   loading.value = true;
+  let loaded = false;
   try {
-    const savedAnchorPath = restoreSavedPosition
-      ? scrollPositions.get(target)?.anchorPath
-      : undefined;
-    const result = await folderBrowserClient.browse(
-      target,
-      undefined,
-      200,
-      focusOverride ||
-        requestedContainerPath.value ||
-        requestedFocusPath.value ||
-        savedAnchorPath ||
-        undefined,
-      activeFilter || undefined,
-    );
+    const explicitFocusPath = requestedContainerPath.value || requestedFocusPath.value;
+    const result = await folderBrowserClient.browse({
+      path: target,
+      limit: 200,
+      focusPath: focusOverride || explicitFocusPath || undefined,
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      filterQuery.value.trim() !== activeFilter
+      filterQuery.value.trim() !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
+      return;
+    }
+    if (
+      activeFilter &&
+      explicitFocusPath &&
+      !result.entries.some((entry) => entry.path === explicitFocusPath)
+    ) {
+      ignoreFilterReload = true;
+      filterQuery.value = "";
+      ignoreFilterReload = false;
+      folderFilters.set(target, "");
+      exitBatch();
+      await loadCurrent(explicitFocusPath);
       return;
     }
     page.value = result;
@@ -473,19 +634,24 @@ const loadCurrent = async (focusOverride?: string, restoreSavedPosition = true):
     previousCursor.value = result.previousCursor;
     nextCursor.value = result.nextCursor;
     loadedFilter.value = activeFilter;
-    if (restoreSavedPosition) await restoreScroll(target);
-    await loadContainer();
+    loadedSort.value = activeSort;
+    loadedOrder.value = activeOrder;
+    loaded = true;
   } catch (value) {
     if (
       generation === browseGeneration &&
       currentPath.value === target &&
-      filterQuery.value.trim() === activeFilter
+      filterQuery.value.trim() === activeFilter &&
+      currentSort.value === activeSort &&
+      currentOrder.value === activeOrder
     ) {
       error.value = value instanceof Error ? value.message : String(value);
     }
   } finally {
     if (generation === browseGeneration) loading.value = false;
   }
+  // focus 只能在 loading 结束、SVirtualList 真正挂载后执行。
+  if (loaded && generation === browseGeneration) await loadContainer();
 };
 
 const markDirectoryThumbnailFailed = (path: string): void => {
@@ -497,12 +663,8 @@ const markDirectoryThumbnailFailed = (path: string): void => {
 
 const refreshCurrent = async (): Promise<void> => {
   const target = currentPath.value;
-  saveCurrentScroll();
-  const state = scrollPositions.get(target);
-  const anchorPath = state?.anchorPath;
-  await loadCurrent(anchorPath, false);
+  await loadCurrent();
   if (currentPath.value !== target || loadedPath.value !== target) return;
-  await restoreScroll(target);
 };
 
 const loadMore = async (): Promise<void> => {
@@ -510,26 +672,33 @@ const loadMore = async (): Promise<void> => {
     !currentPath.value ||
     !nextCursor.value ||
     loadingMore.value ||
-    filterQuery.value.trim() !== loadedFilter.value
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
   )
     return;
   const generation = browseGeneration;
   const target = currentPath.value;
   const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
   const cursor = nextCursor.value;
   loadingMore.value = true;
   try {
-    const result = await folderBrowserClient.browse(
-      target,
+    const result = await folderBrowserClient.browse({
+      path: target,
       cursor,
-      200,
-      undefined,
-      activeFilter || undefined,
-    );
+      limit: 200,
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -540,7 +709,9 @@ const loadMore = async (): Promise<void> => {
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -559,12 +730,16 @@ const loadPrevious = async (): Promise<void> => {
     !currentPath.value ||
     !previousCursor.value ||
     loadingMore.value ||
-    filterQuery.value.trim() !== loadedFilter.value
+    filterQuery.value.trim() !== loadedFilter.value ||
+    currentSort.value !== loadedSort.value ||
+    currentOrder.value !== loadedOrder.value
   )
     return;
   const generation = browseGeneration;
   const target = currentPath.value;
   const activeFilter = loadedFilter.value;
+  const activeSort = loadedSort.value;
+  const activeOrder = loadedOrder.value;
   const cursor = previousCursor.value;
   loadingMore.value = true;
   const rowsBefore = viewRows.value;
@@ -574,17 +749,20 @@ const loadPrevious = async (): Promise<void> => {
   const anchorOffset =
     anchorKey && listRef.value ? scrollTop - listRef.value.getItemTop(anchorIndex) : 0;
   try {
-    const result = await folderBrowserClient.browse(
-      target,
+    const result = await folderBrowserClient.browse({
+      path: target,
       cursor,
-      200,
-      undefined,
-      activeFilter || undefined,
-    );
+      limit: 200,
+      filter: activeFilter || undefined,
+      sort: activeSort,
+      order: activeOrder,
+    });
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -601,7 +779,9 @@ const loadPrevious = async (): Promise<void> => {
     if (
       generation !== browseGeneration ||
       currentPath.value !== target ||
-      loadedFilter.value !== activeFilter
+      loadedFilter.value !== activeFilter ||
+      currentSort.value !== activeSort ||
+      currentOrder.value !== activeOrder
     ) {
       return;
     }
@@ -615,12 +795,58 @@ const loadPrevious = async (): Promise<void> => {
   }
 };
 
-const goFolder = async (path: string): Promise<void> => {
-  await router.push({ name: "folders", query: { path } });
+const goFolder = async (path: string, rememberReturnFocus = false): Promise<void> => {
+  if (rememberReturnFocus && currentPath.value) {
+    // 把返回目标写进父目录自己的 history 记录；浏览器后退和应用后退因此共享同一语义。
+    await router.replace({
+      name: "folders",
+      query: {
+        ...route.query,
+        path: currentPath.value,
+        sort: currentSort.value,
+        order: currentOrder.value,
+        focusPath: path,
+      },
+    });
+  }
+  await router.push({
+    name: "folders",
+    query: { path, sort: currentSort.value, order: currentOrder.value },
+  });
 };
 
 const goHome = async (): Promise<void> => {
   await router.push({ name: "folders" });
+};
+
+const updateFolderSort = async (
+  sort: FolderBrowseSort,
+  order: FolderBrowseOrder,
+): Promise<void> => {
+  if (!currentPath.value) return;
+  exitBatch();
+  await router.replace({
+    name: "folders",
+    query: {
+      ...route.query,
+      path: currentPath.value,
+      sort,
+      order,
+    },
+  });
+  settings.appearance.folderBrowseSort = sort;
+  settings.appearance.folderBrowseOrder = order;
+};
+
+const handleFolderSort = (value: string | number | boolean): void => {
+  const sort = parseFolderSort(String(value));
+  if (!sort || sort === currentSort.value) return;
+  void updateFolderSort(sort, defaultFolderOrder(sort));
+};
+
+const toggleFolderOrder = (): void => {
+  const order: FolderBrowseOrder = currentOrder.value === "asc" ? "desc" : "asc";
+  void updateFolderSort(currentSort.value, order);
 };
 
 const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
@@ -630,6 +856,8 @@ const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
     name: "folders",
     query: {
       path: currentPath.value,
+      sort: currentSort.value,
+      order: currentOrder.value,
       ...(!same ? { container: entry.path } : {}),
     },
   });
@@ -921,7 +1149,7 @@ const handleEntryMenu = (entry: FolderBrowseEntry, key: string): void => {
 };
 
 const activateEntry = async (entry: FolderBrowseEntry): Promise<void> => {
-  if (entry.kind === "directory") await goFolder(entry.path);
+  if (entry.kind === "directory") await goFolder(entry.path, true);
   else if (entry.kind === "cue" || entry.kind === "sacd") await toggleContainer(entry);
   else if (entry.kind === "material") await openMaterial(entry);
   else await runAction(entry.path, "play", false);
@@ -936,7 +1164,12 @@ const openSearchResult = async (result: FolderSearchResult): Promise<void> => {
   searchQuery.value = "";
   await router.push({
     name: "folders",
-    query: { path: result.parent, focusPath: result.path },
+    query: {
+      path: result.parent,
+      sort: currentSort.value,
+      order: currentOrder.value,
+      focusPath: result.path,
+    },
   });
 };
 
@@ -947,6 +1180,7 @@ const performSearch = useDebounceFn(async (query: string) => {
   const value = query.trim();
   searchResults.value = [];
   searchCursor.value = undefined;
+  searchTruncated.value = false;
   if (!value) {
     searchLoading.value = false;
     return;
@@ -959,6 +1193,7 @@ const performSearch = useDebounceFn(async (query: string) => {
     if (generation !== searchGeneration) return;
     searchResults.value = result.data;
     searchCursor.value = result.nextCursor;
+    searchTruncated.value = result.truncated === true;
   } catch (error) {
     if (generation === searchGeneration && !controller.signal.aborted)
       toast.error(error instanceof Error ? error.message : String(error));
@@ -988,6 +1223,7 @@ const loadMoreSearch = async (): Promise<void> => {
     if (generation !== searchGeneration || controller.signal.aborted) return;
     searchResults.value = [...searchResults.value, ...result.data];
     searchCursor.value = result.nextCursor;
+    searchTruncated.value = searchTruncated.value || result.truncated === true;
   } catch (value) {
     if (generation === searchGeneration && !controller.signal.aborted) {
       toast.error(value instanceof Error ? value.message : String(value));
@@ -1000,11 +1236,14 @@ const loadMoreSearch = async (): Promise<void> => {
   }
 };
 
-watch(searchQuery, (value) => void performSearch(value));
+watch(searchQuery, (value) => {
+  searchTruncated.value = false;
+  void performSearch(value);
+});
 
 const performFilter = useDebounceFn((value: string) => {
   if (!currentPath.value || value.trim() === loadedFilter.value) return;
-  void loadCurrent(undefined, false);
+  void loadCurrent();
 }, 200);
 
 watch(
@@ -1012,6 +1251,18 @@ watch(
   (value) => {
     if (ignoreFilterReload || !currentPath.value) return;
     folderFilters.set(currentPath.value, value);
+    if (
+      value.trim() === loadedFilter.value &&
+      currentSort.value === loadedSort.value &&
+      currentOrder.value === loadedOrder.value
+    ) {
+      return;
+    }
+    exitBatch();
+    browseGeneration++;
+    previousCursor.value = undefined;
+    nextCursor.value = undefined;
+    loadingMore.value = false;
     void performFilter(value);
   },
   { flush: "sync" },
@@ -1070,18 +1321,49 @@ watch(viewerOpen, (open) => {
 });
 
 watch(
-  currentPath,
-  (path) => {
-    exitBatch();
-    restoreFolderFilter(path);
-    void loadCurrent();
+  () =>
+    [
+      currentPath.value,
+      currentSort.value,
+      currentOrder.value,
+      requestedContainerPath.value,
+      requestedFocusPath.value,
+      requestedFocusId.value,
+    ] as const,
+  (next, previous) => {
+    const [path, sort, order, containerPath, focusPath, focusId] = next;
+    if (path && (routeFolderSort.value !== sort || routeFolderOrder.value !== order)) {
+      void router.replace({
+        name: "folders",
+        query: { ...route.query, path, sort, order },
+      });
+    }
+
+    const pathOrSortChanged =
+      !previous || path !== previous[0] || sort !== previous[1] || order !== previous[2];
+    if (pathOrSortChanged) {
+      exitBatch();
+      restoreFolderFilter(path);
+      void loadCurrent();
+      return;
+    }
+
+    if (!path || path !== loadedPath.value || loading.value) return;
+    const focusTarget = containerPath || focusPath;
+    if (focusTarget && !entries.value.some((entry) => entry.path === focusTarget)) {
+      void loadCurrent(focusTarget);
+      return;
+    }
+    if (containerPath !== previous[3]) {
+      void loadContainer();
+      return;
+    }
+    if (focusPath !== previous[4] || focusId !== previous[5]) {
+      void focusRequestedEntry();
+    }
   },
   { immediate: true },
 );
-
-watch(requestedContainerPath, () => {
-  if (currentPath.value === loadedPath.value && !loading.value) void loadContainer();
-});
 
 let unsubscribeScan: (() => void) | null = null;
 let unsubscribeRevision: (() => void) | null = null;
@@ -1130,13 +1412,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   searchAbortController?.abort();
   searchAbortController = null;
-  saveCurrentScroll();
   saveViewerState();
   unsubscribeScan?.();
   unsubscribeRevision?.();
   unsubscribePins?.();
   unsubscribeRoots?.();
-  if (highlightTimer !== null) window.clearTimeout(highlightTimer);
 });
 </script>
 
@@ -1182,9 +1462,13 @@ onBeforeUnmount(() => {
           <SCheckbox
             :checked="batchAllSelected"
             :indeterminate="batchPartialSelected"
+            :disabled="loadingMore"
             size="small"
             @update:checked="toggleBatchAll"
           />
+          <span class="shrink-0 text-sm text-on-surface-variant">
+            {{ t("folder.selectAll") }}
+          </span>
           <span class="shrink-0 text-sm tabular-nums text-on-surface-variant">
             {{ t("songList.batch.selected", { count: batchSelectedCount }) }}
           </span>
@@ -1192,11 +1476,11 @@ onBeforeUnmount(() => {
           <SButton
             variant="ghost"
             size="small"
-            :disabled="batchSelectedCount === 0"
+            :disabled="loadingMore || batchCandidates.length === 0"
             @click="invertBatchSelection"
           >
             <template #icon><IconArrowLeftRight class="size-3.5" /></template>
-            {{ t("songList.batch.invert") }}
+            {{ t("folder.invertSelection") }}
           </SButton>
           <SButton
             variant="ghost"
@@ -1249,7 +1533,7 @@ onBeforeUnmount(() => {
             @click="runAction(currentPath, 'play', true)"
           >
             <template #icon><IconPlay /></template>
-            {{ t("common.playAll") }}
+            {{ t("folder.play") }}
           </SButton>
           <SButton
             variant="secondary"
@@ -1279,6 +1563,31 @@ onBeforeUnmount(() => {
           >
             <template #prefix><IconSearch class="size-4 opacity-50" /></template>
           </SInput>
+          <SPopselect
+            :model-value="currentSort"
+            :options="folderSortOptions"
+            align="end"
+            @update:model-value="handleFolderSort"
+          >
+            <template #trigger="{ selected }">
+              <SButton variant="secondary" size="small" round>
+                <template #icon><IconArrowUpDown class="size-3.5" /></template>
+                {{ selected?.label ?? t("folder.sortName") }}
+              </SButton>
+            </template>
+          </SPopselect>
+          <SButton
+            variant="secondary"
+            circle
+            size="small"
+            :title="t(currentOrder === 'asc' ? 'folder.sortAscending' : 'folder.sortDescending')"
+            @click="toggleFolderOrder"
+          >
+            <template #icon>
+              <IconArrowUp v-if="currentOrder === 'asc'" />
+              <IconArrowDown v-else />
+            </template>
+          </SButton>
           <SButton
             variant="secondary"
             circle
@@ -1308,6 +1617,12 @@ onBeforeUnmount(() => {
       >
         <div class="mb-3 text-sm font-medium text-on-surface-variant">
           {{ t("folder.searchResults") }}
+        </div>
+        <div
+          v-if="searchTruncated"
+          class="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+        >
+          {{ t("folder.searchTruncated") }}
         </div>
         <div
           v-for="result in searchResults"
@@ -1451,6 +1766,7 @@ onBeforeUnmount(() => {
               <div
                 v-for="entry in item.entries"
                 :key="entry.path"
+                :data-folder-grid-path="entry.path"
                 class="group relative min-w-0 rounded-xl border border-solid border-primary/10 bg-surface-panel transition-colors hover:bg-primary/6"
               >
                 <button
@@ -1474,6 +1790,12 @@ onBeforeUnmount(() => {
                   <div class="line-clamp-2 min-h-10 break-words text-sm font-medium">
                     {{ entry.name }}
                   </div>
+                  <div
+                    v-if="currentSort === 'mtime'"
+                    class="mt-1 truncate text-xs text-on-surface-variant/50"
+                  >
+                    {{ formatFolderMtime(entry.mtime) }}
+                  </div>
                 </button>
                 <div v-if="!batchActive" class="absolute right-2 top-2">
                   <SDropdownMenu
@@ -1494,11 +1816,8 @@ onBeforeUnmount(() => {
 
           <div
             v-else-if="item.kind === 'container-track'"
-            class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors"
-            :class="[
-              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
-              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
-            ]"
+            class="mx-5 flex min-h-14 items-center gap-3 border-0 border-l-2 border-solid border-primary/20 px-4 py-2 transition-colors hover:bg-primary/6"
+            :class="batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : ''"
             @click="batchActive ? toggleBatchKey(item.key) : undefined"
           >
             <SCheckbox
@@ -1515,9 +1834,18 @@ onBeforeUnmount(() => {
             >
               <div class="truncate text-sm font-medium">{{ item.track.title }}</div>
               <div class="truncate text-xs text-on-surface-variant/50">
-                {{ item.track.artists.map((artist) => artist.name).join(" / ") }}
+                {{ t("folder.containerFile", { name: pathName(item.containerPath) }) }}
+                <span v-if="item.track.artists.length" class="hidden sm:inline">
+                  · {{ item.track.artists.map((artist) => artist.name).join(" / ") }}
+                </span>
               </div>
             </button>
+            <div
+              v-if="virtualTrackTechnicalSummary(item.track)"
+              class="hidden shrink-0 text-xs tabular-nums text-on-surface-variant/55 lg:block"
+            >
+              {{ virtualTrackTechnicalSummary(item.track) }}
+            </div>
             <SButton
               v-if="!batchActive"
               variant="text"
@@ -1552,21 +1880,14 @@ onBeforeUnmount(() => {
 
           <div
             v-else
-            class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors"
-            :class="[
-              highlightKey === item.key ? 'bg-primary/12' : 'hover:bg-primary/6',
-              batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : '',
-            ]"
+            class="mx-3 flex min-h-16 items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-primary/6"
+            :class="batchActive && batchSelectedKeys.has(item.key) ? 'bg-primary/10' : ''"
             @click="
-              batchActive && item.entry.kind !== 'directory' && item.entry.kind !== 'material'
-                ? toggleBatchKey(item.key)
-                : undefined
+              batchActive && batchCandidateKeys.has(item.key) ? toggleBatchKey(item.key) : undefined
             "
           >
             <SCheckbox
-              v-if="
-                batchActive && item.entry.kind !== 'directory' && item.entry.kind !== 'material'
-              "
+              v-if="batchActive && batchCandidateKeys.has(item.key)"
               :checked="batchSelectedKeys.has(item.key)"
               size="small"
               @update:checked="toggleBatchKey(item.key)"
@@ -1599,6 +1920,7 @@ onBeforeUnmount(() => {
 
             <button
               class="min-w-0 flex-1 text-left"
+              :title="item.entry.path"
               :class="
                 batchActive && (item.entry.kind === 'directory' || item.entry.kind === 'material')
                   ? 'cursor-default opacity-60'
@@ -1611,27 +1933,65 @@ onBeforeUnmount(() => {
               </div>
               <div class="mt-0.5 truncate text-xs text-on-surface-variant/50">
                 <template v-if="item.entry.kind === 'track'">
-                  {{ item.entry.track.artists.map((artist) => artist.name).join(" / ") }}
-                  <span v-if="item.entry.track.album?.name">
-                    · {{ item.entry.track.album.name }}
+                  {{ item.entry.name }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
+                  <span class="hidden sm:inline">
+                    <template v-if="item.entry.track.artists.length">
+                      · {{ item.entry.track.artists.map((artist) => artist.name).join(" / ") }}
+                    </template>
+                    <template v-if="item.entry.track.album?.name">
+                      · {{ item.entry.track.album.name }}
+                    </template>
                   </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'file'">
-                  {{ formatFileSize(item.entry.size) }}
+                  {{ t("folder.unscanned") }}
+                  <span v-if="fileExtension(item.entry.name)">
+                    · {{ fileExtension(item.entry.name) }}
+                  </span>
+                  · {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'cue' || item.entry.kind === 'sacd'">
-                  {{
-                    item.entry.trackCount
-                      ? t("common.totalSongs", { count: item.entry.trackCount })
-                      : item.entry.path
-                  }}
+                  <span v-if="fileExtension(item.entry.name)">
+                    {{ fileExtension(item.entry.name) }} ·
+                  </span>
+                  <span v-if="item.entry.trackCount">
+                    {{ t("common.totalSongs", { count: item.entry.trackCount }) }} ·
+                  </span>
+                  {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
                 <template v-else-if="item.entry.kind === 'material'">
+                  <span v-if="fileExtension(item.entry.name)">
+                    {{ fileExtension(item.entry.name) }} ·
+                  </span>
                   {{ formatFileSize(item.entry.size) }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
                 </template>
-                <template v-else>{{ item.entry.path }}</template>
+                <template v-else>
+                  {{ item.entry.path }}
+                  <span v-if="currentSort === 'mtime'" class="lg:hidden">
+                    · {{ formatFolderMtime(item.entry.mtime) }}
+                  </span>
+                </template>
               </div>
             </button>
+
+            <div
+              v-if="entryTechnicalSummary(item.entry)"
+              class="hidden shrink-0 text-xs tabular-nums text-on-surface-variant/55 lg:block"
+            >
+              {{ entryTechnicalSummary(item.entry) }}
+            </div>
 
             <IconChevronRight
               v-if="item.entry.kind === 'directory' && !batchActive"
