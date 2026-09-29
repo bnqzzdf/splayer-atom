@@ -1475,7 +1475,16 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex h-full min-h-0 flex-col">
-    <div class="shrink-0 px-5 pb-3">
+    <div
+      class="shrink-0 px-5"
+      :class="
+        currentPath &&
+        !searchQuery.trim() &&
+        (page?.associations?.album || page?.associations?.artist)
+          ? 'pb-1'
+          : 'pb-3'
+      "
+    >
       <div class="flex flex-wrap items-center gap-3 pt-2">
         <h1 class="text-3xl font-bold text-on-surface">{{ t("folder.label") }}</h1>
         <SInput
@@ -1682,26 +1691,30 @@ onBeforeUnmount(() => {
           !searchQuery.trim() &&
           (page?.associations?.album || page?.associations?.artist)
         "
-        class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-sm text-on-surface-variant"
+        class="mt-3 flex flex-wrap items-center gap-2 text-sm"
       >
-        <div v-if="page?.associations?.album" class="flex min-w-0 items-center gap-2">
-          <span class="shrink-0 opacity-55">{{ t("album.label") }}</span>
-          <button
-            class="max-w-96 truncate font-medium text-on-surface hover:text-primary"
-            @click="openAssociatedAlbum"
-          >
-            {{ page.associations.album.name }}
-          </button>
-        </div>
-        <div v-if="page?.associations?.artist" class="flex min-w-0 items-center gap-2">
-          <span class="shrink-0 opacity-55">{{ t("artist.label") }}</span>
-          <button
-            class="max-w-80 truncate font-medium text-on-surface hover:text-primary"
-            @click="openAssociatedArtist"
-          >
-            {{ page.associations.artist.name }}
-          </button>
-        </div>
+        <button
+          v-if="page?.associations?.album"
+          class="group flex min-w-0 max-w-full items-center gap-2 rounded-full border border-on-surface/10 bg-on-surface/3 px-3 py-1.5 text-on-surface transition-colors hover:border-primary/25 hover:bg-primary/8 hover:text-primary"
+          @click="openAssociatedAlbum"
+        >
+          <span class="shrink-0 text-on-surface-variant/55">{{ t("album.label") }}</span>
+          <span class="max-w-96 truncate font-medium">{{ page.associations.album.name }}</span>
+          <IconChevronRight
+            class="size-3.5 shrink-0 opacity-45 transition-opacity group-hover:opacity-80"
+          />
+        </button>
+        <button
+          v-if="page?.associations?.artist"
+          class="group flex min-w-0 max-w-full items-center gap-2 rounded-full border border-on-surface/10 bg-on-surface/3 px-3 py-1.5 text-on-surface transition-colors hover:border-primary/25 hover:bg-primary/8 hover:text-primary"
+          @click="openAssociatedArtist"
+        >
+          <span class="shrink-0 text-on-surface-variant/55">{{ t("artist.label") }}</span>
+          <span class="max-w-80 truncate font-medium">{{ page.associations.artist.name }}</span>
+          <IconChevronRight
+            class="size-3.5 shrink-0 opacity-45 transition-opacity group-hover:opacity-80"
+          />
+        </button>
       </div>
     </div>
 
