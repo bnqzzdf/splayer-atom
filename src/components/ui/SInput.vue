@@ -69,6 +69,8 @@ const emit = defineEmits<{
 }>();
 
 const isFocused = ref(false);
+/** 中文/日文等 IME 组合输入期间不回写受控 value，避免打断候选词组合。 */
+const isComposing = ref(false);
 const draftValue = ref(props.modelValue);
 const displayValue = computed(() =>
   props.updateOn === "blur" ? draftValue.value : props.modelValue,
@@ -100,23 +102,41 @@ const handleInput = (value: string): void => {
   draftValue.value = value;
 };
 
+const handleNativeInput = (event: Event): void => {
+  if (isComposing.value) return;
+  handleInput((event.target as HTMLInputElement | HTMLTextAreaElement).value);
+};
+
+const handleCompositionStart = (): void => {
+  isComposing.value = true;
+};
+
+const finishComposition = (event: Event): void => {
+  if (!isComposing.value) return;
+  isComposing.value = false;
+  handleInput((event.target as HTMLInputElement | HTMLTextAreaElement).value);
+};
+
 const handleClear = () => {
   handleInput("");
 };
 
-const handleBlur = (): void => {
+const handleBlur = (event: FocusEvent): void => {
+  finishComposition(event);
   isFocused.value = false;
   if (props.updateOn === "blur") commitValue();
   emit("blur");
 };
 
 const handleEnter = (event: KeyboardEvent): void => {
+  if (event.isComposing || isComposing.value) return;
   if (props.updateOn !== "blur") return;
   commitValue();
   (event.currentTarget as HTMLInputElement).blur();
 };
 
 const handleEscape = (event: KeyboardEvent): void => {
+  if (event.isComposing || isComposing.value) return;
   if (props.updateOn === "blur") rollbackValue();
   (event.currentTarget as HTMLInputElement).blur();
 };
@@ -149,7 +169,9 @@ const handleEscape = (event: KeyboardEvent): void => {
         :rows="rows"
         class="w-full block bg-transparent outline-none border-none shadow-none text-on-surface placeholder:text-on-surface-variant/40 disabled:cursor-not-allowed"
         :class="[resizeClass, readonly ? 'cursor-pointer' : '', showClear ? 'pr-5' : '']"
-        @input="handleInput(($event.target as HTMLTextAreaElement).value)"
+        @input="handleNativeInput"
+        @compositionstart="handleCompositionStart"
+        @compositionend="finishComposition"
         @focus="
           isFocused = true;
           emit('focus');
@@ -179,7 +201,9 @@ const handleEscape = (event: KeyboardEvent): void => {
         :readonly="readonly"
         class="flex-1 min-w-0 h-full bg-transparent outline-none border-none shadow-none text-on-surface placeholder:text-on-surface-variant/40 disabled:cursor-not-allowed"
         :class="readonly ? 'cursor-pointer' : ''"
-        @input="handleInput(($event.target as HTMLInputElement).value)"
+        @input="handleNativeInput"
+        @compositionstart="handleCompositionStart"
+        @compositionend="finishComposition"
         @focus="
           isFocused = true;
           emit('focus');
