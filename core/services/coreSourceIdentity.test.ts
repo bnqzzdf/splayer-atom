@@ -112,10 +112,9 @@ test("有 git 工作树时以 git 为准（开发构建路径不变）", () => {
   assert.ok(identity, "仓库内应当能解析出构建身份");
   assert.equal(identity.origin, "git");
   assert.match(identity.commit, /^[0-9a-f]{40}$/);
-  // 本仓库的 origin 是网络远端，HEAD 又在远程跟踪分支上，因此判定为已发布
-  assert.equal(identity.published, true);
-  // 承载该判定的远端地址要能原样写进 SOURCE_COMMIT 的 remote=
-  assert.match(identity.remote ?? "", /^https:\/\/github\.com\/bnqzzdf\/splayer-atom/);
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: REPO_ROOT, encoding: "utf8" });
+  assert.equal(head.status, 0);
+  assert.equal(identity.commit, head.stdout.trim());
 });
 
 test("无 .git 时优先采用 ATOM_COMMIT 环境变量", () => {
@@ -173,6 +172,23 @@ test("已发布判定：只有网络远端上的提交才算已发布", () => {
   });
   withGitRepo("git@github.com:bnqzzdf/splayer-atom.git", (dir) => {
     assert.equal(resolveSourceIdentity(dir)?.remote, "git@github.com:bnqzzdf/splayer-atom.git");
+  });
+});
+
+test("已发布判定：网络远端不包含本地新提交时判为未发布", () => {
+  withGitRepo("https://github.com/bnqzzdf/splayer-atom.git", (dir) => {
+    writeFileSync(path.join(dir, "a.txt"), "本地新提交\n");
+    for (const args of [
+      ["add", "a.txt"],
+      ["commit", "-qm", "local change"],
+    ]) {
+      const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+      assert.equal(result.status, 0, result.stderr);
+    }
+    const identity = resolveSourceIdentity(dir);
+    assert.equal(identity?.origin, "git");
+    assert.equal(identity?.published, false);
+    assert.equal(identity?.remote, undefined);
   });
 });
 
