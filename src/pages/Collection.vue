@@ -698,129 +698,138 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <!-- 多碟专辑的碟片筛选放在 Hero 信息与主操作之间，单碟不占空间。 -->
-          <div
-            v-if="discOptions.length > 1 && !collapsed"
-            class="mt-4 inline-flex max-w-full self-start items-center gap-1 overflow-x-auto rounded-full border border-solid border-on-surface/15 bg-on-surface/3 p-0.5"
-          >
-            <button
-              type="button"
-              class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
-              :class="
-                selectedDisc === 'all'
-                  ? 'bg-primary/12 text-on-surface font-medium'
-                  : 'text-on-surface-variant hover:bg-on-surface/6'
-              "
-              @click="selectedDisc = 'all'"
+          <!--
+            碟片筛选与主操作共用一个底部操作区。
+            mt-auto 只作用于外层，内部用 gap 保证简介变高时两行也始终有固定间距。
+          -->
+          <div class="mt-4 sm:mt-auto flex flex-col items-start gap-3">
+            <div
+              v-if="discOptions.length > 1 && !collapsed"
+              class="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-solid border-on-surface/15 bg-on-surface/3 p-0.5"
             >
-              {{ t("collection.allDiscs") }} · {{ collection?.tracks.length ?? 0 }}
-            </button>
-            <button
-              v-for="option in discOptions"
-              :key="option.disc"
-              type="button"
-              class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
-              :class="
-                selectedDisc === String(option.disc)
-                  ? 'bg-primary/12 text-on-surface font-medium'
-                  : 'text-on-surface-variant hover:bg-on-surface/6'
-              "
-              @click="selectedDisc = String(option.disc)"
-            >
-              {{ t("songList.disc", { number: option.disc }) }} · {{ option.count }}
-            </button>
-          </div>
-          <!-- 操作栏 -->
-          <div class="mt-3 sm:mt-auto flex flex-wrap items-center gap-2 sm:gap-3">
-            <SButton
-              type="primary"
-              variant="secondary"
-              round
-              :disabled="!playAllAction?.enabled"
-              @click="handleCollectionAction('playAll')"
-            >
-              <template #icon>
-                <IconLucidePlay />
-              </template>
-              {{ t("common.playAll") }}
-            </SButton>
-            <SButton
-              variant="secondary"
-              round
-              :disabled="!addToQueueAction?.enabled"
-              @click="handleCollectionAction('addToQueue')"
-            >
-              <template #icon>
-                <IconLucideListEnd />
-              </template>
-              {{ t("collection.addToQueue") }}
-            </SButton>
-            <SButton
-              variant="secondary"
-              round
-              :disabled="!batchManageAction?.enabled"
-              @click="handleCollectionAction('batchManage')"
-            >
-              <template #icon>
-                <IconLucideListChecks />
-              </template>
-              {{ t("songList.batch.manage") }}
-            </SButton>
-            <SDropdownMenu
-              v-if="downloadAlbumAction.visible"
-              :items="controlActionsToMenuItems(downloadAlbumAction.children ?? [])"
-              align="start"
-              @select="handleCollectionAction"
-            >
-              <template #trigger>
-                <SButton variant="secondary" round :disabled="!downloadAlbumAction.enabled">
-                  <template #icon><IconLucideDownload /></template>
-                  {{ t("collection.downloadAlbum") }}
-                </SButton>
-              </template>
-            </SDropdownMenu>
-            <SButton
-              v-if="subscribeAction?.visible"
-              variant="secondary"
-              round
-              :disabled="!subscribeAction?.enabled"
-              @click="handleCollectionAction('toggleSubscribe')"
-            >
-              <template #icon>
-                <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
-                <IconMaterialSymbolsFavoriteOutlineRounded v-else />
-              </template>
-              {{
-                t(subscribe.isSubscribed.value ? "collection.unsubscribe" : "collection.subscribe")
-              }}
-            </SButton>
-            <SButton
-              v-if="openFolderAction?.visible"
-              variant="secondary"
-              round
-              :disabled="!openFolderAction?.enabled"
-              :loading="folderOpening"
-              @click="handleCollectionAction('openContainingFolder')"
-            >
-              <template #icon>
-                <IconLucideFolderOpen />
-              </template>
-              {{ t("folder.openContaining") }}
-            </SButton>
-            <SDropdownMenu
-              v-if="moreMenuItems.length > 0"
-              :items="moreMenuItems"
-              align="start"
-              @select="handleCollectionAction"
-            >
-              <template #trigger>
-                <SButton variant="secondary" circle>
-                  <template #icon>
-                    <IconLucideEllipsis />
-                  </template>
-                </SButton>
-              </template>
-            </SDropdownMenu>
+              <button
+                type="button"
+                class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
+                :class="
+                  selectedDisc === 'all'
+                    ? 'bg-primary/12 text-on-surface font-medium'
+                    : 'text-on-surface-variant hover:bg-on-surface/6'
+                "
+                @click="selectedDisc = 'all'"
+              >
+                {{ t("collection.allDiscs") }} · {{ collection?.tracks.length ?? 0 }}
+              </button>
+              <button
+                v-for="option in discOptions"
+                :key="option.disc"
+                type="button"
+                class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
+                :class="
+                  selectedDisc === String(option.disc)
+                    ? 'bg-primary/12 text-on-surface font-medium'
+                    : 'text-on-surface-variant hover:bg-on-surface/6'
+                "
+                @click="selectedDisc = String(option.disc)"
+              >
+                {{ t("songList.disc", { number: option.disc }) }} · {{ option.count }}
+              </button>
+            </div>
+            <!-- 操作栏 -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+              <SButton
+                type="primary"
+                variant="secondary"
+                round
+                :disabled="!playAllAction?.enabled"
+                @click="handleCollectionAction('playAll')"
+              >
+                <template #icon>
+                  <IconLucidePlay />
+                </template>
+                {{ t("common.playAll") }}
+              </SButton>
+              <SButton
+                variant="secondary"
+                round
+                :disabled="!addToQueueAction?.enabled"
+                @click="handleCollectionAction('addToQueue')"
+              >
+                <template #icon>
+                  <IconLucideListEnd />
+                </template>
+                {{ t("collection.addToQueue") }}
+              </SButton>
+              <SButton
+                variant="secondary"
+                round
+                :disabled="!batchManageAction?.enabled"
+                @click="handleCollectionAction('batchManage')"
+              >
+                <template #icon>
+                  <IconLucideListChecks />
+                </template>
+                {{ t("songList.batch.manage") }}
+              </SButton>
+              <SDropdownMenu
+                v-if="downloadAlbumAction.visible"
+                :items="controlActionsToMenuItems(downloadAlbumAction.children ?? [])"
+                align="start"
+                @select="handleCollectionAction"
+              >
+                <template #trigger>
+                  <SButton variant="secondary" round :disabled="!downloadAlbumAction.enabled">
+                    <template #icon><IconLucideDownload /></template>
+                    {{ t("collection.downloadAlbum") }}
+                  </SButton>
+                </template>
+              </SDropdownMenu>
+              <SButton
+                v-if="subscribeAction?.visible"
+                variant="secondary"
+                round
+                :disabled="!subscribeAction?.enabled"
+                @click="handleCollectionAction('toggleSubscribe')"
+              >
+                <template #icon>
+                  <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
+                  <IconMaterialSymbolsFavoriteOutlineRounded v-else />
+                </template>
+                {{
+                  t(
+                    subscribe.isSubscribed.value
+                      ? "collection.unsubscribe"
+                      : "collection.subscribe",
+                  )
+                }}
+              </SButton>
+              <SButton
+                v-if="openFolderAction?.visible"
+                variant="secondary"
+                round
+                :disabled="!openFolderAction?.enabled"
+                :loading="folderOpening"
+                @click="handleCollectionAction('openContainingFolder')"
+              >
+                <template #icon>
+                  <IconLucideFolderOpen />
+                </template>
+                {{ t("folder.openContaining") }}
+              </SButton>
+              <SDropdownMenu
+                v-if="moreMenuItems.length > 0"
+                :items="moreMenuItems"
+                align="start"
+                @select="handleCollectionAction"
+              >
+                <template #trigger>
+                  <SButton variant="secondary" circle>
+                    <template #icon>
+                      <IconLucideEllipsis />
+                    </template>
+                  </SButton>
+                </template>
+              </SDropdownMenu>
+            </div>
           </div>
         </div>
       </div>
