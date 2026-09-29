@@ -453,6 +453,52 @@ const sacdTracksFor = (tracks: Track[], isoPath: string): Track[] =>
     })
     .sort(compareTracks);
 
+const folderAssociations = (tracks: Track[]): FolderBrowsePage["associations"] | undefined => {
+  let album: NonNullable<FolderBrowsePage["associations"]>["album"];
+  let albumKey = "";
+  let albumAmbiguous = false;
+  let artist: NonNullable<FolderBrowsePage["associations"]>["artist"];
+  let artistKey = "";
+  let artistAmbiguous = false;
+
+  for (const track of tracks) {
+    if (!albumAmbiguous) {
+      const candidate = track.album;
+      const name = candidate?.name.trim();
+      if (candidate && name) {
+        const key = candidate.id?.trim() || name.toLocaleLowerCase();
+        if (!albumKey) {
+          albumKey = key;
+          album = candidate;
+        } else if (key !== albumKey) {
+          album = undefined;
+          albumAmbiguous = true;
+        }
+      }
+    }
+
+    if (!artistAmbiguous) {
+      for (const candidate of track.artists) {
+        const name = candidate.name.trim();
+        if (!name) continue;
+        const key = name.toLocaleLowerCase();
+        if (!artistKey) {
+          artistKey = key;
+          artist = candidate;
+        } else if (key !== artistKey) {
+          artist = undefined;
+          artistAmbiguous = true;
+          break;
+        }
+      }
+    }
+
+    if (albumAmbiguous && artistAmbiguous) break;
+  }
+
+  return album || artist ? { album, artist } : undefined;
+};
+
 const compareTracks = (a: Track, b: Track): number => {
   const disc = (a.disc ?? 1) - (b.disc ?? 1);
   if (disc !== 0) return disc;
@@ -685,6 +731,8 @@ export const browseFolder = async (
     })
     .map((entry) => entry.path);
   const canonical = getTracksByPhysicalPaths(mediaPaths);
+  const associationTracks: Track[] = [];
+  let associationsReliable = true;
 
   // CUE backing audio 在浏览层即可通过 FILE 行确认，无需 metadata probe。
   const cueInspections = new Map<string, { backingPath: string; trackCount: number }>();
@@ -705,6 +753,11 @@ export const browseFolder = async (
     const ext = extension(entry.path);
     if (ext === "cue") {
       const tracks = cueTracksFor(canonical, entry.path);
+      const canonicalFresh =
+        tracks.length > 0 && tracks.every((track) => sameMtime(track.mtime, entry.mtime));
+      if (canonicalFresh) {
+        associationTracks.push(...tracks);
+      } else associationsReliable = false;
       const inspection = cueInspections.get(pathKey(entry.path));
       entries.push({
         kind: "cue",
@@ -718,6 +771,16 @@ export const browseFolder = async (
     }
     if (ext === "iso") {
       const tracks = sacdTracksFor(canonical, entry.path);
+      const canonicalFresh =
+        tracks.length > 0 &&
+        tracks.every(
+          (track) =>
+            sameMtime(track.mtime, entry.mtime) &&
+            (track.fileSize == null || track.fileSize === entry.size),
+        );
+      if (canonicalFresh) {
+        associationTracks.push(...tracks);
+      } else associationsReliable = false;
       entries.push({
         kind: "sacd",
         name: entry.name,
@@ -732,6 +795,7 @@ export const browseFolder = async (
       if (cueBackings.has(pathKey(entry.path))) continue;
       const track = canonicalForExactFile(canonical, entry.path);
       if (canonicalFileIsFresh(track, entry)) {
+        associationTracks.push(track);
         entries.push({
           kind: "track",
           name: entry.name,
@@ -741,6 +805,7 @@ export const browseFolder = async (
           track,
         });
       } else {
+        associationsReliable = false;
         entries.push({
           kind: "file",
           name: entry.name,
@@ -812,6 +877,7 @@ export const browseFolder = async (
     root: resolved.root,
     parent: pathKey(resolved.path) === pathKey(resolved.root) ? null : path.dirname(resolved.path),
     unavailable: false,
+    associations: associationsReliable ? folderAssociations(associationTracks) : undefined,
     counts,
     entries: pageEntries,
     previousCursor:
@@ -1296,6 +1362,7 @@ export const searchFolders = async (
   cursor?: string,
   requestedLimit = 100,
   signal?: AbortSignal,
+  scope?: string,
 ): Promise<FolderSearchPage> => {
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return { data: [] };
@@ -1357,14 +1424,21 @@ export const searchFolders = async (
     }
   };
 
-  for (const root of configuredRoots()) {
+  const searchRoots = scope
+    ? (() => {
+        const resolved = resolveFolderPath(scope);
+        return [{ path: resolved.path, root: resolved.root }];
+      })()
+    : configuredRoots().map((root) => ({ path: root, root }));
+
+  for (const searchRoot of searchRoots) {
     let realRoot: string;
     try {
-      realRoot = await fs.realpath(root);
+      realRoot = await fs.realpath(searchRoot.root);
     } catch {
       continue;
     }
-    await walk(root, root, realRoot);
+    await walk(searchRoot.path, searchRoot.root, realRoot);
     if (matches.length >= targetCount || truncated || signal?.aborted) break;
   }
   if (signal?.aborted) throw new Error("FOLDER_SEARCH_CANCELLED");

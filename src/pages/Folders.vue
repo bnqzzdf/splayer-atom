@@ -11,6 +11,7 @@ import type {
   FolderDirectoryEntry,
   FolderMaterialEntry,
   FolderPinEntry,
+  FolderPlaylistResult,
   FolderRootEntry,
   FolderSearchResult,
 } from "@shared/types/folderBrowser";
@@ -29,6 +30,7 @@ import { formatFileSize } from "@/utils/format";
 import { formatTime } from "@/utils/time";
 import { getQualityLabel } from "@/utils/quality";
 import { appendFolderPath, folderPathWithinRoot } from "@/utils/folderPath";
+import { navigateToAlbum, navigateToArtist } from "@/utils/navigate";
 import * as player from "@/core/player";
 import IconFolder from "~icons/lucide/folder";
 import IconFolderOpen from "~icons/lucide/folder-open";
@@ -863,6 +865,13 @@ const toggleContainer = async (entry: FolderBrowseEntry): Promise<void> => {
   });
 };
 
+const showActionFailures = (count: number, failed: string[]): boolean => {
+  if (failed.length === 0) return false;
+  if (count > 0) toast.warning(t("folder.partialFailure", { count: failed.length }));
+  else toast.error(t("folder.actionFailed"));
+  return true;
+};
+
 const runAction = async (
   path: string,
   mode: "play" | "shuffle" | "play-next" | "queue",
@@ -870,9 +879,11 @@ const runAction = async (
 ): Promise<void> => {
   try {
     const result = await folderBrowserClient.play(path, mode, recursive);
-    if (result.failed.length > 0) toast.warning(result.failed[0]);
-    if (mode === "queue" && result.count > 0) toast.success(t("songList.toast.addedToQueue"));
-    if (mode === "play-next" && result.count > 0) toast.success(t("songList.toast.addedToNext"));
+    const failed = showActionFailures(result.count, result.failed);
+    if (!failed && mode === "queue" && result.count > 0)
+      toast.success(t("songList.toast.addedToQueue"));
+    if (!failed && mode === "play-next" && result.count > 0)
+      toast.success(t("songList.toast.addedToNext"));
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   }
@@ -883,9 +894,10 @@ const runBatchAction = async (mode: "play" | "play-next" | "queue"): Promise<voi
   if (targets.length === 0) return;
   try {
     const result = await folderBrowserClient.batchPlay(mode, targets);
-    if (result.failed.length > 0) toast.warning(result.failed[0]);
-    if (mode === "queue" && result.count > 0) toast.success(t("songList.toast.addedToQueue"));
-    if (mode === "play-next" && result.count > 0) {
+    const failed = showActionFailures(result.count, result.failed);
+    if (!failed && mode === "queue" && result.count > 0)
+      toast.success(t("songList.toast.addedToQueue"));
+    if (!failed && mode === "play-next" && result.count > 0) {
       toast.success(t("songList.toast.addedToNext"));
     }
     if (result.count > 0) exitBatch();
@@ -975,7 +987,7 @@ const openPlaylistCreate = (): void => {
   createOpen.value = true;
 };
 
-const addPlaylistTarget = async (playlistId: string): Promise<number> => {
+const addPlaylistTarget = async (playlistId: string): Promise<FolderPlaylistResult> => {
   const batchTargets = createBatchTargets.value;
   const trackTarget = createTargetTrack.value;
   const result = batchTargets
@@ -992,7 +1004,7 @@ const addPlaylistTarget = async (playlistId: string): Promise<number> => {
           createRecursive.value,
         );
   await playlistStore.load();
-  return result.added;
+  return result;
 };
 
 const handlePlaylistPick = async (playlistId: string): Promise<void> => {
@@ -1000,11 +1012,13 @@ const handlePlaylistPick = async (playlistId: string): Promise<void> => {
   playlistSubmitting.value = true;
   try {
     const wasBatch = !!createBatchTargets.value;
-    const added = await addPlaylistTarget(playlistId);
-    toast.success(t("collection.tracksAdded", { count: added }));
+    const result = await addPlaylistTarget(playlistId);
+    if (!showActionFailures(result.count, result.failed)) {
+      toast.success(t("collection.tracksAdded", { count: result.added }));
+    }
     playlistPickerOpen.value = false;
     createBatchTargets.value = null;
-    if (wasBatch) exitBatch();
+    if (wasBatch && result.count > 0) exitBatch();
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   } finally {
@@ -1016,10 +1030,12 @@ const handleCreated = async (playlistId: string): Promise<void> => {
   if (!createTargetPath.value) return;
   try {
     const wasBatch = !!createBatchTargets.value;
-    const added = await addPlaylistTarget(playlistId);
-    toast.success(t("collection.tracksAdded", { count: added }));
+    const result = await addPlaylistTarget(playlistId);
+    if (!showActionFailures(result.count, result.failed)) {
+      toast.success(t("collection.tracksAdded", { count: result.added }));
+    }
     createBatchTargets.value = null;
-    if (wasBatch) exitBatch();
+    if (wasBatch && result.count > 0) exitBatch();
   } catch (value) {
     toast.error(value instanceof Error ? value.message : String(value));
   }
@@ -1174,8 +1190,8 @@ const activateEntry = async (entry: FolderBrowseEntry): Promise<void> => {
 
 const openSearchResult = async (result: FolderSearchResult): Promise<void> => {
   if (result.kind === "directory") {
-    await goFolder(result.path);
     searchQuery.value = "";
+    await goFolder(result.path);
     return;
   }
   searchQuery.value = "";
@@ -1206,7 +1222,13 @@ const performSearch = useDebounceFn(async (query: string) => {
   searchAbortController = controller;
   searchLoading.value = true;
   try {
-    const result = await folderBrowserClient.search(value, undefined, 100, controller.signal);
+    const result = await folderBrowserClient.search(
+      value,
+      undefined,
+      100,
+      controller.signal,
+      currentPath.value || undefined,
+    );
     if (generation !== searchGeneration) return;
     searchResults.value = result.data;
     searchCursor.value = result.nextCursor;
@@ -1236,6 +1258,7 @@ const loadMoreSearch = async (): Promise<void> => {
       searchCursor.value,
       100,
       controller.signal,
+      currentPath.value || undefined,
     );
     if (generation !== searchGeneration || controller.signal.aborted) return;
     searchResults.value = [...searchResults.value, ...result.data];
@@ -1257,6 +1280,18 @@ watch(searchQuery, (value) => {
   searchTruncated.value = false;
   void performSearch(value);
 });
+
+const openAssociatedAlbum = (): void => {
+  const album = page.value?.associations?.album;
+  if (!album) return;
+  navigateToAlbum(album.name, { source: "local", albumId: album.id });
+};
+
+const openAssociatedArtist = (): void => {
+  const artist = page.value?.associations?.artist;
+  if (!artist) return;
+  navigateToArtist(artist.name, { source: "local", artistId: artist.id });
+};
 
 const performFilter = useDebounceFn((value: string) => {
   if (!currentPath.value || value.trim() === loadedFilter.value) return;
@@ -1359,6 +1394,7 @@ watch(
     const pathOrSortChanged =
       !previous || path !== previous[0] || sort !== previous[1] || order !== previous[2];
     if (pathOrSortChanged) {
+      if (previous && path !== previous[0] && searchQuery.value) searchQuery.value = "";
       exitBatch();
       restoreFolderFilter(path);
       void loadCurrent();
@@ -1443,9 +1479,10 @@ onBeforeUnmount(() => {
       <div class="flex flex-wrap items-center gap-3 pt-2">
         <h1 class="text-3xl font-bold text-on-surface">{{ t("folder.label") }}</h1>
         <SInput
-          v-if="!currentPath"
           v-model="searchQuery"
-          :placeholder="t('folder.searchPlaceholder')"
+          :placeholder="
+            t(currentPath ? 'folder.searchCurrentPlaceholder' : 'folder.searchPlaceholder')
+          "
           clearable
           round
           class="ml-auto w-full sm:w-72"
@@ -1638,13 +1675,38 @@ onBeforeUnmount(() => {
           </div>
         </template>
       </div>
+
+      <div
+        v-if="
+          currentPath &&
+          !searchQuery.trim() &&
+          (page?.associations?.album || page?.associations?.artist)
+        "
+        class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-sm text-on-surface-variant"
+      >
+        <div v-if="page?.associations?.album" class="flex min-w-0 items-center gap-2">
+          <span class="shrink-0 opacity-55">{{ t("album.label") }}</span>
+          <button
+            class="max-w-96 truncate font-medium text-on-surface hover:text-primary"
+            @click="openAssociatedAlbum"
+          >
+            {{ page.associations.album.name }}
+          </button>
+        </div>
+        <div v-if="page?.associations?.artist" class="flex min-w-0 items-center gap-2">
+          <span class="shrink-0 opacity-55">{{ t("artist.label") }}</span>
+          <button
+            class="max-w-80 truncate font-medium text-on-surface hover:text-primary"
+            @click="openAssociatedArtist"
+          >
+            {{ page.associations.artist.name }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="min-h-0 flex-1">
-      <div
-        v-if="!currentPath && searchQuery.trim()"
-        class="h-full min-h-0 overflow-y-auto px-5 pb-5"
-      >
+      <div v-if="searchQuery.trim()" class="h-full min-h-0 overflow-y-auto px-5 pb-5">
         <div class="mb-3 text-sm font-medium text-on-surface-variant">
           {{ t("folder.searchResults") }}
         </div>

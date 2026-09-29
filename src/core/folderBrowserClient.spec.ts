@@ -98,4 +98,20 @@ describe("Folder Browser Core Protocol client", () => {
       truncated: true,
     });
   });
+
+  it("adds an optional current-folder scope to recursive Folder Search", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ protocol: { version: 1 } }))
+      .mockResolvedValueOnce(jsonResponse({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { folderBrowserClient } = await import("./folderBrowserClient");
+    await folderBrowserClient.search("bach", undefined, 100, undefined, "/music/PhilipsDUO");
+
+    const url = new URL(String(fetchMock.mock.calls[1]?.[0]));
+    expect(url.pathname).toBe("/api/library/folders/search");
+    expect(url.searchParams.get("q")).toBe("bach");
+    expect(url.searchParams.get("path")).toBe("/music/PhilipsDUO");
+  });
 });

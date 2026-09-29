@@ -211,6 +211,7 @@ export const buildFolderRoutes = (): Hono => {
           c.req.query("cursor"),
           boundedInt(c.req.query("limit"), 100, 1, 200),
           c.req.raw.signal,
+          c.req.query("path"),
         ),
       );
     } catch (error) {

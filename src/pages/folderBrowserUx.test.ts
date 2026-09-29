@@ -26,12 +26,14 @@ const fullPlayerSource = readFileSync(
 const zhSource = readFileSync(new URL("../i18n/locales/zh-CN.json", import.meta.url), "utf8");
 
 test("Folder filter stays separate from recursive Folder Search", () => {
-  assert.ok(foldersSource.includes('v-if="!currentPath"'));
   assert.ok(foldersSource.includes('v-model="searchQuery"'));
   assert.ok(foldersSource.includes('v-model="filterQuery"'));
+  assert.ok(foldersSource.includes("folder.searchCurrentPlaceholder"));
+  assert.ok(foldersSource.includes("currentPath.value || undefined"));
   assert.ok(foldersSource.includes("folderFilters = new Map<string, string>()"));
   assert.ok(foldersSource.includes("activeFilter || undefined"));
   assert.ok(folderClientSource.includes('if (filter) params.set("filter", filter)'));
+  assert.ok(folderClientSource.includes('if (path) params.set("path", path)'));
 });
 
 test("Folder actions use concise recursive menu with one current-folder-only submenu", () => {
@@ -57,8 +59,8 @@ test("Folder presentation supports list/grid without changing route semantics", 
 });
 
 test("Folder display sorting stays route-aware and keeps navigation state isolated", () => {
-  assert.ok(foldersSource.includes('sort: currentSort.value'));
-  assert.ok(foldersSource.includes('order: currentOrder.value'));
+  assert.ok(foldersSource.includes("sort: currentSort.value"));
+  assert.ok(foldersSource.includes("order: currentOrder.value"));
   assert.ok(foldersSource.includes("currentSort.value !== loadedSort.value"));
   assert.ok(foldersSource.includes("currentOrder.value !== loadedOrder.value"));
   assert.ok(foldersSource.includes("browseGeneration++"));
@@ -83,23 +85,27 @@ test("Folder return focus stays simple and runs only after the list is rendered"
   assert.equal(foldersSource.includes("highlightKey"), false);
   assert.equal(foldersSource.includes("highlightTimer"), false);
   assert.ok(foldersSource.includes("if (generation === browseGeneration) loading.value = false;"));
-  assert.ok(foldersSource.includes("if (loaded && generation === browseGeneration) await loadContainer();"));
+  assert.ok(
+    foldersSource.includes("if (loaded && generation === browseGeneration) await loadContainer();"),
+  );
   assert.ok(foldersSource.includes('card?.scrollIntoView({ block: "center" })'));
   assert.ok(foldersSource.includes("list.scrollToIndex(index);"));
 });
 
 test("Folder child navigation records a deterministic return focus in browser history", () => {
-  assert.ok(foldersSource.includes("const goFolder = async (path: string, rememberReturnFocus = false)"));
+  assert.ok(
+    foldersSource.includes("const goFolder = async (path: string, rememberReturnFocus = false)"),
+  );
   assert.ok(foldersSource.includes("if (rememberReturnFocus && currentPath.value)"));
   assert.ok(foldersSource.includes("focusPath: path"));
-  assert.ok(foldersSource.includes('goFolder(entry.path, true)'));
+  assert.ok(foldersSource.includes("goFolder(entry.path, true)"));
   assert.ok(foldersSource.includes('data-folder-grid-path="entry.path"'));
   assert.ok(foldersSource.includes('key: "directory-grid"'));
   assert.ok(foldersSource.includes("entries: directories"));
 });
 
 test("Folder rows expose physical file identity without inventing unscanned metadata", () => {
-  assert.ok(foldersSource.includes('{{ item.entry.name }}'));
+  assert.ok(foldersSource.includes("{{ item.entry.name }}"));
   assert.ok(foldersSource.includes('t("folder.unscanned")'));
   assert.ok(foldersSource.includes("trackTechnicalSummary"));
   assert.ok(foldersSource.includes("virtualTrackTechnicalSummary"));
@@ -154,23 +160,28 @@ test("Folder batch management keeps explicit file selection Core-owned", () => {
   assert.ok(
     foldersSource.includes("folderBrowserClient.addBatchToPlaylist(playlistId, batchTargets)"),
   );
-  assert.ok(
-    foldersSource.includes('(row.entry.kind === "cue" || row.entry.kind === "sacd") &&'),
-  );
+  assert.ok(foldersSource.includes('(row.entry.kind === "cue" || row.entry.kind === "sacd") &&'));
   assert.ok(foldersSource.includes("container.value?.path === row.entry.path"));
   assert.ok(foldersSource.includes("batchCandidateKeys.has(item.key)"));
   assert.ok(folderClientSource.includes('"/library/folders/batch/playlist"'));
   assert.ok(folderClientSource.includes("/library/folders/batch/"));
+  assert.ok(foldersSource.includes("showActionFailures(result.count, result.failed)"));
+  assert.equal(foldersSource.includes("toast.warning(result.failed[0])"), false);
+});
+
+test("Folder-level album and artist shortcuts stay outside stable track rows", () => {
+  assert.ok(foldersSource.includes("page?.associations?.album"));
+  assert.ok(foldersSource.includes("page?.associations?.artist"));
+  assert.ok(foldersSource.includes("openAssociatedAlbum"));
+  assert.ok(foldersSource.includes("openAssociatedArtist"));
+  assert.equal(foldersSource.includes("goAlbum(item.entry.track)"), false);
+  assert.equal(foldersSource.includes("goArtist(item.entry.track"), false);
 });
 
 test("Show in folder remains shared across player and queue surfaces", () => {
   assert.ok(trackMenuSource.includes('id: "openContainingFolder"'));
   assert.ok(trackMenuSource.includes("folderBrowserClient.location(current)"));
-  assert.ok(
-    foldersSource.includes(
-      "const focusPath = containerPath || requestedFocusPath.value;",
-    ),
-  );
+  assert.ok(foldersSource.includes("const focusPath = containerPath || requestedFocusPath.value;"));
   assert.equal(foldersSource.includes("data-folder-track-id"), false);
   assert.equal(foldersSource.includes("requestAnimationFrame"), false);
   assert.ok(queuePopoverSource.includes("onOpenContainingFolder(item)"));

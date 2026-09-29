@@ -1,4 +1,4 @@
-import type { Track } from "./player";
+import type { Album, Artist, Track } from "./player";
 
 export type FolderMaterialType = "image" | "pdf" | "text";
 export type FolderBrowseSort = "name" | "mtime" | "track";
@@ -82,6 +82,10 @@ export interface FolderBrowsePage {
   root: string;
   parent: string | null;
   unavailable: boolean;
+  associations?: {
+    album?: Album;
+    artist?: Artist;
+  };
   counts: {
     directories: number;
     media: number;

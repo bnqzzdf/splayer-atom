@@ -73,9 +73,11 @@ export const folderBrowserClient = {
     cursor?: string,
     limit = 100,
     signal?: AbortSignal,
+    path?: string,
   ): Promise<FolderSearchPage> => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
     if (cursor) params.set("cursor", cursor);
+    if (path) params.set("path", path);
     return request(`/library/folders/search?${params}`, { signal });
   },
 

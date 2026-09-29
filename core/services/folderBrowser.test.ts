@@ -65,11 +65,27 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   const cueActionCue = path.join(cueActionDir, "album.cue");
   const ordering = path.join(root, "ordering");
   const canonicalArtworkDir = path.join(root, "Canonical Artwork");
+  const associationParent = path.join(root, "Association Parent");
+  const associationDir = path.join(associationParent, "Single Album");
+  const associationTrack1 = path.join(associationDir, "01.flac");
+  const associationTrack2 = path.join(associationDir, "02.flac");
+  const mixedAssociationDir = path.join(root, "Mixed Association");
+  const mixedAssociationTrack1 = path.join(mixedAssociationDir, "01.flac");
+  const mixedAssociationTrack2 = path.join(mixedAssociationDir, "02.flac");
+  const searchScope = path.join(root, "Scoped Search");
+  const searchScopeNested = path.join(searchScope, "Nested");
+  const searchOutsideScope = path.join(root, "Other Search");
+  const scopedNeedle = path.join(searchScopeNested, "needle-inside.flac");
+  const outsideNeedle = path.join(searchOutsideScope, "needle-outside.flac");
   const orderingCd1 = path.join(ordering, "CD1");
   const orderingCd2 = path.join(ordering, "CD2");
   mkdirSync(orderingCd1, { recursive: true });
   mkdirSync(orderingCd2, { recursive: true });
   mkdirSync(canonicalArtworkDir);
+  mkdirSync(associationDir, { recursive: true });
+  mkdirSync(mixedAssociationDir);
+  mkdirSync(searchScopeNested, { recursive: true });
+  mkdirSync(searchOutsideScope);
   const canonicalArtworkTrack = path.join(canonicalArtworkDir, "01.flac");
   const cacheDir = path.join(dataDir, "cache");
   const cachedCanonicalCover = path.join(cacheDir, "covers", "canonical.jpg");
@@ -163,6 +179,12 @@ test("Folder Browser browses live media/materials without a completed scan", asy
   utimesSync(sortingDir2, 9_000, 9_000);
   utimesSync(sortingDir10, 10_000, 10_000);
   writeFileSync(canonicalArtworkTrack, "canonical");
+  writeFileSync(associationTrack1, "association-1");
+  writeFileSync(associationTrack2, "association-2");
+  writeFileSync(mixedAssociationTrack1, "mixed-1");
+  writeFileSync(mixedAssociationTrack2, "mixed-2");
+  writeFileSync(scopedNeedle, "inside");
+  writeFileSync(outsideNeedle, "outside");
   writeFileSync(outsideTrack, "outside");
   writeFileSync(outsideLog, "outside");
   symlinkSync(ordering, path.join(orderingCd2, "back-to-ordering"), "dir");
@@ -183,6 +205,10 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     store.set("cache.dir", cacheDir);
     const indexedStat = statSync(indexed);
     const canonicalArtworkStat = statSync(canonicalArtworkTrack);
+    const associationTrack1Stat = statSync(associationTrack1);
+    const associationTrack2Stat = statSync(associationTrack2);
+    const mixedAssociationTrack1Stat = statSync(mixedAssociationTrack1);
+    const mixedAssociationTrack2Stat = statSync(mixedAssociationTrack2);
     const cueActionStat = statSync(cueActionCue);
     const cueActionBackingStat = statSync(cueActionBacking);
     const sortingUnknownStat = statSync(sortingUnknown);
@@ -241,6 +267,50 @@ test("Folder Browser browses live media/materials without a completed scan", asy
         ctime: canonicalArtworkStat.ctimeMs,
       },
       {
+        id: "association-track-1",
+        path: associationTrack1,
+        title: "Association 1",
+        artists: [{ name: "Shared Artist" }],
+        album: { name: "Shared Album" },
+        duration: 1000,
+        fileSize: associationTrack1Stat.size,
+        mtime: associationTrack1Stat.mtimeMs,
+        ctime: associationTrack1Stat.ctimeMs,
+      },
+      {
+        id: "association-track-2",
+        path: associationTrack2,
+        title: "Association 2",
+        artists: [{ name: "Shared Artist" }],
+        album: { name: "Shared Album" },
+        duration: 1000,
+        fileSize: associationTrack2Stat.size,
+        mtime: associationTrack2Stat.mtimeMs,
+        ctime: associationTrack2Stat.ctimeMs,
+      },
+      {
+        id: "mixed-association-track-1",
+        path: mixedAssociationTrack1,
+        title: "Mixed Association 1",
+        artists: [{ name: "Shared Artist" }],
+        album: { name: "Album One" },
+        duration: 1000,
+        fileSize: mixedAssociationTrack1Stat.size,
+        mtime: mixedAssociationTrack1Stat.mtimeMs,
+        ctime: mixedAssociationTrack1Stat.ctimeMs,
+      },
+      {
+        id: "mixed-association-track-2",
+        path: mixedAssociationTrack2,
+        title: "Mixed Association 2",
+        artists: [{ name: "Shared Artist" }],
+        album: { name: "Album Two" },
+        duration: 1000,
+        fileSize: mixedAssociationTrack2Stat.size,
+        mtime: mixedAssociationTrack2Stat.mtimeMs,
+        ctime: mixedAssociationTrack2Stat.ctimeMs,
+      },
+      {
         id: "sorting-unknown",
         path: sortingUnknown,
         title: "Unknown track",
@@ -291,6 +361,11 @@ test("Folder Browser browses live media/materials without a completed scan", asy
     assert.equal(page.unavailable, false);
     assert.equal(page.root, path.resolve(root));
     assert.equal(page.parent, null);
+    assert.equal(
+      page.associations,
+      undefined,
+      "unknown direct media must suppress folder-level metadata shortcuts",
+    );
     assert.ok(page.entries.some((entry) => entry.kind === "directory" && entry.path === subfolder));
     assert.equal(
       page.entries.some(
@@ -321,6 +396,27 @@ test("Folder Browser browses live media/materials without a completed scan", asy
       page.entries.some((entry) => entry.path === whole),
       false,
       "valid CUE must hide its whole-file backing audio",
+    );
+
+    const associationParentPage = await folder.browseFolder(associationParent, undefined, 100);
+    assert.equal(
+      associationParentPage.associations,
+      undefined,
+      "folder associations must never recurse into child directories",
+    );
+    const associationPage = await folder.browseFolder(associationDir, undefined, 100);
+    assert.equal(associationPage.associations?.album?.name, "Shared Album");
+    assert.equal(associationPage.associations?.artist?.name, "Shared Artist");
+    const mixedAssociationPage = await folder.browseFolder(mixedAssociationDir, undefined, 100);
+    assert.equal(
+      mixedAssociationPage.associations?.album,
+      undefined,
+      "multiple direct albums must suppress only the album shortcut",
+    );
+    assert.equal(
+      mixedAssociationPage.associations?.artist?.name,
+      "Shared Artist",
+      "an unambiguous artist remains linkable even when albums differ",
     );
 
     const nameAsc = await folder.browseFolder(sorting, undefined, 100);
@@ -672,6 +768,23 @@ test("Folder Browser browses live media/materials without a completed scan", asy
 
     const search = await folder.searchFolders("very long");
     assert.ok(search.data.some((entry) => entry.kind === "directory" && entry.path === subfolder));
+    const scopedSearch = await folder.searchFolders(
+      "needle",
+      undefined,
+      100,
+      undefined,
+      searchScope,
+    );
+    assert.deepEqual(
+      scopedSearch.data.map((entry) => entry.path),
+      [scopedNeedle],
+      "scoped Folder Search must traverse only the current subtree",
+    );
+    await assert.rejects(
+      () => folder.searchFolders("needle", undefined, 100, undefined, outsideRoot),
+      /FOLDER_PATH_OUTSIDE_LIBRARY_ROOT/,
+      "scoped Folder Search must keep the existing configured-root boundary",
+    );
     const escapedSearch = await folder.searchFolders("external");
     assert.equal(
       escapedSearch.data.some(
