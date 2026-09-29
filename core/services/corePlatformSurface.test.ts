@@ -21,10 +21,18 @@ test("search platform tabs are gated by the Core capability projection", () => {
   assert.match(capabilitiesStoreSource, /capabilities\.value\[platform\] !== false/);
 
   assert.match(searchPageSource, /useCoreCapabilitiesStore\(\)/);
+  assert.match(searchPageSource, /useProviderSessionsStore\(\)/);
   assert.match(searchPageSource, /coreCapabilities\.supportsPlatform\(platform\)/);
+  assert.match(searchPageSource, /providerSessions\.isAuthenticated\(platform\)/);
   assert.match(searchPageSource, /ALL_PLATFORMS\.filter\(isSearchPlatformAvailable\)/);
-  // 能力位与登录态都就绪后才判定，未就绪时不误退回本地。
-  assert.match(searchPageSource, /if \(!sessionsReady \|\| !capabilitiesReady\) return/);
+  // 搜索页从本地来源起步；当前在线来源从可用 tab 消失时立即退回本地。
+  // provider session 初始为空，因此无需额外维护一套 initialized 门控状态。
+  assert.match(searchPageSource, /const searchSource = ref<SearchSource>\("local"\)/);
+  assert.match(searchPageSource, /\[searchSource, platformTabs\]/);
+  assert.match(
+    searchPageSource,
+    /if \(!availableTabs\.some\(\(tab\) => tab\.key === source\)\) searchSource\.value = "local"/,
+  );
 });
 
 test("hot search and suggestions follow the selected online platform", () => {
