@@ -1786,7 +1786,7 @@
     "gridView": "Grid view",
     "sortName": "Filename",
     "sortMtime": "Modified time",
-    "sortTrack": "Track order (audio only)",
+    "sortTrack": "Track order",
     "sortAscending": "Ascending",
     "sortDescending": "Descending",
     "selectAll": "Select all",

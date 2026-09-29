@@ -1786,7 +1786,7 @@
     "gridView": "网格视图",
     "sortName": "文件名",
     "sortMtime": "修改时间",
-    "sortTrack": "曲目顺序（仅音频）",
+    "sortTrack": "曲目顺序",
     "sortAscending": "升序",
     "sortDescending": "降序",
     "selectAll": "全选",

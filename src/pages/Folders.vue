@@ -1025,7 +1025,17 @@ const handleCreated = async (playlistId: string): Promise<void> => {
   }
 };
 
-const folderMenuItems = computed<DropdownMenuItem[]>(() => [
+const folderToolbarRef = useTemplateRef<HTMLElement>("folderToolbar");
+const { width: folderToolbarWidth } = useElementSize(folderToolbarRef);
+// 按工具栏实际宽度展开常用操作，为筛选和排序保留空间。
+const folderToolbarActionCount = computed(() => {
+  if (folderToolbarWidth.value >= 1440) return 5;
+  if (folderToolbarWidth.value >= 1200) return 4;
+  if (folderToolbarWidth.value >= 960) return 2;
+  return 0;
+});
+
+const folderPrimaryActions = computed<DropdownMenuItem[]>(() => [
   {
     key: "batchManage",
     label: t("songList.batch.manage"),
@@ -1052,6 +1062,13 @@ const folderMenuItems = computed<DropdownMenuItem[]>(() => [
     label: t("folder.addToPlaylist"),
     icon: IconListPlus,
   },
+]);
+
+const folderToolbarActions = computed(() =>
+  folderPrimaryActions.value.slice(0, folderToolbarActionCount.value),
+);
+const folderMenuItems = computed<DropdownMenuItem[]>(() => [
+  ...folderPrimaryActions.value.slice(folderToolbarActionCount.value),
   {
     key: "currentOnly",
     label: t("folder.currentOnly"),
@@ -1456,6 +1473,7 @@ onBeforeUnmount(() => {
 
       <div
         v-if="currentPath && !searchQuery.trim()"
+        ref="folderToolbar"
         class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-solid border-primary/12 bg-surface-panel px-3 py-2"
       >
         <template v-if="batchActive">
@@ -1546,6 +1564,18 @@ onBeforeUnmount(() => {
               <IconRefreshCw :class="scanCoversCurrent ? 'animate-spin' : ''" />
             </template>
             {{ t("folder.scan") }}
+          </SButton>
+          <SButton
+            v-for="action in folderToolbarActions"
+            :key="action.key"
+            variant="secondary"
+            size="small"
+            round
+            :disabled="action.disabled"
+            @click="handleFolderMenu(action.key)"
+          >
+            <template #icon><component :is="action.icon" /></template>
+            {{ action.label }}
           </SButton>
           <SDropdownMenu :items="folderMenuItems" align="start" @select="handleFolderMenu">
             <template #trigger>
