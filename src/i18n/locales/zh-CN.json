@@ -210,7 +210,7 @@
       "artist": "前往歌手「{id}」",
       "playlist": "前往歌单「{id}」"
     },
-    "platforms": "流媒体接入"
+    "platforms": "流媒体"
   },
   "recognition": {
     "title": "听歌识曲",

@@ -210,7 +210,7 @@
       "artist": "Go to artist [{id}]",
       "playlist": "Go to playlist [{id}]"
     },
-    "platforms": "Streaming Access"
+    "platforms": "Streaming"
   },
   "recognition": {
     "title": "Music Recognition",

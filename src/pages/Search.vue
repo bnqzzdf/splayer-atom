@@ -52,22 +52,9 @@ const tabs = computed(() => {
   return items;
 });
 
-/** NCM / QM / KG 搜索允许匿名使用；Qobuz / TIDAL 仅在 Core 会话已认证时进入搜索来源。 */
-const ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>([
-  "netease",
-  "qqmusic",
-  "kugou",
-]);
-
-/**
- * 平台是否可作为搜索来源。
- *
- * 先看 Core 是否声明了该平台能力位（不含该平台的 Core 不应出现它的入口），
- * 再看登录态（匿名平台始终可用，其余需已认证）。
- */
+/** 搜索来源仅包含 Core 支持且已登录的平台。 */
 const isSearchPlatformAvailable = (platform: Platform): boolean =>
-  coreCapabilities.supportsPlatform(platform) &&
-  (ANONYMOUS_SEARCH_PLATFORMS.has(platform) || providerSessions.isAuthenticated(platform));
+  coreCapabilities.supportsPlatform(platform) && providerSessions.isAuthenticated(platform);
 
 const platformTabs = computed(() => {
   const online = ALL_PLATFORMS.filter(isSearchPlatformAvailable).map((key) => ({
@@ -81,29 +68,12 @@ const platformTabs = computed(() => {
 });
 
 watch(
-  () =>
-    [
-      searchSource.value,
-      providerSessions.initialized,
-      coreCapabilities.initialized,
-      providerSessions.sessions.qobuz.authenticated,
-      providerSessions.sessions.tidal.authenticated,
-    ] as const,
-  ([source, sessionsReady, capabilitiesReady]) => {
-    if (source === "local" || source === "streaming") return;
-    // 两份投影都就绪后才判定：未就绪时保持现状，避免把可用平台误退回本地；
-    // 就绪后同时覆盖「用户选了不可用平台」与「能力位/登录态后到」两种情形。
-    if (!sessionsReady || !capabilitiesReady) return;
-    if (!isSearchPlatformAvailable(source)) searchSource.value = "local";
+  [searchSource, platformTabs],
+  ([source, availableTabs]) => {
+    // 当前来源退出登录或被移除后切回本地，由现有来源切换逻辑清空旧结果。
+    if (!availableTabs.some((tab) => tab.key === source)) searchSource.value = "local";
   },
   { immediate: true },
-);
-
-watch(
-  () => streaming.activeServerId,
-  (serverId) => {
-    if (!serverId && searchSource.value === "streaming") searchSource.value = "local";
-  },
 );
 
 interface TabState<T> {

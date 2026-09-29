@@ -29,19 +29,13 @@ const streamingStoreSource = readFileSync(
   "utf8",
 );
 
-test("Atom formal renderer exposes every Core-managed online search provider", () => {
-  // NCM / QM / KG 匿名可用；Qobuz / TIDAL 需要 Core 会话已认证。
+test("Atom formal renderer exposes authenticated Core-managed online search providers", () => {
   assert.match(
     searchPageSource,
-    /ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>\(\[[\s\S]{0,160}?\]\)/,
-  );
-  assert.match(
-    searchPageSource,
-    /ANONYMOUS_SEARCH_PLATFORMS: ReadonlySet<Platform> = new Set<Platform>\(\[[\s\S]{0,160}"qqmusic"[\s\S]{0,40}"kugou"/,
+    /coreCapabilities\.supportsPlatform\(platform\) &&\s+providerSessions\.isAuthenticated\(platform\)/,
   );
   assert.match(searchPageSource, /ALL_PLATFORMS\.filter\(isSearchPlatformAvailable\)/);
-  assert.match(searchPageSource, /providerSessions\.isAuthenticated\(platform\)/);
-  assert.match(searchPageSource, /providerSessions\.initialized/);
+  assert.doesNotMatch(searchPageSource, /ANONYMOUS_SEARCH_PLATFORMS/);
   assert.doesNotMatch(searchPageSource, /atomSearchPlatforms/);
   assert.match(providerSessionsSource, /const initialized = ref\(false\)/);
   assert.doesNotMatch(
@@ -93,7 +87,6 @@ test("Media source search reuses the Core streaming search projection", () => {
   assert.match(searchPageSource, /response\.playlists\.map/);
   assert.match(searchPageSource, /source: searchSource, name: item\.title/);
   assert.match(streamingStoreSource, /streamingClient\.search\(activeServerId\.value, query\)/);
-  assert.doesNotMatch(searchPageSource, /ANONYMOUS_SEARCH_PLATFORMS[\s\S]{0,160}"streaming"/);
 });
 
 test("Web Netease account pages reuse the shared Core provider surface", () => {

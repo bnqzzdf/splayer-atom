@@ -9,6 +9,8 @@ import { useSettingsStore } from "@/stores/settings";
 import { useStatusStore } from "@/stores/status";
 import { usePlaylistStore } from "@/stores/playlist";
 import { useUserStore } from "@/stores/user";
+import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { ALL_PLATFORMS } from "@shared/types/platform";
 import { useDownloadStore } from "@/stores/download";
 import { useHeartMode } from "@/composables/useHeartMode";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
@@ -51,6 +53,10 @@ const isCollapsed = computed(() => {
 const status = useStatusStore();
 const playlistStore = usePlaylistStore();
 const userStore = useUserStore();
+const providerSessions = useProviderSessionsStore();
+const hasAuthenticatedPlatform = computed(() =>
+  ALL_PLATFORMS.some((platform) => providerSessions.isAuthenticated(platform)),
+);
 const downloadStore = useDownloadStore();
 const { enterHeartMode } = useHeartMode();
 const settingsDialog = useSettingsDialog();
@@ -205,6 +211,7 @@ const navItems = computed<SMenuItem[]>(() => {
       if (hidden.has(key)) continue;
       const entry = SIDEBAR_NAV_META[key];
       if (!entry) continue;
+      if (key === "/platforms" && !hasAuthenticatedPlatform.value) continue;
       if (key === "/download" && !systemSettings.download.enabled) continue;
       if (key === "/streaming" && !systemSettings.streaming.enabled) continue;
       if (key === "/stats" && !appearance.showStatsInSidebar) continue;
