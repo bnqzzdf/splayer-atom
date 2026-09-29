@@ -1,30 +1,36 @@
 <script setup lang="ts">
-import type { PlaybackContext, TrackSource } from "@shared/types/player";
+import type {
+  Artist,
+  AudioQuality,
+  PlaybackContext,
+  Track,
+  TrackSource,
+} from "@shared/types/player";
 import type { Collection, CollectionType } from "@/types/collection";
 import { createControlAction, type ControlAction } from "@/actions/model";
 import { controlActionsToMenuItems } from "@/actions/menu";
+import { folderBrowserClient } from "@/core/folderBrowserClient";
 import { loadCollection as loadCollectionService } from "@/services/collection";
 import { getCollectionShareUrl } from "@/utils/format/shareUrl";
 import { htmlToText } from "@/utils/format/html";
+import { canNavigateToResource, navigateToArtist } from "@/utils/navigate";
 import { useCopyText } from "@/composables/useCopyText";
 import { useCollectionSubscribe } from "@/composables/collection/useCollectionSubscribe";
 import { usePlaylistManage } from "@/composables/collection/usePlaylistManage";
 import { buildDownloadQualityItems, useDownload } from "@/composables/useDownload";
+import { toast } from "@/composables/useToast";
 import { useSettingsStore } from "@/stores/settings";
-import type { QualityLevel } from "@/utils/quality";
+import { getQualityLabel, type QualityLevel } from "@/utils/quality";
 import SongList from "@/components/list/SongList.vue";
 import { formatTime } from "@/utils/time";
 import * as player from "@/core/player";
 import IconLucidePencil from "~icons/lucide/pencil";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
 import IconLucideListChecks from "~icons/lucide/list-checks";
-import IconLucideListMusic from "~icons/lucide/list-music";
-import IconLucideHourglass from "~icons/lucide/hourglass";
-import IconLucideCalendar from "~icons/lucide/calendar";
-import IconLucideUser from "~icons/lucide/user";
-import IconMoreHorizontal from "~icons/lucide/more-horizontal";
 import IconCopy from "~icons/lucide/copy";
 import IconLucideDownload from "~icons/lucide/download";
+import IconLucideFolderOpen from "~icons/lucide/folder-open";
+import IconLucideListEnd from "~icons/lucide/list-end";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -49,6 +55,14 @@ let loadAbort: AbortController | null = null;
 const collapsed = ref(false);
 /** 简介弹窗 */
 const descriptionOpen = ref(false);
+/** 多目录专辑的目录选择弹窗 */
+const folderChoiceOpen = ref(false);
+/** 正在解析本地专辑所在目录 */
+const folderOpening = ref(false);
+/** 多目录专辑可跳转的目录 */
+const folderChoices = shallowRef<string[]>([]);
+/** 多碟专辑当前浏览范围；"all" 表示整张专辑。 */
+const selectedDisc = ref("all");
 
 /**
  * 简介正文。
@@ -120,11 +134,6 @@ const typeLabel = computed(() => {
   return map[type] ?? "";
 });
 
-/** 合集所属范围 */
-const scopeLabel = computed(() =>
-  t(source === "local" ? "collection.scope.local" : "collection.scope.online"),
-);
-
 /** 总时长 */
 const totalDuration = computed(() => {
   if (!collection.value) return "";
@@ -143,11 +152,151 @@ const creatorText = computed(() => {
   return artistText.value || collection.value?.creator || "";
 });
 
+/** 专辑发行年份：只有整张专辑能得到单一年份时才展示，避免给混杂标签一个错误结论。 */
+const albumYear = computed(() => {
+  if (type !== "album" || !collection.value) return "";
+  const years = new Set(
+    collection.value.tracks
+      .map((track) => track.album?.year)
+      .filter(
+        (year): year is number => typeof year === "number" && Number.isInteger(year) && year > 0,
+      ),
+  );
+  return years.size === 1 ? String([...years][0]) : "";
+});
+
+/** 专辑碟数；未写 disc 标签的曲目按第一碟处理。 */
+const trackDiscNumber = (track: Track): number =>
+  Number.isInteger(track.disc) && (track.disc ?? 0) > 0 ? track.disc! : 1;
+
+const discCount = computed(() => {
+  if (type !== "album" || !collection.value?.tracks.length) return 0;
+  return new Set(collection.value.tracks.map(trackDiscNumber)).size;
+});
+
+/** 多碟专辑浏览筛选；按真实 disc 编号排序，不重新编号。 */
+const discOptions = computed(() => {
+  if (type !== "album" || !collection.value?.tracks.length) return [];
+  const counts = new Map<number, number>();
+  for (const track of collection.value.tracks) {
+    const disc = trackDiscNumber(track);
+    counts.set(disc, (counts.get(disc) ?? 0) + 1);
+  }
+  if (counts.size <= 1) return [];
+  return [...counts.entries()].sort(([a], [b]) => a - b).map(([disc, count]) => ({ disc, count }));
+});
+
+const visibleTracks = computed(() => {
+  const tracks = collection.value?.tracks ?? [];
+  if (selectedDisc.value === "all") return tracks;
+  const disc = Number(selectedDisc.value);
+  return tracks.filter((track) => trackDiscNumber(track) === disc);
+});
+
+watch(discOptions, (options) => {
+  if (
+    selectedDisc.value !== "all" &&
+    !options.some((option) => String(option.disc) === selectedDisc.value)
+  ) {
+    selectedDisc.value = "all";
+  }
+});
+
+const formatSampleRate = (sampleRate: number): string => {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return "";
+  if (sampleRate >= 1_000_000) {
+    return `${(sampleRate / 1_000_000).toFixed(2).replace(/\.0+$/, "")} MHz`;
+  }
+  const khz = sampleRate / 1000;
+  return `${Number.isInteger(khz) ? khz.toFixed(0) : khz.toFixed(1)} kHz`;
+};
+
+/** 把单曲已有的 AudioQuality 压缩成适合专辑头部的一行事实文本。 */
+const formatAudioQuality = (quality: AudioQuality | undefined): string => {
+  if (!quality) return "";
+  const display = getQualityLabel(quality);
+  if (display.startsWith("DSD") || ["SACD", "MQA", "HDCD", "DTS", "MIDI"].includes(display)) {
+    return display;
+  }
+  const codec = quality.codec?.trim();
+  const details = [
+    quality.bitsPerSample > 0 ? `${quality.bitsPerSample} bit` : "",
+    formatSampleRate(quality.sampleRate),
+  ].filter(Boolean);
+  return [codec && codec !== "unknown" ? codec.toUpperCase() : "", details.join(" / ")]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+/** 专辑统一音频规格；出现多种规格时不选一个“代表值”。 */
+const qualitySummary = computed(() => {
+  if (type !== "album" || !collection.value?.tracks.length) return "";
+  const values = new Set(
+    collection.value.tracks.map((track) => formatAudioQuality(track.quality)).filter(Boolean),
+  );
+  if (values.size === 0) return "";
+  if (values.size === 1) return [...values][0] ?? "";
+  return t("collection.multipleAudioFormats");
+});
+
+/** 来源名称用于事实信息，不再用右上角图标重复表达“这是专辑”。 */
+const sourceText = computed(() => {
+  switch (source) {
+    case "local":
+      return t("collection.scope.local");
+    case "streaming":
+      return "Streaming";
+    case "qobuz":
+      return "Qobuz";
+    case "tidal":
+      return "TIDAL";
+    case "qqmusic":
+      return "QQ";
+    case "kugou":
+      return "酷狗";
+    case "netease":
+      return "网易";
+    default:
+      return String(source).toUpperCase();
+  }
+});
+
 /** 更新时间文本 */
 const updateTimeText = computed(() => {
   if (!collection.value?.updateTime) return "";
   return new Date(collection.value.updateTime).toLocaleDateString();
 });
+
+/** 第一行事实：专辑优先展示发行信息，其余合集保留原有数量/时长信息。 */
+const primaryFacts = computed(() => {
+  if (!collection.value) return [];
+  const facts: string[] = [];
+  if (type === "album") {
+    if (albumYear.value) facts.push(albumYear.value);
+    if (discCount.value > 0) facts.push(t("collection.totalDiscs", { count: discCount.value }));
+  }
+  facts.push(t("common.totalSongs", { count: collection.value.tracks.length }));
+  if (totalDuration.value) facts.push(t("collection.totalDuration", { time: totalDuration.value }));
+  if (type !== "album" && updateTimeText.value) facts.push(updateTimeText.value);
+  return facts;
+});
+
+/** 第二行事实：音频规格与来源。 */
+const secondaryFacts = computed(() =>
+  [type === "album" ? qualitySummary.value : "", sourceText.value].filter(Boolean),
+);
+
+const canOpenArtist = (artist: Artist): boolean =>
+  canNavigateToResource({
+    type: "artist",
+    source,
+    id: artist.id,
+    name: artist.name,
+  });
+
+const openArtist = (artist: Artist): void => {
+  navigateToArtist(artist.name, { source, artistId: artist.id });
+};
 
 const playbackContext = computed<PlaybackContext | undefined>(() => {
   const current = collection.value;
@@ -163,6 +312,73 @@ const playbackContext = computed<PlaybackContext | undefined>(() => {
 const handlePlayAll = () => {
   if (!collection.value?.tracks.length) return;
   player.playFrom(collection.value.tracks, 0, playbackContext.value);
+};
+
+const handleAddToQueue = (): void => {
+  if (!collection.value?.tracks.length) return;
+  const count = player.insertManyToQueue(collection.value.tracks, "end", playbackContext.value);
+  if (count > 0) toast.success(t("collection.queueAdded", { count }));
+  else toast.warning(t("collection.queueAllPresent"));
+};
+
+/**
+ * 取一个只用于减少 location 请求的目录提示。
+ * Core 仍通过 folderBrowserClient.location 决定真实可导航目录；这里不复制 CUE/SACD 规则。
+ */
+const folderHint = (track: Track): string => {
+  const candidate = track.cuePath ?? track.path ?? track.cueAudioPath ?? track.id;
+  const slash = Math.max(candidate.lastIndexOf("/"), candidate.lastIndexOf("\\"));
+  return slash >= 0 ? candidate.slice(0, slash) : candidate;
+};
+
+const folderName = (path: string): string => {
+  const normalized = path.replace(/[\\/]+$/, "");
+  const slash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  return normalized.slice(slash + 1) || normalized || path;
+};
+
+const openFolderPath = (path: string): void => {
+  folderChoiceOpen.value = false;
+  void router.push({ name: "folders", query: { path } });
+};
+
+/** 专辑级“打开所在文件夹”：单目录直接进入，多目录才让用户选择。 */
+const handleOpenAlbumFolder = async (): Promise<void> => {
+  const current = collection.value;
+  if (!current || source !== "local" || type !== "album" || folderOpening.value) return;
+
+  const representatives = new Map<string, Track>();
+  for (const track of current.tracks) {
+    const hint = folderHint(track);
+    if (!representatives.has(hint)) representatives.set(hint, track);
+  }
+  if (representatives.size === 0) return;
+
+  folderOpening.value = true;
+  try {
+    const resolved = await Promise.all(
+      [...representatives.values()].map(async (track) => {
+        try {
+          return await folderBrowserClient.location(track);
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const paths = [...new Set(resolved.flatMap((target) => (target?.path ? [target.path] : [])))];
+    if (paths.length === 0) {
+      toast.error(t("folder.openContainingFailed"));
+      return;
+    }
+    if (paths.length === 1) {
+      openFolderPath(paths[0]!);
+      return;
+    }
+    folderChoices.value = paths;
+    folderChoiceOpen.value = true;
+  } finally {
+    folderOpening.value = false;
+  }
 };
 
 const downloadQualityItems = computed(() =>
@@ -223,6 +439,13 @@ const collectionActions = computed<ControlAction[]>(() => {
       coreCommand: "player.playFrom",
     }),
     createControlAction({
+      id: "addToQueue",
+      label: t("collection.addToQueue"),
+      icon: markRaw(IconLucideListEnd),
+      enabled: !!collection.value?.tracks.length,
+      coreCommand: "player.insertQueueEnd",
+    }),
+    createControlAction({
       id: "toggleSubscribe",
       label: t(subscribe.isSubscribed.value ? "collection.unsubscribe" : "collection.subscribe"),
       visible: subscribe.available.value,
@@ -233,8 +456,16 @@ const collectionActions = computed<ControlAction[]>(() => {
       id: "batchManage",
       label: t("songList.batch.manage"),
       icon: markRaw(IconLucideListChecks),
+      enabled: !!collection.value?.tracks.length,
     }),
     downloadAlbumAction.value,
+    createControlAction({
+      id: "openContainingFolder",
+      label: t("folder.openContaining"),
+      icon: markRaw(IconLucideFolderOpen),
+      visible: source === "local" && type === "album",
+      enabled: !!collection.value?.tracks.length && !folderOpening.value,
+    }),
     createControlAction({
       id: "edit",
       label: editLabel.value,
@@ -252,28 +483,21 @@ const collectionActions = computed<ControlAction[]>(() => {
       coreCommand: `${manageCommandPrefix}.delete`,
     }),
     createControlAction({
-      id: "more",
-      label: t("collection.context.more"),
-      icon: markRaw(IconMoreHorizontal),
-      children: [
-        createControlAction({
-          id: "copyTitle",
-          label: t(`collection.context.${type}.copyTitle`),
-          icon: markRaw(IconCopy),
-        }),
-        createControlAction({
-          id: "copyId",
-          label: t(`collection.context.${type}.copyId`),
-          icon: markRaw(IconCopy),
-          visible: !isLocal,
-        }),
-        createControlAction({
-          id: "copyUrl",
-          label: t(`collection.context.${type}.copyUrl`),
-          icon: markRaw(IconCopy),
-          visible: isOnline && type !== "cloud",
-        }),
-      ],
+      id: "copyTitle",
+      label: t(`collection.context.${type}.copyTitle`),
+      icon: markRaw(IconCopy),
+    }),
+    createControlAction({
+      id: "copyId",
+      label: t(`collection.context.${type}.copyId`),
+      icon: markRaw(IconCopy),
+      visible: !isLocal,
+    }),
+    createControlAction({
+      id: "copyUrl",
+      label: t(`collection.context.${type}.copyUrl`),
+      icon: markRaw(IconCopy),
+      visible: isOnline && type !== "cloud",
     }),
   ];
 });
@@ -281,14 +505,30 @@ const collectionActions = computed<ControlAction[]>(() => {
 const playAllAction = computed(() =>
   collectionActions.value.find((action) => action.id === "playAll"),
 );
+const addToQueueAction = computed(() =>
+  collectionActions.value.find((action) => action.id === "addToQueue"),
+);
 const subscribeAction = computed(() =>
   collectionActions.value.find((action) => action.id === "toggleSubscribe"),
+);
+const batchManageAction = computed(() =>
+  collectionActions.value.find((action) => action.id === "batchManage"),
+);
+const openFolderAction = computed(() =>
+  collectionActions.value.find((action) => action.id === "openContainingFolder"),
 );
 const moreMenuItems = computed(() =>
   controlActionsToMenuItems(
     collectionActions.value.filter(
       (action) =>
-        action.id !== "playAll" && action.id !== "toggleSubscribe" && action.id !== "downloadAlbum",
+        ![
+          "playAll",
+          "addToQueue",
+          "toggleSubscribe",
+          "batchManage",
+          "downloadAlbum",
+          "openContainingFolder",
+        ].includes(action.id),
     ),
   ),
 );
@@ -298,6 +538,9 @@ const handleCollectionAction = (key: string): void => {
     case "playAll":
       handlePlayAll();
       break;
+    case "addToQueue":
+      handleAddToQueue();
+      break;
     case "toggleSubscribe":
       void subscribe.toggle();
       break;
@@ -305,6 +548,9 @@ const handleCollectionAction = (key: string): void => {
       break;
     case "batchManage":
       songListRef.value?.enterBatch();
+      break;
+    case "openContainingFolder":
+      void handleOpenAlbumFolder();
       break;
     case "edit":
       manage.openEdit();
@@ -342,174 +588,239 @@ onBeforeUnmount(() => {
     <div v-if="collection" class="shrink-0 px-5 pb-2">
       <div
         class="flex flex-col sm:flex-row mt-2 transition-[gap,margin] duration-300"
-        :class="collapsed ? 'gap-3' : 'gap-5'"
+        :class="collapsed ? 'gap-3' : 'gap-6'"
       >
         <!-- 封面 -->
         <SImg
           :src="collection.cover"
           :alt="collection.title"
           class="rounded-xl shrink-0 transition-[width,height] duration-300"
-          :class="collapsed ? 'size-16 sm:size-20' : 'size-28 sm:size-40'"
+          :class="collapsed ? 'size-16 sm:size-20' : 'size-36 sm:size-60'"
         />
         <!-- 信息 -->
-        <div class="flex-1 flex flex-col min-w-0">
+        <div class="flex-1 flex flex-col min-w-0 py-1">
           <div
             class="flex flex-col transition-[gap] duration-300"
-            :class="collapsed ? 'gap-0.5' : 'gap-2'"
+            :class="collapsed ? 'gap-0.5' : 'gap-2.5'"
           >
-            <div class="flex min-w-0 items-center gap-3">
-              <h1
-                class="min-w-0 flex-1 font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
-                :class="collapsed ? 'text-xl' : 'text-3xl'"
-              >
-                {{ collection.title }}
-              </h1>
-              <div
-                class="flex shrink-0 items-center gap-1 text-primary"
-                :aria-label="`${scopeLabel} · ${typeLabel}`"
-              >
-                <STooltip :content="scopeLabel">
-                  <span class="inline-flex size-6 cursor-default items-center justify-center">
-                    <IconLucideHardDrive v-if="source === 'local'" class="size-4" />
-                    <IconLucideGlobe2 v-else class="size-4" />
-                  </span>
-                </STooltip>
-                <SDivider vertical />
-                <STooltip :content="typeLabel">
-                  <span
-                    class="inline-flex size-6 cursor-default items-center justify-center text-primary/65"
-                  >
-                    <IconLucideDisc3 v-if="type === 'album'" class="size-4" />
-                    <IconLucideListMusic v-else-if="type === 'playlist'" class="size-4" />
-                    <IconLucideRadio v-else-if="type === 'radio'" class="size-4" />
-                    <IconLucideTrophy v-else-if="type === 'rank'" class="size-4" />
-                    <IconLucideCloud v-else class="size-4" />
-                  </span>
-                </STooltip>
-              </div>
-            </div>
+            <h1
+              class="min-w-0 font-bold text-on-surface truncate lh-normal transition-[font-size,line-height] duration-300"
+              :class="collapsed ? 'text-xl' : 'text-3xl lg:text-4xl'"
+            >
+              {{ collection.title }}
+            </h1>
             <div
               class="grid transition-[grid-template-rows,opacity] duration-300"
               :class="collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
             >
-              <div class="overflow-hidden flex flex-col gap-2">
-                <!-- 简介 -->
+              <div class="overflow-hidden flex flex-col gap-2.5">
+                <!-- 专辑艺术家优先作为可导航关系展示；其余合集保留创建者文本。 -->
+                <div
+                  v-if="type === 'album' && collection.artists?.length"
+                  class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-base sm:text-lg text-on-surface-variant/80"
+                >
+                  <template
+                    v-for="(artist, index) in collection.artists"
+                    :key="`${artist.id ?? ''}:${artist.name}`"
+                  >
+                    <button
+                      type="button"
+                      class="min-w-0 truncate transition-colors"
+                      :class="
+                        canOpenArtist(artist)
+                          ? 'cursor-pointer hover:text-primary focus-visible:text-primary'
+                          : 'cursor-default'
+                      "
+                      :disabled="!canOpenArtist(artist)"
+                      @click="openArtist(artist)"
+                    >
+                      {{ artist.name }}
+                    </button>
+                    <span
+                      v-if="index < collection.artists.length - 1"
+                      class="text-on-surface-variant/35"
+                    >
+                      /
+                    </span>
+                  </template>
+                </div>
+                <p
+                  v-else-if="creatorText"
+                  class="truncate text-base sm:text-lg text-on-surface-variant/80"
+                >
+                  {{ creatorText }}
+                </p>
+
+                <!-- 专辑事实：只展示现有 Track 可以可靠派生的信息。 -->
+                <div
+                  v-if="primaryFacts.length"
+                  class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant/55"
+                >
+                  <template v-for="(fact, index) in primaryFacts" :key="`${fact}:${index}`">
+                    <span class="shrink-0">{{ fact }}</span>
+                    <span v-if="index < primaryFacts.length - 1" class="text-on-surface-variant/25">
+                      ·
+                    </span>
+                  </template>
+                </div>
+                <div
+                  v-if="secondaryFacts.length"
+                  class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant/55"
+                >
+                  <template v-for="(fact, index) in secondaryFacts" :key="`${fact}:${index}`">
+                    <span class="truncate">{{ fact }}</span>
+                    <span
+                      v-if="index < secondaryFacts.length - 1"
+                      class="text-on-surface-variant/25"
+                    >
+                      ·
+                    </span>
+                  </template>
+                </div>
+
+                <!-- 有简介才占空间；点击可查看全文。 -->
                 <SButton
                   v-if="descriptionText"
                   variant="text"
                   size="auto"
                   block
                   static
-                  class="group max-w-full overflow-hidden text-left text-sm"
+                  class="group max-w-3xl overflow-hidden text-left text-sm"
                   :aria-label="t('collection.viewIntroduction')"
                   @click="descriptionOpen = true"
                 >
                   <span
-                    class="min-w-0 truncate text-on-surface-variant/70 transition-colors duration-200 group-hover:text-on-surface-variant group-focus-visible:text-on-surface-variant"
+                    class="line-clamp-3 min-w-0 whitespace-normal leading-5 text-on-surface-variant/65 transition-colors duration-200 group-hover:text-on-surface-variant group-focus-visible:text-on-surface-variant"
                   >
                     {{ descriptionText }}
                   </span>
                 </SButton>
-                <p v-else class="text-sm text-on-surface-variant/70 truncate">
-                  {{ t("collection.noDescription") }}
-                </p>
-                <div
-                  class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm leading-none text-on-surface-variant/50"
-                >
-                  <span v-if="creatorText" class="flex items-center gap-1 min-w-0">
-                    <IconLucideUser class="shrink-0" />
-                    <span class="truncate">{{ creatorText }}</span>
-                  </span>
-                  <span class="flex items-center gap-1 shrink-0">
-                    <IconLucideListMusic class="shrink-0" />
-                    {{ t("common.totalSongs", { count: collection.tracks.length }) }}
-                  </span>
-                  <span v-if="totalDuration" class="flex items-center gap-1 shrink-0">
-                    <IconLucideHourglass class="shrink-0" />
-                    {{ t("collection.totalDuration", { time: totalDuration }) }}
-                  </span>
-                  <span v-if="updateTimeText" class="flex items-center gap-1 shrink-0">
-                    <IconLucideCalendar class="shrink-0" />
-                    {{ updateTimeText }}
-                  </span>
-                </div>
               </div>
             </div>
           </div>
-          <!-- 操作栏 -->
-          <div class="mt-3 sm:mt-auto flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-            <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-              <SButton
-                type="primary"
-                variant="secondary"
-                round
-                :disabled="!playAllAction?.enabled"
-                @click="handleCollectionAction('playAll')"
-              >
-                <template #icon>
-                  <IconLucidePlay />
-                </template>
-                {{ t("common.playAll") }}
-              </SButton>
-              <SDropdownMenu
-                v-if="downloadAlbumAction.visible"
-                :items="controlActionsToMenuItems(downloadAlbumAction.children ?? [])"
-                align="start"
-                @select="handleCollectionAction"
-              >
-                <template #trigger>
-                  <SButton variant="secondary" round :disabled="!downloadAlbumAction.enabled">
-                    <template #icon><IconLucideDownload /></template>
-                    {{ t("collection.downloadAlbum") }}
-                  </SButton>
-                </template>
-              </SDropdownMenu>
-              <SButton
-                v-if="subscribeAction?.visible"
-                variant="secondary"
-                round
-                :disabled="!subscribeAction?.enabled"
-                @click="handleCollectionAction('toggleSubscribe')"
-              >
-                <template #icon>
-                  <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
-                  <IconMaterialSymbolsFavoriteOutlineRounded v-else />
-                </template>
-                {{
-                  t(
-                    subscribe.isSubscribed.value
-                      ? "collection.unsubscribe"
-                      : "collection.subscribe",
-                  )
-                }}
-              </SButton>
-              <SDropdownMenu
-                v-if="moreMenuItems.length > 0"
-                :items="moreMenuItems"
-                align="start"
-                @select="handleCollectionAction"
-              >
-                <template #trigger>
-                  <SButton variant="secondary" circle>
-                    <template #icon>
-                      <IconLucideEllipsis />
-                    </template>
-                  </SButton>
-                </template>
-              </SDropdownMenu>
-            </div>
-            <SInput
-              v-model="searchQuery"
-              :placeholder="t('common.search')"
-              clearable
-              round
-              class="w-full sm:w-40 sm:focus-within:w-56"
-              data-search-input
+          <!-- 多碟专辑的碟片筛选放在 Hero 信息与主操作之间，单碟不占空间。 -->
+          <div
+            v-if="discOptions.length > 1 && !collapsed"
+            class="mt-4 inline-flex max-w-full self-start items-center gap-1 overflow-x-auto rounded-full border border-solid border-on-surface/15 bg-on-surface/3 p-0.5"
+          >
+            <button
+              type="button"
+              class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
+              :class="
+                selectedDisc === 'all'
+                  ? 'bg-primary/12 text-on-surface font-medium'
+                  : 'text-on-surface-variant hover:bg-on-surface/6'
+              "
+              @click="selectedDisc = 'all'"
             >
-              <template #prefix>
-                <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
+              {{ t("collection.allDiscs") }} · {{ collection?.tracks.length ?? 0 }}
+            </button>
+            <button
+              v-for="option in discOptions"
+              :key="option.disc"
+              type="button"
+              class="h-8 shrink-0 rounded-full px-3 text-sm transition-colors"
+              :class="
+                selectedDisc === String(option.disc)
+                  ? 'bg-primary/12 text-on-surface font-medium'
+                  : 'text-on-surface-variant hover:bg-on-surface/6'
+              "
+              @click="selectedDisc = String(option.disc)"
+            >
+              {{ t("songList.disc", { number: option.disc }) }} · {{ option.count }}
+            </button>
+          </div>
+          <!-- 操作栏 -->
+          <div class="mt-3 sm:mt-auto flex flex-wrap items-center gap-2 sm:gap-3">
+            <SButton
+              type="primary"
+              variant="secondary"
+              round
+              :disabled="!playAllAction?.enabled"
+              @click="handleCollectionAction('playAll')"
+            >
+              <template #icon>
+                <IconLucidePlay />
               </template>
-            </SInput>
+              {{ t("common.playAll") }}
+            </SButton>
+            <SButton
+              variant="secondary"
+              round
+              :disabled="!addToQueueAction?.enabled"
+              @click="handleCollectionAction('addToQueue')"
+            >
+              <template #icon>
+                <IconLucideListEnd />
+              </template>
+              {{ t("collection.addToQueue") }}
+            </SButton>
+            <SButton
+              variant="secondary"
+              round
+              :disabled="!batchManageAction?.enabled"
+              @click="handleCollectionAction('batchManage')"
+            >
+              <template #icon>
+                <IconLucideListChecks />
+              </template>
+              {{ t("songList.batch.manage") }}
+            </SButton>
+            <SDropdownMenu
+              v-if="downloadAlbumAction.visible"
+              :items="controlActionsToMenuItems(downloadAlbumAction.children ?? [])"
+              align="start"
+              @select="handleCollectionAction"
+            >
+              <template #trigger>
+                <SButton variant="secondary" round :disabled="!downloadAlbumAction.enabled">
+                  <template #icon><IconLucideDownload /></template>
+                  {{ t("collection.downloadAlbum") }}
+                </SButton>
+              </template>
+            </SDropdownMenu>
+            <SButton
+              v-if="subscribeAction?.visible"
+              variant="secondary"
+              round
+              :disabled="!subscribeAction?.enabled"
+              @click="handleCollectionAction('toggleSubscribe')"
+            >
+              <template #icon>
+                <IconMaterialSymbolsFavoriteRounded v-if="subscribe.isSubscribed.value" />
+                <IconMaterialSymbolsFavoriteOutlineRounded v-else />
+              </template>
+              {{
+                t(subscribe.isSubscribed.value ? "collection.unsubscribe" : "collection.subscribe")
+              }}
+            </SButton>
+            <SButton
+              v-if="openFolderAction?.visible"
+              variant="secondary"
+              round
+              :disabled="!openFolderAction?.enabled"
+              :loading="folderOpening"
+              @click="handleCollectionAction('openContainingFolder')"
+            >
+              <template #icon>
+                <IconLucideFolderOpen />
+              </template>
+              {{ t("folder.openContaining") }}
+            </SButton>
+            <SDropdownMenu
+              v-if="moreMenuItems.length > 0"
+              :items="moreMenuItems"
+              align="start"
+              @select="handleCollectionAction"
+            >
+              <template #trigger>
+                <SButton variant="secondary" circle>
+                  <template #icon>
+                    <IconLucideEllipsis />
+                  </template>
+                </SButton>
+              </template>
+            </SDropdownMenu>
           </div>
         </div>
       </div>
@@ -522,7 +833,7 @@ onBeforeUnmount(() => {
       >
         <SongList
           ref="songListRef"
-          :items="collection.tracks"
+          :items="visibleTracks"
           :search-query="searchQuery"
           :show-album="type !== 'album'"
           :show-size="source === 'local'"
@@ -531,10 +842,26 @@ onBeforeUnmount(() => {
           :collection-id="id"
           :playback-context="playbackContext"
           :can-remove="manage.canManage.value"
+          :group-by-disc="type === 'album' && selectedDisc === 'all'"
           enable-sort
           @scroll="handleListScroll"
           @change="handleTracksRemoved"
-        />
+        >
+          <template #headerActions>
+            <SInput
+              v-model="searchQuery"
+              :placeholder="t('collection.filterTracks')"
+              clearable
+              round
+              class="w-36 sm:w-44 lg:w-52"
+              data-search-input
+            >
+              <template #prefix>
+                <IconLucideSearch class="size-4 text-on-surface-variant/40 shrink-0" />
+              </template>
+            </SInput>
+          </template>
+        </SongList>
       </div>
       <!-- 加载中 -->
       <div v-else-if="loading" key="loading" class="flex-1 flex items-center justify-center">
@@ -572,6 +899,32 @@ onBeforeUnmount(() => {
       <p class="whitespace-pre-wrap break-words leading-6 text-on-surface-variant">
         {{ descriptionText }}
       </p>
+    </SDialog>
+    <!-- 一个专辑来自多个目录时才出现，让用户明确选择目标目录。 -->
+    <SDialog
+      v-model:open="folderChoiceOpen"
+      :title="t('collection.chooseFolder')"
+      width="min(560px, calc(100vw - 40px))"
+    >
+      <div class="flex flex-col gap-2">
+        <button
+          v-for="path in folderChoices"
+          :key="path"
+          type="button"
+          class="flex min-w-0 items-center gap-3 rounded-xl border border-solid border-outline-variant/25 px-3 py-2.5 text-left transition-colors hover:bg-on-surface/6"
+          @click="openFolderPath(path)"
+        >
+          <IconLucideFolderOpen class="size-5 shrink-0 text-primary/70" />
+          <span class="min-w-0">
+            <span class="block truncate text-sm font-medium text-on-surface">
+              {{ folderName(path) }}
+            </span>
+            <span class="block truncate text-xs text-on-surface-variant/55">
+              {{ path }}
+            </span>
+          </span>
+        </button>
+      </div>
     </SDialog>
     <!-- 编辑弹窗 -->
     <SDialog v-model:open="manage.editOpen.value" :title="editLabel" width="400px">

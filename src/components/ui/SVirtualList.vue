@@ -35,6 +35,8 @@ export interface SVirtualListProps<T> {
   hideScrollbar?: boolean;
   /** 封面主题色 */
   cover?: boolean;
+  /** 空列表时仍保留 header；用于筛选无结果时保留筛选入口 */
+  keepHeaderOnEmpty?: boolean;
 }
 
 const props = withDefaults(defineProps<SVirtualListProps<T>>(), {
@@ -44,6 +46,7 @@ const props = withDefaults(defineProps<SVirtualListProps<T>>(), {
   paddingBottom: 0,
   bufferSize: 5,
   getItemKey: (_item: T, index: number) => index,
+  keepHeaderOnEmpty: false,
 });
 
 const emit = defineEmits<{
@@ -372,9 +375,14 @@ defineExpose({
     class="w-full flex flex-col [overflow-anchor:none] contain-[layout_paint]"
     :style="{ height: containerHeightStyle }"
   >
-    <div v-if="items.length === 0 && $slots.empty" class="flex-1 flex items-center justify-center">
-      <slot name="empty" />
-    </div>
+    <template v-if="items.length === 0 && $slots.empty">
+      <div v-if="keepHeaderOnEmpty && $slots.header" class="shrink-0">
+        <slot name="header" />
+      </div>
+      <div class="flex-1 flex items-center justify-center">
+        <slot name="empty" />
+      </div>
+    </template>
     <template v-else>
       <div v-if="$slots.header" class="shrink-0">
         <slot name="header" />

@@ -508,6 +508,7 @@
   },
   "songList": {
     "title": "标题",
+    "disc": "碟 {number}",
     "album": "专辑",
     "actions": "操作",
     "size": "大小",
@@ -1701,7 +1702,15 @@
   },
   "collection": {
     "downloadAlbum": "下载专辑",
+    "allDiscs": "全部",
+    "filterTracks": "筛选曲目",
+    "addToQueue": "添加到队列",
+    "queueAdded": "已添加 {count} 首到队列",
+    "queueAllPresent": "曲目已全部在队列中",
     "totalDuration": "约 {time}",
+    "totalDiscs": "{count} 碟",
+    "multipleAudioFormats": "多种音频规格",
+    "chooseFolder": "选择所在文件夹",
     "unknownAlbum": "未知专辑",
     "empty": "暂无歌曲",
     "noDescription": "还没有描述哦~",

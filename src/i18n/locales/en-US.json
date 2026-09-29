@@ -508,6 +508,7 @@
   },
   "songList": {
     "title": "Title",
+    "disc": "Disc {number}",
     "album": "Album",
     "actions": "Actions",
     "size": "Size",
@@ -1701,7 +1702,15 @@
   },
   "collection": {
     "downloadAlbum": "Download album",
+    "allDiscs": "All",
+    "filterTracks": "Filter tracks",
+    "addToQueue": "Add to Queue",
+    "queueAdded": "Added {count} tracks to the queue",
+    "queueAllPresent": "All tracks are already in the queue",
     "totalDuration": "About {time}",
+    "totalDiscs": "{count} discs",
+    "multipleAudioFormats": "Multiple audio formats",
+    "chooseFolder": "Choose containing folder",
     "unknownAlbum": "Unknown Album",
     "empty": "No songs",
     "noDescription": "No description yet~",

@@ -48,6 +48,8 @@ const props = withDefaults(
     showSize?: boolean;
     /** 是否启用排序交互 */
     enableSort?: boolean;
+    /** 多碟专辑按 disc 标签展示分组标题 */
+    groupByDisc?: boolean;
     /** 列表来源 */
     source?: TrackSource;
     /** 集合类型 */
@@ -70,6 +72,7 @@ const props = withDefaults(
     showDuration: true,
     showSize: false,
     enableSort: false,
+    groupByDisc: false,
     source: "local",
     collectionType: undefined,
     collectionId: undefined,
@@ -199,6 +202,30 @@ const sortedItems = computed(() => {
   return result;
 });
 
+/** 曲目未写 disc 时按第一碟处理，与专辑头部的碟数口径一致。 */
+const discNumber = (track: Track): number =>
+  Number.isInteger(track.disc) && (track.disc ?? 0) > 0 ? track.disc! : 1;
+
+/** 只有真正的多碟专辑才显示碟标题；自定义排序时隐藏分组，避免制造错误的连续关系。 */
+const showDiscGroups = computed(() => {
+  if (!props.groupByDisc || (props.enableSort && sortField.value !== "none")) return false;
+  return new Set(props.items.map(discNumber)).size > 1;
+});
+
+const isDiscStart = (index: number): boolean => {
+  if (!showDiscGroups.value) return false;
+  const current = sortedItems.value[index];
+  if (!current) return false;
+  const previous = sortedItems.value[index - 1];
+  return !previous || discNumber(previous) !== discNumber(current);
+};
+
+/** 多碟专辑使用媒体标签里的曲号，使每张碟从自身曲号开始，而不是全局连续编号。 */
+const displayIndex = (track: Track, index: number): number =>
+  showDiscGroups.value && Number.isInteger(track.track) && (track.track ?? 0) > 0
+    ? track.track!
+    : index + 1;
+
 /** 当前播放歌曲在过滤后列表中的索引 */
 const playingIndex = computed(() => {
   if (!playingId.value) return -1;
@@ -313,7 +340,8 @@ defineExpose({
         :item-height="88"
         :padding-bottom="listPaddingBottom"
         :get-item-key="(item: Track) => item.id"
-        item-fixed
+        :item-fixed="!showDiscGroups"
+        :keep-header-on-empty="!!searchQuery"
         height="100%"
         @scroll="onScroll"
         @reach-bottom="emit('reachBottom')"
@@ -427,64 +455,74 @@ defineExpose({
               <div v-if="showIndex" class="w-8 shrink-0 flex items-center justify-center">
                 <span>#</span>
               </div>
-              <div class="flex-1 min-w-0">
-                <SPopover
-                  v-if="enableSort"
-                  :side-offset="6"
-                  trigger="click"
-                  side="bottom"
-                  align="start"
-                  block
+              <div class="flex-1 min-w-0 flex items-center gap-3">
+                <div
+                  class="min-w-0"
+                  :class="$slots.headerActions ? 'shrink-0 max-w-[min(50%,28rem)]' : 'flex-1'"
                 >
-                  <template #trigger>
-                    <div
-                      class="w-full h-full px-1.5 py-1 rounded-md cursor-pointer transition-colors hover:bg-on-surface/8"
-                    >
-                      {{ sortTitleText }}
-                    </div>
-                  </template>
-                  <div class="w-60 flex flex-col gap-3 text-sm">
-                    <div class="flex items-center gap-2 text-xs">
-                      <IconArrowUpDown class="size-3.5" />
-                      <span>{{ t("songList.sort.mode") }}</span>
-                    </div>
-                    <SRadioGroup v-model:value="sortField" size="small">
-                      <SRadio value="none" :label="t('songList.sort.default')" />
-                      <SRadio value="title" :label="t('songList.sort.byTitle')" />
-                      <SRadio value="artist" :label="t('songList.sort.byArtist')" />
-                      <SRadio value="album" :label="t('songList.sort.byAlbum')" />
-                      <SRadio value="path" :label="t('songList.sort.byPath')" />
-                      <SRadio value="duration" :label="t('songList.sort.byDuration')" />
-                      <SRadio value="size" :label="t('songList.sort.bySize')" />
-                      <SRadio value="mtime" :label="t('songList.sort.byMtime')" />
-                      <SRadio value="ctime" :label="t('songList.sort.byCtime')" />
-                      <SRadio value="track" :label="t('songList.sort.byTrack')" />
-                    </SRadioGroup>
+                  <SPopover
+                    v-if="enableSort"
+                    :side-offset="6"
+                    trigger="click"
+                    side="bottom"
+                    align="start"
+                    block
+                  >
+                    <template #trigger>
+                      <div
+                        class="w-full h-full px-1.5 py-1 rounded-md cursor-pointer transition-colors hover:bg-on-surface/8"
+                      >
+                        {{ sortTitleText }}
+                      </div>
+                    </template>
+                    <div class="w-60 flex flex-col gap-3 text-sm">
+                      <div class="flex items-center gap-2 text-xs">
+                        <IconArrowUpDown class="size-3.5" />
+                        <span>{{ t("songList.sort.mode") }}</span>
+                      </div>
+                      <SRadioGroup v-model:value="sortField" size="small">
+                        <SRadio value="none" :label="t('songList.sort.default')" />
+                        <SRadio value="title" :label="t('songList.sort.byTitle')" />
+                        <SRadio value="artist" :label="t('songList.sort.byArtist')" />
+                        <SRadio value="album" :label="t('songList.sort.byAlbum')" />
+                        <SRadio value="path" :label="t('songList.sort.byPath')" />
+                        <SRadio value="duration" :label="t('songList.sort.byDuration')" />
+                        <SRadio value="size" :label="t('songList.sort.bySize')" />
+                        <SRadio value="mtime" :label="t('songList.sort.byMtime')" />
+                        <SRadio value="ctime" :label="t('songList.sort.byCtime')" />
+                        <SRadio value="track" :label="t('songList.sort.byTrack')" />
+                      </SRadioGroup>
 
-                    <div class="h-px bg-outline-variant/25" />
+                      <div class="h-px bg-outline-variant/25" />
 
-                    <div class="flex items-center gap-2 text-xs">
-                      <IconArrowUpAz class="size-3.5" />
-                      <span>{{ t("songList.sort.order") }}</span>
+                      <div class="flex items-center gap-2 text-xs">
+                        <IconArrowUpAz class="size-3.5" />
+                        <span>{{ t("songList.sort.order") }}</span>
+                      </div>
+                      <SRadioGroup
+                        v-model:value="sortOrder"
+                        size="small"
+                        :disabled="sortField === 'none'"
+                      >
+                        <SRadio value="asc" :label="t('songList.sort.asc')" />
+                        <SRadio value="desc" :label="t('songList.sort.desc')" />
+                      </SRadioGroup>
                     </div>
-                    <SRadioGroup
-                      v-model:value="sortOrder"
-                      size="small"
-                      :disabled="sortField === 'none'"
-                    >
-                      <SRadio value="asc" :label="t('songList.sort.asc')" />
-                      <SRadio value="desc" :label="t('songList.sort.desc')" />
-                    </SRadioGroup>
+                  </SPopover>
+                  <div v-else class="w-full h-full px-1.5 py-1">
+                    {{ t("songList.title") }}
                   </div>
-                </SPopover>
-                <div v-else class="w-full h-full px-1.5 py-1">
-                  {{ t("songList.title") }}
                 </div>
+                <slot name="headerActions" />
+                <div v-if="$slots.headerActions" class="min-w-4 flex-1" />
               </div>
               <div v-if="showAlbum" class="hidden md:block flex-1 min-w-0">
                 {{ t("songList.album") }}
               </div>
-              <div class="w-14 shrink-0 text-center">{{ t("songList.actions") }}</div>
+              <div class="w-7 shrink-0 text-center whitespace-nowrap">
+                {{ t("songList.actions") }}
+              </div>
+              <div class="w-7 shrink-0" />
               <div v-if="showDuration" class="hidden sm:block w-16 shrink-0 text-center">
                 {{ t("songList.duration") }}
               </div>
@@ -497,6 +535,12 @@ defineExpose({
         <!-- 列表项 -->
         <template #default="{ item, index }: { item: Track; index: number }">
           <div class="px-3 pb-3">
+            <div
+              v-if="isDiscStart(index)"
+              class="flex h-9 items-center px-3 text-sm font-medium text-on-surface-variant/70"
+            >
+              {{ t("songList.disc", { number: discNumber(item) }) }}
+            </div>
             <div
               data-song-item
               class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl cursor-pointer border-2 border-solid transition-[background-color,border-color] duration-200"
@@ -549,7 +593,7 @@ defineExpose({
                     v-if="playingId !== item.id"
                     class="text-sm font-bold tabular-nums group-hover:opacity-0 transition-opacity duration-300"
                   >
-                    {{ index + 1 }}
+                    {{ displayIndex(item, index) }}
                   </span>
                   <IconLucideMusic
                     v-else
