@@ -23,7 +23,15 @@ The only formal product is **Linux x86-64 Node Core + Web Control**.
 - ALSA headers, Clang, pkg-config
 - `libarchive-tools`: needed only by the CI dependency install line (`.github/workflows/dev.yml:54`); no repository script uses it (packaging and extraction both use GNU `tar`), so local builds can omit it
 
-## Packaging
+## Full build
+
+```bash
+pnpm build
+```
+
+The order is: native → Node/Web typecheck → Core bundle → Web bundle.
+
+## Core package
 
 System runtime:
 
@@ -36,29 +44,6 @@ Bundled runtime:
 ```bash
 pnpm package:core:bundled
 ```
-
-For a glibc-compatible bundled artifact, use the pinned Debian 11 builder. It keeps
-`node_modules` and the pnpm store in Docker volumes, rebuilds `better-sqlite3` inside Debian 11,
-and rejects native artifacts requiring newer than glibc 2.31. The default has no Diretta:
-
-```bash
-pnpm package:core:debian11 --without-diretta
-```
-
-To include Diretta, supply SDK 150 and select an x86-64 library variant (`v2`, `v3`, or `v4/zen4`):
-
-```bash
-DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
-  pnpm package:core:debian11 --with-diretta --diretta-variant=v3
-```
-
-The SDK is mounted read-only and is not packaged. The builder checks native glibc requirements,
-Diretta capability metadata, and startup of the extracted artifact. It retains separate
-`*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz` copies.
-SDK 150's ACQUA library uses an old-glibc compatibility shim for integer parsing.
-
-The builder uses the Tsinghua Debian main/updates mirrors and a fixed Debian security snapshot for
-explicit package installation only. It does not install or enable unattended security updates.
 
 Artifacts:
 
@@ -99,12 +84,6 @@ published=true
 `published=true` is honored only together with a network `remote`; with a local-path `remote` the
 identity is treated as unpublished.
 
-The staging contents include the Core JS, Web Control, both in-house native addons, runtime
-dependencies such as `better-sqlite3`, `runtime.json`, LICENSE, the launcher and the deployment guide,
-plus **two parallel service definitions**: the systemd unit with `install-systemd.sh`, and the OpenRC
-script with `install-openrc.sh` (for targets without systemd such as GentooPlayer; see
-[GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md)).
-
 For local experiments that explicitly do not need a release identity:
 
 ```bash
@@ -113,6 +92,12 @@ pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublishe
 
 It **only skips the check**; it never turns the identity into a published one, and such an artifact
 must not be delivered as a release.
+
+The staging contents include the Core JS, Web Control, both in-house native addons, runtime
+dependencies such as `better-sqlite3`, `runtime.json`, LICENSE, the launcher and the deployment guide,
+plus **two parallel service definitions**: the systemd unit with `install-systemd.sh`, and the OpenRC
+script with `install-openrc.sh` (for targets without systemd such as GentooPlayer; see
+[GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md)).
 
 Both flavors contain the same Core JS, Web Control, project-built addons, runtime dependencies
 (including `better-sqlite3`), protocol, and data schema.
@@ -190,7 +175,52 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 The SDK release must match the version pinned by the repository; a missing or mismatched SDK fails
 before staging (`scripts/atom/build-core-native.ts:51-56`). The SDK itself is not bundled.
 
-## CI and gates
+## Debian 11 bundled package
+
+For a glibc-compatible bundled artifact, use the pinned Debian 11 builder. It builds inside a
+container on glibc 2.31, and the default has no Diretta:
+
+```bash
+pnpm package:core:debian11 --without-diretta
+```
+
+To include Diretta, provide the path to SDK 150 and select the target CPU variant:
+
+```bash
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+  pnpm package:core:debian11 --with-diretta --diretta-variant=v3
+```
+
+`v2`, `v3`, `v4`, and `zen4` select the SDK's x86-64 library variant — the variant decides whether
+the artifact **can run on the target CPU at all**, not merely how fast it is; see
+[CPU variants](./cpu-variants.md). The SDK is mounted read-only at build time and its files are never
+placed into the artifact. The script checks the glibc version of the native addons, the Diretta
+capability bit, and startup of the artifact. The two modes are retained separately as
+`out/*-debian11-without-diretta.tar.gz` and `out/*-debian11-with-diretta-<variant>.tar.gz`.
+SDK 150's ACQUA library uses an old-glibc compatibility shim for integer parsing.
+
+The builder keeps `node_modules` and the pnpm store in Docker volumes, rebuilds `better-sqlite3`
+inside Debian 11, and rejects native artifacts requiring newer than glibc 2.31. It uses the Tsinghua
+Debian main/updates mirrors and a fixed Debian security snapshot for explicit package installation
+only. It does not install or enable unattended security updates.
+
+The container itself (Dockerfile + in-container build script + cache volume notes) lives in
+[`docker/atom-debian11/`](https://github.com/bnqzzdf/splayer-atom/blob/dev/docker/atom-debian11/README.md).
+
+## Artifact smoke
+
+`scripts/atom/build-core-system.ts` runs staging and the final artifact checks in the formal build
+chain. The checks include:
+
+- runtime metadata
+- native addon load
+- plugin-host IPC
+- Core `/api/info`, session, library, cache
+- the Web root page
+- startup / SIGTERM
+- whether bundled-runtime really uses the Node inside the package
+
+## CI
 
 `.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.18.0`
 and Rust stable. The workflow runs `pnpm typecheck`, `pnpm test`, `pnpm build`, and
@@ -199,7 +229,7 @@ and Rust stable. The workflow runs `pnpm typecheck`, `pnpm test`, `pnpm build`, 
 (`.github/workflows/dev.yml:62-78`). The Debian 11 container is a separate packaging environment.
 Record the actual build environment, source commit, and artifact hash for a release.
 
-Recommended release gates:
+## Release gates
 
 ```bash
 pnpm typecheck
@@ -209,6 +239,7 @@ pnpm build
 pnpm package:core
 pnpm release:tag --dry-run
 pnpm docs:build
+pnpm docs:stamp:check
 cargo check --workspace
 cargo test --workspace
 git diff --check

@@ -1,6 +1,6 @@
 # Native Modules
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 SPlayer Atom native code exists only for the Linux x86-64 Node Core runtime.
 
@@ -29,7 +29,20 @@ pnpm build:native
 pnpm build:native --dev
 ```
 
-The formal `core-audio` flavor uses ALSA on Linux. The build checks `audio-engine.node` with `ldd` and rejects PipeWire/PulseAudio dynamic dependencies in the Core artifact. It likewise rejects dynamic OpenSSL dependencies in `streaming-api.node`, so the shipped artifact never depends on a host libssl.
+The formal Core native flavor uses `core-audio`, and the Linux output backend is ALSA. The build script checks the two project-owned addons with `ldd`; the build fails if either gate does not pass:
+
+- `audio-engine.node`: PipeWire/PulseAudio dynamic dependencies (`libpipewire*` / `libpulse*`) are forbidden (`scripts/atom/build-core-native.ts:124-128`);
+- `streaming-api.node`: OpenSSL dynamic dependencies (`libssl.so` / `libcrypto.so`) are forbidden (`scripts/atom/build-core-native.ts:132-138`).
+
+## audio-engine-core
+
+`audio-engine-core` is the pure-Rust shared implementation. Normal ALSA playback may use the internal processing chain; Diretta uses a separate strict Source Direct path and must never pass through the normal `f32` DSP/resampler.
+
+### CUE / SACD
+
+- CUE virtual track start/end boundaries are owned by Core;
+- SACD stereo virtual tracks are parsed by Core/native together;
+- The temporary extraction/materialization required by UPnP stays isolated from normal/Direct playback.
 
 ## Diretta
 

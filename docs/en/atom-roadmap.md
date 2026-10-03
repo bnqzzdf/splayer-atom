@@ -4,12 +4,25 @@
 
 ## Current status
 
+The first batch of Folder Browser improvements is implemented and passed functional acceptance on
+the current real library and browser on 2026-09-28; this is not a new output-hardware, account or
+release acceptance record.
+
 SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
 ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
 Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
 tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
 bundled packages can be built with or without Diretta. Confirmed implementation milestones are in
 [Atom Completed](./atom-completed.md).
+
+The Folder Browser implements paged browsing, pinned folders, physical-name search,
+current-directory filtering, list/grid views, materials, scoped scan, recursive operations and
+batch actions on audio/container tracks. List/grid preference is persisted in `058c0e63`.
+First-batch display sorting, physical attributes, Web controls, navigation restore, scope notices
+and full-result batch selection from the
+[Folder Browser improvements](./folder-browser-improvements.md) are implemented and have passed
+functional acceptance on the current real library. Wider acceptance for NAS/USB, very large
+directories and the material viewer in the original plan is still open.
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -29,11 +42,14 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 - [ ] Validate the [ALSA output plan](./alsa-output-plan.md) changes in a clean candidate Core
       artifact. The [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short
-      Processed pitch/speed playback, pitch/speed seek and Direct basic playback. Check the
-      supported modes, formats, transitions and resource trend on that candidate; investigate
-      a specific failure if observed. Shared `AlsaFrameWriter`, single runtime ownership and
-      bounded decoded/DSP queues are implemented. Separate mode control loops, parameter-version
-      tracking and an arbitrary cap on one upstream decoder frame are not acceptance gates.
+      Processed pitch/speed playback, pitch/speed seek and Direct basic playback. A
+      [2026-09-23 ALSA native runtime change review](./alsa-runtime-smoke-2026-09-23.md) of the same
+      source working tree separately records a partial smoke of Processed seek and Direct basic
+      playback. Check the supported modes, formats, transitions and resource trend on that
+      candidate; investigate a specific failure if observed. Shared `AlsaFrameWriter`, single
+      runtime ownership and bounded decoded/DSP queues are implemented. Separate mode control loops,
+      parameter-version tracking and an arbitrary cap on one upstream decoder frame are not
+      acceptance gates.
 - [ ] Complete target-device ALSA format and lifecycle checks on the clean candidate. Independent
       PCM/DSD comparisons already establish exact data at the USB submission layer. Final DAC
       bit-test or digital capture is needed only for a device-specific end-to-end claim; the
@@ -58,15 +74,41 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 - [ ] Add a bounded real-token ListenBrainz acceptance record for Now Playing, permanent listens,
       401/429 handling, offline retry and restart. The current code implements these paths, but
       the former completion checkbox had no corresponding run record in the repository.
-- [ ] Complete manual browser, NAS/USB, large-directory and material-viewer acceptance for the
-      merged [Core-owned Folder Browser](./local-folder-browser-plan.md). Its Core/Web implementation
-      and automated tests are present; the old full-tree projection has been removed.
 - [ ] Complete responsive Web Control acceptance at the representative viewports and actual mobile
       devices in the [responsive plan](./web-responsive-plan.md). The layout is implemented; no
       complete device/interaction acceptance record is in the repository.
 - [ ] Record long-running use with multiple real Web Controls across refresh, disconnect and
       reconnect. The artifact smoke passed multiple WebSocket clients and reconnection; that is
       narrower than long-running browser acceptance.
+
+### Folder browsing
+
+The [original plan](./local-folder-browser-plan.md) defines the implemented base features; the
+[improvements plan](./folder-browser-improvements.md) records the first batch and later direction.
+Display sorting is independent of the Core-owned directory playback order.
+
+- [x] First-batch Core display sorting: file name, modification time, disc/track number,
+      ascending/descending, pinned groups, physical attributes, sorting before pagination and
+      cursor-invalidation checks when the sort result changes.
+- [x] First-batch Web sort controls and browser-local preference, sort-related history state,
+      per-directory filter restore and deterministic back and containing-folder positioning; this
+      reuses the list/grid preference persistence.
+- [x] First-batch physical file names and required information, recursive/current-directory action
+      scope notices, select-all/invert over the complete current filter result and Core search
+      truncation notices.
+- [x] First-batch functional acceptance on the current real library and browser was completed on
+      2026-09-28: sorting, pinned groups, pagination beyond 200 items, rapid sort switching, back
+      positioning, filtering, search, batch selection and CUE/SACD container positioning all passed.
+      The final automated gates were Node 428/428 and Web 111/111. No on-device sample of batch
+      operations in a single directory with more than 200 songs was available; Folder Search is
+      functionally correct but feels slow. Neither point blocks first-batch functional acceptance.
+- [ ] Complete the wider manual acceptance for NAS/USB, very large directories and the material
+      viewer in sections 17/18 of the original plan.
+- [ ] If Folder Search latency is still clearly noticeable on a real library, measure and analyze
+      performance before deciding on specific optimizations.
+- [ ] Second batch: current-subtree recursive search, folder-associated album/artist shortcuts and
+      the batch failure notice are implemented; functional acceptance on a real library and browser
+      is still pending.
 
 ### Release
 
@@ -85,9 +127,12 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
 2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Complete all five provider matrices, ListenBrainz, Folder Browser, responsive Web and
+3. Complete the wider Folder Browser acceptance in the original plan for NAS/USB, very large
+   directories and the material viewer; if search latency is still noticeable, measure before
+   optimizing. First-batch implementation and acceptance are complete.
+4. Complete all five provider matrices, ListenBrainz, Folder Browser, responsive Web and
    long-running multi-Control acceptance.
-4. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
+5. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
 
 ## Product scope
 
@@ -107,4 +152,5 @@ and stricter browser-origin controls require a later accepted product requiremen
 | [Provider acceptance](./live-provider-acceptance.md)                                               | Real-account criteria                                   |
 | [ALSA plan](./alsa-output-plan.md), [UPnP plan](./upnp-output-plan.md)                             | Output implementation and remaining checks              |
 | [Folder Browser plan](./local-folder-browser-plan.md), [responsive plan](./web-responsive-plan.md) | Web feature and device criteria                         |
+| [Folder Browser improvements](./folder-browser-improvements.md)                                    | Display sorting, file information and batch acceptance  |
 | [Direct CUE plan](./direct-cue-gapless-plan.md), [lyric plan](./lyric-improvements.md)             | Gapless and lyric implementation                        |

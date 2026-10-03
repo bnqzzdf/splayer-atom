@@ -180,6 +180,10 @@ sudo rc-service splayer-atom-core start
 rc-service splayer-atom-core status   # exit 0 = started；3 = stopped
 ```
 
+> 同一台机器上如果还启用了上一代 `splayer-headless`，它与 Core 的默认端口相同（都是 **14558**）：
+> 先停掉它，或在 `/etc/conf.d/splayer-atom-core` 里 `export ATOM_SERVER_PORT=<其它端口>`，否则 Core
+> 起动即 `EADDRINUSE`（有界重启约 11 次后放弃，`status` 变 stopped）。
+
 5. 核对运行面：
 
 ```sh
@@ -304,16 +308,18 @@ openrc default                                 # 重新走一遍 default 运行�
 
 ## 排障清单
 
-| 现象                            | 先看什么                                          | 常见根因                                                                           |
-| ------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `status` 是 started，功能不通   | `/var/log/<x>.err.log`、子进程是否在              | 无限重启掩盖了子进程崩溃（`respawn_max=0` + SIGILL/缺库）                          |
-| `status` 是 3，起不来           | `/var/log/<x>.err.log`、`depend()`                | 依赖未满足（`need net` 但网络没起来）、`command=` 路径不存在                       |
-| 改了 init.d 没生效              | `rc-service <x> zap` 后重试                       | 状态缓存仍是旧状态                                                                 |
-| 开机不自启                      | `rc-update show -v`、`/etc/runlevels/default/<x>` | 忘了 `rc-update add`，或一次性服务自己 `stop` 了                                   |
-| 菜单里关掉了但还在跑            | `rc-status default`、`ps`                         | 服务被其它运行级或手工命令拉起；`disable` 只管 default 运行级                      |
-| 菜单显示 NOT INSTALLED          | `/etc/init.d/<x>` 的 `command=`                   | GP 的探针按 `command=` 指向的文件是否存在判断（见 `script/enable/values.sh`）      |
-| 脚本里 `systemctl` 报 not found | —                                                 | GP 没有 systemd，服务管理必须走 `rc-*`（本页骨架已按此写）                         |
-| conf.d 里改了参数不生效         | 脚本里该项是不是 `VAR=默认`                       | 普通赋值会覆盖 conf.d 的值；必须写成 `: "${VAR:=默认}"`（OpenRC 先 source conf.d） |
+| 现象                                                      | 先看什么                                          | 常见根因                                                                                                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` 是 started，功能不通                             | `/var/log/<x>.err.log`、子进程是否在              | 无限重启掩盖了子进程崩溃（`respawn_max=0` + SIGILL/缺库）                                                                                                                             |
+| `status` 是 3，起不来                                     | `/var/log/<x>.err.log`、`depend()`                | 依赖未满足（`need net` 但网络没起来）、`command=` 路径不存在                                                                                                                          |
+| 改了 init.d 没生效                                        | `rc-service <x> zap` 后重试                       | 状态缓存仍是旧状态                                                                                                                                                                    |
+| 开机不自启                                                | `rc-update show -v`、`/etc/runlevels/default/<x>` | 忘了 `rc-update add`，或一次性服务自己 `stop` 了                                                                                                                                      |
+| 菜单里关掉了但还在跑                                      | `rc-status default`、`ps`                         | 服务被其它运行级或手工命令拉起；`disable` 只管 default 运行级                                                                                                                         |
+| 菜单显示 NOT INSTALLED                                    | `/etc/init.d/<x>` 的 `command=`                   | GP 的探针按 `command=` 指向的文件是否存在判断（见 `script/enable/values.sh`）                                                                                                         |
+| 脚本里 `systemctl` 报 not found                           | —                                                 | GP 没有 systemd，服务管理必须走 `rc-*`（本页骨架已按此写）                                                                                                                            |
+| conf.d 里改了参数不生效                                   | 脚本里该项是不是 `VAR=默认`                       | 普通赋值会覆盖 conf.d 的值；必须写成 `: "${VAR:=默认}"`（OpenRC 先 source conf.d）                                                                                                    |
+| 起动即 `EADDRINUSE: address already in use 0.0.0.0:14558` | `ss -ltnp \| grep 14558` 看谁占着                 | 上一代 `splayer-headless` 默认也监听 **14558**（实测某台 GP 上它开机自启并占用）；停掉它，或在 `/etc/conf.d/splayer-atom-core` 里 `export ATOM_SERVER_PORT=<其它端口>` 给 Core 换端口 |
+| 起动后 `status` 是 started，但日志反复重启                | `tail /var/log/splayer-atom-core.err.log`         | 端口冲突、缺库等启动期错误；有界重启约 11 次后放弃并把状态降为 stopped，不限次时只会一直显示 started                                                                                  |
 
 ## 相关文件
 

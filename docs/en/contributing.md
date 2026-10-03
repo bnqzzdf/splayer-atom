@@ -1,6 +1,6 @@
 # Contributing
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 Contributions to SPlayer Atom are welcome.
 
@@ -37,4 +37,20 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-Commit titles use Conventional Commits with a one-line Chinese summary, following repository policy.
+## Commits
+
+Commit titles use Conventional Commits with a one-line Chinese summary, following repository
+policy. For example:
+
+```text
+fix: 修复 Core 队列恢复状态
+docs: 更新 Core 部署说明
+```
+
+Do not mix unrelated formatting or refactoring into one commit.
+
+## Release-related changes
+
+For changes that touch builds, native code, artifacts, Core HTTP/WS, or deployment, also run
+`pnpm package:core` and inspect the resulting tar.gz. Real ALSA/Diretta/UPnP acceptance runs
+separately, following the [Hardware Release Checklist](./hardware-release-checklist.md).

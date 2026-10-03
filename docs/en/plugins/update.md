@@ -1,22 +1,29 @@
 # Plugin Updates
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 SPlayer Atom Core checks plugin versions and Web Control presents the user-approved update action. A plugin declares `@updateUrl`, Core downloads the script and compares `@version`, and applying an update preserves enabled state, settings, and storage.
+
+The **host** decides whether a newer version exists; scripts do not need their own version-comparison logic.
 
 ## Workflow
 
 ```text
 declare @updateUrl + @version (+ @changelog)
-  → host fetches the latest script and reads @version
-  → newer version shows on the plugin card
-  → user chooses Update
-  → host replaces the script and restarts the plugin process
+  → host fetches the new script from @updateUrl and reads its @version
+  → newer than local → the card shows "New version available v1.1.0" + @changelog
+  → user chooses Update → host fetches the same address and overwrites in place → restart
 ```
 
-Checks run silently at application startup and can also be started from each plugin card. Updates are never installed automatically. Plugins without `@updateUrl` are not checked.
+- **When checks run**: checks run silently at application startup, and users can also check manually
+  from each card under **Settings → Plugin Management**.
+- **Applying is manual**: the host only notifies; updates are never installed automatically, and the
+  user decides when to update.
+- Plugins without `@updateUrl` are not checked, and their cards do not show the "Check update" action.
 
 ## Update metadata
+
+Add three fields to the script header (only `@updateUrl` is required for update checks):
 
 ```js
 /**
@@ -28,15 +35,27 @@ Checks run silently at application startup and can also be started from each plu
  */
 ```
 
-| Field        | Description                                                                                   |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `@updateUrl` | Stable HTTPS raw `.js` URL; `http://localhost` and `http://127.0.0.1` are allowed for testing |
-| `@version`   | Numeric dotted version compared segment by segment                                            |
-| `@changelog` | Notes shown from the newly fetched script; use literal `\n`                                   |
+| Field        | Description                                                                                                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@updateUrl` | Raw `.js` URL of the new version (HTTPS only; `http://localhost` and `http://127.0.0.1` are allowed for local debugging). The host fetches it to read and compare `@version`, and also uses it as the download source for one-click updates |
+| `@version`   | Version number; the host compares it segment by segment as `major.minor.patch`. To release a new version, just bump it                                                                                                                      |
+| `@changelog` | Update notes shown in the card prompt; in a single-line header, break lines with a literal `\n`                                                                                                                                             |
 
-Point `@updateUrl` at a stable location such as a file on the repository's main branch. The changelog shown to users comes from the remote new script, not the installed copy.
+::: tip Point @updateUrl at a stable address
+`@updateUrl` should point at a **long-lived** raw address (for example, a file on the `main` branch
+served through GitHub raw) that always holds the latest script. The host fetches this address every
+time to read the latest `@version`.
+:::
 
-## LX `updateAlert`
+::: warning The changelog comes from the new script
+The `@changelog` shown on the card comes from the **new script** fetched from `@updateUrl`, not from
+the copy installed locally. So when releasing, put the release notes in the **new** script header.
+:::
+
+## LX scripts: `updateAlert` (compatibility)
+
+LX source scripts have no `@updateUrl` mechanism; instead they report updates at runtime through
+their native event, which the host recognizes as the same update prompt:
 
 ```js
 lx.send(lx.EVENT_NAMES.updateAlert, {
@@ -45,14 +64,30 @@ lx.send(lx.EVENT_NAMES.updateAlert, {
 });
 ```
 
-LX `updateAlert` carries `log` and `updateUrl`; the host compatibility layer also accepts `version`, so without one the card only indicates that an update exists. If the URL is a web page rather than raw JavaScript, the update fails with a failure toast and the app does **not** open that address automatically; the user can open it manually through the View Update link in the dialog, then locate the new script's raw URL and install it again from Plugin Management.
+The LX `updateAlert` payload is `log` and `updateUrl`; the host compatibility layer also accepts `version`, and when no version is given the card only shows "New version available" without a specific version. Its `updateUrl` usually points at an introduction page rather than a raw `.js`, in which case an automatic update fails and only shows a failure toast; it does **not** open that address automatically. The user can open it manually through the "Open update page" link in the update dialog, then find the new script's raw URL and re-import it through Plugin Management.
 
 ## Applying an update
 
-The host downloads and validates the raw script, replaces the installed plugin, preserves its state and data, and restarts the plugin host.
+When the user chooses Update, the host:
+
+1. Fetches `@updateUrl` (which must serve an accessible **raw `.js`** file).
+2. After parsing and validating it, **overwrites the plugin in place** and **preserves** enabled
+   state, user settings, and plugin-private storage (`splayer.storage`).
+3. Restarts the plugin process and clears the update prompt.
 
 ::: warning Identity and type must remain stable
-The new script must keep the same identity (`@id`, or an identity derived from `@name`) and `@type`. Change only `@version`, `@changelog`, and code. If identity or type changes, automatic update is rejected.
+An automatic update requires the new script to keep the same **identity (`@id`, or an identity
+derived from the name when omitted) and type (`@type`)**: if the new script changes identity, or
+switches from `source` to `control`, the update is rejected and the user must re-import it manually.
+For a release, change only `@version`, `@changelog`, and the script contents; do not change `@id`
+(or `@name` when no ID is declared).
 :::
 
-On failure, the old plugin remains installed and usable. Re-importing a script with the same identity also replaces the existing plugin in place; update checks simply make new versions discoverable.
+If an automatic update fails (network problems, an `@updateUrl` that is not a valid script, an identity/type change, and so on), the plugin remains on the old version and usable; the "Open update page" external-link button on the card can still open `@updateUrl` manually.
+
+## Relationship to re-importing
+
+Plugin identity depends only on `@id` (derived from the name when omitted) and never on the script
+contents, so **manually re-importing a script with the same identity also replaces the existing
+plugin in place** and does not create a duplicate entry. Update checks merely announce that a newer
+version exists, saving users from comparing versions themselves.
