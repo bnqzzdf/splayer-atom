@@ -41,7 +41,7 @@ docker/atom-debian11/    Debian 11 compatibility build image (the packaging path
 docs/                    Atom documentation (bilingual; English under docs/en/)
 ```
 
-`@main/*` is the TypeScript alias for the `core/` tree.
+`@main/*` is the TypeScript alias for the `core/` tree. For conventions on changing the service definitions (systemd unit and OpenRC script) see [Core deployment and upgrades](./core-deployment.md) and [GentooPlayer (OpenRC) service management](./gentooplayer-openrc.md).
 
 ## Change and commit conventions
 

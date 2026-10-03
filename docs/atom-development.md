@@ -41,7 +41,7 @@ docker/atom-debian11/    Debian 11 兼容构建镜像（.133 上实际使用的�
 docs/                    Atom documentation（中英双语，英文在 docs/en/）
 ```
 
-`@main/*` 是 `core/` 目录树的 TypeScript 别名。
+`@main/*` 是 `core/` 目录树的 TypeScript 别名。服务定义（systemd unit 与 OpenRC 脚本）的改写约定见 [Core 部署与升级](./core-deployment.md) 与 [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)。
 
 ## 变更与提交约定
 

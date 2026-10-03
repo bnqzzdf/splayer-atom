@@ -47,7 +47,8 @@
   from `@splayer/*` rather than duplicating them.
 - Frontend time is milliseconds; convert native seconds at the Core boundary.
 - Persist lightweight canonical `Track` values; load details/lyrics on demand and release large
-  objects after use. Centralize durable data/cache paths per [deployment](docs/core-deployment.md).
+  objects after use. Centralize durable data/cache paths per [deployment](docs/core-deployment.md);
+  OpenRC targets (GentooPlayer) are covered by [docs/gentooplayer-openrc.md](docs/gentooplayer-openrc.md).
 - Host media files are user-owned: Atom must not expose commands or UI that delete music files.
   Cleanup may remove only Atom-owned cache, temporary, staging, or partial-download files.
 - Caches need explicit eviction. Use appropriately sized images; pause RAF/canvas/high-frequency
