@@ -20,11 +20,20 @@ name="splayer-atom-core"
 description="SPlayer Atom Core"
 
 # 安装根，等价 systemd 单元的 WorkingDirectory=/opt/splayer-atom-core。
-# install-openrc.sh 会把实际解包路径写进 /etc/conf.d/splayer-atom-core 覆盖这个默认值。
-: "${SPLAYER_ATOM_ROOT:=/opt/splayer-atom-core}"
+#
+# ⚠️ command= 这一行必须是**字面绝对路径**，不能写成 ${VAR}/bin/...：
+# GentooPlayer 菜单「05. 启用/禁用软件」的存在性探针会 `sed` 出这一行的原文，再对它做
+# `[ -f ]`——它不解析变量，写成变量拼接就会把已安装的服务判成 NOT INSTALLED，菜单开关消失。
+# 非标准安装根由 install-openrc.sh 改写本文件里的字面路径，并同步写 conf.d。
+command="/opt/splayer-atom-core/bin/splayer-atom-core"
+directory="/opt/splayer-atom-core"
 
-command="${SPLAYER_ATOM_ROOT}/bin/splayer-atom-core"
-directory="${SPLAYER_ATOM_ROOT}"
+# 可选覆盖：/etc/conf.d/splayer-atom-core 在本脚本之前被 source，因此这里能读到用户配置。
+# 只有显式配置了 SPLAYER_ATOM_ROOT（例如安装根不是 /opt/splayer-atom-core）才会生效。
+if [ -n "${SPLAYER_ATOM_ROOT:-}" ]; then
+    command="${SPLAYER_ATOM_ROOT}/bin/splayer-atom-core"
+    directory="${SPLAYER_ATOM_ROOT}"
+fi
 
 # 守护 + 重启由 OpenRC 自带的 supervise-daemon 负责（等价 systemd 的 Restart=on-failure）。
 supervisor="supervise-daemon"

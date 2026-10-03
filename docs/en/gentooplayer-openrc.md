@@ -93,6 +93,12 @@ start_pre() {
 1. **The shebang must be `#!/sbin/openrc-run`.** With `/bin/sh`, `rc-service` fails on
    `ebegin`/`eend`/`start_pre` and friends.
 2. `command=` must be an **absolute path**; `directory=` is the working directory (systemd's
+   ⚠️ More importantly, this line must be a **literal path**, never `${SPLAYER_ATOM_ROOT}/bin/…`:
+   GentooPlayer's menu probe (`gp_menus_probe` in `script/enable/values.sh`) `sed`s the **raw text**
+   of the `command=` line and runs `[ -f ]` on it — it does **not** expand variables, so a service whose
+   `command=` is built from a variable is reported as `NOT INSTALLED` and its menu switch disappears
+   (this project's shipped script hit exactly that regression; it now uses a literal path and a gate
+   assertion guards it). For a non-standard install root, `install-openrc.sh` rewrites that literal.
    `WorkingDirectory=`). The Core launcher must run from the installation root, otherwise it cannot
    derive `runtime/bin/node` and `app/`.
 3. `supervisor="supervise-daemon"` is OpenRC's built-in supervisor and restarter; 17 services on GP
@@ -185,12 +191,19 @@ sudo ./service/install-openrc.sh --user splayer-atom   # plain ALSA Core
 # or: sudo ./service/install-openrc.sh --diretta        # Diretta Host / root
 ```
 
-The installer does three things: it installs `service/splayer-atom-core.openrc` verbatim as
-`/etc/init.d/splayer-atom-core` (0755), writes `/etc/conf.d/splayer-atom-core` with the **actual
-extracted root** in `SPLAYER_ATOM_ROOT` (plus `command_user` in `--user` mode), and preserves any
+What the installer does: it installs `service/splayer-atom-core.openrc` as
+`/etc/init.d/splayer-atom-core` (0755) — **verbatim** when the install root is the default
+`/opt/splayer-atom-core` (so it can be checked against the artifact by md5), and with that literal
+path rewritten when the root differs; it then writes `/etc/conf.d/splayer-atom-core`
+(`SPLAYER_ATOM_ROOT` only for a non-default root, plus `command_user` in `--user` mode) and keeps any
 lines you added to conf.d yourself when reinstalling. It does not start or enable the service (same
 contract as `install-systemd.sh`), and on a systemd host it refuses and points at
 `install-systemd.sh`.
+
+After installing it also **runs GentooPlayer's own probe** (`script/enable/values.sh <service>`) and
+prints the result; if the probe reports `NOT INSTALLED` it prints an extra `WARNING`. That is exactly
+what catches the silent integration failure where the service runs but the menu has no switch (see
+the literal `command=` constraint in the development section).
 
 4. Enable at boot and start it now:
 
@@ -336,18 +349,18 @@ Logs and runtime surface:
 
 ## Troubleshooting checklist
 
-| Symptom                                                               | Look at first                                            | Usual root cause                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status` says started but the feature does not work                   | `/var/log/<x>.err.log`, whether the child process exists | unlimited restart hides a child crash (`respawn_max=0` plus SIGILL/missing library)                                                                                                                                                                       |
-| `status` is 3, it will not start                                      | `/var/log/<x>.err.log`, `depend()`                       | unmet dependency (`need net` before the network is up), missing `command=` path                                                                                                                                                                           |
-| Edited init.d but nothing changed                                     | `rc-service <x> zap`, then retry                         | the state cache still holds the old state                                                                                                                                                                                                                 |
-| No startup at boot                                                    | `rc-update show -v`, `/etc/runlevels/default/<x>`        | missing `rc-update add`, or a one-shot service stopped itself                                                                                                                                                                                             |
-| Turned off in the menu but still running                              | `rc-status default`, `ps`                                | started by another runlevel or by hand; `disable` only covers the default runlevel                                                                                                                                                                        |
-| Menu shows NOT INSTALLED                                              | `command=` in `/etc/init.d/<x>`                          | GP's probe checks whether the file `command=` points at exists (see `script/enable/values.sh`)                                                                                                                                                            |
-| `systemctl` not found inside a script                                 | —                                                        | GP has no systemd; service management must use `rc-*` (the skeleton above already does)                                                                                                                                                                   |
-| conf.d change has no effect                                           | is that line a plain `VAR=default` in the script         | a plain assignment overrides conf.d; use `: "${VAR:=default}"` (OpenRC sources conf.d first)                                                                                                                                                              |
-| Startup fails with `EADDRINUSE: address already in use 0.0.0.0:14558` | `ss -ltnp \| grep 14558`                                 | The previous-generation `splayer-headless` also listens on **14558** by default (on one GP machine it was enabled at boot and held the port); stop it, or give Core another port with `export ATOM_SERVER_PORT=<port>` in `/etc/conf.d/splayer-atom-core` |
-| `status` says started but the log shows repeated restarts             | `tail /var/log/splayer-atom-core.err.log`                | A startup-time error such as a port conflict or a missing library; the bounded restart gives up after about 11 crashes and drops the state to stopped, while an unbounded setting would only ever report started                                          |
+| Symptom                                                               | Look at first                                            | Usual root cause                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` says started but the feature does not work                   | `/var/log/<x>.err.log`, whether the child process exists | unlimited restart hides a child crash (`respawn_max=0` plus SIGILL/missing library)                                                                                                                                                                                                    |
+| `status` is 3, it will not start                                      | `/var/log/<x>.err.log`, `depend()`                       | unmet dependency (`need net` before the network is up), missing `command=` path                                                                                                                                                                                                        |
+| Edited init.d but nothing changed                                     | `rc-service <x> zap`, then retry                         | the state cache still holds the old state                                                                                                                                                                                                                                              |
+| No startup at boot                                                    | `rc-update show -v`, `/etc/runlevels/default/<x>`        | missing `rc-update add`, or a one-shot service stopped itself                                                                                                                                                                                                                          |
+| Turned off in the menu but still running                              | `rc-status default`, `ps`                                | started by another runlevel or by hand; `disable` only covers the default runlevel                                                                                                                                                                                                     |
+| Menu shows NOT INSTALLED                                              | `command=` in `/etc/init.d/<x>`                          | GP's probe checks whether the file `command=` points at exists (see `script/enable/values.sh`) (the probe does **not** expand variables); `command=` must be a **literal absolute path** — a `${VAR}/…` form or an interpreter wrapper (python/bash/node) is reported as not installed |
+| `systemctl` not found inside a script                                 | —                                                        | GP has no systemd; service management must use `rc-*` (the skeleton above already does)                                                                                                                                                                                                |
+| conf.d change has no effect                                           | is that line a plain `VAR=default` in the script         | a plain assignment overrides conf.d; use `: "${VAR:=default}"` (OpenRC sources conf.d first)                                                                                                                                                                                           |
+| Startup fails with `EADDRINUSE: address already in use 0.0.0.0:14558` | `ss -ltnp \| grep 14558`                                 | The previous-generation `splayer-headless` also listens on **14558** by default (on one GP machine it was enabled at boot and held the port); stop it, or give Core another port with `export ATOM_SERVER_PORT=<port>` in `/etc/conf.d/splayer-atom-core`                              |
+| `status` says started but the log shows repeated restarts             | `tail /var/log/splayer-atom-core.err.log`                | A startup-time error such as a port conflict or a missing library; the bounded restart gives up after about 11 crashes and drops the state to stopped, while an unbounded setting would only ever report started                                                                       |
 
 ## Related files
 

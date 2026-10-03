@@ -84,16 +84,32 @@ test("Core OpenRC installer binds the service to the actual extracted root and k
     openrcInstallerSource,
     /INIT_SOURCE="\$ROOT_DIR\/service\/splayer-atom-core\.openrc"/,
   );
-  assert.match(openrcInstallerSource, /INIT_TARGET="\/etc\/init\.d\/splayer-atom-core"/);
-  assert.match(openrcInstallerSource, /CONF_TARGET="\/etc\/conf\.d\/splayer-atom-core"/);
+  assert.match(openrcInstallerSource, /INIT_TARGET="\/etc\/init\.d\/\$SERVICE_NAME"/);
+  assert.match(openrcInstallerSource, /CONF_TARGET="\/etc\/conf\.d\/\$SERVICE_NAME"/);
   assert.match(openrcInstallerSource, /install -m 0755 "\$INIT_SOURCE" "\$INIT_TARGET"/);
-  assert.match(openrcInstallerSource, /SPLAYER_ATOM_ROOT=\\"\$ROOT_DIR\\"/);
+  // 默认安装根不写 conf.d：靠 init.d 里的字面路径；非默认根才写并改写脚本
+  assert.match(openrcInstallerSource, /DEFAULT_ROOT="\/opt\/splayer-atom-core"/);
+  assert.match(openrcInstallerSource, /if \[ "\$ROOT_DIR" != "\$DEFAULT_ROOT" \]; then/);
+  assert.match(openrcInstallerSource, /echo "SPLAYER_ATOM_ROOT=\\"\$ROOT_DIR\\""/);
+  // 非默认根必须改写 init.d 里的字面路径，否则 GP 菜单探针会报 NOT INSTALLED
+  assert.match(openrcInstallerSource, /escape_sed/);
+  assert.match(
+    openrcInstallerSource,
+    /sed "s\|\$\(escape_sed "\$DEFAULT_ROOT"\)\|\$\(escape_sed "\$ROOT_DIR"\)\|g"/,
+  );
   assert.match(openrcInstallerSource, /command_user=\\"\$SERVICE_USER\\"/);
   // 重新安装时保留用户在 conf.d 里自己加的行
   assert.match(
     openrcInstallerSource,
     /grep -v -E '\^\[\[:space:\]\]\*\(SPLAYER_ATOM_ROOT\|command_user\)='/,
   );
+  // 装完立刻用 GP 自己的探针复核，拦住「服务能跑但菜单显示 NOT INSTALLED」
+  assert.match(
+    openrcInstallerSource,
+    /GP_PROBE="\/opt\/\.gentooplayer\/web\/scripts\/script\/enable\/values\.sh"/,
+  );
+  assert.match(openrcInstallerSource, /PROBE_OUTPUT=\$\(bash "\$GP_PROBE"/);
+  assert.match(openrcInstallerSource, /WARNING GentooPlayer reports NOT INSTALLED/);
   // 头注释只能由脚本维护一份：重装三次不能叠成三层（实测踩过这个坑）
   assert.match(openrcInstallerSource, /^CONF_HEADER=".*install-openrc\.sh 生成.*"$/m);
   assert.match(openrcInstallerSource, /grep -v -F "\$CONF_HEADER"/);
@@ -107,9 +123,18 @@ test("Core OpenRC installer binds the service to the actual extracted root and k
 test("Core OpenRC service script matches the systemd unit and bounds restarts", () => {
   // 同一启动器、同一工作目录：OpenRC 侧的默认安装根与 unit 里的路径一致
   assert.match(openrcServiceSource, /^#!\/sbin\/openrc-run$/m);
-  assert.match(openrcServiceSource, /: "\$\{SPLAYER_ATOM_ROOT:=\/opt\/splayer-atom-core\}"/);
-  assert.match(openrcServiceSource, /command="\$\{SPLAYER_ATOM_ROOT\}\/bin\/splayer-atom-core"/);
-  assert.match(openrcServiceSource, /directory="\$\{SPLAYER_ATOM_ROOT\}"/);
+  // command=/directory= 必须是字面绝对路径：GP 菜单的存在性探针直接 sed 出 command= 那一行
+  // 做 `[ -f ]`（不解析变量），写成 ${VAR}/... 会被判成 NOT INSTALLED——实测回归，故加断言。
+  assert.match(
+    openrcServiceSource,
+    /^command="\/opt\/splayer-atom-core\/bin\/splayer-atom-core"$/m,
+  );
+  assert.match(openrcServiceSource, /^directory="\/opt\/splayer-atom-core"$/m);
+  const commandLine = /^command=(.*)$/m.exec(openrcServiceSource);
+  assert.ok(commandLine, "missing command= line");
+  assert.doesNotMatch(commandLine[1], /\$/, "command= 行不能含变量引用");
+  // conf.d 覆盖仍然可用，但只在显式配置时才生效
+  assert.match(openrcServiceSource, /if \[ -n "\$\{SPLAYER_ATOM_ROOT:-\}" \]; then/);
   assert.match(serviceSource, /WorkingDirectory=\/opt\/splayer-atom-core/);
   assert.match(serviceSource, /ExecStart=\/opt\/splayer-atom-core\/bin\/splayer-atom-core/);
   // 守护与日志

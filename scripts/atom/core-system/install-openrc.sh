@@ -2,10 +2,14 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+SERVICE_NAME="splayer-atom-core"
+DEFAULT_ROOT="/opt/splayer-atom-core"
 INIT_SOURCE="$ROOT_DIR/service/splayer-atom-core.openrc"
-INIT_TARGET="/etc/init.d/splayer-atom-core"
-CONF_TARGET="/etc/conf.d/splayer-atom-core"
-# 这一行由本脚本维护：重装时先删掉它自己（连同它管的两个赋值），再重写一遍，
+INIT_TARGET="/etc/init.d/$SERVICE_NAME"
+CONF_TARGET="/etc/conf.d/$SERVICE_NAME"
+# GentooPlayer 菜单「05. 启用/禁用软件」的存在性探针（存在才用它的输出复核）
+GP_PROBE="/opt/.gentooplayer/web/scripts/script/enable/values.sh"
+# 这一行由本脚本维护：重装时先删掉它自己（连同它管的赋值），再重写一遍，
 # 避免多次安装把注释叠成好几层。
 CONF_HEADER="# 由 service/install-openrc.sh 生成：安装根与运行用户由它维护，其余内容可自行追加。"
 MODE=""
@@ -64,16 +68,32 @@ if [ ! -x "$ROOT_DIR/bin/splayer-atom-core" ]; then
   exit 1
 fi
 
-# init.d 脚本本身不含机器相关路径（安装根来自 conf.d），因此按原样安装、可校验 md5。
-install -m 0755 "$INIT_SOURCE" "$INIT_TARGET"
+escape_sed() {
+  printf '%s' "$1" | sed 's/[&|]/\\&/g'
+}
 
-# conf.d 由本脚本生成：只管理 SPLAYER_ATOM_ROOT 与 command_user 两行，
-# 其余行（用户自己加的 export / 覆盖项）原样保留。
+TMP_INIT=$(mktemp)
 TMP_CONF=$(mktemp)
-trap 'rm -f "$TMP_CONF"' EXIT HUP INT TERM
+trap 'rm -f "$TMP_INIT" "$TMP_CONF"' EXIT HUP INT TERM
+
+# init.d 脚本：
+#   · 默认安装根（/opt/splayer-atom-core）按原样安装，可与产物内文件校验 md5；
+#   · 其它安装根必须把脚本里的**字面路径**一起改写 —— GP 菜单的存在性探针直接 sed 出
+#     command= 那一行做 `[ -f ]`，不改写就会读着 /opt/... 把已安装的服务判成 NOT INSTALLED。
+if [ "$ROOT_DIR" = "$DEFAULT_ROOT" ]; then
+  install -m 0755 "$INIT_SOURCE" "$INIT_TARGET"
+else
+  sed "s|$(escape_sed "$DEFAULT_ROOT")|$(escape_sed "$ROOT_DIR")|g" "$INIT_SOURCE" > "$TMP_INIT"
+  install -m 0755 "$TMP_INIT" "$INIT_TARGET"
+fi
+
+# conf.d 由本脚本生成：只管理 SPLAYER_ATOM_ROOT（仅非默认安装根时）与 command_user 两行，
+# 其余行（用户自己加的 export / 覆盖项）原样保留。
 {
   echo "$CONF_HEADER"
-  echo "SPLAYER_ATOM_ROOT=\"$ROOT_DIR\""
+  if [ "$ROOT_DIR" != "$DEFAULT_ROOT" ]; then
+    echo "SPLAYER_ATOM_ROOT=\"$ROOT_DIR\""
+  fi
   if [ "$MODE" = user ]; then
     echo "command_user=\"$SERVICE_USER\""
   fi
@@ -86,12 +106,25 @@ trap 'rm -f "$TMP_CONF"' EXIT HUP INT TERM
 install -m 0644 "$TMP_CONF" "$CONF_TARGET"
 
 echo "Installed $INIT_TARGET"
-echo "Wrote $CONF_TARGET (SPLAYER_ATOM_ROOT=$ROOT_DIR)"
+echo "Wrote $CONF_TARGET (install root: $ROOT_DIR)"
 if [ "$MODE" = diretta ]; then
   echo "Mode: Diretta/root"
 else
   echo "Mode: ALSA user $SERVICE_USER"
 fi
+
+# 装完立刻用 GP 自己的探针复核一次：这一步能拦住「服务能跑但菜单显示 NOT INSTALLED」
+# 这类静默集成缺陷（探针只认 command= 的字面路径，不解析变量）。
+if [ -f "$GP_PROBE" ]; then
+  PROBE_OUTPUT=$(bash "$GP_PROBE" "$SERVICE_NAME" 2>/dev/null | tr '\n' ' ' || true)
+  echo "GentooPlayer probe (values.sh $SERVICE_NAME): ${PROBE_OUTPUT:-<no output>}"
+  case "$PROBE_OUTPUT" in
+    *"NOT INSTALLED"*)
+      echo "SPlayer Atom Core: WARNING GentooPlayer reports NOT INSTALLED — check the literal command= line in $INIT_TARGET" >&2
+      ;;
+  esac
+fi
+
 echo "Review the service script, then run:"
-echo "  rc-update add splayer-atom-core default"
-echo "  rc-service splayer-atom-core start"
+echo "  rc-update add $SERVICE_NAME default"
+echo "  rc-service $SERVICE_NAME start"
