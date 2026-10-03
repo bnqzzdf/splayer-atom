@@ -5,6 +5,15 @@ import test from "node:test";
 
 const installerUrl = new URL("../../scripts/atom/core-system/install-systemd.sh", import.meta.url);
 const installerSource = readFileSync(installerUrl, "utf8");
+const openrcInstallerUrl = new URL(
+  "../../scripts/atom/core-system/install-openrc.sh",
+  import.meta.url,
+);
+const openrcInstallerSource = readFileSync(openrcInstallerUrl, "utf8");
+const openrcServiceSource = readFileSync(
+  new URL("../../scripts/atom/core-system/splayer-atom-core.openrc", import.meta.url),
+  "utf8",
+);
 const serviceSource = readFileSync(
   new URL("../../scripts/atom/core-system/splayer-atom-core.service", import.meta.url),
   "utf8",
@@ -53,6 +62,90 @@ test("Core system artifact stages the deployment helper and operator guide", () 
     /chmodSync\(path\.join\(outputDir, "service", "install-systemd\.sh"\), 0o755\)/,
   );
   assert.match(stageSource, /docs", "core-deployment\.md"/);
+});
+
+test("Core OpenRC installer has valid shell syntax, needs root, and refuses non-OpenRC hosts", () => {
+  const syntax = spawnSync("sh", ["-n", openrcInstallerUrl.pathname], { encoding: "utf8" });
+  assert.equal(syntax.status, 0, syntax.stderr);
+  assert.match(openrcInstallerSource, /--diretta/);
+  assert.match(openrcInstallerSource, /--user <service-user>/);
+  assert.match(openrcInstallerSource, /\$\(id -u\).* -ne 0/);
+  assert.match(openrcInstallerSource, /service user does not exist/);
+  // OpenRC 目标机判据，并在 systemd 主机上明确劝退
+  assert.match(openrcInstallerSource, /\/sbin\/openrc-run/);
+  assert.match(openrcInstallerSource, /install-systemd\.sh on systemd hosts/);
+  // 与 install-systemd.sh 一致：只安装定义，不替操作者启动或设开机自启
+  assert.doesNotMatch(openrcInstallerSource, /^rc-update add/m);
+  assert.doesNotMatch(openrcInstallerSource, /^rc-service .* start/m);
+});
+
+test("Core OpenRC installer binds the service to the actual extracted root and keeps user conf.d lines", () => {
+  assert.match(
+    openrcInstallerSource,
+    /INIT_SOURCE="\$ROOT_DIR\/service\/splayer-atom-core\.openrc"/,
+  );
+  assert.match(openrcInstallerSource, /INIT_TARGET="\/etc\/init\.d\/splayer-atom-core"/);
+  assert.match(openrcInstallerSource, /CONF_TARGET="\/etc\/conf\.d\/splayer-atom-core"/);
+  assert.match(openrcInstallerSource, /install -m 0755 "\$INIT_SOURCE" "\$INIT_TARGET"/);
+  assert.match(openrcInstallerSource, /SPLAYER_ATOM_ROOT=\\"\$ROOT_DIR\\"/);
+  assert.match(openrcInstallerSource, /command_user=\\"\$SERVICE_USER\\"/);
+  // 重新安装时保留用户在 conf.d 里自己加的行
+  assert.match(
+    openrcInstallerSource,
+    /grep -v -E '\^\[\[:space:\]\]\*\(SPLAYER_ATOM_ROOT\|command_user\)='/,
+  );
+});
+
+test("Core OpenRC service script matches the systemd unit and bounds restarts", () => {
+  // 同一启动器、同一工作目录：OpenRC 侧的默认安装根与 unit 里的路径一致
+  assert.match(openrcServiceSource, /^#!\/sbin\/openrc-run$/m);
+  assert.match(openrcServiceSource, /: "\$\{SPLAYER_ATOM_ROOT:=\/opt\/splayer-atom-core\}"/);
+  assert.match(openrcServiceSource, /command="\$\{SPLAYER_ATOM_ROOT\}\/bin\/splayer-atom-core"/);
+  assert.match(openrcServiceSource, /directory="\$\{SPLAYER_ATOM_ROOT\}"/);
+  assert.match(serviceSource, /WorkingDirectory=\/opt\/splayer-atom-core/);
+  assert.match(serviceSource, /ExecStart=\/opt\/splayer-atom-core\/bin\/splayer-atom-core/);
+  // 守护与日志
+  assert.match(openrcServiceSource, /supervisor="supervise-daemon"/);
+  assert.match(openrcServiceSource, /pidfile="\/run\/\$\{RC_SVCNAME\}\.pid"/);
+  assert.match(openrcServiceSource, /output_log="\/var\/log\/\$\{RC_SVCNAME\}\.log"/);
+  assert.match(openrcServiceSource, /error_log="\/var\/log\/\$\{RC_SVCNAME\}\.err\.log"/);
+  assert.match(openrcServiceSource, /depend\(\) \{\s*need net/s);
+  // conf.d 先被 source，所以每个可调项都必须走 `:=` 默认值，否则 conf.d 覆盖不了
+  for (const name of ["respawn_delay", "respawn_period", "respawn_max", "retry"]) {
+    assert.match(openrcServiceSource, new RegExp(`: "\\$\\{${name}:=[^}]+\\}"`));
+  }
+  // 有界重启：respawn_max 不能是 0（无限重启会把崩溃环藏成 status=started）
+  const number = (name: string): number => {
+    const matched = new RegExp(`: "\\$\\{${name}:=([0-9]+)\\}\\"`).exec(openrcServiceSource);
+    assert.ok(matched, `missing default for ${name}`);
+    return Number(matched[1]);
+  };
+  const delay = number("respawn_delay");
+  const period = number("respawn_period");
+  const max = number("respawn_max");
+  assert.ok(max > 0, "respawn_max must be bounded");
+  assert.ok(
+    period >= delay * max,
+    `respawn_period (${period}) must be >= respawn_delay (${delay}) × respawn_max (${max})`,
+  );
+  // 停止走 TERM→KILL；实时权限用 start_pre 的 ulimit 表达（等价 LimitMEMLOCK）
+  assert.match(openrcServiceSource, /retry:=\TERM\/[0-9]+\/KILL\/[0-9]+/);
+  assert.match(openrcServiceSource, /ulimit -l unlimited/);
+});
+
+test("Core system artifact stages the OpenRC service script and installer", () => {
+  assert.match(stageSource, /core-system", "splayer-atom-core\.openrc"/);
+  assert.match(stageSource, /service", "splayer-atom-core\.openrc"/);
+  assert.match(
+    stageSource,
+    /chmodSync\(path\.join\(outputDir, "service", "splayer-atom-core\.openrc"\), 0o755\)/,
+  );
+  assert.match(stageSource, /core-system", "install-openrc\.sh"/);
+  assert.match(stageSource, /service", "install-openrc\.sh"/);
+  assert.match(
+    stageSource,
+    /chmodSync\(path\.join\(outputDir, "service", "install-openrc\.sh"\), 0o755\)/,
+  );
 });
 
 test("Core deployment guide keeps rollback data independent from migrated data", () => {

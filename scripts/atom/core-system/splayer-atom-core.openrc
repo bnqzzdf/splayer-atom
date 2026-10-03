@@ -1,0 +1,55 @@
+#!/sbin/openrc-run
+# ============================================================================
+# SPlayer Atom Core —— OpenRC 服务脚本（GentooPlayer 等无 systemd 的目标机）
+#
+# 与 splayer-atom-core.service 等价：同一启动器、同一工作目录、同一「崩溃即重启」
+# 语义；差别只在 OpenRC 的写法。安装由同目录下的 install-openrc.sh 完成：
+#
+#   sudo ./service/install-openrc.sh --user splayer-atom   # 普通 ALSA Core
+#   sudo ./service/install-openrc.sh --diretta             # Diretta Host / root
+#   sudo rc-update add splayer-atom-core default
+#   sudo rc-service splayer-atom-core start
+#
+# 可调项：OpenRC 会**先** source /etc/conf.d/splayer-atom-core，再执行本脚本，
+# 因此下面每一项都用 `: "${VAR:=默认}"` 取默认值 —— 在 conf.d 里写同名变量即可覆盖，
+# 不需要改这个文件。想给 Core 传环境变量，在 conf.d 里用 `export`（例如
+# `export ATOM_SERVER_PORT=14558`）。
+# ============================================================================
+
+name="splayer-atom-core"
+description="SPlayer Atom Core"
+
+# 安装根，等价 systemd 单元的 WorkingDirectory=/opt/splayer-atom-core。
+# install-openrc.sh 会把实际解包路径写进 /etc/conf.d/splayer-atom-core 覆盖这个默认值。
+: "${SPLAYER_ATOM_ROOT:=/opt/splayer-atom-core}"
+
+command="${SPLAYER_ATOM_ROOT}/bin/splayer-atom-core"
+directory="${SPLAYER_ATOM_ROOT}"
+
+# 守护 + 重启由 OpenRC 自带的 supervise-daemon 负责（等价 systemd 的 Restart=on-failure）。
+supervisor="supervise-daemon"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/${RC_SVCNAME}.log"
+error_log="/var/log/${RC_SVCNAME}.err.log"
+
+# 重启必须**有界**：respawn_max=0 表示无限重启，会把「起不来的二进制」藏成
+# status=started 的静默崩溃环（在无 AVX 的机器上跑 AVX2 产物就是这个现象）。
+# 约束：respawn_period >= respawn_delay × respawn_max，否则 supervise-daemon
+# 会报 "Please decrease the value of --respawn-period" 并退化为无限重启。
+: "${respawn_delay:=5}"
+: "${respawn_period:=120}"
+: "${respawn_max:=10}"
+
+# 停止：先 SIGTERM，超时再 SIGKILL。
+: "${retry:=TERM/5/KILL/5}"
+
+depend() {
+    need net
+    after localmount
+}
+
+start_pre() {
+    # Diretta Host 与 ALSA 实时输出需要锁定内存，等价 systemd 单元的
+    # LimitMEMLOCK=infinity。普通 ALSA 播放不依赖它，所以失败也不阻断启动。
+    ulimit -l unlimited 2>/dev/null || true
+}

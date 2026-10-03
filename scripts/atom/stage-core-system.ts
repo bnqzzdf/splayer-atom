@@ -202,6 +202,18 @@ cpSync(
   path.join(outputDir, "service", "install-systemd.sh"),
 );
 chmodSync(path.join(outputDir, "service", "install-systemd.sh"), 0o755);
+// 无 systemd 的目标机（GentooPlayer 等 OpenRC 系统）走这一对：init.d 脚本按原样安装
+// （安装根由 conf.d 提供，脚本里没有机器相关路径），安装器负责写 conf.d。
+cpSync(
+  path.join(root, "scripts", "atom", "core-system", "splayer-atom-core.openrc"),
+  path.join(outputDir, "service", "splayer-atom-core.openrc"),
+);
+chmodSync(path.join(outputDir, "service", "splayer-atom-core.openrc"), 0o755);
+cpSync(
+  path.join(root, "scripts", "atom", "core-system", "install-openrc.sh"),
+  path.join(outputDir, "service", "install-openrc.sh"),
+);
+chmodSync(path.join(outputDir, "service", "install-openrc.sh"), 0o755);
 mkdirSync(path.join(outputDir, "docs"), { recursive: true });
 cpSync(
   path.join(root, "docs", "core-deployment.md"),

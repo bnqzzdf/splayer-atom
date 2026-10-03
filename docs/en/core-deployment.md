@@ -98,6 +98,11 @@ sudo systemctl enable --now splayer-atom-core
 
 The helper installs a unit pointing to the actual extracted directory. It does not start or enable the service automatically.
 
+On a host without systemd (OpenRC systems such as GentooPlayer) use the artifact's
+`service/install-openrc.sh --user <account>` / `--diretta` instead, followed by
+`rc-update add splayer-atom-core default` and `rc-service splayer-atom-core start`; see
+[GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md).
+
 The service account must have read/write access to the installation `data/` directory and the configured XDG cache directory, plus the host audio-device permissions required for ALSA.
 
 ### systemd for Diretta Core

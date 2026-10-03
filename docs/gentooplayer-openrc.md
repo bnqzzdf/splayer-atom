@@ -48,7 +48,8 @@ OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。
 
 ### 推荐骨架
 
-下面的骨架可以直接用于 Core（已在 GP 上验证过等价形态：`/etc/init.d/splayer-atom-core`）：
+产物里自带的 `service/splayer-atom-core.openrc` 就是下面这个骨架（`install-openrc.sh` 按原样
+安装，不做 sed 改写），因此本节同时是「读懂产物脚本」和「自己写 GP 服务」的说明：
 
 ```sh
 #!/sbin/openrc-run
@@ -103,8 +104,11 @@ start_pre() {
    约束来自实测，仓库内 `_materials/integration/openrc-headless/etc-init.d-splayer-headless` 保留了该注释）。
 6. `pidfile` 放 `/run`（tmpfs），不要放安装目录；`output_log`/`error_log` 放 `/var/log`，
    安装目录不应用来堆积生产日志（与 Core 的日志约定一致）。
-7. **可覆盖的参数都放进 `/etc/conf.d/<服务名>`**，不要在脚本里写死环境变量。GP 的惯例是
-   脚本内给默认值（`: "${VAR:=默认}"`），`/etc/conf.d/<x>` 里改，OpenRC 会先 source 它。
+7. **可覆盖的参数都放进 `/etc/conf.d/<服务名>`**，不要在脚本里写死环境变量。OpenRC 会
+   **先** source `/etc/conf.d/<x>`、**再**执行 init.d 脚本体（本机用探针实测：
+   脚本体内读到的变量已经是 conf.d 的值），所以脚本里每一项可调参数都必须写成
+   `: "${VAR:=默认}"`；写成普通赋值 `VAR=默认` 会把 conf.d 的值覆盖掉，用户改了不生效。
+   想给 Core 传环境变量（例如 `ATOM_SERVER_PORT`），在 conf.d 里用 `export`。
 8. `start_pre()` / `stop_post()` 用来做前置校验与清理。实例：`rdsa` 的 `start_pre()` 依次做
    `ulimit -l unlimited` 和「生成或校验本机 RAAT 身份文件」——注意这类前置**失败不要阻断启动**，
    否则一个可选的校准步骤会让服务起不来。
@@ -151,16 +155,19 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core        # 应打印启动日志并监听 14558，Ctrl-C 退出
 ```
 
-3. 安装 OpenRC 服务脚本（**不要用 `service/install-systemd.sh`**，GP 上没有 systemctl）。
-   产物内 `service/` 目前只带 systemd 单元与安装脚本，所以 GP 上的 `/etc/init.d/<服务>` 要么按
-   上面的骨架写，要么取仓库 `_materials/integration/openrc-headless/` 里的现成资产改写
-   （那份是给上一代 headless 产品写的，路径与命令要按 Core 调整）：
+3. 安装 OpenRC 服务脚本。产物内自带这一对（**不要用 `service/install-systemd.sh`**，GP 上没有
+   systemctl）：
 
 ```sh
-sudo install -m 0755 ./splayer-atom-core.openrc /etc/init.d/splayer-atom-core
-# 可选：默认参数放 conf.d，便于以后改端口/运行用户而不动 init.d
-sudo install -m 0644 ./splayer-atom-core.conf   /etc/conf.d/splayer-atom-core
+sudo ./service/install-openrc.sh --user splayer-atom   # 普通 ALSA Core
+# 或: sudo ./service/install-openrc.sh --diretta        # Diretta Host / root
 ```
+
+安装器做三件事：把 `service/splayer-atom-core.openrc` 按原样装成 `/etc/init.d/splayer-atom-core`
+（0755），写 `/etc/conf.d/splayer-atom-core`（把**实际解包路径**写进 `SPLAYER_ATOM_ROOT`，
+`--user` 模式再写 `command_user`），并在重装时**保留你在 conf.d 里自己加的行**。
+它不替你启动、也不设开机自启（与 `install-systemd.sh` 的口径一致）；在 systemd 主机上它会
+直接拒绝并提示改用 `install-systemd.sh`。
 
 4. 开机自启 + 立即启动：
 
@@ -307,6 +314,8 @@ openrc default                                 # 重新走一遍 default 运行�
 ## 相关文件
 
 - 产物内的 systemd 安装路径：[Core 部署与升级](./core-deployment.md)
+- 产物内的 OpenRC 资产：`service/splayer-atom-core.openrc`（服务脚本）与
+  `service/install-openrc.sh`（安装器）；源文件在 `scripts/atom/core-system/`
 - 仓库内 OpenRC 资产：`_materials/integration/openrc-headless/`（`etc-init.d-splayer-headless`、
   `etc-init.d-splayer-android-web`、`部署说明.md`）
 - 仓库内 GP 菜单资产：`_materials/integration/gp-menu/`

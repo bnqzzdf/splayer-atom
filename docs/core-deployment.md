@@ -92,6 +92,11 @@ sudo systemctl enable --now splayer-atom-core
 
 该脚本安装的 unit 指向实际解包目录。它不会自动启动或启用服务。
 
+目标机没有 systemd（GentooPlayer 等 OpenRC 系统）时改用包内的
+`service/install-openrc.sh --user <账户>` / `--diretta`，再用
+`rc-update add splayer-atom-core default` + `rc-service splayer-atom-core start`，
+见 [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)。
+
 服务账户必须对安装目录下的 `data/` 与所配置的 XDG 缓存目录具备读写权限，并具备 ALSA 所需的音频设备权限。
 
 ### Diretta Core 的 systemd

@@ -52,8 +52,9 @@ meant to stay resident, check whether it is a `supervise-daemon` or self-managed
 
 ### Recommended skeleton
 
-This skeleton can be used directly for Core (an equivalent form is verified on GP as
-`/etc/init.d/splayer-atom-core`):
+The `service/splayer-atom-core.openrc` shipped in the artifact is exactly this skeleton
+(`install-openrc.sh` installs it verbatim, with no sed rewriting), so this section doubles as
+"how to read the shipped script" and "how to write your own GP service":
 
 ```sh
 #!/sbin/openrc-run
@@ -114,8 +115,11 @@ start_pre() {
    `output_log`/`error_log` under `/var/log`. The installation directory must not accumulate
    production log files (same contract as Core's logging rule).
 7. **Put every overridable parameter in `/etc/conf.d/<service>`** instead of hardcoding environment
-   variables in the script. The GP convention is to give defaults inside the script
-   (`: "${VAR:=default}"`) and override them in `/etc/conf.d/<x>`, which OpenRC sources first.
+   variables in the script. OpenRC sources `/etc/conf.d/<x>` **first** and only then executes the
+   init.d script body (measured on the baseline machine with a probe: the script body already sees
+   the conf.d value), so every tunable in the script must use `: "${VAR:=default}"`. A plain
+   `VAR=default` assignment overrides conf.d and the user's change silently does nothing. To pass
+   environment variables to Core (for example `ATOM_SERVER_PORT`), `export` them in conf.d.
 8. Use `start_pre()` / `stop_post()` for pre-flight checks and cleanup. Example: `rdsa`'s
    `start_pre()` runs `ulimit -l unlimited` and then generates or validates the machine-local RAAT
    identity file. Note that such a pre-flight step **must not block startup** — an optional
@@ -169,17 +173,20 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core        # should log startup and listen on 14558; Ctrl-C to exit
 ```
 
-3. Install the OpenRC service script (**do not use `service/install-systemd.sh`** — GP has no
-   systemctl). The artifact's `service/` directory currently ships only the systemd unit and
-   installer, so `/etc/init.d/<service>` on GP is either written from the skeleton above or adapted
-   from the assets in `_materials/integration/openrc-headless/` (those were written for the previous
-   headless product; paths and commands need adjusting for Core):
+3. Install the OpenRC service script. The artifact ships this pair (**do not use
+   `service/install-systemd.sh`** — GP has no systemctl):
 
 ```sh
-sudo install -m 0755 ./splayer-atom-core.openrc /etc/init.d/splayer-atom-core
-# Optional: keep defaults in conf.d so ports/run user can change without touching init.d
-sudo install -m 0644 ./splayer-atom-core.conf   /etc/conf.d/splayer-atom-core
+sudo ./service/install-openrc.sh --user splayer-atom   # plain ALSA Core
+# or: sudo ./service/install-openrc.sh --diretta        # Diretta Host / root
 ```
+
+The installer does three things: it installs `service/splayer-atom-core.openrc` verbatim as
+`/etc/init.d/splayer-atom-core` (0755), writes `/etc/conf.d/splayer-atom-core` with the **actual
+extracted root** in `SPLAYER_ATOM_ROOT` (plus `command_user` in `--user` mode), and preserves any
+lines you added to conf.d yourself when reinstalling. It does not start or enable the service (same
+contract as `install-systemd.sh`), and on a systemd host it refuses and points at
+`install-systemd.sh`.
 
 4. Enable at boot and start it now:
 
@@ -333,6 +340,8 @@ Logs and runtime surface:
 ## Related files
 
 - systemd installation path inside the artifact: [Core Deployment and Upgrade](./core-deployment.md)
+- OpenRC assets inside the artifact: `service/splayer-atom-core.openrc` (service script) and
+  `service/install-openrc.sh` (installer); sources live in `scripts/atom/core-system/`
 - OpenRC assets in this repository: `_materials/integration/openrc-headless/`
   (`etc-init.d-splayer-headless`, `etc-init.d-splayer-android-web`, `部署说明.md`)
 - GP menu assets in this repository: `_materials/integration/gp-menu/`
