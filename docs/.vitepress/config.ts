@@ -36,6 +36,7 @@ const zhTheme: DefaultTheme.Config = {
       text: "部署与发布",
       items: [
         { text: "Core 部署", link: "/core-deployment" },
+        { text: "GentooPlayer / OpenRC", link: "/gentooplayer-openrc" },
         { text: "构建与打包", link: "/build-and-packaging" },
         { text: "Build Flavors", link: "/build-flavors" },
         { text: "CPU 变体", link: "/cpu-variants" },
@@ -110,6 +111,7 @@ const enTheme: DefaultTheme.Config = {
       text: "Build and Development",
       items: [
         { text: "Core Deployment", link: "/en/core-deployment" },
+        { text: "GentooPlayer / OpenRC", link: "/en/gentooplayer-openrc" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
         { text: "Contributing", link: "/en/contributing" },

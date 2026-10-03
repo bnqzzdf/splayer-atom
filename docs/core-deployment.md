@@ -1,8 +1,12 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-03
 
 本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
+
+以下步骤以 **systemd** 为目标 init 系统。GentooPlayer 等 **OpenRC** 目标机没有 systemd，
+产物内的 `service/install-systemd.sh` 在那里不可用；产物布局、`data/` 语义与回滚原则完全相同，
+只有服务注册与启停命令不同，见 [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)。
 
 ## 运行期约定
 
@@ -202,6 +206,11 @@ journalctl -u splayer-atom-core -n 200 --no-pager
 node --version
 cat /opt/splayer-atom-core/runtime.json
 ```
+
+在 OpenRC 目标机（GentooPlayer）上对应的检查是
+`rc-service splayer-atom-core status`（退出码 0=started、3=stopped）、
+`rc-status default` 与 `/var/log/splayer-atom-core.log`，见
+[GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)。
 
 `runtime.json` 同时也是发布溯源记录。诊断安装时请核对 `productName`、`atomVersion`、`atomCommit`、
 `sourceDirty`、协议 / schema 版本以及运行期能力。正式干净发布应记录 `sourceDirty: false`；

@@ -4,7 +4,7 @@ title: Download and Deployment
 
 # Download and Deployment
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 SPlayer Atom ships only Linux x86-64 Core artifacts. There is no Desktop installer.
 
@@ -22,4 +22,5 @@ Both run the same Node Core and Web Control. Debian 11 bundled builds also retai
 `-debian11-without-diretta` or `-debian11-with-diretta-<variant>` suffixes; Diretta is selected
 at build time. See [Build and Packaging](./build-and-packaging.md) for the commands.
 
-Follow [Core Deployment](./core-deployment.md) for extraction, data directories, systemd, upgrades, and rollback.
+Follow [Core Deployment](./core-deployment.md) for extraction, data directories, systemd, upgrades and rollback;
+on OpenRC targets such as GentooPlayer use [GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md) instead.

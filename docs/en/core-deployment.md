@@ -1,8 +1,13 @@
 # SPlayer Atom Core Deployment and Upgrade
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
+
+The steps below target **systemd**. **OpenRC** targets such as GentooPlayer have no systemd, so the
+`service/install-systemd.sh` shipped inside the artifact cannot be used there; the artifact layout,
+the `data/` contract and the rollback rules are identical, and only service registration and the
+start/stop commands differ. See [GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md).
 
 ## Runtime contract
 
@@ -202,6 +207,11 @@ journalctl -u splayer-atom-core -n 200 --no-pager
 node --version
 cat /opt/splayer-atom-core/runtime.json
 ```
+
+On an OpenRC target (GentooPlayer) the equivalent checks are
+`rc-service splayer-atom-core status` (exit code 0=started, 3=stopped), `rc-status default` and
+`/var/log/splayer-atom-core.log`; see
+[GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md).
 
 `runtime.json` is also the release provenance record. Verify `productName`, `atomVersion`, `atomCommit`, `sourceDirty`, protocol/schema versions and runtime capabilities when diagnosing an installation. A formal clean release is expected to record `sourceDirty: false`; a locally built archive from an uncommitted worktree records `true` explicitly instead of pretending the Git commit alone identifies the exact source tree.
 
