@@ -1,6 +1,6 @@
 # SPlayer Atom hardware release checklist
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 This document records the manual acceptance steps for a target audio host. Source builds, fixtures and
 fake ALSA/Diretta cannot replace functional verification on the actual output device; DAC-side
@@ -225,7 +225,10 @@ for real-hardware results:
 - The mixed PCM/DSD overnight loop is already complete; for the release candidate it is enough to record
   short continuous playback, Track count, error/recovery counts and memory trend for the final artifact,
   unless this release changed the playback/output lifecycle.
-- systemd start/stop/restart, SIGTERM, upgrade and rollback.
+- Service lifecycle: on systemd targets run `systemctl start/stop/restart`; on OpenRC targets
+  (GentooPlayer) run `rc-service start/stop/restart` (`status` exits 0=started, 3=stopped). Exercise
+  SIGTERM, upgrade and rollback on both; see
+  [GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md).
 
 ## 5. Acceptance record template
 

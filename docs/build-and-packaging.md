@@ -1,6 +1,6 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-03
 
 本文描述当前唯一正式产品：**Linux x86-64 Node Core + Web Control**。
 
@@ -80,7 +80,7 @@ pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublishe
 
 它**只跳过检查**，不会把身份改成已发布——这样的产物不能作为发布交付。
 
-staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、systemd unit、启动脚本和部署文档。
+staging 内容包括 Core JS、Web Control、两个自研 native addons、`better-sqlite3` 等运行依赖、`runtime.json`、LICENSE、启动脚本和部署文档，以及**并列的两套服务定义**：systemd unit + `install-systemd.sh`、OpenRC 脚本 + `install-openrc.sh`（GentooPlayer 等无 systemd 的目标机，见 [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)）。
 
 ## 源码交付包
 

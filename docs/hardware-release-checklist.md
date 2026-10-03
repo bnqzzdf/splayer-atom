@@ -1,6 +1,6 @@
 # SPlayer Atom 硬件发布验收清单
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-03
 
 本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
 实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。
@@ -186,7 +186,9 @@ pnpm check:hardware-release -- \
 - 单曲开始/停止、三首 auto-next、ALSA ↔ Diretta output switch。
 - 混合 PCM/DSD 过夜循环已完成；release candidate 记录最终 artifact 的短时连续播放、Track 数、
   错误/恢复次数和内存趋势即可，除非本次 release 修改了 playback/output lifecycle。
-- systemd start/stop/restart、SIGTERM、升级与回滚。
+- 服务生命周期：systemd 目标机走 `systemctl start/stop/restart`；OpenRC 目标机（GentooPlayer）走
+  `rc-service start/stop/restart`（`status` 退出码 0=started、3=stopped），两者的 SIGTERM、升级与回滚
+  都要过一遍，见 [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)。
 
 ## 5. 验收记录模板
 

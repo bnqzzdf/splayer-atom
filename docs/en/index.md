@@ -27,10 +27,12 @@ features:
     details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 ## Product boundary
 
 SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.
 
-Continue with the [User Guide](./guide.md), [Build and Packaging](./build-and-packaging.md), or [Core Deployment](./core-deployment.md).
+Continue with the [User Guide](./guide.md), [Build and Packaging](./build-and-packaging.md),
+[Core Deployment](./core-deployment.md), or
+[GentooPlayer / OpenRC](./gentooplayer-openrc.md).

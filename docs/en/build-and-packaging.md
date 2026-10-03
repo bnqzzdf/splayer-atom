@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 The only formal product is **Linux x86-64 Node Core + Web Control**.
 
@@ -98,6 +98,12 @@ published=true
 
 `published=true` is honored only together with a network `remote`; with a local-path `remote` the
 identity is treated as unpublished.
+
+The staging contents include the Core JS, Web Control, both in-house native addons, runtime
+dependencies such as `better-sqlite3`, `runtime.json`, LICENSE, the launcher and the deployment guide,
+plus **two parallel service definitions**: the systemd unit with `install-systemd.sh`, and the OpenRC
+script with `install-openrc.sh` (for targets without systemd such as GentooPlayer; see
+[GentooPlayer (OpenRC) Service Management](./gentooplayer-openrc.md)).
 
 For local experiments that explicitly do not need a release identity:
 

@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 ## Current status
 
@@ -102,6 +102,7 @@ and stricter browser-origin controls require a later accepted product requiremen
 | [Development guide](./atom-development.md)                                                         | Environment, checks and conventions                     |
 | [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)               | Core/Web artifacts and variants                         |
 | [Core deployment](./core-deployment.md)                                                            | systemd, durable data, install, upgrade and rollback    |
+| [GentooPlayer (OpenRC) service management](./gentooplayer-openrc.md)                               | OpenRC service development, deployment, upgrade, triage |
 | [Hardware checklist](./hardware-release-checklist.md)                                              | ALSA, Diretta and UPnP release checks                   |
 | [Provider acceptance](./live-provider-acceptance.md)                                               | Real-account criteria                                   |
 | [ALSA plan](./alsa-output-plan.md), [UPnP plan](./upnp-output-plan.md)                             | Output implementation and remaining checks              |

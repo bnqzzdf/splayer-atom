@@ -1,6 +1,6 @@
 # SPlayer Atom 路线图
 
-> 最后更新：2026-09-29
+> 最后更新：2026-10-03
 
 ## 当前状态
 
@@ -117,6 +117,7 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 | [开发指南](./atom-development.md)                                                             | 环境、检查与约定                    |
 | [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md)                        | Core/Web 产物与变体                 |
 | [Core 部署](./core-deployment.md)                                                             | systemd、持久状态、安装、升级与回滚 |
+| [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)                                    | OpenRC 服务开发、部署、升级与排障   |
 | [硬件清单](./hardware-release-checklist.md)                                                   | ALSA、Diretta 与 UPnP 发布检查      |
 | [Provider 验收](./live-provider-acceptance.md)                                                | 真实账户验收标准                    |
 | [ALSA 方案](./alsa-output-plan.md)、[UPnP 方案](./upnp-output-plan.md)                        | 输出实现与剩余检查                  |
