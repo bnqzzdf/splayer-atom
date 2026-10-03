@@ -5,6 +5,9 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 INIT_SOURCE="$ROOT_DIR/service/splayer-atom-core.openrc"
 INIT_TARGET="/etc/init.d/splayer-atom-core"
 CONF_TARGET="/etc/conf.d/splayer-atom-core"
+# 这一行由本脚本维护：重装时先删掉它自己（连同它管的两个赋值），再重写一遍，
+# 避免多次安装把注释叠成好几层。
+CONF_HEADER="# 由 service/install-openrc.sh 生成：安装根与运行用户由它维护，其余内容可自行追加。"
 MODE=""
 SERVICE_USER=""
 
@@ -69,13 +72,15 @@ install -m 0755 "$INIT_SOURCE" "$INIT_TARGET"
 TMP_CONF=$(mktemp)
 trap 'rm -f "$TMP_CONF"' EXIT HUP INT TERM
 {
-  echo "# 由 service/install-openrc.sh 生成：安装根与运行用户由它维护，其余内容可自行追加。"
+  echo "$CONF_HEADER"
   echo "SPLAYER_ATOM_ROOT=\"$ROOT_DIR\""
   if [ "$MODE" = user ]; then
     echo "command_user=\"$SERVICE_USER\""
   fi
   if [ -f "$CONF_TARGET" ]; then
-    grep -v -E '^[[:space:]]*(SPLAYER_ATOM_ROOT|command_user)=' "$CONF_TARGET" | grep -v -E '^[[:space:]]*$' || true
+    grep -v -E '^[[:space:]]*(SPLAYER_ATOM_ROOT|command_user)=' "$CONF_TARGET" \
+      | grep -v -F "$CONF_HEADER" \
+      | grep -v -E '^[[:space:]]*$' || true
   fi
 } > "$TMP_CONF"
 install -m 0644 "$TMP_CONF" "$CONF_TARGET"

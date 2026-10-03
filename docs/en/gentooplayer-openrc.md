@@ -106,6 +106,10 @@ start_pre() {
    `SIGILL` (exit code 132) on a Celeron J1900 without AVX, and the only trace was
    `[supervisor] rdsa exited code=132 after 0s, restarting in …` in the log while the service state
    said started. A bounded restart (5s / 120s / 10 tries as above) surfaces the problem immediately.
+   **Measured**: pointing `SPLAYER_ATOM_ROOT` at a fake launcher that exits 132 made
+   `supervise-daemon` give up on the **11th** crash and `rc-service status` flip from `started` to
+   `stopped` (rc=3); with an unbounded setting the same scenario only ever reported started while
+   the log grew silently.
 5. `respawn_period >= respawn_delay × respawn_max` is an observed constraint: when it is not met,
    `supervise-daemon` prints `Please decrease the value of --respawn-period …` and degrades to
    unlimited restarts (`respawn_max` defaults to 10 and `respawn_period` to 12s per
@@ -336,6 +340,7 @@ Logs and runtime surface:
 | Turned off in the menu but still running            | `rc-status default`, `ps`                                | started by another runlevel or by hand; `disable` only covers the default runlevel             |
 | Menu shows NOT INSTALLED                            | `command=` in `/etc/init.d/<x>`                          | GP's probe checks whether the file `command=` points at exists (see `script/enable/values.sh`) |
 | `systemctl` not found inside a script               | —                                                        | GP has no systemd; service management must use `rc-*` (the skeleton above already does)        |
+| conf.d change has no effect                         | is that line a plain `VAR=default` in the script         | a plain assignment overrides conf.d; use `: "${VAR:=default}"` (OpenRC sources conf.d first)   |
 
 ## Related files
 

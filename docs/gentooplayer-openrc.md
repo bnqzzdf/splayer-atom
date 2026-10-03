@@ -97,7 +97,10 @@ start_pre() {
    而 `rc-service <x> status` **仍然显示 started**（托管的是外壳进程）。我们在 GP 上踩过两次：
    `rdsa` 的 AVX2 产物在无 AVX 的 Celeron J1900 上 `SIGILL`（退出码 132），日志里只有
    `[supervisor] rdsa exited code=132 after 0s, restarting in …`，服务状态却是 started。
-   有界重启（如上 5s / 120s / 10 次）会让状态与日志立刻暴露问题。
+   有界重启（如上 5s / 120s / 10 次）会让状态与日志立刻暴露问题。**实测**：把 `SPLAYER_ATOM_ROOT`
+   指向一个 `exit 132` 的假启动器后，`supervise-daemon` 在第 **11** 次崩溃时放弃退出，
+   `rc-service status` 从 `started` 变成 `stopped`（rc=3）；同一场景在不限次时只会一直显示
+   started，日志默默增长。
 5. `respawn_period >= respawn_delay × respawn_max` 是实测约束：不满足时 `supervise-daemon`
    会打印 `Please decrease the value of --respawn-period …` 并退化为无限重启
    （`respawn_max` 自身默认 10，`respawn_period` 默认 12s；数值取自 `man 8 supervise-daemon`，
@@ -301,15 +304,16 @@ openrc default                                 # 重新走一遍 default 运行�
 
 ## 排障清单
 
-| 现象                            | 先看什么                                          | 常见根因                                                                      |
-| ------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `status` 是 started，功能不通   | `/var/log/<x>.err.log`、子进程是否在              | 无限重启掩盖了子进程崩溃（`respawn_max=0` + SIGILL/缺库）                     |
-| `status` 是 3，起不来           | `/var/log/<x>.err.log`、`depend()`                | 依赖未满足（`need net` 但网络没起来）、`command=` 路径不存在                  |
-| 改了 init.d 没生效              | `rc-service <x> zap` 后重试                       | 状态缓存仍是旧状态                                                            |
-| 开机不自启                      | `rc-update show -v`、`/etc/runlevels/default/<x>` | 忘了 `rc-update add`，或一次性服务自己 `stop` 了                              |
-| 菜单里关掉了但还在跑            | `rc-status default`、`ps`                         | 服务被其它运行级或手工命令拉起；`disable` 只管 default 运行级                 |
-| 菜单显示 NOT INSTALLED          | `/etc/init.d/<x>` 的 `command=`                   | GP 的探针按 `command=` 指向的文件是否存在判断（见 `script/enable/values.sh`） |
-| 脚本里 `systemctl` 报 not found | —                                                 | GP 没有 systemd，服务管理必须走 `rc-*`（本页骨架已按此写）                    |
+| 现象                            | 先看什么                                          | 常见根因                                                                           |
+| ------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `status` 是 started，功能不通   | `/var/log/<x>.err.log`、子进程是否在              | 无限重启掩盖了子进程崩溃（`respawn_max=0` + SIGILL/缺库）                          |
+| `status` 是 3，起不来           | `/var/log/<x>.err.log`、`depend()`                | 依赖未满足（`need net` 但网络没起来）、`command=` 路径不存在                       |
+| 改了 init.d 没生效              | `rc-service <x> zap` 后重试                       | 状态缓存仍是旧状态                                                                 |
+| 开机不自启                      | `rc-update show -v`、`/etc/runlevels/default/<x>` | 忘了 `rc-update add`，或一次性服务自己 `stop` 了                                   |
+| 菜单里关掉了但还在跑            | `rc-status default`、`ps`                         | 服务被其它运行级或手工命令拉起；`disable` 只管 default 运行级                      |
+| 菜单显示 NOT INSTALLED          | `/etc/init.d/<x>` 的 `command=`                   | GP 的探针按 `command=` 指向的文件是否存在判断（见 `script/enable/values.sh`）      |
+| 脚本里 `systemctl` 报 not found | —                                                 | GP 没有 systemd，服务管理必须走 `rc-*`（本页骨架已按此写）                         |
+| conf.d 里改了参数不生效         | 脚本里该项是不是 `VAR=默认`                       | 普通赋值会覆盖 conf.d 的值；必须写成 `: "${VAR:=默认}"`（OpenRC 先 source conf.d） |
 
 ## 相关文件
 

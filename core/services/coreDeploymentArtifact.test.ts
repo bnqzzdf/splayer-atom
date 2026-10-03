@@ -94,6 +94,14 @@ test("Core OpenRC installer binds the service to the actual extracted root and k
     openrcInstallerSource,
     /grep -v -E '\^\[\[:space:\]\]\*\(SPLAYER_ATOM_ROOT\|command_user\)='/,
   );
+  // 头注释只能由脚本维护一份：重装三次不能叠成三层（实测踩过这个坑）
+  assert.match(openrcInstallerSource, /^CONF_HEADER=".*install-openrc\.sh 生成.*"$/m);
+  assert.match(openrcInstallerSource, /grep -v -F "\$CONF_HEADER"/);
+  assert.equal(
+    openrcInstallerSource.split("install-openrc.sh 生成").length - 1,
+    1,
+    "生成的头注释只能在 CONF_HEADER 里出现一次",
+  );
 });
 
 test("Core OpenRC service script matches the systemd unit and bounds restarts", () => {
