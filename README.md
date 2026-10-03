@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-03
 
 **简体中文** · [English](./README.en.md)
 
@@ -170,12 +170,13 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
   pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2
 ```
 
-归档**顶层就是安装根**，解包到目标目录即可（不需要 `--strip-components`）。systemd、数据目录、升级与回滚流程见 [Core 部署与升级](./docs/core-deployment.md)。
+归档**顶层就是安装根**，解包到目标目录即可（不需要 `--strip-components`）。产物内的 `service/` 并列两套服务定义：`install-systemd.sh`（systemd 目标机）与 `install-openrc.sh`（GentooPlayer 等 OpenRC 目标机）。数据目录、升级与回滚流程见 [Core 部署与升级](./docs/core-deployment.md)；OpenRC 侧见 [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)。
 
 ## 文档
 
 - [使用指南](./docs/guide.md)
 - [Core 部署与升级](./docs/core-deployment.md)（systemd、数据目录、升级、回滚）
+- [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)（OpenRC 服务开发、部署、升级与排障）
 - [构建与打包](./docs/build-and-packaging.md) · [构建面](./docs/build-flavors.md) · [CPU 变体](./docs/cpu-variants.md)
 - [开发环境](./docs/atom-development.md) · [路线图](./docs/atom-roadmap.md) · [已完成事项](./docs/atom-completed.md)
 - [原生模块](./docs/native.md) · [Qobuz / TIDAL Rust 协议引擎](./docs/streaming-rust-guide.md)

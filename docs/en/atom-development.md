@@ -1,6 +1,6 @@
 # SPlayer Atom Development Setup
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
 live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.
@@ -36,7 +36,9 @@ native/audio-engine-core shared Rust audio engine
 native/streaming-api/    Qobuz/TIDAL native protocol engine
 native/diretta-sys/      Diretta Host SDK FFI
 scripts/atom/            Core build, staging and release checks
-docs/                    Atom documentation
+scripts/atom/core-system/ service definitions and launcher: systemd unit, OpenRC script, both installers
+docker/atom-debian11/    Debian 11 compatibility build image (the packaging path used on .133)
+docs/                    Atom documentation (bilingual; English under docs/en/)
 ```
 
 `@main/*` is the TypeScript alias for the `core/` tree.

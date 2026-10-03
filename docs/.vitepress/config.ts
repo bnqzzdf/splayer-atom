@@ -7,7 +7,13 @@ const zhTheme: DefaultTheme.Config = {
   nav: [
     { text: "首页", link: "/" },
     { text: "使用指南", link: "/guide" },
-    { text: "部署", link: "/core-deployment" },
+    {
+      text: "部署",
+      items: [
+        { text: "Core 部署（systemd）", link: "/core-deployment" },
+        { text: "GentooPlayer / OpenRC", link: "/gentooplayer-openrc" },
+      ],
+    },
     {
       text: "开发",
       items: [
@@ -85,7 +91,13 @@ const enTheme: DefaultTheme.Config = {
   nav: [
     { text: "Home", link: "/en/" },
     { text: "User Guide", link: "/en/guide" },
-    { text: "Deployment", link: "/en/core-deployment" },
+    {
+      text: "Deployment",
+      items: [
+        { text: "Core Deployment (systemd)", link: "/en/core-deployment" },
+        { text: "GentooPlayer / OpenRC", link: "/en/gentooplayer-openrc" },
+      ],
+    },
     {
       text: "Development",
       items: [

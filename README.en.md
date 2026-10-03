@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-09-28
+> Last updated: 2026-10-03
 
 [简体中文](./README.md) · **English**
 
@@ -170,12 +170,13 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
   pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2
 ```
 
-The archive's **top level is the installation root**, so extracting it into the target directory is enough (no `--strip-components` needed). See [Core deployment and upgrades](./docs/en/core-deployment.md) for systemd, data directories, and the upgrade and rollback flow.
+The archive's **top level is the installation root**, so extracting it into the target directory is enough (no `--strip-components` needed). The `service/` directory inside the artifact carries two parallel service definitions: `install-systemd.sh` (systemd targets) and `install-openrc.sh` (OpenRC targets such as GentooPlayer). See [Core deployment and upgrades](./docs/en/core-deployment.md) for data directories and the upgrade and rollback flow, and [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md) for the OpenRC side.
 
 ## Documentation
 
 - [User guide](./docs/en/guide.md)
 - [Core deployment and upgrades](./docs/en/core-deployment.md) (systemd, data directories, upgrades, rollback)
+- [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md) (OpenRC service development, deployment, upgrade, triage)
 - [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/cpu-variants.md) (Chinese only)
 - [Development setup](./docs/en/atom-development.md) · [Roadmap](./docs/en/atom-roadmap.md) · [Completed work](./docs/en/atom-completed.md)
 - [Native modules](./docs/en/native.md) · [Qobuz / TIDAL Rust protocol engine](./docs/streaming-rust-guide.md) (Chinese only)

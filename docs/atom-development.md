@@ -1,6 +1,6 @@
 # SPlayer Atom 开发环境
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-03
 
 项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
 开发工作流与约定。
@@ -36,7 +36,9 @@ native/audio-engine-core shared Rust audio engine
 native/streaming-api/    Qobuz/TIDAL native protocol engine
 native/diretta-sys/      Diretta Host SDK FFI
 scripts/atom/            Core build, staging and release checks
-docs/                    Atom documentation
+scripts/atom/core-system/ 服务定义与启动器：systemd unit、OpenRC 脚本、两套安装器
+docker/atom-debian11/    Debian 11 兼容构建镜像（.133 上实际使用的打包路径）
+docs/                    Atom documentation（中英双语，英文在 docs/en/）
 ```
 
 `@main/*` 是 `core/` 目录树的 TypeScript 别名。
