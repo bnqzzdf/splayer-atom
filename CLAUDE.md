@@ -1,4 +1,4 @@
-# Claude Code Guidance
+# Claude Code 指引
 
-Read `AGENTS.md` for project constraints, `docs/atom-roadmap.md` for current priorities and acceptance
-status, and `docs/atom-development.md` for development, commit, and validation workflows.
+项目长期约束见 `AGENTS.md`；当前优先级与验收状态见 `docs/atom-roadmap.md`；
+开发、提交与验证工作流见 `docs/atom-development.md`。

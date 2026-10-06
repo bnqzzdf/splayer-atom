@@ -1,67 +1,64 @@
 # AGENTS.md
 
-## Scope and authority
+## 适用范围与效力
 
-- Product: Linux x86-64 Node Core with Web Control as the only UI, connected through Core HTTP/WS.
-  Scope is one user on a trusted LAN with one active output; extensions require accepted requirements.
-- This file defines lasting constraints. [Roadmap](docs/atom-roadmap.md) owns priorities and
-  acceptance status; [development guide](docs/atom-development.md) owns workflows and conventions.
-- Resolve documentation/code conflicts against accepted requirements: fix nonconforming code or
-  stale documentation. Existing code alone does not establish correctness.
+- 产品定位：Linux x86-64 上的 Node Core，Web Control 是唯一 UI，二者通过 Core HTTP/WS 交互。
+  适用范围是「可信局域网内的单个用户 + 单个活动输出」；扩展能力需要先有被接受的需求。
+- 本文件定义长期约束。[路线图](docs/atom-roadmap.md) 负责优先级与验收状态；
+  [开发指南](docs/atom-development.md) 负责工作流与约定。
+- 文档与代码冲突时，以被接受的**需求**为准：修正不合规的代码或过期的文档。
+  「代码本来就是这么写的」不构成正确性依据。
 
-## Core and implementation boundaries
+## Core 与实现边界
 
-- Core owns music-domain state, persistence, credentials, queue, playback policy, source resolution,
-  cache/preload, downloads, statistics, plugins, and output assignment.
-- Web sends high-level commands and consumes snapshots/events through existing Core contracts.
-  It may cache projections and own browser-local display preferences; playable URLs, retry/skip
-  policy, and Source Direct staging remain Core-owned.
-- ALSA and strict Diretta use the shared `audio-engine`; UPnP is a Core-owned single-renderer path
-  under the same playback authority.
-- Solve actual problems or accepted requirements with the smallest concrete change. Reuse existing
-  models, services, and contracts; never duplicate business authority or canonical state.
-- Optimize for minimal changes, simple implementations, stability, and performance. Do not add
-  safeguards, fallback paths, or tests solely for speculative edge cases.
-- When low-value features cause conflicts or complexity, propose removing them before adding
-  defensive machinery. Remove features only when authorized; keep implementation and verification
-  proportional to the actual task.
-- Split real responsibilities, but add abstractions only for demonstrated needs or repeated
-  duplication. Protocol, storage, and UI representations may differ without becoming new authorities.
+- Core 拥有：音乐领域状态、持久化、凭证、队列、播放策略、音源解析、缓存/预加载、
+  下载、统计、插件与输出分配。
+- Web 通过既有 Core 契约下发高层命令、消费快照与事件。它可以缓存投影数据，并拥有
+  浏览器本地的显示偏好；但可播放 URL、重试/跳过策略与 Source Direct 暂存始终归 Core 所有。
+- ALSA 与严格 Diretta 共用同一个 `audio-engine`；UPnP 是 Core 拥有的单渲染器路径，
+  处于同一套播放权威之下。
+- 用**最小的具体改动**解决真实问题或被接受的需求。复用既有模型、服务与契约；
+  绝不复制业务权威或权威状态。
+- 以「改动最小、实现简单、稳定、性能」为优化目标。不要仅出于臆测的边界情况就添加
+  保险措施、回退路径或测试。
+- 当低价值功能引发冲突或复杂度时，先提出**移除**它，而不是新增防御性机制。
+  只有获得授权才能移除功能；实现的深度与验证的强度要与实际任务相称。
+- 拆分真实职责，但只在「已证实的需要」或「反复出现的重复」出现时才引入抽象。
+  协议层、存储层与 UI 的表现可以不同，但不能各自成为新的权威。
 
-## Diretta and realtime audio
+## Diretta 与实时音频
 
-- Diretta is strict Source Direct: preserve PCM samples, effective bit depth, rate, and channels;
-  preserve the native DSD logical one-bit sequence, rate, and channels.
-- Lossless decode/container adaptation is allowed. Wider transport slots must preserve effective
-  integer sample bits; DSF/DFF bit-order adaptation must preserve the logical DSD sequence.
-- No resampling, remixing, normalization, ReplayGain, EQ/preamp, non-unity software gain, fade,
-  tempo, pitch, re-encoding, PCM fallback, DoP, or DSD-to-PCM.
-- Never route strict Diretta through the normal `f32` DSP/resampler path. Reject unsupported Target
-  formats explicitly; never silently process or fall back.
-- Keep allocation, locks, logging, discovery, negotiation, and avoidable copying out of the SDK
-  realtime callback.
+- Diretta 是严格的 Source Direct：保持 PCM 采样值、有效位深、采样率与声道数；
+  保持原生 DSD 的逻辑单比特序列、速率与声道数。
+- 允许无损解码与容器适配。更宽的传输槽位必须保持**有效整数采样位**；
+  DSF/DFF 的位序适配必须保持逻辑 DSD 序列。
+- 禁止：重采样、混音、归一化、ReplayGain、EQ/前级、非单位软件增益、淡入淡出、
+  变速、变调、重编码、PCM 回退、DoP、DSD 转 PCM。
+- 绝不要把严格 Diretta 接到常规 `f32` DSP/重采样路径上。显式拒绝不支持的 Target 格式；
+  绝不静默处理、绝不静默回退。
+- 把分配、加锁、日志、发现、协商与可避免的拷贝挡在 SDK 实时回调之外。
 
-## Data and resource ownership
+## 数据与资源所有权
 
-- Cross-process/Core protocol types live in `shared/types/`; import generated native addon types
-  from `@splayer/*` rather than duplicating them.
-- Frontend time is milliseconds; convert native seconds at the Core boundary.
-- Persist lightweight canonical `Track` values; load details/lyrics on demand and release large
-  objects after use. Centralize durable data/cache paths per [deployment](docs/core-deployment.md);
-  OpenRC targets (GentooPlayer) are covered by [docs/gentooplayer-openrc.md](docs/gentooplayer-openrc.md).
-- Host media files are user-owned: Atom must not expose commands or UI that delete music files.
-  Cleanup may remove only Atom-owned cache, temporary, staging, or partial-download files.
-- Caches need explicit eviction. Use appropriately sized images; pause RAF/canvas/high-frequency
-  UI work while Web Control is hidden.
-- ListenBrainz is Core-owned and performs no background work when disabled. When enabled,
-  SQLite/HTTP/retry work stays in its isolated child process and never blocks playback/audio paths.
-- Production Core logs go to stdout/stderr for systemd/journald.
+- 跨进程/Core 的协议类型放在 `shared/types/`；原生 addon 生成的类型从 `@splayer/*` 引入，
+  不要复制一份。
+- 前端时间单位是毫秒；在 Core 边界完成与原生秒的换算。
+- 只持久化轻量的权威 `Track` 值；详情与歌词按需加载，用完即释放大对象。
+  持久数据/缓存路径按[部署文档](docs/core-deployment.md)统一；OpenRC 目标机
+  （GentooPlayer）见 [docs/gentooplayer-openrc.md](docs/gentooplayer-openrc.md)。
+- 主机上的媒体文件归用户所有：Atom 不得提供删除音乐文件的命令或 UI。
+  清理只能删除 Atom 自有的缓存、临时、暂存或未完成下载的文件。
+- 缓存必须有明确的淘汰策略。使用尺寸合适的图片；Web Control 隐藏时暂停
+  RAF/canvas/高频 UI 工作。
+- ListenBrainz 归 Core 所有，禁用时不做任何后台工作。启用后，SQLite/HTTP/重试
+  都留在它独立的子进程里，绝不阻塞播放/音频路径。
+- 生产环境的 Core 日志写 stdout/stderr，交给 systemd/journald。
 
-## Engineering conventions
+## 工程约定
 
-- Preserve unrelated working-tree changes and keep independent changes separable.
-- Code comments are Chinese and explain non-obvious intent. Follow repository formatting and
-  auto-import/component-registration conventions.
+- 保留与本次改动无关的工作树改动，并让彼此独立的改动保持可分离。
+- 代码注释使用中文，并解释非显而易见的意图。遵循仓库的格式化与
+  自动导入/组件注册约定。
 
 ---
 
