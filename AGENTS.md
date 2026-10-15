@@ -1,212 +1,64 @@
 # AGENTS.md
 
-## 适用范围与效力
+## Scope and authority
 
-- 产品定位：Linux x86-64 上的 Node Core，Web Control 是唯一 UI，二者通过 Core HTTP/WS 交互。
-  适用范围是「可信局域网内的单个用户 + 单个活动输出」；扩展能力需要先有被接受的需求。
-- 本文件定义长期约束。[路线图](docs/atom-roadmap.md) 负责优先级与验收状态；
-  [开发指南](docs/atom-development.md) 负责工作流与约定。
-- 文档与代码冲突时，以被接受的**需求**为准：修正不合规的代码或过期的文档。
-  「代码本来就是这么写的」不构成正确性依据。
+- Product: Linux x86-64 Node Core with Web Control as the only UI, connected through Core HTTP/WS.
+  Scope is one user on a trusted LAN with one active output; extensions require accepted requirements.
+- This file defines lasting constraints. [Roadmap](docs/atom-roadmap.md) owns priorities and
+  acceptance status; [development guide](docs/atom-development.md) owns workflows and conventions.
+- Resolve documentation/code conflicts against accepted requirements: fix nonconforming code or
+  stale documentation. Existing code alone does not establish correctness.
 
-## Core 与实现边界
+## Core and implementation boundaries
 
-- Core 拥有：音乐领域状态、持久化、凭证、队列、播放策略、音源解析、缓存/预加载、
-  下载、统计、插件与输出分配。
-- Web 通过既有 Core 契约下发高层命令、消费快照与事件。它可以缓存投影数据，并拥有
-  浏览器本地的显示偏好；但可播放 URL、重试/跳过策略与 Source Direct 暂存始终归 Core 所有。
-- ALSA 与严格 Diretta 共用同一个 `audio-engine`；UPnP 是 Core 拥有的单渲染器路径，
-  处于同一套播放权威之下。
-- 用**最小的具体改动**解决真实问题或被接受的需求。复用既有模型、服务与契约；
-  绝不复制业务权威或权威状态。
-- 以「改动最小、实现简单、稳定、性能」为优化目标。不要仅出于臆测的边界情况就添加
-  保险措施、回退路径或测试。
-- 当低价值功能引发冲突或复杂度时，先提出**移除**它，而不是新增防御性机制。
-  只有获得授权才能移除功能；实现的深度与验证的强度要与实际任务相称。
-- 拆分真实职责，但只在「已证实的需要」或「反复出现的重复」出现时才引入抽象。
-  协议层、存储层与 UI 的表现可以不同，但不能各自成为新的权威。
+- Core owns music-domain state, persistence, credentials, queue, playback policy, source resolution,
+  cache/preload, downloads, statistics, plugins, and output assignment.
+- Web sends high-level commands and consumes snapshots/events through existing Core contracts.
+  It may cache projections and own browser-local display preferences; playable URLs, retry/skip
+  policy, and Source Direct staging remain Core-owned.
+- ALSA and strict Diretta use the shared `audio-engine`; UPnP is a Core-owned single-renderer path
+  under the same playback authority.
+- Solve actual problems or accepted requirements with the smallest concrete change. Reuse existing
+  models, services, and contracts; never duplicate business authority or canonical state.
+- Optimize for minimal changes, simple implementations, stability, and performance. Do not add
+  safeguards, fallback paths, or tests solely for speculative edge cases.
+- When low-value features cause conflicts or complexity, propose removing them before adding
+  defensive machinery. Remove features only when authorized; keep implementation and verification
+  proportional to the actual task.
+- Split real responsibilities, but add abstractions only for demonstrated needs or repeated
+  duplication. Protocol, storage, and UI representations may differ without becoming new authorities.
 
-## Diretta 与实时音频
+## Diretta and realtime audio
 
-- Diretta 是严格的 Source Direct：保持 PCM 采样值、有效位深、采样率与声道数；
-  保持原生 DSD 的逻辑单比特序列、速率与声道数。
-- 允许无损解码与容器适配。更宽的传输槽位必须保持**有效整数采样位**；
-  DSF/DFF 的位序适配必须保持逻辑 DSD 序列。
-- 禁止：重采样、混音、归一化、ReplayGain、EQ/前级、非单位软件增益、淡入淡出、
-  变速、变调、重编码、PCM 回退、DoP、DSD 转 PCM。
-- 绝不要把严格 Diretta 接到常规 `f32` DSP/重采样路径上。显式拒绝不支持的 Target 格式；
-  绝不静默处理、绝不静默回退。
-- 把分配、加锁、日志、发现、协商与可避免的拷贝挡在 SDK 实时回调之外。
+- Diretta is strict Source Direct: preserve PCM samples, effective bit depth, rate, and channels;
+  preserve the native DSD logical one-bit sequence, rate, and channels.
+- Lossless decode/container adaptation is allowed. Wider transport slots must preserve effective
+  integer sample bits; DSF/DFF bit-order adaptation must preserve the logical DSD sequence.
+- No resampling, remixing, normalization, ReplayGain, EQ/preamp, non-unity software gain, fade,
+  tempo, pitch, re-encoding, PCM fallback, DoP, or DSD-to-PCM.
+- Never route strict Diretta through the normal `f32` DSP/resampler path. Reject unsupported Target
+  formats explicitly; never silently process or fall back.
+- Keep allocation, locks, logging, discovery, negotiation, and avoidable copying out of the SDK
+  realtime callback.
 
-## 数据与资源所有权
+## Data and resource ownership
 
-- 跨进程/Core 的协议类型放在 `shared/types/`；原生 addon 生成的类型从 `@splayer/*` 引入，
-  不要复制一份。
-- 前端时间单位是毫秒；在 Core 边界完成与原生秒的换算。
-- 只持久化轻量的权威 `Track` 值；详情与歌词按需加载，用完即释放大对象。
-  持久数据/缓存路径按[部署文档](docs/core-deployment.md)统一；OpenRC 目标机
-  （GentooPlayer）见 [docs/gentooplayer-openrc.md](docs/gentooplayer-openrc.md)。
-- 主机上的媒体文件归用户所有：Atom 不得提供删除音乐文件的命令或 UI。
-  清理只能删除 Atom 自有的缓存、临时、暂存或未完成下载的文件。
-- 缓存必须有明确的淘汰策略。使用尺寸合适的图片；Web Control 隐藏时暂停
-  RAF/canvas/高频 UI 工作。
-- ListenBrainz 归 Core 所有，禁用时不做任何后台工作。启用后，SQLite/HTTP/重试
-  都留在它独立的子进程里，绝不阻塞播放/音频路径。
-- 生产环境的 Core 日志写 stdout/stderr，交给 systemd/journald。
+- Cross-process/Core protocol types live in `shared/types/`; import generated native addon types
+  from `@splayer/*` rather than duplicating them.
+- Frontend time is milliseconds; convert native seconds at the Core boundary.
+- Persist lightweight canonical `Track` values; load details/lyrics on demand and release large
+  objects after use. Centralize durable data/cache paths per [deployment](docs/core-deployment.md);
+  OpenRC targets (GentooPlayer) are covered by [docs/gentooplayer-openrc.md](docs/gentooplayer-openrc.md).
+- Host media files are user-owned: Atom must not expose commands or UI that delete music files.
+  Cleanup may remove only Atom-owned cache, temporary, staging, or partial-download files.
+- Caches need explicit eviction. Use appropriately sized images; pause RAF/canvas/high-frequency
+  UI work while Web Control is hidden.
+- ListenBrainz is Core-owned and performs no background work when disabled. When enabled,
+  SQLite/HTTP/retry work stays in its isolated child process and never blocks playback/audio paths.
+- Production Core logs go to stdout/stderr for systemd/journald.
 
-## 工程约定
+## Engineering conventions
 
-- 保留与本次改动无关的工作树改动，并让彼此独立的改动保持可分离。
-- 代码注释使用中文，并解释非显而易见的意图。遵循仓库的格式化与
-  自动导入/组件注册约定。
-
----
-
-# 工程实施纪律（R1～R10）
-
-> 本节同步自跨项目标准 **`harmonyosnews/engineering-standards`**
-> （本机路径 `~/engineering-standards`），适用于本仓库的**一切代码变更、构建、
-> 部署与调试**；非工程类任务不适用。
-> **上文是本仓库的项目专有约定；两者冲突时以项目专有约定为准。**
->
-> 本仓库的环境体检件：`envcheck/specs/splayer-atom-core.yml`（位于 engineering-standards 仓库）。
-> 通用引擎 `envcheck/envcheck.py`；改完检查单必须先跑 `envcheck/assert_envcheck.py`
-> （它会校验全部检查单的只读性质与登记册一致性）。
-
-> 本项目在登记册中的状态见 `ENGINEERING-PROJECTS.md` 的 `splayer-atom-core` 行。
-
-## R1 ★ 首选规则：环境可判定性优先
-
-**在写第一行业务代码之前**，先交付环境可判定性，四件事：
-
-1. **环境前提清单** —— 逐条列出项目依赖的外部实体（服务进程 / 硬件设备 /
-   网络 / 权限 / 配置），并写明每个实体的"满足"判据。
-2. **环境体检脚本** —— 独立于主程序，逐项检查，**输出一句可执行的结论**
-   （不是一堆原始数据）。
-3. **基线机制** —— 已知良好状态可 `--record`；之后逐次比对，识别"部分降级"。
-4. **开机自检** —— 主程序启动时自动跑一次，结论进日志；**永不阻断启动**。
-
-三条硬性质：
-
-- **双向结论**：既能说"环境不满足（**与代码无关**）"，也能说"环境正常
-  （**问题在代码侧**）"。只说其一等于没做——无法排除环境就不能确认代码。
-- **只读**：体检绝不允许改变被测系统的状态（不占资源、不建会话、不写入）。
-  该性质必须写成断言，并有实测记录。
-- **被断言守住**：体检脚本本身纳入构建闸门（R2）。
-
-**判据**：如果你无法回答"这个现象是环境造成的还是代码造成的"，
-那么你接下来的所有调试都不可信。
-
-**何时必须触发 R1**：出现"看起来像缺陷但无法复现/时好时坏"的现象时，
-**先跑环境体检，再改代码**——不允许先改代码后观测。
-
-### R1.1 ★ 回溯义务：已有项目也必须补建，不得豁免
-
-**"代码已经写好"不是跳过的理由。** 恰恰相反——已有项目积累的环境盲区更多，
-而且已经为此付过代价。
-
-- **触发时机**：对一个尚未有体检件的已有项目，**在下一次对它做任何代码变更
-  之前**必须先补建体检件。"下次再说"不被接受。
-- **复用优先**：补建时使用通用引擎
-  `~/engineering-standards/envcheck/envcheck.py` + 该项目的声明式检查单
-  （`~/engineering-standards/envcheck/specs/<project>.yml`），**不要每个项目写一份脚本**——
-  那会让输出格式、退出码、结论口径立刻分叉（R3）。
-- **项目特化**：若通用引擎覆盖不了该项目的特有前提（例如需要 SDK 做只读发现），
-  允许写项目专用体检件，但必须沿用同一套结论口径与退出码。
-
-### R1.2 ★ 登记册是唯一事实来源
-
-`~/engineering-standards/ENGINEERING-PROJECTS.md` 逐个登记本机所有工程项目及其体检件状态。
-状态只允许三种取值，**不允许留空**：
-
-| 状态 | 含义 |
-|---|---|
-| `已建` | 有可运行的体检件，且已实测过判定正确 |
-| `待建` | 尚无体检件，且尚未做下一次代码变更 |
-| `不适用` | **必须写明理由**（例如纯归档目录、第三方检出、无外部依赖） |
-
-**新增项目时先登记**；状态变化时同步更新。登记册腐烂等同于规则失效（M8）。
-
-### R1.3 完成判据
-
-一个项目的体检件算"已建"，必须同时满足：
-
-- [ ] 能跑通，且**四类环境故障**都能被正确判定（外部实体缺失 / 实体存在但不可用 /
-      部分降级 / 实体正常）；
-- [ ] 结论**双向**可读，退出码 `0/1/2/3` 分级；
-- [ ] 全程**只读**，并有实测记录；
-- [ ] 已接入**开机自检**（若是长驻服务）；
-- [ ] 已登记到 `~/engineering-standards/ENGINEERING-PROJECTS.md`，状态为 `已建`。
-
----
-
-## R2 构建前断言闸门
-
-顺序固定、不可跳：**断言全绿 → 构建 → 安装**。
-
-- 断言要把"这次改动要成立哪些**结构事实**"显式化；
-- 结构断言一律在**剥离注释与字符串**后的代码上做；
-- 文案类断言用"只剥注释、保留字符串"的另一条路径；
-- 断言脚本必须能在**没有补丁的代码上跑出红**（R6）。
-
-## R3 同一缺陷第 3 次重现 → 转成断言或抽象
-
-不要第三次手修。第 3 次出现说明缺的是抽象或断言。
-
-## R4 同型返回值一律用具名结构
-
-禁止 `a, b = f()` 这种裸元组解包，尤其是返回两个同类型值的函数。
-用具名结构（NamedTuple / dataclass / struct），让顺序错误在语法上不可能发生。
-
-## R5 单测必须覆盖调用点，不能只测函数本身
-
-"返回结构 + 调用点消费"的地方，断言必须同时覆盖**调用点**。
-
-## R6 断言脚本先做负对照
-
-新写的断言脚本必须先在**没有补丁的代码上跑出红**。
-
-## R7 只读工具不得有副作用
-
-诊断/体检/探针工具必须：① 注释里写明禁止调用的 API 清单与理由；
-② 断言里逐条禁止；③ 有一条实测记录证明副作用不存在。
-（探针曾经把被测系统搞坏，制造了它本要观测的故障。）
-
-**"只读"的边界要划清（补建检查单时实测补充，三条）**：
-
-- **本地资源占用判定必须纯读**。例如"端口是否被占用"必须读 `/proc/net/tcp`
-  （或 `ss -ltn`），**绝不能用 `bind()` 试探**——那会短暂**占用**被测端口，
-  本身就是"占资源"。（envcheck 引擎初版正是这么写的，被审计发现后改为纯读。）
-- **与外部建立连接的探测必须显式声明**。TCP connect 会建立一次连接，哪怕
-  立即关闭、不发送任何数据。没有纯读替代品时仍允许使用，但检查单必须用
-  `lint_allow_probe` + 理由显式声明，**不允许静默发生**；同时，本地能纯读的
-  部分不许退化成探测。
-- **断言必须覆盖工具自身，而不只是数据**。只 lint 检查单、不 lint 引擎原语，
-  就会漏掉"引擎自己 bind 端口"这类问题。
-
-## R8 结论文案必须能被证据支撑
-
-没有基线就不能说"与基线一致"。凡是结论行/汇总行/徽章，都要能指向具体证据；
-指不到就改文案或删掉。**不允许把"无法判定"写成"正常"。**
-
-## R9 变更前工作区必须干净
-
-动手前工作区必须干净；上一轮的坏改动**先回退到干净基线**再重做，
-不要在坏改动上继续叠补丁。
-
-## R10 环境与代码的边界要写进交付文档
-
-交付物必须有一节写清"哪些现象属于环境、哪些属于代码"，以及环境故障的处置步骤。
-运维人员看到的是日志，不是源码。
-
----
-
-## 交付前自检（工程类任务收尾时逐条过）
-
-- [ ] 环境前提清单已在？（**新项目与已有项目都算**；已有项目见 R1.1 回溯义务）
-- [ ] 环境体检脚本可跑、结论双向、只读、进了构建闸门？
-- [ ] 断言全绿才构建？（本轮已保持）
-- [ ] 新增/修改的逻辑有对应断言，且断言做过负对照？
-- [ ] 同类缺陷是否第 3 次出现？若是，已转成断言/抽象？
-- [ ] 文档写了"环境 vs 代码"的现象边界与处置？
-- [ ] 工作区干净、提交信息说明了"为什么"而非"改了什么"？
+- Preserve unrelated working-tree changes and keep independent changes separable.
+- Code comments are Chinese and explain non-obvious intent. Follow repository formatting and
+  auto-import/component-registration conventions.
