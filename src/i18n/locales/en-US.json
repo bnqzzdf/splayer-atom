@@ -696,6 +696,8 @@
     "noLocalSongs": "No local songs",
     "noLocalAlbums": "No local albums",
     "noLocalArtists": "No local artists",
+    "loadFailed": "Failed to load the local library",
+    "refreshFailed": "Failed to refresh the local library. Showing previous data.",
     "configureHint": "Add music directories and scan them in Settings → Local Library",
     "openSettings": "Open Local Library Settings",
     "searchAlbums": "Search albums or artists",

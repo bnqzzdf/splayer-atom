@@ -696,6 +696,8 @@
     "noLocalSongs": "暂无本地歌曲",
     "noLocalAlbums": "暂无本地专辑",
     "noLocalArtists": "暂无本地艺术家",
+    "loadFailed": "本地曲库加载失败",
+    "refreshFailed": "本地曲库刷新失败，正在显示上次的数据",
     "configureHint": "请在“设置 → 本地曲库”中添加音乐目录并扫描",
     "openSettings": "打开本地曲库设置",
     "searchAlbums": "搜索专辑、艺术家",

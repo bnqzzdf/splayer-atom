@@ -1,5 +1,5 @@
 import localforage from "localforage";
-import type { Track, Artist } from "@shared/types/player";
+import type { Track, Artist, IpcResponse } from "@shared/types/player";
 import type { AlbumSummary, ArtistSummary, ScanProgress } from "@shared/types/library";
 import type { Collection } from "@/types/collection";
 import type { ArtistProfile, CoverItem } from "@/types/artist";
@@ -11,9 +11,14 @@ const trackDb = localforage.createInstance({ name: "splayer", storeName: "librar
 /** 本地喜欢 id 在 trackDb 内的持久化 key */
 const LIKED_IDS_KEY = "liked-ids";
 
+export type LibraryLoadState = "idle" | "loading" | "success" | "error";
+
 export const useLibraryStore = defineStore("library", () => {
   /** 曲目列表 */
   const tracks = shallowRef<Track[]>([]);
+  /** 曲目请求结果独立于缓存和其它初始化任务，避免把尚未取得数据当作空库。 */
+  const tracksLoadState = ref<LibraryLoadState>("idle");
+  const tracksLoadError = ref<string | null>(null);
   /** 扫描目录列表 */
   const scanDirs = ref<string[]>([]);
   /** 是否正在扫描 */
@@ -81,12 +86,13 @@ export const useLibraryStore = defineStore("library", () => {
   /** 批量预取头像 */
   const loadArtistAvatars = async (): Promise<void> => {
     const list = await getArtistList();
-    const names = list
+    if (!list.success || !list.data) return;
+    const names = list.data
       .filter((item) => !artistAvatars.value[normalizeArtistName(item.name)])
       .map((item) => item.name);
     if (!names.length) return;
-    const res = await libraryClient.prefetchArtistAvatars(names);
-    if (!res.success || !res.data) return;
+    const res = await libraryClient.prefetchArtistAvatars(names).catch(() => null);
+    if (!res?.success || !res.data) return;
     const patch: Record<string, string> = {};
     for (const [key, avatar] of Object.entries(res.data)) {
       if (avatar) patch[key] = avatar;
@@ -103,6 +109,8 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 加载曲目和目录列表 */
   const load = async (): Promise<void> => {
+    tracksLoadState.value = "loading";
+    tracksLoadError.value = null;
     // 扫描进度是曲库域投影，由 store 常驻订阅，避免关闭设置页后丢失完成事件。
     subscribeScanProgress();
     // 先从 IndexedDB 读缓存，立即渲染
@@ -116,15 +124,11 @@ export const useLibraryStore = defineStore("library", () => {
       Array.isArray(legacyLiked) && legacyLiked.length > 0
         ? libraryClient.importLikedTrackIds(legacyLiked)
         : libraryClient.getLikedTrackIds();
-    const [tracksRes, dirsRes, likesRes] = await Promise.all([
-      libraryClient.getTracks(),
+    const [, dirsRes, likesRes] = await Promise.all([
+      refreshTracksProjection(),
       libraryClient.getScanDirs(),
       likesPromise,
     ]);
-    if (tracksRes.success && tracksRes.data) {
-      tracks.value = tracksRes.data;
-      cacheTracks(tracksRes.data);
-    }
     if (dirsRes.success && dirsRes.data) scanDirs.value = dirsRes.data;
     if (likesRes.success && likesRes.data) {
       applyLikedIds(likesRes.data);
@@ -148,8 +152,6 @@ export const useLibraryStore = defineStore("library", () => {
       scanning.value = false;
       scanProgress.value = null;
     }
-    // 预取歌手头像
-    loadArtistAvatars();
   };
 
   /** 开始扫描 */
@@ -218,12 +220,7 @@ export const useLibraryStore = defineStore("library", () => {
       scanning.value = false;
       scanProgress.value = null;
     }
-    const res = await libraryClient.getTracks();
-    if (res.success && res.data) {
-      tracks.value = res.data;
-      cacheTracks(res.data);
-      loadArtistAvatars();
-    }
+    await refreshTracksProjection();
   };
 
   let unsubscribe: (() => void) | null = null;
@@ -231,13 +228,19 @@ export const useLibraryStore = defineStore("library", () => {
   let unsubscribeLibraryRootsChanged: (() => void) | null = null;
   let unsubscribeLibraryLikesChanged: (() => void) | null = null;
 
-  const refreshTracksProjection = (): void => {
-    libraryClient.getTracks().then((res) => {
-      if (!res.success || !res.data) return;
-      tracks.value = res.data;
-      cacheTracks(res.data);
-      loadArtistAvatars();
-    });
+  const refreshTracksProjection = async (): Promise<void> => {
+    tracksLoadState.value = "loading";
+    tracksLoadError.value = null;
+    const res = await libraryClient.getTracks();
+    if (!res.success || !res.data) {
+      tracksLoadState.value = "error";
+      tracksLoadError.value = res.error ?? "LIBRARY_LOAD_FAILED";
+      return;
+    }
+    tracks.value = res.data;
+    cacheTracks(res.data);
+    tracksLoadState.value = "success";
+    void loadArtistAvatars();
   };
 
   /** 监听扫描进度 */
@@ -295,16 +298,10 @@ export const useLibraryStore = defineStore("library", () => {
   };
 
   /** 专辑聚合列表 */
-  const getAlbumList = async (): Promise<AlbumSummary[]> => {
-    const res = await libraryClient.getAlbums();
-    return res.success && res.data ? res.data : [];
-  };
+  const getAlbumList = (): Promise<IpcResponse<AlbumSummary[]>> => libraryClient.getAlbums();
 
   /** 歌手聚合列表 */
-  const getArtistList = async (): Promise<ArtistSummary[]> => {
-    const res = await libraryClient.getArtists();
-    return res.success && res.data ? res.data : [];
-  };
+  const getArtistList = (): Promise<IpcResponse<ArtistSummary[]>> => libraryClient.getArtists();
 
   /** 专辑详情 */
   const getAlbumCollection = async (
@@ -373,6 +370,8 @@ export const useLibraryStore = defineStore("library", () => {
 
   return {
     tracks,
+    tracksLoadState,
+    tracksLoadError,
     scanDirs,
     scanning,
     scanProgress,

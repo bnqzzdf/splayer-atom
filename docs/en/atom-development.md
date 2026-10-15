@@ -78,6 +78,13 @@ display preferences remain in Web Control.
 Use the 300 px cover for blurred, sampled, and list rendering; use original images only where
 visibly required.
 
+Local album, artist, and song pages show an empty-library message only after a successful Core
+list request returns no items. Pending requests show a loading indicator; failures provide a
+retry action, while existing cached songs remain visible. If the network or Core is unavailable,
+check the corresponding `/api/library/albums`, `artists`, or `tracks` request and Core logs, then
+retry after restoring connectivity. An empty-library message during a pending or failed request
+indicates a frontend state-handling defect.
+
 ## Native development
 
 ```bash

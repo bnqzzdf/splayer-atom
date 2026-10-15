@@ -11,7 +11,7 @@ import * as player from "@/core/player";
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
 const settingsDialog = useSettingsDialog();
-const { tracks, initialized } = storeToRefs(libraryStore);
+const { tracks, tracksLoadState, tracksLoadError } = storeToRefs(libraryStore);
 
 const playbackContext = computed<PlaybackContext>(() => ({
   originId: "songs",
@@ -32,9 +32,14 @@ const handlePlayAll = (): void => {
   player.playFrom(tracks.value, 0, playbackContext.value);
 };
 
-onMounted(async () => {
-  if (!initialized.value) await libraryStore.load();
-});
+const ensureTracksLoaded = (): void => {
+  if (tracksLoadState.value === "idle" || tracksLoadState.value === "error") {
+    void libraryStore.load();
+  }
+};
+
+onMounted(ensureTracksLoaded);
+onActivated(ensureTracksLoaded);
 </script>
 
 <template>
@@ -94,6 +99,16 @@ onMounted(async () => {
         </SInput>
       </div>
     </div>
+    <div
+      v-if="tracksLoadState === 'error'"
+      role="alert"
+      :title="tracksLoadError ?? undefined"
+      class="flex items-center justify-center gap-3 px-5 py-4 text-sm text-on-surface-variant"
+      :class="tracks.length > 0 ? 'shrink-0' : 'flex-1'"
+    >
+      <span>{{ t(tracks.length > 0 ? "library.refreshFailed" : "library.loadFailed") }}</span>
+      <SButton variant="secondary" @click="libraryStore.load">{{ t("common.retry") }}</SButton>
+    </div>
     <div v-if="tracks.length > 0" class="flex-1 min-h-0">
       <SongList
         ref="songListRef"
@@ -104,7 +119,15 @@ onMounted(async () => {
         show-size
       />
     </div>
-    <div v-else class="flex-1 flex items-center justify-center">
+    <div
+      v-else-if="tracksLoadState === 'idle' || tracksLoadState === 'loading'"
+      role="status"
+      class="flex-1 flex items-center justify-center gap-2 text-sm text-on-surface-variant/50"
+    >
+      <SLoading class="size-5" />
+      {{ t("common.loading") }}
+    </div>
+    <div v-else-if="tracksLoadState === 'success'" class="flex-1 flex items-center justify-center">
       <div class="text-center text-on-surface-variant/50">
         <IconLucideMusic class="size-12 mx-auto mb-3 opacity-30" />
         <div class="text-sm mb-1">{{ t("library.noLocalSongs") }}</div>
