@@ -390,6 +390,7 @@ impl AlsaDirectDsdConnection {
         let writer = thread::Builder::new()
             .name("alsa-direct-dsd".into())
             .spawn(move || {
+                crate::priority::boost_current_audio_thread("alsa-direct-dsd");
                 if let Err(error) = run_writer(
                     handle,
                     input,

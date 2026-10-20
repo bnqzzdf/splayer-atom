@@ -28,21 +28,21 @@ OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。
 
 ## OpenRC 与 systemd 对照
 
-| 概念         | systemd                              | OpenRC（GP）                                                                         |
-| ------------ | ------------------------------------ | ------------------------------------------------------------------------------------ |
-| 服务定义     | `/etc/systemd/system/<x>.service`    | `/etc/init.d/<x>`（`#!/sbin/openrc-run`）                                            |
-| 参数覆盖     | unit 里的 `Environment=`             | `/etc/conf.d/<x>`（启动前被 source，可覆盖脚本变量）                                 |
-| 开机自启     | `systemctl enable <x>`               | `rc-update add <x> default`（在 `/etc/runlevels/default/` 建软链）                   |
-| 启停重启     | `systemctl start/stop/restart <x>`   | `rc-service <x> start/stop/restart`                                                  |
-| 状态         | `systemctl status <x>`               | `rc-service <x> status`（退出码 **0=started，3=stopped**）                           |
-| 自启查询     | `systemctl is-enabled <x>`           | `rc-update show -v \| grep <x>`、或看 `/etc/runlevels/*/<x>`                         |
-| 依赖顺序     | `After=` / `Wants=`                  | `depend() { need / use / after / before / want }`                                    |
-| 守护与重启   | `Restart=on-failure` + `RestartSec=` | `supervisor="supervise-daemon"` + `respawn_delay` / `respawn_max` / `respawn_period` |
-| 运行用户     | `User=` / `Group=`                   | `command_user=` / `supervisor` 的 user 参数（GP 上默认 root）                        |
-| 资源限制     | `LimitMEMLOCK=infinity`              | `start_pre()` 里 `ulimit -l unlimited`                                               |
-| 日志         | `journalctl -u <x>`                  | `output_log` / `error_log`（惯例 `/var/log/<x>.log`、`<x>.err.log`）                 |
-| 全部服务状态 | `systemctl list-units`               | `rc-status --servicelist --nocolor`                                                  |
-| 状态复位     | `systemctl reset-failed <x>`         | `rc-service <x> zap`（手工复位为 stopped）                                           |
+| 概念         | systemd                                    | OpenRC（GP）                                                                         |
+| ------------ | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| 服务定义     | `/etc/systemd/system/<x>.service`          | `/etc/init.d/<x>`（`#!/sbin/openrc-run`）                                            |
+| 参数覆盖     | unit 里的 `Environment=`                   | `/etc/conf.d/<x>`（启动前被 source，可覆盖脚本变量）                                 |
+| 开机自启     | `systemctl enable <x>`                     | `rc-update add <x> default`（在 `/etc/runlevels/default/` 建软链）                   |
+| 启停重启     | `systemctl start/stop/restart <x>`         | `rc-service <x> start/stop/restart`                                                  |
+| 状态         | `systemctl status <x>`                     | `rc-service <x> status`（退出码 **0=started，3=stopped**）                           |
+| 自启查询     | `systemctl is-enabled <x>`                 | `rc-update show -v \| grep <x>`、或看 `/etc/runlevels/*/<x>`                         |
+| 依赖顺序     | `After=` / `Wants=`                        | `depend() { need / use / after / before / want }`                                    |
+| 守护与重启   | `Restart=on-failure` + `RestartSec=`       | `supervisor="supervise-daemon"` + `respawn_delay` / `respawn_max` / `respawn_period` |
+| 运行用户     | `User=` / `Group=`                         | `command_user=` / `supervisor` 的 user 参数（GP 上默认 root）                        |
+| 资源限制     | `LimitMEMLOCK=infinity` / `LimitRTPRIO=95` | `start_pre()` 里 `ulimit -l unlimited` / `ulimit -r 95`                              |
+| 日志         | `journalctl -u <x>`                        | `output_log` / `error_log`（惯例 `/var/log/<x>.log`、`<x>.err.log`）                 |
+| 全部服务状态 | `systemctl list-units`                     | `rc-status --servicelist --nocolor`                                                  |
+| 状态复位     | `systemctl reset-failed <x>`               | `rc-service <x> zap`（手工复位为 stopped）                                           |
 
 ## 开发：写一个 GP 上能用的服务脚本
 
@@ -80,6 +80,8 @@ depend() {
 start_pre() {
     # Diretta Host / ALSA 需要锁定内存实时权限，等价于 systemd 的 LimitMEMLOCK=infinity
     ulimit -l unlimited 2>/dev/null || true
+    # ALSA 输出写线程切 SCHED_FIFO，等价于 systemd 的 LimitRTPRIO=95
+    ulimit -r 95 2>/dev/null || true
 }
 ```
 

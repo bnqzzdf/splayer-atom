@@ -19,7 +19,6 @@ use crate::error::{AudioErrorKind, AudioResultExt};
 use crate::loudness::LoudnessAnalyzer;
 use crate::media_probe::{self, PreparedMedia};
 use crate::metadata::{self, AudioMetadata};
-use crate::priority;
 use crate::shared::{AudioChunk, ProcessedTrackBoundary, Shared, MAX_PROCESSED_FRAMES_PER_CHUNK};
 use crate::tempo::StretchProcessor;
 
@@ -320,7 +319,6 @@ fn spawn_decode_chain(
     thread::Builder::new()
         .name("audio-decoder".to_string())
         .spawn(move || {
-            priority::boost_current_audio_thread("audio-decoder");
             let mut data = data;
             let dsp_shared = Arc::clone(&shared);
             let dsp_handle = thread::Builder::new()

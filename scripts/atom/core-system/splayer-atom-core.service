@@ -11,6 +11,9 @@ ExecStart=/opt/splayer-atom-core/bin/splayer-atom-core
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
+# 允许 ALSA 输出写线程切到 SCHED_FIFO（优先级 70）并锁定内存，非 root 用户也能生效。
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
 # 可选：覆盖监听端口，默认 14558。
 # Environment=ATOM_SERVER_PORT=14558
 # Diretta Host 需要 root 时使用 root service；普通 ALSA Core 建议改为专用非特权用户。

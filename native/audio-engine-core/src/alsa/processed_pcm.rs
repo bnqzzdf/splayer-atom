@@ -127,6 +127,7 @@ impl AlsaProcessedPcmStream {
         let worker = thread::Builder::new()
             .name("alsa-processed-pcm".into())
             .spawn(move || {
+                crate::priority::boost_current_audio_thread("alsa-processed-pcm");
                 if let Err(error) =
                     run_writer(handle, shared, worker_cancel.as_ref(), command_rx, !paused)
                 {

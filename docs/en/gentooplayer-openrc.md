@@ -32,21 +32,21 @@ meant to stay resident, check whether it is a `supervise-daemon` or self-managed
 
 ## OpenRC vs systemd
 
-| Concept                | systemd                              | OpenRC (GP)                                                                          |
-| ---------------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
-| Service definition     | `/etc/systemd/system/<x>.service`    | `/etc/init.d/<x>` (`#!/sbin/openrc-run`)                                             |
-| Parameter override     | `Environment=` inside the unit       | `/etc/conf.d/<x>` (sourced before start, can override script variables)              |
-| Enable at boot         | `systemctl enable <x>`               | `rc-update add <x> default` (creates a symlink in `/etc/runlevels/default/`)         |
-| Start/stop/restart     | `systemctl start/stop/restart <x>`   | `rc-service <x> start/stop/restart`                                                  |
-| Status                 | `systemctl status <x>`               | `rc-service <x> status` (exit code **0=started, 3=stopped**)                         |
-| Enabled check          | `systemctl is-enabled <x>`           | `rc-update show -v \| grep <x>`, or inspect `/etc/runlevels/*/<x>`                   |
-| Ordering               | `After=` / `Wants=`                  | `depend() { need / use / after / before / want }`                                    |
-| Supervisor and restart | `Restart=on-failure` + `RestartSec=` | `supervisor="supervise-daemon"` + `respawn_delay` / `respawn_max` / `respawn_period` |
-| Run user               | `User=` / `Group=`                   | `command_user=` / supervisor user argument (root by default on GP)                   |
-| Resource limits        | `LimitMEMLOCK=infinity`              | `ulimit -l unlimited` inside `start_pre()`                                           |
-| Logs                   | `journalctl -u <x>`                  | `output_log` / `error_log` (conventionally `/var/log/<x>.log`, `<x>.err.log`)        |
-| All service states     | `systemctl list-units`               | `rc-status --servicelist --nocolor`                                                  |
-| State reset            | `systemctl reset-failed <x>`         | `rc-service <x> zap` (manually resets to stopped)                                    |
+| Concept                | systemd                                    | OpenRC (GP)                                                                          |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Service definition     | `/etc/systemd/system/<x>.service`          | `/etc/init.d/<x>` (`#!/sbin/openrc-run`)                                             |
+| Parameter override     | `Environment=` inside the unit             | `/etc/conf.d/<x>` (sourced before start, can override script variables)              |
+| Enable at boot         | `systemctl enable <x>`                     | `rc-update add <x> default` (creates a symlink in `/etc/runlevels/default/`)         |
+| Start/stop/restart     | `systemctl start/stop/restart <x>`         | `rc-service <x> start/stop/restart`                                                  |
+| Status                 | `systemctl status <x>`                     | `rc-service <x> status` (exit code **0=started, 3=stopped**)                         |
+| Enabled check          | `systemctl is-enabled <x>`                 | `rc-update show -v \| grep <x>`, or inspect `/etc/runlevels/*/<x>`                   |
+| Ordering               | `After=` / `Wants=`                        | `depend() { need / use / after / before / want }`                                    |
+| Supervisor and restart | `Restart=on-failure` + `RestartSec=`       | `supervisor="supervise-daemon"` + `respawn_delay` / `respawn_max` / `respawn_period` |
+| Run user               | `User=` / `Group=`                         | `command_user=` / supervisor user argument (root by default on GP)                   |
+| Resource limits        | `LimitMEMLOCK=infinity` / `LimitRTPRIO=95` | `ulimit -l unlimited` / `ulimit -r 95` inside `start_pre()`                          |
+| Logs                   | `journalctl -u <x>`                        | `output_log` / `error_log` (conventionally `/var/log/<x>.log`, `<x>.err.log`)        |
+| All service states     | `systemctl list-units`                     | `rc-status --servicelist --nocolor`                                                  |
+| State reset            | `systemctl reset-failed <x>`               | `rc-service <x> zap` (manually resets to stopped)                                    |
 
 ## Development: writing a service script that works on GP
 
@@ -85,6 +85,8 @@ depend() {
 start_pre() {
     # Diretta Host / ALSA need locked-memory realtime privileges; equivalent to systemd's LimitMEMLOCK=infinity
     ulimit -l unlimited 2>/dev/null || true
+    # ALSA output writer threads switch to SCHED_FIFO; equivalent to systemd's LimitRTPRIO=95
+    ulimit -r 95 2>/dev/null || true
 }
 ```
 

@@ -10,7 +10,8 @@ use super::format::{direct_pcm_candidates, AlsaPcmFormat};
 use crate::direct_pcm::{DirectPcmFormat, DirectPcmSampleFormat};
 
 const TARGET_PERIOD_MS: u32 = 10;
-const TARGET_BUFFER_MS: u32 = 100;
+/// 200ms 给直通路径留出调度抖动余量（直通 write_all 不做 XRUN 恢复）；播放位置已扣除 ALSA delay。
+const TARGET_BUFFER_MS: u32 = 200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AlsaPcmConfig {
@@ -411,9 +412,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn buffer_targets_follow_ten_and_hundred_milliseconds() {
-        assert_eq!(buffer_targets(44_100), (441, 4_410));
-        assert_eq!(buffer_targets(48_000), (480, 4_800));
-        assert_eq!(buffer_targets(768_000), (7_680, 76_800));
+    fn buffer_targets_follow_ten_and_two_hundred_milliseconds() {
+        assert_eq!(buffer_targets(44_100), (441, 8_820));
+        assert_eq!(buffer_targets(48_000), (480, 9_600));
+        assert_eq!(buffer_targets(768_000), (7_680, 153_600));
     }
 }

@@ -59,6 +59,8 @@ depend() {
 
 start_pre() {
     # Diretta Host 与 ALSA 实时输出需要锁定内存，等价 systemd 单元的
-    # LimitMEMLOCK=infinity。普通 ALSA 播放不依赖它，所以失败也不阻断启动。
+    # LimitMEMLOCK=infinity / LimitRTPRIO=95（ALSA 输出写线程 SCHED_FIFO）。
+    # 普通 ALSA 播放不依赖它们，所以失败也不阻断启动。
     ulimit -l unlimited 2>/dev/null || true
+    ulimit -r 95 2>/dev/null || true
 }
