@@ -15,6 +15,7 @@ import { buildCoreControlRoutes } from "@main/atom/controlRoutes";
 import { getCoreServerPort } from "@main/runtime";
 import { wsHandlers } from "./ws";
 import { createDynamicCacheRoute } from "./cacheRoute";
+import { createRequestGuard } from "./requestGuard";
 
 let runningServer: Server | null = null;
 let runningWss: WebSocketServer | null = null;
@@ -63,6 +64,7 @@ export const startServer = (): Promise<CoreServerStatus> =>
     const hostname = "0.0.0.0";
     const app = new Hono();
 
+    app.use("*", createRequestGuard({ devSameHostAnyPort: Boolean(process.env.ATOM_WEB_DEV_URL) }));
     if (process.env.ATOM_WEB_DEV_URL) app.use("/api/*", cors());
     app.route("/api", buildCoreControlRoutes());
     app.get(
