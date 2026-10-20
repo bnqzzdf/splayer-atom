@@ -938,9 +938,12 @@ mod tests {
                     frames += chunk.frames;
                     credited += chunk.source_sample_count;
                     if frames > 3_800 {
-                        audible_tail |= chunk.bytes.chunks_exact(4).any(|bytes| {
-                            f32::from_le_bytes(bytes.try_into().unwrap()).abs() > 0.01
-                        });
+                        audible_tail |= chunk
+                            .bytes
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|bytes| f32::from_le_bytes(*bytes).abs() > 0.01);
                     }
                 }
                 crate::shared::PopResult::Pending => std::thread::yield_now(),

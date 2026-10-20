@@ -223,7 +223,7 @@ fn append_dff_chunk(target: &mut Vec<u8>, id: &[u8; 4], payload: &[u8]) {
     target.extend_from_slice(id);
     target.extend_from_slice(&(payload.len() as u64).to_be_bytes());
     target.extend_from_slice(payload);
-    if payload.len() % 2 != 0 {
+    if !payload.len().is_multiple_of(2) {
         target.push(0);
     }
 }

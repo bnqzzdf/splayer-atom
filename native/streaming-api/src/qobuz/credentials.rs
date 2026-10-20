@@ -44,7 +44,7 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
     let app_id_re = Regex::new(r#"appId:"(\d{9})""#)
         .map_err(|error| StreamingError::Parse(error.to_string()))?;
     let matched_app_ids: Vec<String> = app_id_re
-        .captures_iter(&js)
+        .captures_iter(js)
         .filter_map(|capture| capture.get(1).map(|value| value.as_str().to_owned()))
         .collect();
     let app_id = matched_app_ids
@@ -57,7 +57,7 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
     let seed_re = Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.([a-z]+)\)"#)
         .map_err(|error| StreamingError::Parse(error.to_string()))?;
     let mut seeds: Vec<(String, String)> = Vec::new();
-    for capture in seed_re.captures_iter(&js) {
+    for capture in seed_re.captures_iter(js) {
         if let (Some(seed), Some(timezone)) = (capture.get(1), capture.get(2)) {
             let timezone = timezone.as_str().to_owned();
             if !seeds.iter().any(|(value, _)| value == &timezone) {
@@ -84,7 +84,7 @@ fn credentials_from_bundle(js: &str) -> Result<QobuzCredentials, StreamingError>
         );
         let info_re =
             Regex::new(&pattern).map_err(|error| StreamingError::Parse(error.to_string()))?;
-        for capture in info_re.captures_iter(&js) {
+        for capture in info_re.captures_iter(js) {
             if let (Some(timezone), Some(info), Some(extras)) =
                 (capture.get(1), capture.get(2), capture.get(3))
             {

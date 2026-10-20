@@ -163,7 +163,7 @@ impl DirectDsdReader {
         validate_dsd_group_bytes(group_bytes)?;
         let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
         ensure!(
-            aligned_bits % group_bits == 0,
+            aligned_bits.is_multiple_of(group_bits),
             "Native DSD seek 未按 transport group 对齐"
         );
         let channels = usize::from(self.format.channels);
@@ -257,7 +257,7 @@ impl DirectDsdReader {
         validate_dsd_group_bytes(group_bytes)?;
         let group_bits = u64::try_from(group_bytes)?.saturating_mul(8);
         ensure!(
-            bits > 0 && bits % group_bits == 0,
+            bits > 0 && bits.is_multiple_of(group_bits),
             "Native DSD segment 长度必须按 transport group 对齐"
         );
         let bytes_per_channel = usize::try_from(bits / 8)?;
@@ -530,7 +530,7 @@ impl DirectDsdReader {
         let data_offset = data_offset.context("DFF 缺少 DSD data chunk")?;
         let unit = usize::from(channels);
         ensure!(
-            data_size > 0 && data_size % unit == 0,
+            data_size > 0 && data_size.is_multiple_of(unit),
             "DFF data 无法无损对齐完整声道字节"
         );
         file.seek(SeekFrom::Start(u64::try_from(data_offset)?))?;
@@ -625,8 +625,8 @@ fn repack_dsf_grouped(
     ensure!(
         channels > 0
             && start_per_channel < block_size
-            && start_per_channel % group_bytes == 0
-            && valid_per_channel % group_bytes == 0,
+            && start_per_channel.is_multiple_of(group_bytes)
+            && valid_per_channel.is_multiple_of(group_bytes),
         "DSF repack 参数无效"
     );
     ensure!(
@@ -661,7 +661,7 @@ fn repack_dff_grouped(
         .checked_mul(group_bytes)
         .context("DFF repack unit 溢出")?;
     ensure!(
-        input.len() % unit == 0,
+        input.len().is_multiple_of(unit),
         "DFF repack input 未按 transport group 对齐"
     );
     ensure!(output.len() >= input.len(), "DFF repack output 太小");
@@ -1895,6 +1895,10 @@ fn fill_claimed_slot(
     Ok(Some(()))
 }
 
+/// # Safety
+///
+/// `context` 必须为 `DirectDsdSource::callback_context()` 返回且仍存活的指针；
+/// `data`、`len` 必须指向可写内存。
 pub unsafe extern "C" fn direct_dsd_next_block(
     context: *mut c_void,
     data: *mut *const u8,
@@ -1914,6 +1918,9 @@ pub unsafe extern "C" fn direct_dsd_next_block(
     true
 }
 
+/// # Safety
+///
+/// `context` 必须为 `DirectDsdSource::callback_context()` 返回且仍存活的指针。
 pub unsafe extern "C" fn direct_dsd_release_block(context: *mut c_void) {
     if context.is_null() {
         return;
@@ -2019,7 +2026,7 @@ mod tests {
         dst.extend_from_slice(id);
         dst.extend_from_slice(&(payload.len() as u64).to_be_bytes());
         dst.extend_from_slice(payload);
-        if payload.len() % 2 != 0 {
+        if !payload.len().is_multiple_of(2) {
             dst.push(0);
         }
     }

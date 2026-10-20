@@ -95,6 +95,8 @@ impl SacdDsfStream {
         })
     }
 
+    // 虚拟文件长度固定非零，is_empty 无实际用途。
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> u64 {
         self.file_len
     }

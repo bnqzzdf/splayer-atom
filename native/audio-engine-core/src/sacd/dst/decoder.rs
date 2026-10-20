@@ -267,10 +267,9 @@ fn read_table(
         let lsb_size = reader.read_bits(3)? as usize;
         for index in (method + 1)..table.length[element] {
             let mut predicted = 0i32;
-            for k in 0..=method {
-                predicted = predicted.wrapping_add(
-                    prediction[method][k].wrapping_mul(table.coeff[element][index - k - 1]),
-                );
+            for (k, factor) in prediction[method][..=method].iter().enumerate() {
+                predicted = predicted
+                    .wrapping_add(factor.wrapping_mul(table.coeff[element][index - k - 1]));
             }
             let mut coefficient = reader.read_sr_golomb_dst(lsb_size)?;
             if predicted >= 0 {
@@ -442,20 +441,21 @@ impl DstDecoder {
                     );
                 }
                 let predict = sum as i16;
-                let probability =
-                    if !half_prob[channel] || sample >= self.fsets.length[filter_element] {
-                        let probability_element = map_p[channel];
-                        ensure!(
-                            probability_element < self.probs.elements,
-                            "DST probability map 越界"
-                        );
-                        let length = self.probs.length[probability_element];
-                        ensure!(length > 0, "DST probability table 为空");
-                        let index = ((i32::from(predict).abs() as usize) >> 3).min(length - 1);
-                        self.probs.coeff[probability_element][index]
-                    } else {
-                        128
-                    };
+                let probability = if !half_prob[channel]
+                    || sample >= self.fsets.length[filter_element]
+                {
+                    let probability_element = map_p[channel];
+                    ensure!(
+                        probability_element < self.probs.elements,
+                        "DST probability map 越界"
+                    );
+                    let length = self.probs.length[probability_element];
+                    ensure!(length > 0, "DST probability table 为空");
+                    let index = ((i32::from(predict).unsigned_abs() as usize) >> 3).min(length - 1);
+                    self.probs.coeff[probability_element][index]
+                } else {
+                    128
+                };
                 let residual = arithmetic.get(&mut reader, probability)?;
                 let bit = ((((predict >> 15) as i32) ^ i32::from(residual)) & 1) as u8;
                 if bit != 0 {

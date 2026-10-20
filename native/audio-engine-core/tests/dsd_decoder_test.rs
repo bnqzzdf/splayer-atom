@@ -88,7 +88,7 @@ fn test_dsf_reader_synthetic() {
     // 校验交织结果：每 8 字节为 [L0, L1, L2, L3, R0, R1, R2, R3]
     // 原 Left = 0x80 -> 反转后 = 0x01
     // 原 Right = 0x01 -> 反转后 = 0x80
-    for chunk in out_buf.chunks_exact(8) {
+    for chunk in out_buf.as_chunks::<8>().0 {
         assert_eq!(&chunk[0..4], &[0x01, 0x01, 0x01, 0x01]);
         assert_eq!(&chunk[4..8], &[0x80, 0x80, 0x80, 0x80]);
     }

@@ -80,7 +80,10 @@ pub fn dsd_candidates(source: DirectDsdFormat) -> Result<Vec<AlsaDsdFormat>> {
         AlsaDsdFormat::U32Be,
         AlsaDsdFormat::U32Le,
     ] {
-        if source.bit_rate % u32::from(format.bits_per_channel_frame()) == 0 {
+        if source
+            .bit_rate
+            .is_multiple_of(u32::from(format.bits_per_channel_frame()))
+        {
             result.push(format);
         }
     }
@@ -119,7 +122,7 @@ fn configure_candidate(
 ) -> Result<AlsaDsdConfig> {
     let bits = u32::from(candidate.bits_per_channel_frame());
     ensure!(
-        source.bit_rate % bits == 0,
+        source.bit_rate.is_multiple_of(bits),
         "Native DSD bit rate 无法整除 ALSA DSD frame 宽度"
     );
     let frame_rate = source.bit_rate / bits;

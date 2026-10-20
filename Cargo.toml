@@ -24,6 +24,8 @@ needless_collect = "warn"
 large_enum_variant = "warn"
 collapsible_if = "allow"
 redundant_pattern_matching = "allow"
+# 音频输出线程入口参数较多，拆结构体收益有限
+too_many_arguments = "allow"
 
 [profile.release]
 lto = true

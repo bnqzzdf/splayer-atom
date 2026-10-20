@@ -422,21 +422,21 @@ impl TidalClient {
             .get("refreshToken")
             .or_else(|| params.get("refresh_token"))
             .and_then(Value::as_str)
-            .or_else(|| self.refresh_token.as_deref())
+            .or(self.refresh_token.as_deref())
             .ok_or_else(|| StreamingError::Auth("Missing refreshToken".into()))?;
 
         let client_id = params
             .get("clientId")
             .or_else(|| params.get("client_id"))
             .and_then(Value::as_str)
-            .or_else(|| self.client_id.as_deref())
+            .or(self.client_id.as_deref())
             .unwrap_or(TIDAL_OFFICIAL_CLIENT_ID);
 
         let client_secret = params
             .get("clientSecret")
             .or_else(|| params.get("client_secret"))
             .and_then(Value::as_str)
-            .or_else(|| self.client_secret.as_deref())
+            .or(self.client_secret.as_deref())
             .unwrap_or("");
 
         // 刷新时**不发送 scope**：按 RFC 6749 §6，省略 scope 即表示「沿用原授权范围」。

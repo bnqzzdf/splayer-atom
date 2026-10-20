@@ -176,7 +176,7 @@ impl WavWriter {
             (16, 16) => {
                 self.scratch.clear();
                 self.scratch.reserve(usize::try_from(written)?);
-                for chunk in source.chunks_exact(2) {
+                for chunk in source.as_chunks::<2>().0.iter() {
                     let value = i16::from_ne_bytes([chunk[0], chunk[1]]);
                     self.scratch.extend_from_slice(&value.to_le_bytes());
                 }
@@ -185,8 +185,8 @@ impl WavWriter {
             (32, 32) => {
                 self.scratch.clear();
                 self.scratch.reserve(usize::try_from(written)?);
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                for chunk in source.as_chunks::<4>().0.iter() {
+                    let value = i32::from_ne_bytes(*chunk);
                     self.scratch.extend_from_slice(&value.to_le_bytes());
                 }
                 self.file.write_all(&self.scratch)?;
@@ -194,8 +194,8 @@ impl WavWriter {
             (32, 24) => {
                 self.scratch.clear();
                 self.scratch.reserve(usize::try_from(written)?);
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                for chunk in source.as_chunks::<4>().0.iter() {
+                    let value = i32::from_ne_bytes(*chunk);
                     ensure!(value & 0xff == 0, "24-bit WAV 转换发现非零低 8 bit");
                     let packed = (value >> 8).to_le_bytes();
                     self.scratch.extend_from_slice(&packed[..3]);
@@ -205,8 +205,8 @@ impl WavWriter {
             (32, 16) => {
                 self.scratch.clear();
                 self.scratch.reserve(usize::try_from(written)?);
-                for chunk in source.chunks_exact(4) {
-                    let value = i32::from_ne_bytes(chunk.try_into().unwrap());
+                for chunk in source.as_chunks::<4>().0.iter() {
+                    let value = i32::from_ne_bytes(*chunk);
                     ensure!(value & 0xffff == 0, "16-bit WAV 转换发现非零低 16 bit");
                     self.scratch
                         .extend_from_slice(&(value >> 16).to_le_bytes()[..2]);
@@ -431,7 +431,7 @@ impl DsfWriter {
     fn create(path: &Path, sample_rate: u32, bits_per_channel: u64) -> Result<Self> {
         ensure!(sample_rate > 0, "DSF sample rate 无效");
         ensure!(
-            bits_per_channel > 0 && bits_per_channel % 8 == 0,
+            bits_per_channel > 0 && bits_per_channel.is_multiple_of(8),
             "DSF logical bit count 必须按完整 byte 对齐"
         );
         let expected_bytes_per_channel = bits_per_channel / 8;
@@ -497,8 +497,11 @@ impl DsfWriter {
     }
 
     fn write(&mut self, bytes: &[u8]) -> Result<()> {
-        ensure!(bytes.len() % 2 == 0, "双声道 DSF 输入必须按 L/R byte 对齐");
-        for pair in bytes.chunks_exact(2) {
+        ensure!(
+            bytes.len().is_multiple_of(2),
+            "双声道 DSF 输入必须按 L/R byte 对齐"
+        );
+        for pair in bytes.as_chunks::<2>().0.iter() {
             ensure!(
                 self.written_bytes_per_channel < self.expected_bytes_per_channel,
                 "DSF 输入超过声明的 logical bit count"

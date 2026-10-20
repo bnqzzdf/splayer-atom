@@ -2197,6 +2197,10 @@ impl DirectPcmSource {
     }
 }
 
+/// # Safety
+///
+/// `context` 必须为 `DirectPcmSource::callback_context()` 返回且仍存活的指针；
+/// `data`、`len` 必须指向可写内存。
 pub unsafe extern "C" fn direct_pcm_next_block(
     context: *mut c_void,
     data: *mut *const u8,
@@ -2216,6 +2220,9 @@ pub unsafe extern "C" fn direct_pcm_next_block(
     true
 }
 
+/// # Safety
+///
+/// `context` 必须为 `DirectPcmSource::callback_context()` 返回且仍存活的指针。
 pub unsafe extern "C" fn direct_pcm_release_block(context: *mut c_void) {
     if context.is_null() {
         return;
@@ -2435,8 +2442,10 @@ mod tests {
         let decoded: Vec<i32> = frame
             .payload_bytes()
             .unwrap()
-            .chunks_exact(4)
-            .map(|chunk| i32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| i32::from_le_bytes(*chunk))
             .collect();
         let expected: Vec<i32> = samples.iter().map(|sample| sample << 8).collect();
         assert_eq!(decoded, expected);
@@ -2486,8 +2495,10 @@ mod tests {
         let decoded: Vec<i32> = frame
             .payload_bytes()
             .unwrap()
-            .chunks_exact(4)
-            .map(|chunk| i32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| i32::from_le_bytes(*chunk))
             .collect();
         let expected: Vec<i32> = samples.iter().map(|sample| sample << 8).collect();
         assert_eq!(decoded, expected);
@@ -2671,8 +2682,10 @@ mod tests {
             let decoded: Vec<i32> = frame
                 .payload_bytes()
                 .unwrap()
-                .chunks_exact(4)
-                .map(|chunk| i32::from_le_bytes(chunk.try_into().unwrap()))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| i32::from_le_bytes(*chunk))
                 .collect();
             assert_eq!(decoded, expected);
             assert!(decoded.iter().all(|sample| sample & 0xff == 0));
@@ -2722,8 +2735,10 @@ mod tests {
         let decoded: Vec<i32> = frame
             .payload_bytes()
             .unwrap()
-            .chunks_exact(4)
-            .map(|chunk| i32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| i32::from_le_bytes(*chunk))
             .collect();
         assert_eq!(decoded, expected);
     }
@@ -3129,7 +3144,7 @@ mod tests {
         let mut frame = DirectPcmFrame::new().unwrap();
         let mut samples = vec![0.25_f32, -0.5, 0.75, -1.0];
         let raw = unsafe { frame.raw.as_mut() };
-        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLT as i32;
+        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLT;
         raw.sample_rate = 44_100;
         raw.nb_samples = 2;
         raw.ch_layout.nb_channels = 2;
@@ -3151,8 +3166,10 @@ mod tests {
         let decoded: Vec<f32> = frame
             .payload_bytes()
             .unwrap()
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
             .collect();
         assert_eq!(decoded, samples);
     }
@@ -3163,7 +3180,7 @@ mod tests {
         let mut left = vec![0.25_f32, 0.75];
         let mut right = vec![-0.5_f32, -1.0];
         let raw = unsafe { frame.raw.as_mut() };
-        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP as i32;
+        raw.format = sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP;
         raw.sample_rate = 48_000;
         raw.nb_samples = 2;
         raw.ch_layout.nb_channels = 2;
@@ -3180,8 +3197,10 @@ mod tests {
         let decoded: Vec<f32> = frame
             .payload_bytes()
             .unwrap()
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
             .collect();
         assert_eq!(decoded, vec![0.25, -0.5, 0.75, -1.0]);
     }

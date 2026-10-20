@@ -20,6 +20,9 @@ use serde_json::Value;
 use crate::error::StreamingError;
 use config::{TIDAL_API_BASE, TIDAL_DEFAULT_COUNTRY, TIDAL_USER_AGENT};
 
+/// 自动刷新结果：(access_token, refresh_token, expires_at)。
+type RefreshedTokens = (String, Option<String>, Option<u64>);
+
 pub struct TidalClient {
     http: reqwest::Client,
     pub access_token: Option<String>,
@@ -29,7 +32,7 @@ pub struct TidalClient {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     /// 自动刷新产生的新 token，交由 Core 在本次调用结束后持久化。
-    refreshed_tokens: Mutex<Option<(String, Option<String>, Option<u64>)>>,
+    refreshed_tokens: Mutex<Option<RefreshedTokens>>,
     /// 每个请求实例最多自动刷新一次，避免失效 refresh token 形成循环。
     refresh_attempted: AtomicBool,
 }
@@ -171,7 +174,7 @@ impl TidalClient {
     }
 
     /// 返回自动刷新后的 token；Core 负责持久化它们。
-    pub fn take_refreshed_tokens(&self) -> Option<(String, Option<String>, Option<u64>)> {
+    pub fn take_refreshed_tokens(&self) -> Option<RefreshedTokens> {
         self.refreshed_tokens
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

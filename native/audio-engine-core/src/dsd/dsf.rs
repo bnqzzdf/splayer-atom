@@ -205,10 +205,7 @@ impl DsfReader {
             self.interleave_buf.clear();
             self.interleave_pos = 0;
 
-            let bytes_read = match self.file.read(&mut self.io_buf[..read_size]) {
-                Ok(n) => n,
-                Err(e) => return Err(e.into()),
-            };
+            let bytes_read = self.file.read(&mut self.io_buf[..read_size])?;
 
             if bytes_read == 0 {
                 break;
@@ -228,12 +225,12 @@ impl DsfReader {
                 let bsize = self.block_size as usize;
                 let mut i = 0;
                 while i < bsize {
-                    p_out[write_idx + 0] = reverse_byte(p_l[i + 0]);
+                    p_out[write_idx] = reverse_byte(p_l[i]);
                     p_out[write_idx + 1] = reverse_byte(p_l[i + 1]);
                     p_out[write_idx + 2] = reverse_byte(p_l[i + 2]);
                     p_out[write_idx + 3] = reverse_byte(p_l[i + 3]);
 
-                    p_out[write_idx + 4] = reverse_byte(p_r[i + 0]);
+                    p_out[write_idx + 4] = reverse_byte(p_r[i]);
                     p_out[write_idx + 5] = reverse_byte(p_r[i + 1]);
                     p_out[write_idx + 6] = reverse_byte(p_r[i + 2]);
                     p_out[write_idx + 7] = reverse_byte(p_r[i + 3]);

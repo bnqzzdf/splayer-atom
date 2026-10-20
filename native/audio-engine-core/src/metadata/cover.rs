@@ -105,7 +105,7 @@ pub fn extract_cover_thumbnail_with_directory_cover(
     }
 
     let directory_cover = directory_cover?;
-    extract_directory_cover_thumbnail(&directory_cover, cache_dir)
+    extract_directory_cover_thumbnail(directory_cover, cache_dir)
 }
 
 /// 提取内嵌封面；没有内嵌图时查找同目录约定封面。

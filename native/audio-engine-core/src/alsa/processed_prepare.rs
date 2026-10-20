@@ -11,6 +11,12 @@ pub struct OutputLimiter {
     gain: f32,
 }
 
+impl Default for OutputLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OutputLimiter {
     pub fn new() -> Self {
         Self { gain: 1.0 }
@@ -138,8 +144,10 @@ mod tests {
         .unwrap();
         let samples: Vec<f32> = prepared
             .bytes
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
             .collect();
         assert_eq!(samples, [0.25, -0.25, 0.5, -0.5]);
         assert_eq!(prepared.frames, 2);

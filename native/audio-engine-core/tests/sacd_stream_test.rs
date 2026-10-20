@@ -324,7 +324,7 @@ fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
 
     let mut actual = Vec::with_capacity(expected.len());
     let mut remaining = expected_per_channel;
-    for group in bytes[92..].chunks_exact(8192) {
+    for group in bytes[92..].as_chunks::<8192>().0 {
         if remaining == 0 {
             break;
         }

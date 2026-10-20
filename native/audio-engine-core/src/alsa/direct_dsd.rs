@@ -454,7 +454,7 @@ impl AlsaDirectDsdConnection {
         if let Some(preparer) = &self.preparer {
             preparer.play()?;
         }
-        if let Err(error) = self.request(|response| WriterCommand::Play(response)) {
+        if let Err(error) = self.request(WriterCommand::Play) {
             if let Some(preparer) = &self.preparer {
                 let _ = preparer.pause();
             }
@@ -464,7 +464,7 @@ impl AlsaDirectDsdConnection {
     }
 
     pub fn pause(&mut self) -> Result<()> {
-        self.request(|response| WriterCommand::Pause(response))?;
+        self.request(WriterCommand::Pause)?;
         if let Some(preparer) = &self.preparer {
             preparer.pause()?;
         }
@@ -571,7 +571,7 @@ fn spawn_packed_preparer(
     let (command_tx, command_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(PACK_QUEUE_DEPTH);
     let (recycle_tx, recycle_rx) = mpsc::sync_channel(PACK_QUEUE_DEPTH + 1);
-    let worker_recycle_tx = recycle_tx.clone();
+    let worker_recycle_tx = recycle_tx;
     let worker = thread::Builder::new()
         .name("alsa-dsd-prepare".into())
         .spawn(move || {
@@ -1054,7 +1054,7 @@ fn commit_boundaries(
 fn frames_from_bits(bits_per_channel: u64, bits_per_frame: u8) -> Result<usize> {
     let width = u64::from(bits_per_frame);
     ensure!(
-        width > 0 && bits_per_channel % width == 0,
+        width > 0 && bits_per_channel.is_multiple_of(width),
         "Native DSD block 无法完整表达为 ALSA frame"
     );
     usize::try_from(bits_per_channel / width).context("Native DSD frame 数越界")

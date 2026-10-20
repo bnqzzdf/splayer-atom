@@ -424,7 +424,7 @@ impl AlsaDirectPcmConnection {
         if let Some(preparer) = &self.preparer {
             preparer.play()?;
         }
-        if let Err(error) = self.request(|response| WriterCommand::Play(response)) {
+        if let Err(error) = self.request(WriterCommand::Play) {
             if let Some(preparer) = &self.preparer {
                 let _ = preparer.pause();
             }
@@ -434,7 +434,7 @@ impl AlsaDirectPcmConnection {
     }
 
     pub fn pause(&mut self) -> Result<()> {
-        self.request(|response| WriterCommand::Pause(response))?;
+        self.request(WriterCommand::Pause)?;
         if let Some(preparer) = &self.preparer {
             preparer.pause()?;
         }
@@ -543,7 +543,7 @@ fn spawn_packed_preparer(
     let (command_tx, command_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(PACK_QUEUE_DEPTH);
     let (recycle_tx, recycle_rx) = mpsc::sync_channel(PACK_QUEUE_DEPTH + 1);
-    let worker_recycle_tx = recycle_tx.clone();
+    let worker_recycle_tx = recycle_tx;
     let worker = thread::Builder::new()
         .name("alsa-pcm-prepare".into())
         .spawn(move || {

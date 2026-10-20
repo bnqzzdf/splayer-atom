@@ -415,8 +415,10 @@ mod tests {
         )
         .unwrap();
         let decoded: Vec<i32> = output
-            .chunks_exact(4)
-            .map(|bytes| i32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| i32::from_le_bytes(*bytes))
             .collect();
         let expected: Vec<i32> = samples
             .iter()
@@ -440,7 +442,7 @@ mod tests {
             &mut output,
         )
         .unwrap();
-        for (chunk, sample) in output.chunks_exact(4).zip(samples) {
+        for (chunk, sample) in output.as_chunks::<4>().0.iter().zip(samples) {
             assert_eq!(&chunk[..3], &sample.to_le_bytes()[..3]);
             assert_eq!(chunk[3], 0);
         }
@@ -490,8 +492,10 @@ mod tests {
         assert!(integer_stats.quantized);
         assert!(integer_stats.clipped);
         let decoded: Vec<i16> = integer
-            .chunks_exact(2)
-            .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|bytes| i16::from_le_bytes(*bytes))
             .collect();
         assert_eq!(decoded, vec![16384, -16384, i16::MAX, 0]);
     }
@@ -504,8 +508,10 @@ mod tests {
         assert_eq!(stats.bytes, output.len());
         assert!(stats.clipped);
         let decoded: Vec<f32> = output
-            .chunks_exact(4)
-            .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| f32::from_le_bytes(*bytes))
             .collect();
         assert_eq!(decoded, vec![0.25, -0.25, 1.0, 0.0]);
     }
@@ -516,8 +522,10 @@ mod tests {
         let mut output = vec![0_u8; input.len() * 2];
         pack_processed_pcm(&input, 1.0, AlsaPcmFormat::S16Le, &mut output).unwrap();
         let decoded: Vec<i16> = output
-            .chunks_exact(2)
-            .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|bytes| i16::from_le_bytes(*bytes))
             .collect();
         assert_eq!(decoded, vec![0, 2, i16::MIN, i16::MAX]);
     }
