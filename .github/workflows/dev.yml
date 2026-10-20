@@ -62,8 +62,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Test
         run: pnpm test
+
+      - name: Rust tests
+        run: pnpm test:native
 
       - name: Build Core and Web Control
         run: pnpm build

@@ -1,6 +1,7 @@
 use std::io::ErrorKind;
 
 use anyhow::Error;
+use audio_engine_core::shared::PreparedPcmChunk;
 use audio_engine_core::{AudioChunk, AudioEngineError, PlayerState, PopResult, Shared};
 
 #[test]
@@ -21,8 +22,9 @@ fn shared_round_trips_chunks_and_tracks_position() {
     assert_eq!(decoded.source_sample_count, 1);
     assert_eq!(decoded.player_samples, vec![0.1, -0.1]);
 
-    shared.push_output(AudioChunk {
-        player_samples: vec![0.3, -0.3],
+    shared.push_output(PreparedPcmChunk {
+        bytes: vec![0; 8],
+        frames: 1,
         source_sample_count: 1,
         track_boundary: None,
     });
