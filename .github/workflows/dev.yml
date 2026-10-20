@@ -42,7 +42,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        # 固定版本，避免新 clippy lint 让 CI 无预警失败
+        uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
@@ -67,6 +70,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets
 
       - name: Rust tests
         run: pnpm test:native
