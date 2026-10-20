@@ -17,6 +17,7 @@
 - 当前生产产物仅支持 Linux x86-64。硬件支持范围仍取决于发布验收矩阵。
 - Core HTTP/WS 只接受同源浏览器请求（拒绝跨站 `Origin`），`Host` 仅放行 IP、`localhost`、无点主机名与 `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`；
   经反向代理或自有域名访问时，用逗号分隔的 `ATOM_ALLOWED_HOSTS`（如 `music.example.com`）显式放行。
+- 插件 host 子进程在 Node 权限模型（`--permission`）下运行，不能启动子进程、加载原生模块或写文件。
 
 ## glibc 与发行版兼容（Debian 11）
 

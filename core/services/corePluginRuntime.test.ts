@@ -34,3 +34,11 @@ test("Core build emits a Node IPC wrapper for the existing plugin sandbox worker
   assert.match(nodeHostSource, /process\.send/);
   assert.match(nodeHostSource, /await import\("@main\/plugins\/host\.worker"\)/);
 });
+
+test("plugin host runs under the Node permission model with read-only access to the Core build", async () => {
+  const { pluginHostExecArgv } = await import("../atom/runtime/pluginHost");
+  assert.deepEqual(pluginHostExecArgv("/opt/atom/core/plugin-host.js"), [
+    "--permission",
+    "--allow-fs-read=/opt/atom/core",
+  ]);
+});

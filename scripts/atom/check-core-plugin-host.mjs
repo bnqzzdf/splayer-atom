@@ -12,6 +12,8 @@ if (!existsSync(entry)) {
 const child = fork(entry, [], {
   cwd: root,
   stdio: ["ignore", "pipe", "pipe", "ipc"],
+  // 与 core/atom/runtime/pluginHost.ts 保持一致，验证权限模型下 host 仍能正常握手
+  execArgv: ["--permission", `--allow-fs-read=${path.dirname(entry)}`],
 });
 let output = "";
 let ready = false;

@@ -18,6 +18,7 @@ start/stop commands differ. See [GentooPlayer (OpenRC) Service Management](./gen
 - The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
 - Core HTTP/WS only accepts same-origin browser requests (cross-site `Origin` is rejected), and `Host` is limited to IPs, `localhost`, dotless hostnames and `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`;
   when serving through a reverse proxy or your own domain, allow it explicitly with a comma-separated `ATOM_ALLOWED_HOSTS` (for example `music.example.com`).
+- The plugin host child process runs under the Node permission model (`--permission`) and cannot spawn processes, load native addons or write files.
 
 ## glibc and distro compatibility (Debian 11)
 
