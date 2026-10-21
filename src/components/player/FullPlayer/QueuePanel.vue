@@ -2,6 +2,7 @@
 import type { Track } from "@shared/types/player";
 import type { SVirtualListExposed } from "@/components/ui/SVirtualList.vue";
 import { useQueuePanel } from "@/composables/useQueuePanel";
+import { formatTime } from "@/utils/time";
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -11,6 +12,7 @@ const {
   statusStore,
   queue,
   queueLength,
+  remainingDuration,
   formatArtists,
   playAt,
   removeAt,
@@ -36,6 +38,9 @@ const onOpenContainingFolder = async (track: Track): Promise<void> => {
         </h2>
         <span class="text-sm text-cover/55 mt-1">
           {{ t("common.totalSongs", { count: queueLength }) }}
+          <template v-if="remainingDuration > 0">
+            · {{ t("playlist.remaining", { time: formatTime(remainingDuration) }) }}
+          </template>
         </span>
       </div>
       <div class="shrink-0 flex items-center gap-3">
@@ -111,6 +116,13 @@ const onOpenContainingFolder = async (track: Track): Promise<void> => {
                   {{ formatArtists(item.artists) }}
                 </div>
               </div>
+              <span
+                v-if="item.duration > 0"
+                class="shrink-0 text-sm tabular-nums"
+                :class="index === statusStore.playIndex ? 'text-cover/70' : 'text-cover/55'"
+              >
+                {{ formatTime(item.duration) }}
+              </span>
               <SButton
                 v-if="item.source === 'local' && (item.path || item.cuePath)"
                 type="cover"

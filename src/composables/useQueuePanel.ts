@@ -67,10 +67,29 @@ export const useQueuePanel = (options: UseQueuePanelOptions) => {
     }
   };
 
+  /** 当前曲目之后各曲时长之和；与播放进度无关，单独缓存避免每次进度更新都遍历队列 */
+  const upcomingDuration = computed(() => {
+    const list = queue.value;
+    let total = 0;
+    for (let i = Math.max(0, statusStore.playIndex + 1); i < list.length; i++) {
+      total += list[i].duration;
+    }
+    return total;
+  });
+
+  /** 队列剩余总时长（毫秒）：当前曲剩余部分 + 后续曲目；随机模式下队列已按播放顺序排列 */
+  const remainingDuration = computed(() => {
+    const current = queue.value[statusStore.playIndex];
+    if (!current) return upcomingDuration.value;
+    const total = statusStore.duration > 0 ? statusStore.duration : current.duration;
+    return upcomingDuration.value + Math.max(0, total - statusStore.position);
+  });
+
   return {
     statusStore,
     queue,
     queueLength,
+    remainingDuration,
     formatArtists,
     playAt,
     removeAt,

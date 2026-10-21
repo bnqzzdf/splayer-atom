@@ -581,6 +581,7 @@
     "title": "Playlist",
     "empty": "Playlist is empty",
     "unknownArtist": "Unknown Artist",
+    "remaining": "{time} remaining",
     "clearList": "Clear All",
     "locateCurrent": "Now Playing",
     "clearConfirmTitle": "Clear Playlist",
