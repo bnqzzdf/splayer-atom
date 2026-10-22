@@ -182,9 +182,28 @@ const rankGroupTabs = computed<GenreItem[]>(() =>
 
 /** 第 index 个分区是否是某个大类（目前只有「榜单」）的第一节：分组标题与标签只渲染一次 */
 const isGroupStart = (index: number): boolean => {
-  const current = sections.value[index];
-  return Boolean(current?.group) && current.group !== sections.value[index - 1]?.group;
+  const current = visibleSections.value[index];
+  return Boolean(current?.group) && current.group !== visibleSections.value[index - 1]?.group;
 };
+
+/** 榜单分组 id → 对应分区 key（与 normalizeQQMusic / normalizeKugou / normalizeNeteaseRanks 的规则一致） */
+const rankSectionKey = (id: string): string =>
+  platform.value === "qqmusic" ? `qm-${id}` : platform.value === "kugou" ? `kg-${id}` : id;
+
+/**
+ * 实际渲染的分区。
+ *
+ * QM/KG/网易的榜单分组筛选只在已拉取的榜单目录里过滤，不重新请求、也不动书架，
+ * 页面高度只在榜单区变化，滚动位置得以保留。
+ */
+const visibleSections = computed<HomeSection[]>(() => {
+  if (!isRankGroupPlatform.value || !activeGenre.value) return sections.value;
+  const key = rankSectionKey(activeGenre.value);
+  return sections.value.filter((section) => !section.group || section.key === key);
+});
+
+/** 正在单独重拉的书架（键 = 分区 key），用于切地区时给该书架一个加载态 */
+const shelfLoading = ref<Record<string, boolean>>({});
 
 // ---------- 归一化 ----------
 
@@ -456,6 +475,52 @@ const ncmHotArtistSection = (artists: CoverItem[]): HomeSection =>
     items: artists.slice(0, SHELF_LIMIT).map((artist) => coverToNeteaseItem(artist, "artist")),
   });
 
+/**
+ * 各书架按地区单独取数（键 = 分区 key，与 SHELF_TABS 对应）。
+ *
+ * 整页加载与切换书架标签共用这一份：切标签时只重拉这一个书架并原地替换，
+ * 不清空整页——清空会让所有分区卸载、内容高度塌陷，滚动位置被打回顶部。
+ * 拉不到返回 null，不影响其余分区。
+ */
+const SHELF_LOADERS: Record<string, (tab: string) => Promise<HomeSection | null>> = {
+  "qm-new-songs": async (tab) => {
+    const tracks = await fetchQQMusicNewSongs(30, Number(tab));
+    return tracks.length
+      ? newSongSection("qm-new-songs", t("platformHome.newSongs"), tracks)
+      : null;
+  },
+  "qm-new-albums": async (tab) => {
+    const albums = await fetchQQMusicNewAlbums(30, Number(tab));
+    return albums.length ? qmNewAlbumSection(albums) : null;
+  },
+  "kg-new-songs": async (tab) => {
+    const tracks = await fetchKugouNewSongs(30, Number(tab));
+    return tracks.length
+      ? newSongSection("kg-new-songs", t("platformHome.newSongs"), tracks)
+      : null;
+  },
+  "kg-hot-artists": async (tab) => {
+    const artists = await fetchKugouHotArtists(30, Number(tab));
+    return artists.length ? kgHotArtistSection(artists) : null;
+  },
+  "ncm-new-albums": async (tab) => {
+    const albums = await fetchNeteaseNewAlbums(30, tab);
+    return albums.length ? ncmNewAlbumSection(albums) : null;
+  },
+  "ncm-hot-artists": async (tab) => {
+    const artists = await fetchNeteaseHotArtists(30, Number(tab));
+    return artists.length ? ncmHotArtistSection(artists) : null;
+  },
+};
+
+/** 按当前地区取某个书架 */
+const loadShelf = (key: string): Promise<HomeSection | null> =>
+  SHELF_LOADERS[key](shelfTab(key)).catch(() => null);
+
+/** 去掉没取到的书架 */
+const presentShelves = (shelves: Array<HomeSection | null>): HomeSection[] =>
+  shelves.filter((shelf): shelf is HomeSection => shelf !== null);
+
 /** 网易榜单分组（栏目名是界面文案，判据在 apis/playlist/netease.ts） */
 interface NcmRankGroup {
   id: string;
@@ -545,9 +610,8 @@ const load = async (): Promise<void> => {
   }
   loading.value = true;
   error.value = "";
-  // 先清空上一个平台的内容与分类，避免加载失败时残留另一平台的分类栏
-  sections.value = [];
-  genres.value = [];
+  // 同一平台内重载（手动刷新、Qobuz/TIDAL 换流派）保留旧内容直到新数据到达，
+  // 避免页面先塌成「加载中」再重新铺开、滚动位置被打回顶部；换平台时由 switchPlatform 先清空
   try {
     const genreParam = activeGenre.value || undefined;
     if (platform.value === "qobuz") {
@@ -570,58 +634,40 @@ const load = async (): Promise<void> => {
         fetchQQMusicToplist(),
         // 下面三个书架任一个拉不到都不该影响榜单展示
         fetchQQMusicHotPlaylists(30).catch(() => [] as QMHotPlaylist[]),
-        fetchQQMusicNewSongs(30, Number(shelfTab("qm-new-songs"))).catch(() => [] as Track[]),
-        fetchQQMusicNewAlbums(30, Number(shelfTab("qm-new-albums"))).catch(
-          () => [] as QMNewAlbum[],
-        ),
+        loadShelf("qm-new-songs"),
+        loadShelf("qm-new-albums"),
       ]);
-      const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
-        ...(newSongs.length
-          ? [newSongSection("qm-new-songs", t("platformHome.newSongs"), newSongs)]
-          : []),
-        ...(newAlbums.length ? [qmNewAlbumSection(newAlbums)] : []),
+        ...presentShelves([newSongs, newAlbums]),
         ...(hotPlaylists.length ? [qmHotPlaylistSection(hotPlaylists)] : []),
-        ...normalizeQQMusic(visible),
+        ...normalizeQQMusic(groups),
       ];
       genres.value = groupsToGenres(groups);
     } else if (platform.value === "kugou") {
       const [groups, hotPlaylists, newSongs, hotArtists] = await Promise.all([
         fetchKugouRankList(),
         fetchKugouHotPlaylists(1, 30).catch(() => [] as KGHotPlaylist[]),
-        fetchKugouNewSongs(30, Number(shelfTab("kg-new-songs"))).catch(() => [] as Track[]),
-        fetchKugouHotArtists(30, Number(shelfTab("kg-hot-artists"))).catch(
-          () => [] as KGHotArtist[],
-        ),
+        loadShelf("kg-new-songs"),
+        loadShelf("kg-hot-artists"),
       ]);
-      const visible = genreParam ? groups.filter((group) => group.id === genreParam) : groups;
       sections.value = [
-        ...(newSongs.length
-          ? [newSongSection("kg-new-songs", t("platformHome.newSongs"), newSongs)]
-          : []),
-        ...(hotArtists.length ? [kgHotArtistSection(hotArtists)] : []),
+        ...presentShelves([newSongs, hotArtists]),
         ...(hotPlaylists.length ? [kgHotPlaylistSection(hotPlaylists)] : []),
-        ...normalizeKugou(visible),
+        ...normalizeKugou(groups),
       ];
       genres.value = groupsToGenres(groups);
     } else {
       // 网易云：两个书架各是「一份地区一份列表」，榜单目录是另一条通路，
       // 三者任一拉不到都不该影响其余部分（书架在前、榜单在后，与 QM/KG 一致）
       const [newAlbums, hotArtists, toplist] = await Promise.all([
-        fetchNeteaseNewAlbums(30, shelfTab("ncm-new-albums")).catch(() => [] as CoverItem[]),
-        fetchNeteaseHotArtists(30, Number(shelfTab("ncm-hot-artists"))).catch(
-          () => [] as CoverItem[],
-        ),
+        loadShelf("ncm-new-albums"),
+        loadShelf("ncm-hot-artists"),
         fetchNeteaseToplist().catch(() => null),
       ]);
       const rankGroups = toplist ? ncmRankGroups(toplist) : [];
-      const visibleRankGroups = genreParam
-        ? rankGroups.filter((group) => group.id === genreParam)
-        : rankGroups;
       sections.value = [
-        ...(newAlbums.length ? [ncmNewAlbumSection(newAlbums)] : []),
-        ...(hotArtists.length ? [ncmHotArtistSection(hotArtists)] : []),
-        ...normalizeNeteaseRanks(visibleRankGroups),
+        ...presentShelves([newAlbums, hotArtists]),
+        ...normalizeNeteaseRanks(rankGroups),
       ];
       genres.value = groupsToGenres(rankGroups);
     }
@@ -639,6 +685,9 @@ const load = async (): Promise<void> => {
 const switchPlatform = async (next: Platform): Promise<void> => {
   platform.value = next;
   activeGenre.value = "";
+  // 先清空上一个平台的内容与分类，避免新平台加载期间残留另一平台的分区与分类栏
+  sections.value = [];
+  genres.value = [];
   await load();
 };
 
@@ -651,7 +700,8 @@ const onLoginDialogClose = async (open: boolean): Promise<void> => {
 
 const selectGenre = async (id: string): Promise<void> => {
   activeGenre.value = activeGenre.value === id ? "" : id;
-  await load();
+  // 榜单分组只是前端过滤（见 visibleSections），只有 Qobuz/TIDAL 的流派需要重拉首页
+  if (!isRankGroupPlatform.value) await load();
 };
 
 /** 某书架当前生效的地区值（没选过就用 SHELF_TABS 的第一项） */
@@ -660,12 +710,19 @@ const shelfTab = (key: string): string => activeTabs.value[key] ?? shelfDefaultT
 /**
  * 切换某书架的地区标签。
  *
- * 这里选择整页重载而不是局部刷新：与 `selectGenre` 一致，且各平台的取数是并发的，
- * 局部刷新要额外维护「哪些书架在加载」的状态，收益不抵复杂度。
+ * 只重拉这一个书架并原地替换：整页重载会先清空全部分区，页面高度塌陷、滚动回到顶部。
+ * 连点标签时只认最后一次的结果；期间换了平台，该分区已不在列表里，结果直接丢弃。
  */
 const selectShelfTab = async (section: HomeSection, value: string): Promise<void> => {
   activeTabs.value = { ...activeTabs.value, [section.key]: value };
-  await load();
+  shelfLoading.value = { ...shelfLoading.value, [section.key]: true };
+  const next = await loadShelf(section.key);
+  if (shelfTab(section.key) !== value) return;
+  shelfLoading.value = { ...shelfLoading.value, [section.key]: false };
+  const index = sections.value.findIndex((item) => item.key === section.key);
+  if (index < 0) return;
+  // 该地区没取到时保留标签行、清空卡片，用户仍可切回别的地区
+  sections.value.splice(index, 1, next ?? withShelf({ ...sections.value[index], items: [] }));
 };
 
 watch(
@@ -763,7 +820,7 @@ onMounted(async () => {
         </div>
 
         <!-- 分区列表 -->
-        <template v-for="(section, index) in sections" :key="section.key">
+        <template v-for="(section, index) in visibleSections" :key="section.key">
           <!--
             大类标题（目前只有「榜单」）在分组切换处渲染一次。
             榜单分组的筛选标签就挂在这里：它只作用于榜单区，跟着被控制的内容走，
@@ -833,7 +890,11 @@ onMounted(async () => {
             </div>
 
             <!-- 封面卡片 -->
-            <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            <div
+              v-else
+              class="grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+              :class="{ 'opacity-50': shelfLoading[section.key] }"
+            >
               <button
                 v-for="item in section.items"
                 :key="`${section.key}-${item.id}`"

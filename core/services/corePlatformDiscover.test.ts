@@ -96,7 +96,7 @@ test("QM 新碟首发的地区参数是 area，不是 albumType / type", () => {
   assert.doesNotMatch(codeOnly(qmNewAlbumSource), /albumType/);
   assert.match(qmModulesSource, /new_albums: newAlbum/);
   assert.match(qmPlaylistApiSource, /qmApi\.new_albums</);
-  assert.match(platformHomePageSource, /qmNewAlbumSection\(newAlbums\)/);
+  assert.match(platformHomePageSource, /qmNewAlbumSection\(albums\)/);
 });
 
 test("KG 新歌用移动站频道的 type 区分地区", () => {
@@ -106,7 +106,7 @@ test("KG 新歌用移动站频道的 type 区分地区", () => {
   assert.match(kgModulesSource, /new_songs: newSong/);
   assert.match(
     platformHomePageSource,
-    /fetchKugouNewSongs\(30, Number\(shelfTab\("kg-new-songs"\)\)\)/,
+    /"kg-new-songs": async \(tab\) => \{\s+const tracks = await fetchKugouNewSongs\(30, Number\(tab\)\)/,
   );
 });
 
@@ -162,6 +162,12 @@ test("点地区标签只重载对应书架，且「更多」把书架与地区�
     /const selectShelfTab = async \(section: HomeSection, value: string\)/,
   );
   assert.match(platformHomePageSource, /@click="selectShelfTab\(section, tab\.value\)"/);
+  // 只重拉这一个书架并原地替换，不走整页 load（整页清空会让滚动位置回到顶部）
+  assert.match(platformHomePageSource, /const next = await loadShelf\(section\.key\)/);
+  assert.match(platformHomePageSource, /sections\.value\.splice\(index, 1, next \?\?/);
+  // 榜单分组只在前端过滤，只有 Qobuz/TIDAL 的流派才重拉首页
+  assert.match(platformHomePageSource, /if \(!isRankGroupPlatform\.value\) await load\(\)/);
+  assert.match(platformHomePageSource, /v-for="\(section, index\) in visibleSections"/);
   // withShelf 给书架挂 tabs / activeTab / more，more 里带着当前地区
   assert.match(
     platformHomePageSource,
@@ -234,10 +240,10 @@ test("网易热门歌手走 v1 分类接口，而不是没有地区维度的 art
 });
 
 test("网易标签页由新碟上架 + 热门歌手两排书架组成，各带地区标签与「更多」", () => {
-  assert.match(platformHomePageSource, /fetchNeteaseNewAlbums\(30, shelfTab\("ncm-new-albums"\)\)/);
+  assert.match(platformHomePageSource, /const albums = await fetchNeteaseNewAlbums\(30, tab\)/);
   assert.match(
     platformHomePageSource,
-    /fetchNeteaseHotArtists\(30, Number\(shelfTab\("ncm-hot-artists"\)\)\)/,
+    /const artists = await fetchNeteaseHotArtists\(30, Number\(tab\)\)/,
   );
   // 两个书架都过 withShelf：地区标签、「更多」的定位信息都从那里来
   assert.match(platformHomePageSource, /const ncmNewAlbumSection = \(albums: CoverItem\[\]\)/);
@@ -340,7 +346,7 @@ test("网易榜单进「榜单」区，与 QM/KG 共用分组筛选与 rank 跳�
     /const rankGroups = toplist \? ncmRankGroups\(toplist\) : \[\]/,
   );
   assert.match(platformHomePageSource, /genres\.value = groupsToGenres\(rankGroups\)/);
-  assert.match(platformHomePageSource, /\.\.\.normalizeNeteaseRanks\(visibleRankGroups\)/);
+  assert.match(platformHomePageSource, /\.\.\.normalizeNeteaseRanks\(rankGroups\)/);
   // 卡片按榜单类型跳转（collection 的 rank 分支）
   assert.match(platformHomeServiceSource, /export const ncmToplistToItem/);
   assert.match(platformHomeServiceSource, /kind: "rank"/);
