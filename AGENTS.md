@@ -60,5 +60,10 @@
 ## Engineering conventions
 
 - Preserve unrelated working-tree changes and keep independent changes separable.
-- Code comments are Chinese and explain non-obvious intent. Follow repository formatting and
-  auto-import/component-registration conventions.
+- Default to no comments; names and types carry intent. Comment only what code cannot show:
+  external API quirks or measured behavior, deliberate non-implementation, and code that looks
+  removable but is required (ordering, race guards). Use one or two Chinese sentences on why;
+  never restate what the code does. Prefer a test when the fact can be asserted.
+- When changing code, update or delete the comments it invalidates; a stale comment is worse than
+  none. Remove redundant comments only in code you touch; do not mass-delete existing comments.
+- Follow repository formatting and auto-import/component-registration conventions.

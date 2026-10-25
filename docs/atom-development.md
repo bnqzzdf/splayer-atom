@@ -1,6 +1,6 @@
 # SPlayer Atom 开发环境
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-25
 
 项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
 开发工作流与约定。
@@ -49,8 +49,7 @@ docs/                    Atom documentation（中英双语，英文在 docs/en/�
 - 提交标题使用 Conventional Commits，并配一行中文摘要（`<type>: <summary>`）。
 - 仅在明确要求时添加提交正文。
 - 不要格式化或改写无关的脏文件。
-- JS/TS 在有用时使用简洁 JSDoc（`@param name - ...`、`@returns`）；其它语言使用各自的文档约定。
-  避免装饰性注释与显而易见的复述。
+- 注释规则以 `AGENTS.md` 为准：默认不写，只写代码表达不了的「为什么」。
 - `.prettierrc.yaml` 定义格式化。遵循现有的 Vue/Pinia/router/VueUse/i18n 自动导入与组件自动注册模式。
 
 ## 常用门禁
