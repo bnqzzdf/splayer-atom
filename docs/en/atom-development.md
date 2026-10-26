@@ -1,6 +1,6 @@
 # SPlayer Atom Development Setup
 
-> Last updated: 2026-10-03
+> Last updated: 2026-10-15
 
 Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
 live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.

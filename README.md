@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-10-21
+> 最后更新：2026-10-26
 
 **简体中文** · [English](./README.en.md)
 
@@ -104,6 +104,7 @@ cargo test --workspace
 
 ## 文档
 
+- [交付手册：项目书 / 开发 / 运维 / 使用 / 接口](./docs/handbook/README.md)
 - [使用指南](./docs/guide.md)
 - [Core 部署与升级](./docs/core-deployment.md) · [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)
 - [构建与打包](./docs/build-and-packaging.md) · [构建面](./docs/build-flavors.md) · [CPU 变体](./docs/cpu-variants.md)

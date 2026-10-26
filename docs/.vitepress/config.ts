@@ -7,6 +7,7 @@ const zhTheme: DefaultTheme.Config = {
   nav: [
     { text: "首页", link: "/" },
     { text: "使用指南", link: "/guide" },
+    { text: "交付手册", link: "/handbook/01-project" },
     {
       text: "部署",
       items: [
@@ -36,6 +37,16 @@ const zhTheme: DefaultTheme.Config = {
         { text: "使用指南", link: "/guide" },
         { text: "流媒体服务", link: "/streaming" },
         { text: "插件使用", link: "/plugins-usage" },
+      ],
+    },
+    {
+      text: "交付手册",
+      items: [
+        { text: "项目书", link: "/handbook/01-project" },
+        { text: "开发手册", link: "/handbook/02-development" },
+        { text: "运维手册", link: "/handbook/03-operations" },
+        { text: "使用手册", link: "/handbook/04-user-guide" },
+        { text: "程序接口文档", link: "/handbook/05-api" },
       ],
     },
     {
@@ -91,6 +102,7 @@ const enTheme: DefaultTheme.Config = {
   nav: [
     { text: "Home", link: "/en/" },
     { text: "User Guide", link: "/en/guide" },
+    { text: "Delivery Handbook", link: "/en/handbook/01-project" },
     {
       text: "Deployment",
       items: [
@@ -117,6 +129,16 @@ const enTheme: DefaultTheme.Config = {
         { text: "User Guide", link: "/en/guide" },
         { text: "Streaming Services", link: "/en/streaming" },
         { text: "Using Plugins", link: "/en/plugins-usage" },
+      ],
+    },
+    {
+      text: "Delivery Handbook",
+      items: [
+        { text: "Project Book", link: "/en/handbook/01-project" },
+        { text: "Development Manual", link: "/en/handbook/02-development" },
+        { text: "Operations Manual", link: "/en/handbook/03-operations" },
+        { text: "User Guide", link: "/en/handbook/04-user-guide" },
+        { text: "API Reference", link: "/en/handbook/05-api" },
       ],
     },
     {

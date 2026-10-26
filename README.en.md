@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-10-21
+> Last updated: 2026-10-26
 
 [简体中文](./README.md) · **English**
 
@@ -104,6 +104,7 @@ Layout:
 
 ## Documentation
 
+- [Delivery handbook: project / development / operations / user / API](./docs/en/handbook/README.md)
 - [User guide](./docs/en/guide.md)
 - [Core deployment and upgrades](./docs/en/core-deployment.md) · [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md)
 - [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/cpu-variants.md) (Chinese only)

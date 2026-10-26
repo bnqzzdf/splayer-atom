@@ -27,10 +27,10 @@ features:
     details: 当前唯一正式发布平台，提供 system-runtime 与 bundled-runtime tar.gz artifact。
 ---
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-26
 
 ## 产品边界
 
 SPlayer Atom 基于 SPlayer-Next 修改，采用 **Node Core + Web Control** 模式，当前发布目标为 Linux x86-64。
 
-继续阅读：[使用指南](./guide.md)、[构建与打包](./build-and-packaging.md)、[Core 部署](./core-deployment.md)、[GentooPlayer / OpenRC](./gentooplayer-openrc.md)。
+继续阅读：[交付手册](./handbook/README.md)（项目书 / 开发 / 运维 / 使用 / 接口）、[使用指南](./guide.md)、[构建与打包](./build-and-packaging.md)、[Core 部署](./core-deployment.md)、[GentooPlayer / OpenRC](./gentooplayer-openrc.md)。

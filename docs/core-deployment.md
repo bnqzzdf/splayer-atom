@@ -1,6 +1,6 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-20
 
 本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
 

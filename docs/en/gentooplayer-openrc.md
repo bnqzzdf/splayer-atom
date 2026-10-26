@@ -1,6 +1,6 @@
 # GentooPlayer (OpenRC) Service Management
 
-> Last updated: 2026-10-03
+> Last updated: 2026-10-20
 
 GentooPlayer (GP) is one of the primary deployment targets for Core, and it is a **pure OpenRC**
 system: there is no systemd, so `service/install-systemd.sh` and the systemd-based steps in this

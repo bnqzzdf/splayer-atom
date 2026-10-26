@@ -1,6 +1,6 @@
 # GentooPlayer（OpenRC）服务管理
 
-> 最后更新：2026-10-03
+> 最后更新：2026-10-20
 
 GentooPlayer（下称 GP）是 Core 的主要落地形态之一，但它是**纯 OpenRC** 系统：没有 systemd，
 `service/install-systemd.sh` 与本文档站里的 systemd 步骤在 GP 上都不适用。本页给出在 GP 上
