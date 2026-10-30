@@ -32,7 +32,7 @@ SPlayer Atom 在目标机上表现为：
 | system-runtime | 宿主机 Node | Node `>=22.19.0` |
 | bundled-runtime | 包内 `runtime/bin/node` | 不需要系统 Node |
 | Debian 11 bundled | 包内 Node | glibc `>=2.30` |
-| Diretta 变体 | 视构建方式 | root、SDK 150、匹配 CPU 变体 |
+| Diretta 变体 | 视构建方式 | root、SDK 148、匹配 CPU 变体 |
 
 ### 2.2 环境前提清单
 
@@ -47,7 +47,7 @@ SPlayer Atom 在目标机上表现为：
 | 端口 14558 | 未被占用 | `ss -ltnp \| grep 14558` |
 | 数据目录 | 可写、足够空间 | `df -h`、`test -w` |
 | 缓存目录 | 可写、足够空间 | `df -h` |
-| Diretta（可选） | root、SDK 150 产物、Target 独占可用 | `/api/info`、硬件验收 |
+| Diretta（可选） | root、SDK 148 产物、Target 独占可用 | `/api/info`、硬件验收 |
 | UPnP（可选） | Renderer 可达、SSDP 多播可达 | `/api/output/devices` |
 | 在线平台（可选） | 出站 443、账号有效 | 平台登录与播放测试 |
 
@@ -424,7 +424,7 @@ curl -s http://127.0.0.1:14558/api/output/devices
 
 1. 产物编译了 Diretta（`/api/info.capabilities.diretta === true`）。
 2. Core 以 root 运行（`install-systemd.sh --diretta` 或 `install-openrc.sh --diretta`）。
-3. SDK 150、CPU 变体与目标机匹配。
+3. SDK 148、CPU 变体与目标机匹配。
 4. Target 独占可用，未被其他 Host 占用。
 5. 源为 lossless integer PCM 或原生 DSD。
 

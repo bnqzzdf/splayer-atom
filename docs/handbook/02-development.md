@@ -527,7 +527,7 @@ pnpm test:all
 - 打包脚本要求 Node **24.18.0**（system 与 bundled 都一样）。
 - 默认发布构建要求提交已推送到网络远端且工作树干净。
 - 本地试验可用 `--allow-unpublished`，但产物仍标记未发布身份。
-- Diretta 构建要求 `DIRETTA_SDK_ROOT` 指向 SDK 150，且选择 `v2|v3|v4|zen4`。
+- Diretta 构建要求 `DIRETTA_SDK_ROOT` 指向 SDK 148，且选择 `v2|v3|v4|zen4`。
 
 ### 11.3 产物
 

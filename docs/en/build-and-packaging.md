@@ -184,10 +184,10 @@ container on glibc 2.31, and the default has no Diretta:
 pnpm package:core:debian11 --without-diretta
 ```
 
-To include Diretta, provide the path to SDK 150 and select the target CPU variant:
+To include Diretta, provide the path to SDK 148 and select the target CPU variant:
 
 ```bash
-DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
@@ -197,7 +197,7 @@ the artifact **can run on the target CPU at all**, not merely how fast it is; se
 placed into the artifact. The script checks the glibc version of the native addons, the Diretta
 capability bit, and startup of the artifact. The two modes are retained separately as
 `out/*-debian11-without-diretta.tar.gz` and `out/*-debian11-with-diretta-<variant>.tar.gz`.
-SDK 150's ACQUA library uses an old-glibc compatibility shim for integer parsing.
+SDK 148's ACQUA library uses an old-glibc compatibility shim for integer parsing.
 
 The builder keeps `node_modules` and the pnpm store in Docker volumes, rebuilds `better-sqlite3`
 inside Debian 11, and rejects native artifacts requiring newer than glibc 2.31. It uses the Tsinghua

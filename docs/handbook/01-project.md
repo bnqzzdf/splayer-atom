@@ -131,7 +131,7 @@ SPlayer Atom 的答案是把“播放权威”从 UI 中剥离出来：Core 是�
 | --- | --- | --- |
 | ALSA Processed | 已实现 | 仅 mono/stereo；可 EQ/响度/变速；不做 ALSA resample |
 | ALSA Direct | 已实现 | 保留有效位；整数不转 float；DSD 原生 |
-| Diretta Source Direct | 已实现，硬件验收待完成 | 需 root、SDK 150、对应 CPU 变体；仅无损整数 PCM/原生 DSD；同 wire-format |
+| Diretta Source Direct | 已实现，硬件验收待完成 | 需 root、SDK 148、对应 CPU 变体；仅无损整数 PCM/原生 DSD；同 wire-format |
 | UPnP Renderer | 已实现，硬件验收待完成 | 单 Renderer；无 gapless；1 秒轮询；CUE/SACD 需生成临时文件 |
 
 ### 6.4 在线与流媒体
@@ -348,7 +348,7 @@ Qobuz、TIDAL、ListenBrainz、自建流媒体服务器的凭据文件写后 `06
 | system-runtime | `pnpm package:core` | 宿主机 Node | Node `>=22.19.0` |
 | bundled-runtime | `pnpm package:core:bundled` | 包内 `runtime/bin/node` | 无需系统 Node |
 | Debian 11 bundled | `pnpm package:core:debian11` | 包内 Node | glibc `>=2.30` |
-| Diretta 变体 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` 或构建脚本 | 视 `--bundle-node` | root + SDK 150 + CPU 变体匹配 |
+| Diretta 变体 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` 或构建脚本 | 视 `--bundle-node` | root + SDK 148 + CPU 变体匹配 |
 | 源码包 | `pnpm package:source` | 不适用 | 需已发布提交与干净工作树 |
 
 产物名包含版本、8 位提交、日期、时间、Diretta 变体与 runtime 形态。权威发布身份在包内 `runtime.json`，不在文件名。

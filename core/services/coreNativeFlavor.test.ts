@@ -86,13 +86,13 @@ test("Core native builder emits only the required audio and streaming addons", (
 });
 
 test("Core Diretta build pins the verified SDK release from Release.hpp", () => {
-  assert.equal(DIRETTA_SDK_RELEASE, 150);
+  assert.equal(DIRETTA_SDK_RELEASE, 148);
   const sdkRoot = mkdtempSync(path.join(tmpdir(), "atom-diretta-sdk-"));
   try {
     mkdirSync(path.join(sdkRoot, "Host"));
     writeFileSync(
       path.join(sdkRoot, "Host", "Release.hpp"),
-      "namespace DIRETTA { static constexpr unsigned ReleaseNo = 150; }\n",
+      "namespace DIRETTA { static constexpr unsigned ReleaseNo = 148; }\n",
     );
     assert.equal(readDirettaSdkRelease(sdkRoot), DIRETTA_SDK_RELEASE);
   } finally {

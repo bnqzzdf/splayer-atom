@@ -525,7 +525,7 @@ A new assertion script must fail on the **unpatched** code before it passes on t
 - Packaging requires Node **24.18.0** (both system and bundled).
 - The default release build requires the commit to be pushed to a network remote and the worktree clean.
 - Local experiments may use `--allow-unpublished`, but the artifact remains marked unpublished.
-- Diretta builds require `DIRETTA_SDK_ROOT` pointing at SDK 150 and a `v2|v3|v4|zen4` variant.
+- Diretta builds require `DIRETTA_SDK_ROOT` pointing at SDK 148 and a `v2|v3|v4|zen4` variant.
 
 ### 11.3 Artifacts
 

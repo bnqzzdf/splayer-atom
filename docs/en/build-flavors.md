@@ -46,13 +46,13 @@ The Debian 11 builder uses glibc 2.31 and can package either capability set:
 ```bash
 pnpm package:core:debian11 --without-diretta
 
-DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-The first mode is the default. The second mode mounts SDK 150 read-only and uses its selected
+The first mode is the default. The second mode mounts SDK 148 read-only and uses its selected
 `v2`, `v3`, `v4`, or `zen4` x86-64 libraries. The build checks the packaged native modules against glibc
-2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 150's
+2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 148's
 ACQUA library receives the required old-glibc integer parsing compatibility symbols at link time;
 the SDK files are not packaged. Mode-specific copies are retained as
 `*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz`.

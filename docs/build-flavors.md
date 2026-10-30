@@ -43,13 +43,13 @@ Debian 11 构建机使用 glibc 2.31，两种能力集都能打包：
 ```bash
 pnpm package:core:debian11 --without-diretta
 
-DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-第一种模式是默认模式。第二种模式只读挂载 SDK 150，并使用其选定的
+第一种模式是默认模式。第二种模式只读挂载 SDK 148，并使用其选定的
 `v2`、`v3`、`v4` 或 `zen4` x86-64 库。构建会按 glibc
-2.31 检查打包后的 native 模块、检查 Diretta 能力元数据，并运行解包产物的 smoke。SDK 150 的
+2.31 检查打包后的 native 模块、检查 Diretta 能力元数据，并运行解包产物的 smoke。SDK 148 的
 ACQUA 库在链接时获得旧 glibc 所需的整数解析兼容符号；
 SDK 文件不会被打包。各模式的副本分别保留为
 `*-debian11-without-diretta.tar.gz` 与 `*-debian11-with-diretta-<variant>.tar.gz`。

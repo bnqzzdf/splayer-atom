@@ -100,7 +100,7 @@ native features, Diretta SDK and the verified source path are consistent.
 
 - Use a Linux x86-64 Core `tar.gz` built from a clean checkout that has passed the final-artifact smoke.
 - Formal builds use reference Node `24.18.0`; the minimum requirement for running under system-runtime is Node `22.19.0`, and bundled-runtime must confirm that the actual process uses the Node inside the package.
-- A Diretta-branded artifact must record `diretta=true`, `direttaSdkRelease=150`, and be produced by the controlled SDK 150 gate.
+- A Diretta-branded artifact must record `diretta=true`, `direttaSdkRelease=148`, and be produced by the controlled SDK 148 gate.
 - ALSA acceptance uses an explicit real `alsa:hw:*` device and does not substitute `default`, PipeWire or PulseAudio.
 - The Linux Diretta Host Core runs as root; a normal user discovering a Target does not mean it has permission to connect.
 - Set up the acceptance queue in Web Control in advance. The diagnostic script does not insert, rewrite or clear the queue.

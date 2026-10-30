@@ -131,7 +131,7 @@ Status definitions:
 | --- | --- | --- |
 | ALSA Processed | Implemented | Mono/stereo only; EQ/loudness/speed; no ALSA resampling |
 | ALSA Direct | Implemented | Preserves valid bits; integers never converted to float; native DSD |
-| Diretta Source Direct | Implemented; hardware acceptance pending | Root, SDK 150, matching CPU variant; lossless integer PCM/native DSD only; same wire format |
+| Diretta Source Direct | Implemented; hardware acceptance pending | Root, SDK 148, matching CPU variant; lossless integer PCM/native DSD only; same wire format |
 | UPnP Renderer | Implemented; hardware acceptance pending | Single Renderer; no gapless; 1-second polling; CUE/SACD requires temporary files |
 
 ### 6.4 Online and streaming
@@ -348,7 +348,7 @@ Qobuz, TIDAL, ListenBrainz, and self-hosted server credential files are written 
 | system-runtime | `pnpm package:core` | Host Node | Node `>=22.19.0` |
 | bundled-runtime | `pnpm package:core:bundled` | Bundled `runtime/bin/node` | No system Node needed |
 | Debian 11 bundled | `pnpm package:core:debian11` | Bundled Node | glibc `>=2.30` |
-| Diretta variant | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` or build script | Depends on `--bundle-node` | root + SDK 150 + matching CPU variant |
+| Diretta variant | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` or build script | Depends on `--bundle-node` | root + SDK 148 + matching CPU variant |
 | Source package | `pnpm package:source` | N/A | Published commit and clean tree |
 
 Artifact names include version, 8-character commit, date, time, Diretta variant, and runtime form. The authoritative release identity is `runtime.json` inside the package, not the filename.

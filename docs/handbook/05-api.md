@@ -130,7 +130,7 @@ Core 没有统一错误 envelope。客户端必须按端点处理：
   "node": "24.18.0",
   "nodeRange": ">=22.19.0",
   "nodeReference": "24.18.0",
-  "direttaSdkRelease": 150,
+  "direttaSdkRelease": 148,
   "protocol": { "version": 1 },
   "capabilities": {
     "library": true,

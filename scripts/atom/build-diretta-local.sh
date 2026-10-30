@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-SDK_ROOT=${DIRETTA_SDK_ROOT:-/home/bnqzzdf/code/DirettaHostSDK_150}
+SDK_ROOT=${DIRETTA_SDK_ROOT:-/home/bnqzzdf/code/DirettaHostSDK_148}
 CPU_VARIANT=${DIRETTA_CPU_VARIANT:-v3}
 
 if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then

@@ -1,24 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export const DIRETTA_SDK_RELEASE = 150;
-/**
- * Diretta SDK 为 x86-64 提供的预编译库变体。
- *
- * 变体不是「优化等级」，而是**能不能在这台机器上跑**：SDK 的预编译静态库按
- * `-march=x86-64-vN` 分别发布，v3 库里带 AVX/AVX2 指令，在只到 v2 的 CPU
- * （如 Intel Celeron J1900，Silvermont，完全没有 AVX）上执行会直接 SIGILL。
- * 因此产物必须按目标 CPU 代次选变体编译，并把变体写进产物文件名。
- *
- * 实测（Diretta SDK 150，`objdump -d` 统计 AVX 类指令）：
- * - `libACQUA_x64-linux-15v2-nolog.a`     0 条
- * - `libDirettaHost_x64-linux-15v2-nolog.a` 0 条
- * - `libACQUA_x64-linux-15v3-nolog.a`     623 条
- * - `libDirettaHost_x64-linux-15v3-nolog.a` 466 条
- *
- * **没有 v1**：SDK 150 只发布 v2/v3/v4/zen4，所以「带 Diretta 的 v1 产物」
- * 不存在；需要 v1 只能做不带 Diretta 的 ALSA-only 构建。
- */
+export const DIRETTA_SDK_RELEASE = 148;
+// SDK 静态库按 CPU 指令集分别发布，变体高于目标 CPU 会触发 SIGILL。
+// SDK 148 只提供 v2/v3/v4/zen4，带 Diretta 的产物不能选择 v1。
 export const DIRETTA_CPU_VARIANTS = ["v2", "v3", "v4", "zen4"] as const;
 export type DirettaCpuVariant = (typeof DIRETTA_CPU_VARIANTS)[number];
 

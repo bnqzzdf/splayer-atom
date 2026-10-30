@@ -32,7 +32,7 @@ Operational boundaries:
 | system-runtime | Host Node | Node `>=22.19.0` |
 | bundled-runtime | Bundled `runtime/bin/node` | No system Node |
 | Debian 11 bundled | Bundled Node | glibc `>=2.30` |
-| Diretta variant | Depends on build | root, SDK 150, matching CPU variant |
+| Diretta variant | Depends on build | root, SDK 148, matching CPU variant |
 
 ### 2.2 Prerequisite checklist
 
@@ -47,7 +47,7 @@ Operational boundaries:
 | Port 14558 | Not in use | `ss -ltnp \| grep 14558` |
 | Data directory | Writable, enough space | `df -h`, `test -w` |
 | Cache directory | Writable, enough space | `df -h` |
-| Diretta (optional) | root, SDK 150 artifact, Target exclusively available | `/api/info`, hardware acceptance |
+| Diretta (optional) | root, SDK 148 artifact, Target exclusively available | `/api/info`, hardware acceptance |
 | UPnP (optional) | Renderer reachable, SSDP multicast works | `/api/output/devices` |
 | Online providers (optional) | Outbound 443, valid account | Provider login and playback test |
 
@@ -419,7 +419,7 @@ Prerequisites:
 
 1. The artifact includes Diretta (`/api/info.capabilities.diretta === true`).
 2. Core runs as root (`install-systemd.sh --diretta` or `install-openrc.sh --diretta`).
-3. SDK 150 and the CPU variant match the target.
+3. SDK 148 and the CPU variant match the target.
 4. The Target is exclusively available and not held by another Host.
 5. The source is lossless integer PCM or native DSD.
 

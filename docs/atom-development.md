@@ -107,7 +107,7 @@ pnpm package:core:bundled
 pnpm package:core:debian11 --without-diretta
 ```
 
-Debian 11 构建器还接受 `--with-diretta --diretta-variant=v2|v3|v4|zen4`，SDK 150 通过
+Debian 11 构建器还接受 `--with-diretta --diretta-variant=v2|v3|v4|zen4`，SDK 148 通过
 `DIRETTA_SDK_ROOT` 指定；见[构建面](./build-flavors.md#debian-11-bundled-构建)。
 
 验收最终的 Linux x86-64 `tar.gz`，包括运行时元数据、native addon 加载、Web 根页、HTTP/WS 端点、
