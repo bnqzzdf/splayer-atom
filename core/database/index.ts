@@ -227,6 +227,10 @@ export const initDatabase = (): void => {
 
   `);
   migrate(db);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tracks_cue_path ON tracks(cue_path);
+    CREATE INDEX IF NOT EXISTS idx_tracks_cue_audio_path ON tracks(cue_audio_path);
+  `);
   libraryLog.info(`数据库已初始化: ${dbPath}`);
 };
 

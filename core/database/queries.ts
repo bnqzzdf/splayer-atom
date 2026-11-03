@@ -99,6 +99,7 @@ export const getAllTracks = (): Track[] => {
  * 按物理文件/容器路径批量解析 canonical Track。
  * 普通文件按 path 命中；CUE 同时匹配 cue_path/cue_audio_path；SACD 虚拟 Track
  * 通过其 `{iso}|Track..` 前缀匹配。
+ * SACD 使用 BINARY 排序中相邻的 k/l 作为前缀范围边界，以便走 path 索引且保持文件名按字面匹配。
  */
 export const getTracksByPhysicalPaths = (paths: string[]): Track[] => {
   const requested = [...new Set(paths.map((value) => path.resolve(value)))];
@@ -112,17 +113,18 @@ export const getTracksByPhysicalPaths = (paths: string[]): Track[] => {
     const rows = database
       .prepare(
         `WITH requested(path) AS (VALUES ${values})
-         SELECT DISTINCT t.*
-         FROM tracks t
-         INNER JOIN requested r
-           ON t.path = r.path
-           OR t.cue_path = r.path
-           OR t.cue_audio_path = r.path
-           OR (
-             lower(substr(r.path, -4)) = '.iso'
-             AND instr(t.path, r.path || '|Track') = 1
-           )
-         ORDER BY ${trackOrder("t.")}`,
+         SELECT * FROM (
+           SELECT t.* FROM requested r JOIN tracks t ON t.path = r.path
+           UNION
+           SELECT t.* FROM requested r JOIN tracks t ON t.cue_path = r.path
+           UNION
+           SELECT t.* FROM requested r JOIN tracks t ON t.cue_audio_path = r.path
+           UNION
+           SELECT t.* FROM requested r JOIN tracks t
+             ON t.path >= r.path || '|Track' AND t.path < r.path || '|Tracl'
+           WHERE lower(substr(r.path, -4)) = '.iso'
+         )
+         ORDER BY ${trackOrder()}`,
       )
       .all(...chunk) as TrackRow[];
     for (const row of rows) {
