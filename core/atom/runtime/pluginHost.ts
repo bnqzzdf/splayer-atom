@@ -1,7 +1,6 @@
 import { fork } from "node:child_process";
 import path from "node:path";
 import { decodePluginIpc, encodePluginIpc } from "./pluginIpc";
-import { spawnSandboxedBunPluginHost } from "./bunPluginSandbox";
 
 export interface RuntimePluginHostStream {
   on: (event: "data", listener: (chunk: Buffer) => void) => unknown;
@@ -19,8 +18,7 @@ export interface RuntimePluginHostChild {
 export type RuntimePluginHostSpawner = (entry: string) => RuntimePluginHostChild;
 
 /**
- * 插件 host 的 Node 权限模型参数
- * 插件脚本可经宿主对象逃出 vm 拿到 process，这里禁止子进程、原生模块与写文件，只允许读取 Core 构建目录
+ * Node 插件 Host 保留原有权限配置以减少意外访问，但不将其视为恶意插件安全沙箱。
  * @param entry - plugin-host 入口路径
  */
 export const pluginHostExecArgv = (entry: string): string[] => [
@@ -30,13 +28,15 @@ export const pluginHostExecArgv = (entry: string): string[] => [
 
 const spawnNodePluginHost: RuntimePluginHostSpawner = (entry) => {
   const bunParent = Boolean(process.versions.bun);
-  const child = bunParent
-    ? spawnSandboxedBunPluginHost(entry)
-    : fork(entry, [], {
-        stdio: ["ignore", "pipe", "pipe", "ipc"],
-        serialization: "advanced",
-        execArgv: pluginHostExecArgv(entry),
-      });
+  // Bun 未实现等价的权限开关，实验版只执行用户信任的插件，不承诺安全隔离恶意代码。
+  const child = fork(entry, [], {
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    serialization: bunParent ? "json" : "advanced",
+    execArgv: bunParent ? [] : pluginHostExecArgv(entry),
+    ...(bunParent
+      ? { execPath: process.execPath, env: { ...process.env, ATOM_PLUGIN_IPC_JSON: "1" } }
+      : {}),
+  });
   return {
     stdout: child.stdout,
     stderr: child.stderr,

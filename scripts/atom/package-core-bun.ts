@@ -48,7 +48,7 @@ if (stagedSmoke.error || stagedSmoke.status !== 0 || stagedSmoke.signal) {
 
 const runtimeFile = path.join(stagedBun, "runtime.json");
 const runtime = JSON.parse(readFileSync(runtimeFile, "utf8")) as Record<string, unknown>;
-runtime.runtime = { name: "bun", version: bunVersion, pluginHost: "bun-bwrap" };
+runtime.runtime = { name: "bun", version: bunVersion, pluginHost: "bun" };
 runtime.nodeBundled = false;
 runtime.bunBundled = false;
 writeFileSync(runtimeFile, `${JSON.stringify(runtime, null, 2)}\n`);
@@ -58,4 +58,4 @@ const archive = path.join(root, "out", fileName);
 rmSync(archive, { force: true });
 run("tar", ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", "-czf", archive, "."], stagedBun);
 console.log(`[BunPackage] PASS ${archive}`);
-console.log(`[BunPackage] Requires Bun ${bunVersion} and bubblewrap (unprivileged namespaces and seccomp)`);
+console.log(`[BunPackage] Requires Bun ${bunVersion} at runtime (trusted plugins only)`);
