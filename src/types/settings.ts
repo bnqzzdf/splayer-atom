@@ -2,6 +2,7 @@ import type { LyricFormat } from "@shared/types/lyrics";
 import { DEFAULT_LYRIC_FORMAT_ORDER as DEFAULT_LYRIC_FORMAT_ORDER_SHARED } from "@shared/types/lyrics";
 import type { FolderBrowseOrder, FolderBrowseSort } from "@shared/types/folderBrowser";
 import type { Platform } from "@shared/types/platform";
+import type { SongListDensity, SongSortPreferences } from "@/types/list";
 
 /** 播放器背景类型 */
 export type PlayerBgType = "blur" | "solid" | "animation";
@@ -247,6 +248,10 @@ export interface PlayerSettings {
 
 /** 外观设置 */
 export interface AppearanceSettings {
+  /** 当前浏览器共用歌曲列表的显示密度 */
+  songListDensity: SongListDensity;
+  /** 仅按有限页面类别保存显示排序，不影响 Core 队列 */
+  songSortPreferences: SongSortPreferences;
   /** 布局模式 */
   layoutMode: LayoutMode;
   /** 文件夹页面的子目录展示方式 */

@@ -114,6 +114,7 @@ onMounted(() => {
           :playback-context="playbackContext"
           :show-size="false"
           enable-sort
+          sort-scope="history"
         />
       </div>
       <div v-else key="empty" class="flex-1 flex items-center justify-center">

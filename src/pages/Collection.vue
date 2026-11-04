@@ -853,6 +853,7 @@ onBeforeUnmount(() => {
           :can-remove="manage.canManage.value"
           :group-by-disc="type === 'album' && selectedDisc === 'all'"
           enable-sort
+          :sort-scope="type === 'album' ? 'album' : 'playlist'"
           @scroll="handleListScroll"
           @change="handleTracksRemoved"
         >

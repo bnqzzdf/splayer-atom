@@ -66,11 +66,14 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 - Commits `75561bad` (2026-11-03) and `2041c17b` (2026-11-04) introduced indexed physical-path
   lookups, scoped partial-scan queries and demand-driven library projection refreshes, with
   automated regression coverage. Real-library performance acceptance is still open.
-- An uncommitted UI-1 implementation on 2026-11-04 adds an AM-style player, three-way layout
+- UI-1 commit `09aa92f1` adds an AM-style player, three-way layout
   switching, local `player.layout` persistence with legacy `coverLayout` migration, and shared
   `PlayerTransport.vue` controls. Automated checks passed (Node 491/491, Web 159/159, types,
   lint and Web build). Browser screenshots and real-playback acceptance remain open; see the
   [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+- UI-2 adds normal/compact song rows (88px/56px), virtual-list remeasurement, fixed page-scope
+  sorting preferences and legacy global-sort cleanup, with persistence and isolation tests.
+  Browser scrolling, disc grouping and touch-target acceptance remain open.
 - Responsive Web layout has shared 768/1280 px breakpoints, mobile navigation, a compact player
   bar, adaptive lists, full player, settings and dialogs. Approved queue-drag and duplicate song-row
   double-click interactions were removed. Device acceptance is still open.

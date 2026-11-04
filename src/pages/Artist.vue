@@ -392,6 +392,7 @@ const albumItems = computed<CoverItem[]>(() => {
               :has-more="hasMoreSongs"
               :loading-more="loadingMore"
               enable-sort
+              sort-scope="artist"
               @scroll="handleListScroll"
               @change="loadArtist"
               @reach-bottom="onReachBottom"

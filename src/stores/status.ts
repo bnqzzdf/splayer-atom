@@ -8,7 +8,6 @@ import type {
 } from "@shared/types/player";
 import type { Platform } from "@shared/types/platform";
 import type { ContentScope } from "@/types/collection";
-import type { SortField, SortOrder } from "@/types/list";
 export type { RepeatMode, ShuffleMode } from "@shared/types/player";
 export type { SortField, SortOrder } from "@/types/list";
 import * as queue from "./queue";
@@ -97,10 +96,6 @@ export const useStatusStore = defineStore(
     const likedPageTab = ref<ContentScope>("local");
     /** 设置弹窗上次手动选择的大分类 */
     const settingsCategory = ref("");
-    /** 歌曲列表排序字段 */
-    const sortField = ref<SortField>("none");
-    /** 歌曲列表排序方向 */
-    const sortOrder = ref<SortOrder>("asc");
     /** 是否正在播放 */
     const isPlaying = computed(() => state.value === "playing");
     /** 是否暂停 */
@@ -162,8 +157,6 @@ export const useStatusStore = defineStore(
       myPlaylistSource,
       likedPageTab,
       settingsCategory,
-      sortField,
-      sortOrder,
       currentTrack,
       currentPlaybackContext,
       showComments,
@@ -180,12 +173,16 @@ export const useStatusStore = defineStore(
         "myPlaylistSource",
         "likedPageTab",
         "settingsCategory",
-        "sortField",
-        "sortOrder",
       ],
       afterHydrate: ({ store }) => {
         const state = store as unknown as { settingsCategory: string };
         if (state.settingsCategory === "musicSpectrum") state.settingsCategory = "appearance";
+        // 全局排序没有页面来源，升级后不把它复制到每个列表。
+        const stored = JSON.parse(localStorage.getItem("status") || "{}") as Record<
+          string,
+          unknown
+        >;
+        if ("sortField" in stored || "sortOrder" in stored) store.$persist();
       },
     },
   },

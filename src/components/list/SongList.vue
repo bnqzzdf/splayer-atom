@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { Artist, PlaybackContext, Track, TrackSource } from "@shared/types/player";
 import type { CollectionType } from "@/types/collection";
-import type { SortField } from "@/types/list";
+import type { SongSortScope, SortField } from "@/types/list";
+import { useSongSortPreference } from "@/composables/useSongSortPreference";
 import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { useSettingsStore } from "@/stores/settings";
@@ -48,6 +49,8 @@ const props = withDefaults(
     showSize?: boolean;
     /** 是否启用排序交互 */
     enableSort?: boolean;
+    /** 按固定页面类别保存排序；未指定则仅组件内有效 */
+    sortScope?: SongSortScope;
     /** 多碟专辑按 disc 标签展示分组标题 */
     groupByDisc?: boolean;
     /** 列表来源 */
@@ -72,6 +75,7 @@ const props = withDefaults(
     showDuration: true,
     showSize: false,
     enableSort: false,
+    sortScope: undefined,
     groupByDisc: false,
     source: "local",
     collectionType: undefined,
@@ -89,7 +93,7 @@ const status = useStatusStore();
 const settings = useSettingsStore();
 const fav = useFavorite();
 
-const { isDesktop } = useResponsiveLayout();
+const { isDesktop, isMobile } = useResponsiveLayout();
 const { isFloatingBar: isFloatingPlayerBar, PLAYER_BAR_GAP } = useFloatingPlayerBar();
 
 /** 窄屏下底栏位于普通流，不需要 80px 的绝对悬浮留白 */
@@ -131,8 +135,10 @@ const goAlbum = (item: Track): void => {
   navigateToAlbum(item.album?.name, { source: item.source, albumId: item.album?.id });
 };
 
-/** 排序字段 */
-const { sortField, sortOrder } = storeToRefs(status);
+const { sortField, sortOrder } = useSongSortPreference(toRef(props, "sortScope"));
+const compact = computed(() => settings.appearance.songListDensity === "compact");
+const itemHeight = computed(() => (compact.value ? 56 : 88));
+const actionSize = computed(() => (compact.value ? (isMobile.value ? 44 : 32) : 28));
 
 /** 字段文案 key 映射 */
 const sortFieldLabelKeyMap: Record<SortField, string> = {
@@ -337,7 +343,7 @@ defineExpose({
       <SVirtualList
         ref="virtualListRef"
         :items="sortedItems"
-        :item-height="88"
+        :item-height="itemHeight"
         :padding-bottom="listPaddingBottom"
         :get-item-key="(item: Track) => item.id"
         :item-fixed="!showDiscGroups"
@@ -534,7 +540,7 @@ defineExpose({
         </template>
         <!-- 列表项 -->
         <template #default="{ item, index }: { item: Track; index: number }">
-          <div class="px-3 pb-3">
+          <div class="px-3" :class="compact ? 'pb-2' : 'pb-3'">
             <div
               v-if="isDiscStart(index)"
               class="flex h-9 items-center px-3 text-sm font-medium text-on-surface-variant/70"
@@ -543,16 +549,17 @@ defineExpose({
             </div>
             <div
               data-song-item
-              class="group flex items-center gap-3 pl-3 pr-6 h-19 rounded-xl cursor-pointer border-2 border-solid transition-[background-color,border-color] duration-200"
-              :class="
+              class="group flex items-center rounded-xl cursor-pointer border-2 border-solid transition-[background-color,border-color] duration-200"
+              :class="[
+                compact ? 'gap-2 pl-2 pr-3 h-12' : 'gap-3 pl-3 pr-6 h-19',
                 batch.active.value
                   ? batch.selectedIds.value.has(item.id)
                     ? 'bg-primary/10 border-primary/30'
                     : 'bg-surface-panel border-primary/12 hover:border-primary/20 hover:bg-on-surface/5'
                   : playingId === item.id
                     ? 'bg-primary/16 border-primary/40'
-                    : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12'
-              "
+                    : 'bg-surface-panel border-primary/12 hover:border-primary/30 hover:bg-on-surface/8 active:bg-on-surface/12',
+              ]"
               @click="
                 batch.active.value
                   ? batch.toggle(item.id)
@@ -611,13 +618,20 @@ defineExpose({
                 </template>
               </div>
               <!-- 信息 -->
-              <div class="flex-1 min-w-0 flex items-center gap-3">
-                <SImg :src="item.cover" class="size-12 rounded-lg shrink-0" />
+              <div class="flex-1 min-w-0 flex items-center" :class="compact ? 'gap-2' : 'gap-3'">
+                <SImg
+                  :src="item.cover"
+                  class="rounded-lg shrink-0"
+                  :class="compact ? 'size-9' : 'size-12'"
+                />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-baseline gap-1.5 min-w-0">
                     <span
-                      class="text-base font-medium truncate"
-                      :class="playingId === item.id ? 'text-primary' : ''"
+                      class="font-medium truncate"
+                      :class="[
+                        compact ? 'text-sm' : 'text-base',
+                        playingId === item.id ? 'text-primary' : '',
+                      ]"
                     >
                       {{ item.title }}
                     </span>
@@ -630,17 +644,21 @@ defineExpose({
                     />
                     <span
                       v-if="item.comment && settings.preset.showSubtitle"
-                      class="flex-1 min-w-0 text-base truncate"
-                      :class="
-                        playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant/60'
-                      "
+                      class="flex-1 min-w-0 truncate"
+                      :class="[
+                        compact ? 'text-sm' : 'text-base',
+                        playingId === item.id ? 'text-primary/60' : 'text-on-surface-variant/60',
+                      ]"
                     >
                       ({{ item.comment }})
                     </span>
                   </div>
                   <div
-                    class="text-sm mt-1 truncate flex items-center gap-1"
-                    :class="playingId === item.id ? 'text-primary/70' : 'text-on-surface-variant'"
+                    class="truncate flex items-center gap-1"
+                    :class="[
+                      compact ? 'text-xs mt-0.5' : 'text-sm mt-1',
+                      playingId === item.id ? 'text-primary/70' : 'text-on-surface-variant',
+                    ]"
                   >
                     <span
                       v-if="item.quality && !settings.preset.hideQualityTag"
@@ -728,14 +746,15 @@ defineExpose({
               <!-- 红心：批量模式下隐藏，其余始终显示 -->
               <div
                 v-if="!batch.active.value"
-                class="w-7 shrink-0 flex items-center justify-center"
+                class="shrink-0 flex items-center justify-center"
+                :class="compact ? 'w-11 sm:w-8' : 'w-7'"
                 @click.stop
               >
                 <SButton
                   type="primary"
                   variant="text"
                   circle
-                  :size="28"
+                  :size="actionSize"
                   :icon-size="20"
                   @click="fav.toggle(item)"
                 >
@@ -747,18 +766,19 @@ defineExpose({
                   </template>
                 </SButton>
               </div>
-              <div v-else class="w-7 shrink-0" />
+              <div v-else class="shrink-0" :class="compact ? 'w-11 sm:w-8' : 'w-7'" />
               <!-- 同一 Track Action Model 的触摸/按钮入口 -->
               <div
                 v-if="!batch.active.value"
-                class="w-7 shrink-0 flex items-center justify-center"
+                class="shrink-0 flex items-center justify-center"
+                :class="compact ? 'w-11 sm:w-8' : 'w-7'"
                 @click.stop
               >
                 <SDropdownMenu :items="contextMenuItems" align="end" @select="onContextMenu">
                   <SButton
                     variant="text"
                     circle
-                    :size="28"
+                    :size="actionSize"
                     :icon-size="18"
                     :title="t('songList.context.more')"
                     @pointerdown.stop="contextTrack = item"
@@ -768,7 +788,7 @@ defineExpose({
                   </SButton>
                 </SDropdownMenu>
               </div>
-              <div v-else class="w-7 shrink-0" />
+              <div v-else class="shrink-0" :class="compact ? 'w-11 sm:w-8' : 'w-7'" />
               <!-- 时长 -->
               <div
                 v-if="showDuration"

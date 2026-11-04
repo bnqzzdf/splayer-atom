@@ -1286,6 +1286,12 @@
       "sidebarFull": "Immersive Sidebar",
       "floating": "Dynamic Floating"
     },
+    "songListDensity": {
+      "label": "Song List Density",
+      "description": "Adjust row height and spacing in song lists",
+      "normal": "Normal",
+      "compact": "Compact"
+    },
     "routeTransition": {
       "label": "Page Transition",
       "description": "Animation effect when switching pages",

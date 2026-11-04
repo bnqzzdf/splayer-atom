@@ -21,6 +21,7 @@ import { isCoreSettingPath, type SystemConfig, type LocaleCode } from "@shared/t
 import { defaultSystemConfig } from "@shared/defaults/settings";
 import { setByPath } from "@shared/utils/path";
 import { settingsClient } from "@/core/settingsClient";
+import { normalizeSongSortPreferences } from "@/types/list";
 
 const WEB_CONTROL_CONFIG_KEY = "splayer/web-control-system";
 const WEB_CONTROL_SETTING_PATHS = new Set(["system.onboardingCompleted", "system.uiZoom"]);
@@ -180,6 +181,8 @@ export const useSettingsStore = defineStore(
 
     /** 外观 */
     const appearance = reactive<AppearanceSettings>({
+      songListDensity: "normal",
+      songSortPreferences: {},
       layoutMode: "default",
       folderViewMode: "list",
       folderBrowseSort: "name",
@@ -390,6 +393,8 @@ export const useSettingsStore = defineStore(
         // 已有的跨标签设置优先；首次升级时才沿用当前标签页的旧会话值。
         const saved = JSON.parse(localStorage.getItem(store.$id) || "{}") as {
           appearance?: {
+            songListDensity?: unknown;
+            songSortPreferences?: unknown;
             folderViewMode?: unknown;
             folderBrowseSort?: unknown;
             folderBrowseOrder?: unknown;
@@ -400,6 +405,21 @@ export const useSettingsStore = defineStore(
           };
         };
         let persistAppearanceMigration = false;
+        if (
+          saved.appearance?.songListDensity !== "compact" &&
+          saved.appearance?.songListDensity !== "normal"
+        ) {
+          appearance.songListDensity = "normal";
+          persistAppearanceMigration = true;
+        }
+        const validSongSort = normalizeSongSortPreferences(saved.appearance?.songSortPreferences);
+        if (
+          JSON.stringify(validSongSort) !==
+          JSON.stringify(saved.appearance?.songSortPreferences ?? {})
+        ) {
+          persistAppearanceMigration = true;
+        }
+        appearance.songSortPreferences = validSongSort;
         const layout = resolvePlayerLayout(saved.player?.layout, saved.player?.coverLayout);
         const persistPlayerMigration = saved.player?.layout !== layout || "coverLayout" in player;
         player.layout = layout;

@@ -152,6 +152,7 @@ watch(
           source="netease"
           collection-type="cloud"
           enable-sort
+          sort-scope="cloud"
         />
       </div>
       <!-- 加载中 -->

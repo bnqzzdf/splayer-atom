@@ -1286,6 +1286,12 @@
       "sidebarFull": "沉浸侧栏",
       "floating": "灵动悬浮"
     },
+    "songListDensity": {
+      "label": "歌曲列表密度",
+      "description": "调整共用歌曲列表的行高和信息间距",
+      "normal": "常规",
+      "compact": "紧凑"
+    },
     "routeTransition": {
       "label": "页面切换动效",
       "description": "切换页面时的过渡动画效果",

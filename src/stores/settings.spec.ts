@@ -14,7 +14,7 @@ describe("folder browse display preference", () => {
   });
 });
 
-describe("player layout persistence migration", () => {
+describe("browser presentation persistence migration", () => {
   beforeEach(() => {
     const entries = new Map<string, string>();
     vi.stubGlobal("localStorage", {
@@ -64,6 +64,38 @@ describe("player layout persistence migration", () => {
     expect(persisted.player?.layout).toBe("apple");
     expect(persisted.player).not.toHaveProperty("coverLayout");
     localStorage.removeItem("settings");
+  });
+
+  it("restores compact density and page-scoped sort without leaking arbitrary keys", () => {
+    localStorage.setItem(
+      "settings",
+      JSON.stringify({
+        appearance: {
+          songListDensity: "compact",
+          songSortPreferences: {
+            songs: { field: "title", order: "desc" },
+            album: { field: "track", order: "asc" },
+            "playlist:individual": { field: "artist", order: "asc" },
+          },
+        },
+      }),
+    );
+    const pinia = createPinia();
+    pinia.use(piniaPersistedstate);
+    createApp(() => null).use(pinia);
+    setActivePinia(pinia);
+    const settings = useSettingsStore();
+    expect(settings.appearance.songListDensity).toBe("compact");
+    expect(settings.appearance.songSortPreferences).toEqual({
+      songs: { field: "title", order: "desc" },
+      album: { field: "track", order: "asc" },
+    });
+    expect(
+      JSON.parse(localStorage.getItem("settings") ?? "{}").appearance.songSortPreferences,
+    ).toEqual({
+      songs: { field: "title", order: "desc" },
+      album: { field: "track", order: "asc" },
+    });
   });
 });
 

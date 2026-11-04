@@ -141,6 +141,16 @@ const appearanceCategory: SettingCategory = {
       id: "layout",
       items: [
         {
+          key: "songListDensity",
+          type: "select",
+          binding: { store: "settings", path: "appearance.songListDensity" },
+          options: [
+            { value: "normal", labelKey: "settings.songListDensity.normal" },
+            { value: "compact", labelKey: "settings.songListDensity.compact" },
+          ],
+          defaultValue: "normal",
+        },
+        {
           key: "layoutMode",
           type: "select",
           binding: { store: "settings", path: "appearance.layoutMode" },

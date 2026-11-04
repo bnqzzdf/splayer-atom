@@ -76,11 +76,14 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 - [x] UI-1 implementation: an AM-style player, three-way layout switching, legacy preference
       migration and shared transport controls have passed automated Node/Web tests, types, lint
-      and Web build in the current uncommitted worktree. See the
+      and Web build (`09aa92f1`). See the
       [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
 - [ ] UI-1 manual acceptance: browser screenshots, responsive viewports, uninterrupted playback,
       lyrics/queue behavior, hidden-tab recovery and Direct-mode controls still need validation.
-- [ ] UI-2 (not implemented): compact song rows and page-scoped sorting preferences.
+- [x] UI-2 implementation: normal/compact rows, virtual-list height updates, scoped per-page
+      sorting preferences and retirement of old global sorting, with automated regression coverage.
+- [ ] UI-2 browser acceptance: long lists, pagination, disc grouping, scroll-to-current, mobile
+      touch targets, density changes and cross-page sorting persistence.
 - [ ] Implement the two independent fixes in that plan: reject nested scan roots before Core writes
       state, and recover missing download file extensions. Neither is a completed change.
 - [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
@@ -150,7 +153,8 @@ Display sorting is independent of the Core-owned directory playback order.
 
 Near-term development (separate from release gates):
 
-1. Implement UI-1, then UI-2 from the [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+1. Complete browser/device acceptance for implemented UI-1 and UI-2 from the
+   [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
 2. Keep the nested scan-root and download-extension fixes as separate changes, without expanding the UI scope.
 
 Release acceptance priorities:

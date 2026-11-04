@@ -305,6 +305,22 @@ watch(
   },
 );
 
+watch(
+  () => [props.itemHeight, props.itemFixed],
+  () => {
+    const firstVisible = actualStartIndex.value;
+    if (!props.itemFixed) {
+      itemHeights.value = Array.from({ length: props.items.length }, () => props.itemHeight);
+      updateTops();
+    }
+    nextTick(() => {
+      scrollToIndex(firstVisible);
+      calculateVisibleRange(scrollRef.value?.scrollTop ?? 0);
+      if (!props.itemFixed) measureItemHeights();
+    });
+  },
+);
+
 watch(viewportHeight, () => {
   calculateVisibleRange(scrollTop.value);
 });

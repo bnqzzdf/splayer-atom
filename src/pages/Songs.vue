@@ -110,6 +110,7 @@ useLibraryTracks();
         :search-query="searchQuery"
         :playback-context="playbackContext"
         enable-sort
+        sort-scope="songs"
         show-size
       />
     </div>

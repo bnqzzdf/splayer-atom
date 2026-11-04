@@ -179,6 +179,7 @@ const handleMoreMenu = (key: string): void => {
           :show-size="false"
           source="local"
           enable-sort
+          sort-scope="liked"
         />
       </div>
       <div
@@ -216,6 +217,7 @@ const handleMoreMenu = (key: string): void => {
           :playback-context="playbackContext"
           collection-type="playlist"
           enable-sort
+          sort-scope="liked"
         />
       </div>
       <div
