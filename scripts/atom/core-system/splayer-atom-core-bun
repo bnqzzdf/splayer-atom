@@ -2,7 +2,13 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-BUN_BIN=${ATOM_BUN_BIN:-bun}
+if [ -n "${ATOM_BUN_BIN:-}" ]; then
+  BUN_BIN=$ATOM_BUN_BIN
+elif [ -x "$ROOT_DIR/runtime/bin/bun" ]; then
+  BUN_BIN=$ROOT_DIR/runtime/bin/bun
+else
+  BUN_BIN=bun
+fi
 
 if ! command -v "$BUN_BIN" >/dev/null 2>&1; then
   echo "SPlayer Atom Core: Bun runtime not found: $BUN_BIN" >&2

@@ -1,4 +1,4 @@
-import { chmodSync, cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,10 @@ import { CORE_NODE_REFERENCE } from "../../core/atom/runtime/nodeRuntime";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const stagedNode = path.join(root, "out/core-system");
-const stagedBun = path.join(root, "out/core-bun-system");
+const args = new Set(process.argv.slice(2));
+const bundleBun = args.delete("--bundle-bun");
+if (args.size) throw new Error(`Unknown Bun package arguments: ${[...args].join(" ")}`);
+const stagedBun = path.join(root, bundleBun ? "out/core-bun-bundled" : "out/core-bun-system");
 const bunBinary = process.env.ATOM_BUN_BIN || "bun";
 
 const run = (command: string, args: string[], cwd = root): string => {
@@ -35,9 +38,25 @@ cpSync(
   path.join(stagedBun, "bin/splayer-atom-core"),
 );
 chmodSync(path.join(stagedBun, "bin/splayer-atom-core"), 0o755);
+cpSync(path.join(root, "docs/bun-runtime-experiment.md"), path.join(stagedBun, "docs/bun-runtime-experiment.md"));
+if (bundleBun) {
+  const bundledBun = path.join(stagedBun, "runtime/bin/bun");
+  mkdirSync(path.dirname(bundledBun), { recursive: true });
+  const originalBun = realpathSync(run(bunBinary, ["-p", "process.execPath"]));
+  cpSync(originalBun, bundledBun);
+  chmodSync(bundledBun, 0o755);
+  if (run(bundledBun, ["--version"]) !== bunVersion) {
+    throw new Error("Bundled Bun does not match the packaging runtime");
+  }
+  writeFileSync(
+    path.join(stagedBun, "runtime/BUN-LICENSE-NOTICE.txt"),
+    `Bun ${bunVersion} is developed by the Bun contributors. Bun is MIT-licensed and statically links components with additional licensing requirements, including LGPL-2.\nReview the license and redistribution obligations before public release:\nhttps://github.com/oven-sh/bun/blob/bun-v${bunVersion}/LICENSE.md\nhttps://bun.com/docs/project/license\n`,
+  );
+}
 
 const stagedEntry = path.join(stagedBun, "app/plugin-host.js");
-const stagedSmoke = spawnSync(bunBinary, ["scripts/atom/check-bun-plugin-ipc.ts"], {
+const smokeBun = bundleBun ? path.join(stagedBun, "runtime/bin/bun") : bunBinary;
+const stagedSmoke = spawnSync(smokeBun, ["scripts/atom/check-bun-plugin-ipc.ts"], {
   cwd: root,
   encoding: "utf8",
   env: { ...process.env, ATOM_PLUGIN_HOST_ENTRY: stagedEntry },
@@ -50,12 +69,16 @@ const runtimeFile = path.join(stagedBun, "runtime.json");
 const runtime = JSON.parse(readFileSync(runtimeFile, "utf8")) as Record<string, unknown>;
 runtime.runtime = { name: "bun", version: bunVersion, pluginHost: "bun" };
 runtime.nodeBundled = false;
-runtime.bunBundled = false;
+runtime.bunBundled = bundleBun;
 writeFileSync(runtimeFile, `${JSON.stringify(runtime, null, 2)}\n`);
 
-const fileName = `splayer-atom-core-${runtime.atomVersion}-${String(runtime.atomCommit).slice(0, 8)}-bun-${bunVersion}-system-linux-x64.tar.gz`;
+const fileName = `splayer-atom-core-${runtime.atomVersion}-${String(runtime.atomCommit).slice(0, 8)}-bun-${bunVersion}-${bundleBun ? "bundled" : "system"}-linux-x64.tar.gz`;
 const archive = path.join(root, "out", fileName);
 rmSync(archive, { force: true });
 run("tar", ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", "-czf", archive, "."], stagedBun);
 console.log(`[BunPackage] PASS ${archive}`);
-console.log(`[BunPackage] Requires Bun ${bunVersion} at runtime (trusted plugins only)`);
+console.log(
+  bundleBun
+    ? `[BunPackage] Bundled Bun ${bunVersion} at runtime (trusted plugins only)`
+    : `[BunPackage] Requires Bun ${bunVersion} at runtime (trusted plugins only)`,
+);

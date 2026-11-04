@@ -15,9 +15,15 @@ pnpm typecheck
 pnpm build:core
 pnpm build:web
 ATOM_BUN_BIN=/path/to/bun pnpm package:core:bun
+ATOM_BUN_BIN=/path/to/bun pnpm package:core:bun:bundled
 ```
 
-打包命令复用现有编译产物，通过原有 Node staging 和 artifact smoke 验证，再生成独立的 `out/core-bun-system/` 和 `out/*-bun-*-system-linux-x64.tar.gz`。Bun 版目前为 **system-runtime**：只需系统提供 Bun，无需安装 Bubblewrap 或其他插件隔离工具。不修改现有 Node artifact 的启动入口。
+打包命令复用现有编译产物，通过原有 Node staging 和 artifact smoke 验证，再生成独立的产物：
+
+- **system-runtime**：`out/core-bun-system/`，需要系统提供 Bun。
+- **bundled-runtime**：`out/core-bun-bundled/`，自带 `runtime/bin/bun`，目标机不需要安装 Bun、Node 或 Bubblewrap。
+
+两者都不修改原有 Node artifact 的启动入口。Bun bundled 归档内保留 Atom 自带的 Web 和原生模块，另有 Bun 发行许可证提示；对外公开分发前需审核 Bun 及其静态链接组件的许可证义务。
 
 ## 运行
 
@@ -27,6 +33,21 @@ ATOM_BUN_BIN=/path/to/bun ./bin/splayer-atom-core
 ```
 
 普通 Node artifact 仍运行 `node`。Bun 启动器在 Bun 缺失时会退出，插件 Host 通过 Bun 的 `child_process.fork` 运行在另一个 Bun 进程中。`/api/info` 的 `runtime` 字段显示真正的运行时，原 `node` 字段保留协议兼容信息。
+
+### 独立测试 bundled 包的播放
+
+下面是 Linux x86-64 的测试示例。建议使用临时目录及另一个 HTTP 端口，不要覆盖正在运行的 Node Core：
+
+```bash
+mkdir -p "$HOME/atom-bun-trial"
+tar -xzf splayer-atom-core-*-bun-*-bundled-linux-x64.tar.gz -C "$HOME/atom-bun-trial"
+export ATOM_DATA_DIR="$HOME/atom-bun-trial/data"
+export ATOM_CACHE_DIR="$HOME/atom-bun-trial/cache"
+export ATOM_SERVER_PORT=27234
+"$HOME/atom-bun-trial/bin/splayer-atom-core"
+```
+
+浏览器访问 `http://<设备IP>:27234`，通过 Web Control 选择已有音乐目录、音频输出，测试本地 PCM/DSD、切歌、暂停、seek；Diretta 测试需要实际 Target、匹配的原生 SDK 和权限。默认构建的 CPU 变体以 `runtime.json` 中 `direttaCpuVariant` 为准（2026-11-04 测试包为 v2）。Linux 目标机仍须满足 Bun/glibc、N-API 原生模块与音频硬件的兼容性条件。
 
 ## 对照测试
 
