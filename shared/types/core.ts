@@ -30,6 +30,7 @@ export interface CoreInfo {
   node: string;
   nodeRange: string;
   nodeReference: string;
+  runtime?: { name: "node" | "bun"; version: string };
   direttaSdkRelease?: number | null;
   protocol: CoreProtocolInfo;
   capabilities: CoreCapabilities;

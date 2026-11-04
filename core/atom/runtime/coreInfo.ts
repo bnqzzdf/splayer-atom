@@ -85,6 +85,9 @@ export const getCoreInfo = (): CoreInfo => {
     node: process.versions.node,
     nodeRange: CORE_NODE_RANGE,
     nodeReference: CORE_NODE_REFERENCE,
+    runtime: process.versions.bun
+      ? { name: "bun", version: process.versions.bun }
+      : { name: "node", version: process.versions.node },
     direttaSdkRelease:
       nativeBuild.diretta === true
         ? (release.direttaSdkRelease ?? nativeBuild.direttaSdkRelease ?? null)

@@ -1,5 +1,6 @@
 import { fork } from "node:child_process";
 import path from "node:path";
+import { decodePluginIpc, encodePluginIpc } from "./pluginIpc";
 
 export interface RuntimePluginHostStream {
   on: (event: "data", listener: (chunk: Buffer) => void) => unknown;
@@ -27,19 +28,27 @@ export const pluginHostExecArgv = (entry: string): string[] => [
 ];
 
 const spawnNodePluginHost: RuntimePluginHostSpawner = (entry) => {
+  const bunParent = Boolean(process.versions.bun);
   const child = fork(entry, [], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
-    serialization: "advanced",
+    serialization: bunParent ? "json" : "advanced",
     execArgv: pluginHostExecArgv(entry),
+    ...(bunParent
+      ? {
+          execPath: process.env.ATOM_PLUGIN_HOST_NODE_BIN || "node",
+          env: { ...process.env, ATOM_PLUGIN_IPC_JSON: "1" },
+        }
+      : {}),
   });
   return {
     stdout: child.stdout,
     stderr: child.stderr,
-    onMessage: (listener) => child.on("message", listener),
+    onMessage: (listener) =>
+      child.on("message", (message) => listener(bunParent ? decodePluginIpc(message) : message)),
     onExit: (listener) => child.on("exit", listener),
     postMessage: (message) => {
       if (!child.connected) throw new Error("plugin host process is not connected");
-      child.send(message as any);
+      child.send((bunParent ? encodePluginIpc(message) : message) as any);
     },
     kill: () => {
       child.kill();
