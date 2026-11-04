@@ -4,17 +4,18 @@ import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { usePlaybackTime } from "@/composables/usePlaybackTime";
 import { getCurrentTime } from "@/services/playback";
+import type { PlayerLayout } from "@/types/settings";
 import type { QualityLevel } from "@/utils/quality";
 import { useFavorite } from "@/composables/useFavorite";
 import { useDownload, buildDownloadQualityItems } from "@/composables/useDownload";
 import { usePlaylistPicker } from "@/composables/usePlaylistPicker";
 import { useImmersiveMode } from "@/composables/useImmersiveMode";
-import { useTimeFormat } from "@/composables/useTimeFormat";
-import { useProgressLyric } from "@/composables/useProgressLyric";
 import { useResponsiveLayout } from "@/composables/useResponsiveLayout";
+import { useMediaQuery } from "@vueuse/core";
 import { useTrackMenu } from "@/composables/useTrackMenu";
 import Lyrics from "@/components/player/Lyrics/index.vue";
 import AMLLLyrics from "@/components/player/Lyrics/AMLLLyrics.vue";
+import PlayerTransport from "./PlayerTransport.vue";
 import PlaylistPickerDialog from "@/components/modals/PlaylistPickerDialog.vue";
 import { useWindowControls } from "@/composables/useWindowControls";
 import * as player from "@/core/player";
@@ -30,22 +31,12 @@ const settings = useSettingsStore();
 const fav = useFavorite();
 const { enqueue: enqueueDownload } = useDownload();
 const { t } = useI18n();
-const {
-  isPlaying,
-  isLoading,
-  position,
-  duration,
-  isPlayerExpanded,
-  repeatMode,
-  shuffleMode,
-  heartMode,
-  fmMode,
-  showLyric,
-} = storeToRefs(status);
+const { isPlaying, isPlayerExpanded, showLyric } = storeToRefs(status);
 
-const { timeDisplay, toggleTimeFormat } = useTimeFormat();
-const { snapToNearestLyric } = useProgressLyric();
 const { isMobile } = useResponsiveLayout();
+const isShortViewport = useMediaQuery("(max-height: 560px)");
+const isPhoneLandscape = useMediaQuery("(max-width: 1023px) and (max-height: 560px)");
+const compactPlayer = computed(() => isMobile.value || isPhoneLandscape.value);
 
 const lyricRef = ref<InstanceType<typeof Lyrics> | InstanceType<typeof AMLLLyrics>>();
 const lyricMounted = ref(false);
@@ -65,10 +56,6 @@ const { start: startTick, stop: stopTick } = usePlaybackTime((currentMs) => {
 const onAfterEnter = () => {
   initialLyricTimeMs.value = getCurrentTime() + status.lyricOffsetMs;
   lyricMounted.value = true;
-  nextTick(() => {
-    lyricRef.value?.resume();
-    startTick();
-  });
 };
 
 /** 收起前 */
@@ -86,7 +73,7 @@ const onAfterLeave = () => {
 watch(
   () => status.isPlayerExpanded,
   (open) => {
-    if (open && isMobile.value) {
+    if (open && compactPlayer.value) {
       showLyric.value = false;
     }
   },
@@ -118,17 +105,56 @@ watch(
   },
 );
 
-const fullscreenCover = computed(() => settings.player.coverLayout === "fullscreen");
+const fullscreenCover = computed(() => settings.player.layout === "fullCover");
+const appleLayout = computed(() => settings.player.layout === "apple");
 const coverWidth = computed(() => `${settings.player.coverLyricRatio * 100}%`);
 
 const coverCentered = computed(() => {
   if (fullscreenCover.value || status.fullQueueOpen) return false;
+  if (appleLayout.value) return !showLyric.value || !hasLyric.value;
   return !showLyric.value || (settings.player.autoCenterCover && !hasLyric.value);
 });
 
 /** 移动端是否处于歌词展示模式：需同时满足移动端、未打开播放列表、用户开启歌词且当前歌曲存在歌词 */
 const mobileLyricActive = computed(
-  () => isMobile.value && !status.fullQueueOpen && showLyric.value && hasLyric.value,
+  () => compactPlayer.value && !status.fullQueueOpen && showLyric.value && hasLyric.value,
+);
+
+const pageVisible = ref(!document.hidden);
+const onVisibilityChange = (): void => {
+  pageVisible.value = !document.hidden;
+};
+onMounted(() => document.addEventListener("visibilitychange", onVisibilityChange));
+onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisibilityChange));
+
+const lyricAreaVisible = computed(
+  () =>
+    !status.fullQueueOpen && (compactPlayer.value ? mobileLyricActive.value : !coverCentered.value),
+);
+const lyricActive = computed(
+  () =>
+    lyricMounted.value &&
+    isPlayerExpanded.value &&
+    pageVisible.value &&
+    lyricAreaVisible.value &&
+    hasLyric.value,
+);
+watch(
+  lyricActive,
+  (active) => {
+    if (!active) {
+      lyricRef.value?.freeze();
+      stopTick();
+      return;
+    }
+    initialLyricTimeMs.value = getCurrentTime() + status.lyricOffsetMs;
+    nextTick(() => {
+      if (!lyricActive.value) return;
+      lyricRef.value?.resume();
+      startTick();
+    });
+  },
+  { flush: "post" },
 );
 
 const handleLyricSeek = async (timeMs: number): Promise<void> => {
@@ -180,10 +206,6 @@ const collapse = (): void => {
   isPlayerExpanded.value = false;
 };
 
-const onSeekDragEnd = (value: number): void => {
-  player.seek(snapToNearestLyric(value));
-};
-
 const {
   open: pickerOpen,
   tracks: pickerTracks,
@@ -202,10 +224,37 @@ const openDisplayTrackContainingFolder = async (): Promise<void> => {
   if (await openDisplayTrackContainingFolderAction()) collapse();
 };
 
-const lyricToggleDisabled = computed(() => !hasLyric.value || fullscreenCover.value);
-const lyricToggleActive = computed(
-  () => showLyric.value && hasLyric.value && !status.fullQueueOpen && !fullscreenCover.value,
+const lyricToggleDisabled = computed(
+  () => !hasLyric.value || (fullscreenCover.value && !compactPlayer.value),
 );
+const lyricToggleActive = computed(
+  () =>
+    showLyric.value &&
+    hasLyric.value &&
+    !status.fullQueueOpen &&
+    (!fullscreenCover.value || compactPlayer.value),
+);
+
+const playerLayoutItems = computed(() => [
+  {
+    key: "classic",
+    label: `${settings.player.layout === "classic" ? "✓ " : ""}${t("settings.playerLayout.classic")}`,
+  },
+  {
+    key: "fullCover",
+    label: `${settings.player.layout === "fullCover" ? "✓ " : ""}${t("settings.playerLayout.fullCover")}`,
+  },
+  {
+    key: "apple",
+    label: `${settings.player.layout === "apple" ? "✓ " : ""}${t("settings.playerLayout.apple")}`,
+  },
+]);
+
+const selectPlayerLayout = (key: string): void => {
+  if (key === "classic" || key === "fullCover" || key === "apple") {
+    settings.player.layout = key as PlayerLayout;
+  }
+};
 
 const toggleLyric = (): void => {
   if (status.fullQueueOpen) {
@@ -217,7 +266,7 @@ const toggleLyric = (): void => {
 };
 
 const onCoverContainerClick = (): void => {
-  if (!isMobile.value || !hasLyric.value) return;
+  if (!compactPlayer.value || !hasLyric.value) return;
   showLyric.value = true;
 };
 
@@ -293,6 +342,25 @@ const showComments = (): void => {
             >
               <template #icon><IconLucideTextQuote /></template>
             </SButton>
+            <SDropdownMenu
+              :items="playerLayoutItems"
+              cover
+              side="bottom"
+              align="start"
+              @select="selectPlayerLayout"
+            >
+              <template #trigger>
+                <SButton
+                  type="cover"
+                  variant="ghost"
+                  circle
+                  :size="40"
+                  :title="t('settings.playerLayout.label')"
+                >
+                  <template #icon><IconLucideLayoutTemplate /></template>
+                </SButton>
+              </template>
+            </SDropdownMenu>
           </div>
           <div class="app-no-drag flex items-center gap-2">
             <SButton type="cover" variant="ghost" circle :size="40" @click="toggleFullscreen">
@@ -306,7 +374,8 @@ const showComments = (): void => {
         </div>
         <!-- 主区域 -->
         <div
-          class="absolute top-14 inset-x-0 bottom-36 md:bottom-20 overflow-hidden"
+          class="absolute top-14 inset-x-0 overflow-hidden"
+          :class="compactPlayer ? 'bottom-36' : 'bottom-36 md:bottom-20'"
           @mousemove="onMainMove"
         >
           <!-- 封面与歌曲信息 -->
@@ -314,23 +383,23 @@ const showComments = (): void => {
             v-if="!fullscreenCover"
             class="absolute inset-y-0 left-0 flex items-center justify-center transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)] [-webkit-tap-highlight-color:transparent]"
             :class="[
-              isMobile && (status.fullQueueOpen || mobileLyricActive)
+              compactPlayer && (status.fullQueueOpen || mobileLyricActive)
                 ? 'opacity-0 pointer-events-none invisible z-0 scale-95'
                 : 'opacity-100 pointer-events-auto visible z-10 scale-100',
-              'md:opacity-100 md:pointer-events-auto md:visible md:z-10 md:scale-100',
-              isMobile ? 'px-4' : 'px-12',
-              isMobile && hasLyric ? 'cursor-pointer' : '',
+              compactPlayer ? 'px-4' : appleLayout ? 'px-6 xl:px-10' : 'px-12',
+              compactPlayer && hasLyric ? 'cursor-pointer' : '',
             ]"
             :style="{
-              width: isMobile ? '100%' : coverWidth,
-              transform: !isMobile && coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
+              width: compactPlayer ? '100%' : appleLayout ? '50%' : coverWidth,
+              transform:
+                !compactPlayer && coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
             }"
             @click="onCoverContainerClick"
           >
             <!-- 移动端纵向紧凑视图 -->
             <div
-              v-if="isMobile"
-              class="relative flex flex-col items-center text-center w-full max-w-[85vw] max-h-[45vh] min-w-0 transition-transform duration-300"
+              v-if="compactPlayer"
+              class="relative flex flex-col items-center text-center w-full max-w-[85vw] max-h-full overflow-y-auto min-w-0 transition-transform duration-300"
             >
               <Transition name="scale-switch" mode="out-in">
                 <div
@@ -349,7 +418,23 @@ const showComments = (): void => {
               </Transition>
             </div>
 
-            <!-- PC 桌面端（原汁原味大图与绝对定位歌曲信息） -->
+            <!-- AM 布局：封面下方集中显示信息、进度与控制 -->
+            <div
+              v-else-if="appleLayout"
+              class="relative w-full max-w-[min(35vh,400px)] max-h-full min-w-0 overflow-y-auto flex flex-col items-center gap-3"
+            >
+              <Transition name="scale-switch" mode="out-in">
+                <div :key="displayTrack?.id" class="w-full min-w-0 flex flex-col items-center">
+                  <PlayerCover />
+                  <div class="w-full min-w-0 pt-3">
+                    <PlayerData align="center" />
+                  </div>
+                </div>
+              </Transition>
+              <PlayerTransport v-if="!isShortViewport" class="w-full" />
+            </div>
+
+            <!-- 经典桌面端（大图与绝对定位歌曲信息） -->
             <div v-else class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
               <Transition name="scale-switch" mode="out-in">
                 <div :key="displayTrack?.id">
@@ -365,12 +450,16 @@ const showComments = (): void => {
           <div
             class="group absolute inset-y-0 right-0 px-4 md:pr-20 flex flex-col transition-all duration-600 ease-[cubic-bezier(0.4,0,0.2,1)]"
             :class="[
-              (isMobile && !mobileLyricActive) || coverCentered || status.fullQueueOpen
+              !lyricAreaVisible
                 ? 'opacity-0 pointer-events-none invisible z-0'
                 : 'opacity-100 pointer-events-auto visible z-10',
             ]"
             :style="{
-              width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
+              width: compactPlayer
+                ? '100%'
+                : fullscreenCover || appleLayout
+                  ? '50%'
+                  : `calc(100% - ${coverWidth})`,
             }"
           >
             <!-- 全屏封面模式下的标题信息 -->
@@ -394,10 +483,10 @@ const showComments = (): void => {
                 '--lyric-font-latin': settings.lyric.fontFamilyLatin || undefined,
                 mixBlendMode: settings.lyric.lyricBlendMode,
               }"
-              @click="isMobile && (showLyric = false)"
+              @click="compactPlayer && (showLyric = false)"
             >
               <AMLLLyrics
-                v-if="lyricMounted && hasLyric && settings.lyric.engine === 'amll'"
+                v-if="lyricActive && settings.lyric.engine === 'amll'"
                 ref="lyricRef"
                 :lyric-lines="media.parsedLyric"
                 :initial-time="initialLyricTimeMs"
@@ -427,7 +516,7 @@ const showComments = (): void => {
                 </template>
               </AMLLLyrics>
               <Lyrics
-                v-else-if="lyricMounted && hasLyric"
+                v-else-if="lyricActive"
                 ref="lyricRef"
                 :lyric-lines="media.parsedLyric"
                 :initial-time="initialLyricTimeMs"
@@ -461,7 +550,7 @@ const showComments = (): void => {
                 </template>
               </Lyrics>
               <div
-                v-else-if="lyricMounted"
+                v-else-if="lyricMounted && lyricAreaVisible && !hasLyric"
                 class="w-full h-full flex items-center justify-center text-cover/30"
               >
                 暂无歌词
@@ -479,7 +568,11 @@ const showComments = (): void => {
                 : 'opacity-0 pointer-events-none invisible z-0',
             ]"
             :style="{
-              width: isMobile ? '100%' : fullscreenCover ? '50%' : `calc(100% - ${coverWidth})`,
+              width: compactPlayer
+                ? '100%'
+                : fullscreenCover || appleLayout
+                  ? '50%'
+                  : `calc(100% - ${coverWidth})`,
             }"
           >
             <Transition
@@ -496,13 +589,21 @@ const showComments = (): void => {
         </div>
         <!-- 底栏 -->
         <div
-          class="absolute bottom-0 inset-x-0 z-10 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4 px-3 md:px-4 py-2 md:py-0 md:h-20 transition-opacity duration-400 pb-[env(safe-area-inset-bottom,8px)]"
-          :class="immersive ? 'opacity-0 pointer-events-none' : 'opacity-100'"
+          class="absolute bottom-0 inset-x-0 z-10 flex items-center justify-between px-3 py-2 transition-opacity duration-400 pb-[env(safe-area-inset-bottom,8px)]"
+          :class="[
+            compactPlayer
+              ? 'flex-col gap-2'
+              : 'flex-col md:flex-row gap-2 md:gap-4 md:px-4 md:py-0 md:h-20',
+            immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
+          ]"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
           <!-- 桌面左侧操作区 -->
-          <div class="hidden md:flex flex-1 min-w-0 items-center justify-start gap-2">
+          <div
+            class="flex-1 min-w-0 items-center justify-start gap-2"
+            :class="compactPlayer ? 'hidden' : 'hidden md:flex'"
+          >
             <SButton type="cover" variant="ghost" size="large" circle @click="collapse">
               <template #icon><IconLucideChevronDown /></template>
             </SButton>
@@ -568,111 +669,15 @@ const showComments = (): void => {
             </SDropdownMenu>
           </div>
 
-          <!-- 控制区（进度条 + 播放控制） -->
-          <div
-            class="w-full md:w-[clamp(320px,35%,480px)] shrink-0 flex flex-col items-center gap-1"
-          >
-            <div class="flex items-center gap-3">
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                @click="
-                  fmMode
-                    ? player.dislikeFmTrack()
-                    : heartMode
-                      ? player.exitHeartMode()
-                      : player.toggleShuffleMode()
-                "
-              >
-                <template #icon>
-                  <IconLucideHeartOff v-if="fmMode" />
-                  <IconSpHeartMode v-else-if="heartMode" />
-                  <IconLucideShuffle v-else-if="shuffleMode === 'on'" />
-                  <IconSpPlayOrder v-else />
-                </template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :disabled="!hasTrack || fmMode"
-                @click="player.prevTrack()"
-              >
-                <template #icon><IconLucideSkipBack /></template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="secondary"
-                size="large"
-                circle
-                :loading="isLoading"
-                :disabled="!hasTrack && !isLoading"
-                @click="player.togglePlay()"
-              >
-                <template #icon>
-                  <SIconSwap :active="isPlaying">
-                    <template #on><IconLucidePause /></template>
-                    <template #off><IconLucidePlay /></template>
-                  </SIconSwap>
-                </template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :disabled="!hasTrack"
-                @click="player.nextTrack()"
-              >
-                <template #icon><IconLucideSkipForward /></template>
-              </SButton>
-              <SButton
-                type="cover"
-                variant="ghost"
-                circle
-                :disabled="fmMode"
-                :class="fmMode ? 'opacity-40' : 'opacity-100'"
-                @click="player.cycleRepeatMode()"
-              >
-                <template #icon>
-                  <IconLucideInfinity v-if="fmMode" />
-                  <IconLucideRepeat1 v-else-if="repeatMode === 'one'" />
-                  <IconLucideRepeat
-                    v-else
-                    :class="repeatMode === 'off' ? 'opacity-40' : undefined"
-                  />
-                </template>
-              </SButton>
-            </div>
-            <div class="flex items-center gap-2 w-full">
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center cursor-pointer px-1.5 py-0.5 rounded-md transition-colors hover:bg-cover/10"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[0] }}
-              </span>
-              <SSlider
-                :model-value="position"
-                :min="0"
-                :max="duration"
-                :step="100"
-                :always-show-thumb="false"
-                cover
-                class="flex-1"
-                @drag-end="onSeekDragEnd"
-              />
-              <span
-                class="text-xs text-cover/50 tabular-nums min-w-9 text-center cursor-pointer px-1.5 py-0.5 rounded-md transition-colors hover:bg-cover/10"
-                @click="toggleTimeFormat"
-              >
-                {{ timeDisplay[1] }}
-              </span>
-            </div>
-          </div>
+          <PlayerTransport
+            v-if="!appleLayout || compactPlayer || isShortViewport"
+            class="w-full md:w-[clamp(320px,35%,480px)]"
+          />
 
           <!-- 手机下底部工具行：Fav, Comments, Playlist, Download, Toolbar -->
           <div
-            class="flex md:hidden items-center justify-between w-full pt-1 border-t border-t-solid border-t-cover/10"
+            class="items-center justify-between w-full pt-1 border-t border-t-solid border-t-cover/10"
+            :class="compactPlayer ? 'flex' : 'flex md:hidden'"
           >
             <div class="flex items-center gap-1">
               <SButton
@@ -742,7 +747,10 @@ const showComments = (): void => {
           </div>
 
           <!-- 桌面右侧 Toolbar -->
-          <div class="hidden md:flex flex-1 min-w-0 items-center justify-end">
+          <div
+            class="flex-1 min-w-0 items-center justify-end"
+            :class="compactPlayer ? 'hidden' : 'hidden md:flex'"
+          >
             <Toolbar cover />
           </div>
         </div>

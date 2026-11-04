@@ -1,13 +1,14 @@
 # SPlayer Atom 路线图
 
-> 最后更新：2026-10-03
+> 最后更新：2026-11-04
 
 ## 当前状态
 
 文件夹浏览第一批改进已实现，并于 2026-09-28 完成真实曲库和浏览器下的功能验收；
 这不是新的输出硬件、账号或发布验收记录。
 
-SPlayer Atom 是一套 Linux x86-64 Node Core，并以 Web Control 作为唯一 UI。Web + Core 迁移、
+SPlayer Atom 是一套 Linux x86-64 Core（Node 为默认正式基线、Bun 为实验 Flavor），
+并以 Web Control 作为唯一 UI。Web + Core 迁移、
 ALSA HW Direct / Processed 路径、Diretta Source Direct、UPnP 输出、Core 拥有的 Folder Browser、
 Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进入当前代码树。Netease、QQ音乐、
 酷狗、Qobuz 与 TIDAL 的 Core/Web 路径均已具备。Debian 11 bundled 包可以在带或不带 Diretta 的
@@ -18,6 +19,13 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 [文件夹浏览改进方案](./folder-browser-improvements.md)的第一批显示排序、物理属性、Web 控件、
 导航恢复、范围提示和完整结果批量选择已实现，并完成当前真实曲库的功能验收。
 原方案中 NAS/USB、超大目录与素材查看器的更广验收仍待完成。
+
+2026-11-03 至 11-04，文件夹物理路径查询与局部扫描已改为按范围读取，减少无关全库查询，
+并避免在没有曲目消费者时无条件刷新整库投影（`75561bad`、`2041c17b`）。
+这属于已实现的性能修正，不代表 Folder Search 延迟已在所有真实曲库上复测通过。
+Node/Bun 共用 Core 源码、构建与产物验收流程，四种运行时/携带方式已可构建
+（`85b5aa86`）；`mise.toml` 固定 Node `24.22.2`、Bun `1.4.4`（`0e590b43`）。
+Bun 的实验基准与限制见[运行时对照](./bun-runtime-experiment.md)，尚不等同于正式发布验收。
 
 本路线图跟踪剩余工作与验收。代码只能确立某条路径是否存在；硬件、真实账户、浏览器与发布验收
 需要一次记录的运行。[2026-09-22 ALSA 记录](./alsa-acceptance-2026-09-22.md) 覆盖产物提交
@@ -53,6 +61,18 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 
 ### Provider 与 Web Control
 
+本轮上游界面吸收已有[分批方案](./upstream-ui-adoption-plan.md)：
+AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）已实现、待浏览器验收；
+紧凑列表与排序隔离（UI-2）未实施，扫描目录与下载扩展名两个独立小修亦未实施。
+已排除项目与低频候选见方案范围，不据此勾选现有发布门禁。
+
+- [x] UI-1 代码：AM 播放页、经典/全屏封面/AM 快捷切换、旧偏好迁移和播放控制复用；
+      Node/Web 自动化、类型检查、构建与 lint 已通过，尚未提交。
+- [ ] UI-1 浏览器/设备验收：按方案记录各视口截图、播放连续性、歌词/队列、
+      页面隐藏恢复及 Direct 模式控件。
+- [ ] UI-2：常规/紧凑歌曲列表与按页面类别隔离排序偏好；验证虚拟滚动、多碟和跨页面排序。
+- [ ] FIX-1 / FIX-2：分别修复扫描根目录嵌套校验与下载扩展名识别；独立提交、独立回归。
+
 - [ ] 在目标产物上，针对 [provider 验收标准](./live-provider-acceptance.md)记录 Netease、QM、KG、
       Qobuz 与 TIDAL 的完整真实账户验收。QM/KG 产品路径与 Qobuz 浏览器 OAuth/仅 token 登录均已
       实现，但本代码树没有真实账户验收运行。已有的 UPnP 记录验证了部分真实 Netease/TIDAL 在线
@@ -81,11 +101,16 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
       功能正确，但主观感觉偏慢。这两点不阻塞第一批功能验收。
 - [ ] 完成原方案第 17/18 节中 NAS/USB、超大目录及素材查看器等更广的人工验收。
 - [ ] 若真实曲库的 Folder Search 延迟仍明显，先测量并分析性能，再决定具体优化。
+- [x] 物理路径查询、局部扫描及曲目投影刷新路径的全库操作缩减已合入 `dev`
+      （`75561bad`、`2041c17b`）；仍需按真实曲库范围复测性能。
 - [ ] 第二批：当前子树递归搜索、文件夹级专辑/艺术家快捷入口与批量失败提示已实现；待真实曲库和
       浏览器下完成功能验收。
 
 ### 发布
 
+- [ ] 在实验 Bun Flavor 上分别完成目标设备 PCM/DSD、ALSA/Diretta/UPnP、切歌/seek、
+      插件 Host、长期资源趋势、Debian 11/OpenRC 与升级回滚验收，再决定是否列入正式发布；
+      [现有空库 API 基准](./bun-runtime-experiment.md)不能代替音频或稳定性验收。
 - [ ] 从目标 Git 提交构建一个干净产物，并在同一候选上完成
       [硬件清单](./hardware-release-checklist.md)与
       [部署清单](./core-deployment.md)，包括安装、升级与回滚。`cecee166` 归档通过了文件对比与
@@ -96,13 +121,18 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 
 ## 当前优先级
 
-1. 用一个干净候选产物验证 ALSA 行为与资源趋势；修复观察到的故障。
-2. 完成目标设备的 ALSA 检查，以及尚未完成的 UPnP/Diretta CUE 硬件验收。
-3. 完成 Folder Browser 原方案中 NAS/USB、超大目录与素材查看器的更广验收；若搜索延迟仍明显，
-   测量后再优化。第一批功能实现与验收已完成。
-4. 完成全部五个 provider 矩阵、ListenBrainz、Folder Browser、响应式 Web 与
-   长时运行多 Control 验收。
-5. 在一个干净候选上执行安装、升级、回滚与最终硬件检查，然后发布。
+近期开发批次（与发布门禁并行，不自动扩大范围）：
+
+1. 按[上游 UI 方案](./upstream-ui-adoption-plan.md)先实施 UI-1，再实施 UI-2。
+2. 将 FIX-1 扫描目录嵌套和 FIX-2 下载扩展名分别作为独立小修，不与 UI 批次绑定。
+
+发布前验收优先级：
+
+1. 在同一个干净候选上验证 ALSA 行为及资源趋势，完成目标设备、UPnP 和 Diretta CUE 检查。
+2. 对 Folder Browser 的 NAS/USB、超大目录、素材查看器及新版扫描/查询性能做真实曲库验收。
+3. 完成五个 provider、ListenBrainz、响应式 Web、多个 Control 长时使用的验收。
+4. Node 作为默认发布基线；Bun 保留为实验 Flavor，按实际目标设备验收后再评估发布。
+5. 在固定候选上执行安装、升级、回滚与最终硬件检查，然后发布。
 
 ## 产品范围
 
@@ -115,6 +145,8 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 | --------------------------------------------------------------------------------------------- | ----------------------------------- |
 | [Atom 已完成](./atom-completed.md)                                                            | 已确认的实现与有界验收历史          |
 | [开发指南](./atom-development.md)                                                             | 环境、检查与约定                    |
+| [上游界面吸收与小修](./upstream-ui-adoption-plan.md)                                          | 待实施范围、分批顺序与验收标准      |
+| [Node/Bun 运行时对照](./bun-runtime-experiment.md)                                            | 运行时 Flavor、基准与限制           |
 | [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md)                        | Core/Web 产物与变体                 |
 | [Core 部署](./core-deployment.md)                                                             | systemd、持久状态、安装、升级与回滚 |
 | [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)                                    | OpenRC 服务开发、部署、升级与排障   |

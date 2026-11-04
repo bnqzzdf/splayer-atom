@@ -15,6 +15,7 @@ import {
   SIDEBAR_GROUP_MY_PLAYLISTS,
   SIDEBAR_GROUP_SUBSCRIBED,
   SPRING_PRESETS,
+  resolvePlayerLayout,
 } from "@/types/settings";
 import { isCoreSettingPath, type SystemConfig, type LocaleCode } from "@shared/types/settings";
 import { defaultSystemConfig } from "@shared/defaults/settings";
@@ -208,7 +209,7 @@ export const useSettingsStore = defineStore(
       playerBgFlowSpeed: 4,
       playerBgRenderScale: 0.5,
       playerBgFreezeOnPause: false,
-      coverLayout: "default",
+      layout: "classic",
       coverLyricRatio: 0.45,
       autoCenterCover: true,
       showPlaybackSource: false,
@@ -393,8 +394,16 @@ export const useSettingsStore = defineStore(
             folderBrowseSort?: unknown;
             folderBrowseOrder?: unknown;
           };
+          player?: {
+            layout?: unknown;
+            coverLayout?: unknown;
+          };
         };
         let persistAppearanceMigration = false;
+        const layout = resolvePlayerLayout(saved.player?.layout, saved.player?.coverLayout);
+        const persistPlayerMigration = saved.player?.layout !== layout || "coverLayout" in player;
+        player.layout = layout;
+        delete player.coverLayout;
         const persistedMode = saved.appearance?.folderViewMode;
         const legacyMode = sessionStorage.getItem(LEGACY_FOLDER_VIEW_MODE_KEY);
         if (persistedMode !== "list" && persistedMode !== "grid") {
@@ -417,7 +426,7 @@ export const useSettingsStore = defineStore(
           persistAppearanceMigration = true;
         }
         // 水合钩子早于自动持久化订阅，迁移结果需要立即写入。
-        if (persistAppearanceMigration) store.$persist();
+        if (persistAppearanceMigration || persistPlayerMigration) store.$persist();
         lyric.lyricSourceOrder = reconcileOrder(lyric.lyricSourceOrder, SUPPORTED_LYRIC_PLATFORMS);
         if (lyric.lyricSourcePreference === "qobuz" || lyric.lyricSourcePreference === "tidal") {
           lyric.lyricSourcePreference = "auto";

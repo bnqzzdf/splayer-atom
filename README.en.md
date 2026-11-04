@@ -4,7 +4,7 @@
 
 [简体中文](./README.md) · **English**
 
-SPlayer Atom is a music player for Linux hosts, based on [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next).
+SPlayer Atom is a music player for Linux hosts, based on [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next). The Core defaults to Node.js; an experimental Bun flavor uses the same sources and packaging pipeline.
 
 It runs as a background service and is controlled from a browser on any computer, tablet, or phone on your LAN. Closing the page doesn't stop playback, and every device sees the same playback state. It's meant to live on a music server or HiFi host.
 
@@ -18,7 +18,7 @@ It runs as a background service and is controlled from a browser on any computer
   - ALSA, with EQ, loudness, and playback speed
   - Diretta: sample rate, bit depth, and channels are sent unchanged and DSD is sent natively, with no processing; formats the target doesn't support fail with an explicit error
   - UPnP renderers
-- **Also**: gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
+- **Also**: Classic / Fullscreen Cover / AM-style player layouts, gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
 
 Atom has no feature for deleting music files. Cleanup only touches its own cache and temporary files.
 
@@ -49,7 +49,8 @@ Then open `http://<host IP>:14558` in a browser.
 Requirements:
 
 - Linux x86-64
-- Node.js 24.22.2 (the packaging script checks the version; `>=22.19.0` is enough for development)
+- Node.js 24.22.2 (required by packaging; running a Node Core needs `>=22.19.0`)
+- Bun 1.4.4 (only required when building or running the Bun flavor)
 - pnpm `>=10`
 - Rust stable
 - ALSA development headers, Clang, pkg-config
@@ -66,7 +67,16 @@ Package:
 pnpm install
 pnpm package:core            # uses the host's Node.js
 pnpm package:core:bundled    # ships its own Node.js
+pnpm package:core:bun        # uses the host's Bun
+pnpm package:core:bun:bundled # ships its own Bun
 ```
+
+The checked-in `mise.toml` pins Node `24.22.2` and Bun `1.4.4` (run `mise install` if you use mise).
+Both runtimes use the shared `--runtime=node|bun` and `--bundle-runtime` packaging options;
+`ATOM_BUN_BIN` can specify a custom Bun executable. Node remains the default release baseline.
+The Bun flavor is **experimental**, pending long-running playback, plugin, deployment and
+target-device acceptance. See [Node/Bun runtime comparison and limitations](./docs/bun-runtime-experiment.md)
+(Chinese only).
 
 Diretta builds need the Diretta Host SDK and a variant matching the target CPU (`v2` / `v3` / `v4` / `zen4`, see [CPU variants](./docs/cpu-variants.md), Chinese only):
 
@@ -94,13 +104,13 @@ cargo test --workspace
 
 Layout:
 
-| Directory                  | Contents                                                                     |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `core/`                    | Node Core: library, queue, playback control, streaming, HTTP / WebSocket API |
-| `src/`                     | Web control UI (Vue 3)                                                       |
-| `native/`                  | Rust native modules: audio engine, Qobuz / TIDAL, Diretta SDK bindings       |
-| `shared/types/`            | Types shared by Core and Web                                                 |
-| `scripts/atom/`, `docker/` | Build and packaging scripts                                                  |
+| Directory                  | Contents                                                                           |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `core/`                    | Core (Node/Bun): library, queue, playback control, streaming, HTTP / WebSocket API |
+| `src/`                     | Web control UI (Vue 3)                                                             |
+| `native/`                  | Rust native modules: audio engine, Qobuz / TIDAL, Diretta SDK bindings             |
+| `shared/types/`            | Types shared by Core and Web                                                       |
+| `scripts/atom/`, `docker/` | Build and packaging scripts                                                        |
 
 ## Documentation
 
@@ -109,6 +119,7 @@ Layout:
 - [Core deployment and upgrades](./docs/en/core-deployment.md) · [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md)
 - [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/cpu-variants.md) (Chinese only)
 - [Development setup](./docs/en/atom-development.md) · [Roadmap](./docs/en/atom-roadmap.md) · [Completed work](./docs/en/atom-completed.md)
+- [Node/Bun runtime comparison](./docs/bun-runtime-experiment.md) · [Planned upstream UI adoption](./docs/upstream-ui-adoption-plan.md) (Chinese only)
 - [Native modules](./docs/en/native.md) · [Qobuz / TIDAL protocol engine](./docs/streaming-rust-guide.md) (Chinese only)
 - [Plugin development](./docs/en/plugins/) · [Plugin usage](./docs/en/plugins-usage.md) · [Type reference](./docs/en/types.md)
 - [Hardware release acceptance](./docs/hardware-release-checklist.md) (Chinese only) · [Live provider acceptance](./docs/live-provider-acceptance.md) (Chinese only)

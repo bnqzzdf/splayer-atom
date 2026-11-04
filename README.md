@@ -4,7 +4,7 @@
 
 **简体中文** · [English](./README.en.md)
 
-SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 修改。
+SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) 修改。Core 默认采用 Node.js，也提供共用源码与打包流程的实验性 Bun 运行时。
 
 它作为后台服务常驻运行，局域网内的电脑、平板、手机用浏览器打开即可控制。关掉网页不影响播放，多台设备看到的是同一份播放状态。适合装在音乐服务器或 HiFi 主机上长期使用。
 
@@ -18,7 +18,7 @@ SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Ne
   - ALSA：可使用均衡器、响度、变速
   - Diretta：采样率、位深、声道原样输出，DSD 原生传输，不做任何处理；目标设备不支持的格式会直接报错
   - UPnP 渲染器
-- **其他**：无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
+- **其他**：经典 / 全屏封面 / AM 风格播放页、无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
 
 Atom 不提供删除音乐文件的功能，清理操作只涉及它自己的缓存和临时文件。
 
@@ -49,7 +49,8 @@ sudo systemctl enable --now splayer-atom-core
 需要：
 
 - Linux x86-64
-- Node.js 24.22.2（打包脚本会校验版本；日常开发 `>=22.19.0` 即可）
+- Node.js 24.22.2（打包脚本会校验版本；Node Core 日常运行 `>=22.19.0`）
+- Bun 1.4.4（仅构建或运行 Bun Flavor 时需要）
 - pnpm `>=10`
 - Rust stable
 - ALSA 开发头文件、Clang、pkg-config
@@ -70,9 +71,11 @@ pnpm package:core:bun        # 使用主机上的 Bun
 pnpm package:core:bun:bundled # 安装包自带 Bun
 ```
 
+仓库的 `mise.toml` 固定 Node `24.22.2` 和 Bun `1.4.4`；可先执行 `mise install`。
 构建脚本共用一套源码和验收流程；也可直接传入 `--runtime=node|bun` 与
 `--bundle-runtime`，Bun 构建时通过 `ATOM_BUN_BIN` 指定 Bun 可执行文件。
-Node 保持默认正式构建，Bun Flavor 需通过实际音频硬件验收后再作为正式发布物。
+Node 保持默认正式构建，Bun Flavor 尚需目标设备的长期播放、插件及部署验收，不是正式发布物。
+参见 [Node/Bun 运行时对照与限制](./docs/bun-runtime-experiment.md)。
 
 带 Diretta 的版本需要提供 Diretta Host SDK，并按目标 CPU 选择变体（`v2` / `v3` / `v4` / `zen4`，见 [CPU 变体](./docs/cpu-variants.md)）：
 
@@ -100,13 +103,13 @@ cargo test --workspace
 
 目录结构：
 
-| 目录                       | 内容                                                             |
-| -------------------------- | ---------------------------------------------------------------- |
-| `core/`                    | Node Core：曲库、队列、播放控制、在线服务、HTTP / WebSocket 接口 |
-| `src/`                     | Web 控制界面（Vue 3）                                            |
-| `native/`                  | Rust 原生模块：音频引擎、Qobuz / TIDAL、Diretta SDK 绑定         |
-| `shared/types/`            | Core 与 Web 共用的类型定义                                       |
-| `scripts/atom/`、`docker/` | 构建与打包脚本                                                   |
+| 目录                       | 内容                                                                    |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `core/`                    | Core（Node/Bun）：曲库、队列、播放控制、在线服务、HTTP / WebSocket 接口 |
+| `src/`                     | Web 控制界面（Vue 3）                                                   |
+| `native/`                  | Rust 原生模块：音频引擎、Qobuz / TIDAL、Diretta SDK 绑定                |
+| `shared/types/`            | Core 与 Web 共用的类型定义                                              |
+| `scripts/atom/`、`docker/` | 构建与打包脚本                                                          |
 
 ## 文档
 
@@ -115,6 +118,7 @@ cargo test --workspace
 - [Core 部署与升级](./docs/core-deployment.md) · [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)
 - [构建与打包](./docs/build-and-packaging.md) · [构建面](./docs/build-flavors.md) · [CPU 变体](./docs/cpu-variants.md)
 - [开发环境](./docs/atom-development.md) · [路线图](./docs/atom-roadmap.md) · [已完成事项](./docs/atom-completed.md)
+- [Node/Bun 运行时对照](./docs/bun-runtime-experiment.md) · [上游界面吸收与小修计划](./docs/upstream-ui-adoption-plan.md)
 - [原生模块](./docs/native.md) · [Qobuz / TIDAL 协议引擎](./docs/streaming-rust-guide.md)
 - [插件开发](./docs/plugins/) · [插件使用](./docs/plugins-usage.md) · [类型参考](./docs/types.md)
 - [硬件发布验收](./docs/hardware-release-checklist.md) · [在线服务验收](./docs/live-provider-acceptance.md)

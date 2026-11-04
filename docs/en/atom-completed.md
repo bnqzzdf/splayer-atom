@@ -1,6 +1,6 @@
 # SPlayer Atom Completed Work
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-04
 
 This is the completed-work archive for the [Roadmap](./atom-roadmap.md). A recorded test applies
 only to its stated source commit, artifact and equipment. Remaining acceptance stays on the roadmap.
@@ -36,8 +36,9 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   smoke. See the [2026-09-22 record](./alsa-acceptance-2026-09-22.md).
 - `c3e135ab` contains software fixes for the Processed seek and restart-to-play failures. Both
   passed FC4 retest on installed clean artifact `3e420f78`; see the
-  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). The [ALSA plan](./alsa-output-plan.md)
-  records the structural runtime/buffering work still needed.
+  [2026-09-23 record](./alsa-acceptance-2026-09-23.md). Shared `AlsaFrameWriter`,
+  single runtime ownership and bounded decoded/DSP queues are now implemented; the
+  [ALSA plan](./alsa-output-plan.md) and roadmap retain the clean-artifact/device acceptance.
 - UPnP shares Core queue, source and cache flow; its CUE/SACD materialization is isolated from
   Direct/normal playback. The [UPnP plan](./upnp-output-plan.md) records AudioSys playback,
   extraction comparison and initial long-run evidence, as well as the outstanding stability gate.
@@ -59,6 +60,17 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
   unscanned media and CUE/SACD access, scoped scan, pinned folders, search/filter, materials,
   list/grid views, recursive and batch actions, and shared containing-folder actions. The
   implementation is merged into `dev`; real-library UX acceptance is still open.
+- The first batch of Folder Browser display sorting, physical file information and navigation
+  improvements passed real-library/browser functional acceptance on 2026-09-28; wider NAS/USB,
+  large-directory and materials acceptance remains open.
+- Commits `75561bad` (2026-11-03) and `2041c17b` (2026-11-04) introduced indexed physical-path
+  lookups, scoped partial-scan queries and demand-driven library projection refreshes, with
+  automated regression coverage. Real-library performance acceptance is still open.
+- An uncommitted UI-1 implementation on 2026-11-04 adds an AM-style player, three-way layout
+  switching, local `player.layout` persistence with legacy `coverLayout` migration, and shared
+  `PlayerTransport.vue` controls. Automated checks passed (Node 491/491, Web 159/159, types,
+  lint and Web build). Browser screenshots and real-playback acceptance remain open; see the
+  [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
 - Responsive Web layout has shared 768/1280 px breakpoints, mobile navigation, a compact player
   bar, adaptive lists, full player, settings and dialogs. Approved queue-drag and duplicate song-row
   double-click interactions were removed. Device acceptance is still open.
@@ -68,14 +80,20 @@ only to its stated source commit, artifact and equipment. Remaining acceptance s
 
 ## Packaging groundwork
 
+- Commit `85b5aa86` (2026-11-04) unified Node/Bun Core packaging, staging, artifact smoke and
+  launcher paths, supporting system/bundled variants of each runtime. `mise.toml` pins Node
+  `24.22.2` and Bun `1.4.4` (`0e590b43`). Bun has a separate-process plugin Host and a
+  bounded empty-library API benchmark; target-hardware, long-run playback and release
+  acceptance remain open. See the [runtime comparison](../bun-runtime-experiment.md) (Chinese only).
 - Runtime compatibility checks, reference Node runtime, system/bundled variants and Linux CI
   packaging are in place. Staging checks native loading, plugin-host, HTTP/WS/Web startup and
   termination. Diretta packaging validates the required SDK; filenames include version and date.
-- The Debian 11 bundled builder now selects an explicit no-Diretta or SDK 150 Diretta variant and
+- The Debian 11 bundled builder supports explicit no-Diretta or Diretta variants and
   checks native glibc requirements and artifact capabilities. On 2026-09-23, no-Diretta and
   Diretta v3 packages passed container builds and extracted-artifact smoke; all three packaged
   native modules required at most glibc 2.30. This was a dirty-tree software run, with no
-  Diretta hardware result or v2/v4 build in that record.
+  Diretta hardware result or v2/v4 build in that record. The historical test used SDK 150;
+  the current build moved to SDK 148 in `0daa2cfd` and has no matching acceptance record here.
 - Durable `data/`, migration backup, upgrade and rollback procedures are documented in
   [Core deployment](./core-deployment.md). A complete install/upgrade/rollback run on a fixed
   final candidate remains an open release gate.

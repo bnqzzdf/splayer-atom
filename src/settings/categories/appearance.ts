@@ -298,14 +298,15 @@ const appearanceCategory: SettingCategory = {
           ],
         },
         {
-          key: "coverLayout",
+          key: "playerLayout",
           type: "select",
-          binding: { store: "settings", path: "player.coverLayout" },
+          binding: { store: "settings", path: "player.layout" },
           options: [
-            { value: "default", labelKey: "settings.coverLayout.default" },
-            { value: "fullscreen", labelKey: "settings.coverLayout.fullscreen" },
+            { value: "classic", labelKey: "settings.playerLayout.classic" },
+            { value: "fullCover", labelKey: "settings.playerLayout.fullCover" },
+            { value: "apple", labelKey: "settings.playerLayout.apple" },
           ],
-          defaultValue: "default",
+          defaultValue: "classic",
         },
         {
           key: "coverLyricRatio",

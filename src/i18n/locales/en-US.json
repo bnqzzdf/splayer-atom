@@ -1220,11 +1220,12 @@
       "label": "Freeze When Paused",
       "description": "Stop the fluid background animation while playback is paused"
     },
-    "coverLayout": {
-      "label": "Cover Layout",
-      "description": "Cover presentation in the full-screen player",
-      "default": "Default",
-      "fullscreen": "Fullscreen"
+    "playerLayout": {
+      "label": "Now Playing Layout",
+      "description": "Choose the full-screen player layout",
+      "classic": "Classic",
+      "fullCover": "Fullscreen Cover",
+      "apple": "AM Style"
     },
     "coverLyricRatio": {
       "label": "Cover/Lyrics Ratio",

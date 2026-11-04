@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> Last updated: 2026-10-03
+> Last updated: 2026-11-04
 
 ## Current status
 
@@ -8,7 +8,8 @@ The first batch of Folder Browser improvements is implemented and passed functio
 the current real library and browser on 2026-09-28; this is not a new output-hardware, account or
 release acceptance record.
 
-SPlayer Atom is a Linux x86-64 Node Core with Web Control as its only UI. The Web + Core migration,
+SPlayer Atom is a Linux x86-64 Core (Node is the default release baseline; Bun is an experimental
+runtime flavor) with Web Control as its only UI. The Web + Core migration,
 ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
 Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
 tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
@@ -23,6 +24,13 @@ and full-result batch selection from the
 [Folder Browser improvements](./folder-browser-improvements.md) are implemented and have passed
 functional acceptance on the current real library. Wider acceptance for NAS/USB, very large
 directories and the material viewer in the original plan is still open.
+
+Commits `75561bad` and `2041c17b` narrowed physical-path queries and partial scans to relevant
+paths and removed unnecessary whole-library projection refreshes without active consumers.
+These changes are implemented, but they do not establish a fresh real-library latency acceptance.
+Node and Bun now share the Core build, packaging and artifact verification paths (`85b5aa86`);
+`mise.toml` pins Node `24.22.2` and Bun `1.4.4` (`0e590b43`). See the
+[runtime comparison](../bun-runtime-experiment.md) (Chinese only); Bun is not yet a release candidate.
 
 This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
@@ -66,6 +74,15 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### Providers and Web Control
 
+- [x] UI-1 implementation: an AM-style player, three-way layout switching, legacy preference
+      migration and shared transport controls have passed automated Node/Web tests, types, lint
+      and Web build in the current uncommitted worktree. See the
+      [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+- [ ] UI-1 manual acceptance: browser screenshots, responsive viewports, uninterrupted playback,
+      lyrics/queue behavior, hidden-tab recovery and Direct-mode controls still need validation.
+- [ ] UI-2 (not implemented): compact song rows and page-scoped sorting preferences.
+- [ ] Implement the two independent fixes in that plan: reject nested scan roots before Core writes
+      state, and recover missing download file extensions. Neither is a completed change.
 - [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
       for Netease, QM, KG, Qobuz and TIDAL on the intended artifact. The QM/KG product paths and
       Qobuz browser OAuth/token-only login are implemented but have no real-account acceptance run
@@ -106,12 +123,18 @@ Display sorting is independent of the Core-owned directory playback order.
       viewer in sections 17/18 of the original plan.
 - [ ] If Folder Search latency is still clearly noticeable on a real library, measure and analyze
       performance before deciding on specific optimizations.
+- [x] Optimize physical-path queries, partial scans and library projection refreshes
+      (`75561bad`, `2041c17b`). New real-library performance acceptance remains open.
 - [ ] Second batch: current-subtree recursive search, folder-associated album/artist shortcuts and
       the batch failure notice are implemented; functional acceptance on a real library and browser
       is still pending.
 
 ### Release
 
+- [ ] Evaluate experimental Bun packages on target devices for PCM/DSD, ALSA/Diretta/UPnP,
+      seek/track switching, plugin Host, prolonged resource use, Debian 11/OpenRC, and upgrade/
+      rollback before considering a formal Bun release. The [empty-library API benchmark](../bun-runtime-experiment.md)
+      (Chinese only) is not audio or stability acceptance.
 - [ ] Build a clean artifact from the intended Git commit and complete the
       [hardware checklist](./hardware-release-checklist.md) and
       [deployment checklist](./core-deployment.md) on that same candidate, including install,
@@ -125,14 +148,18 @@ Display sorting is independent of the Core-owned directory playback order.
 
 ## Current priorities
 
-1. Validate ALSA behavior and resource trend using one clean candidate artifact; fix observed failures.
-2. Complete the target-device ALSA checks and outstanding UPnP/Diretta CUE hardware acceptance.
-3. Complete the wider Folder Browser acceptance in the original plan for NAS/USB, very large
-   directories and the material viewer; if search latency is still noticeable, measure before
-   optimizing. First-batch implementation and acceptance are complete.
-4. Complete all five provider matrices, ListenBrainz, Folder Browser, responsive Web and
-   long-running multi-Control acceptance.
-5. Run install, upgrade, rollback and final hardware checks on one clean candidate, then release.
+Near-term development (separate from release gates):
+
+1. Implement UI-1, then UI-2 from the [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+2. Keep the nested scan-root and download-extension fixes as separate changes, without expanding the UI scope.
+
+Release acceptance priorities:
+
+1. Validate ALSA and resource use on one clean candidate; complete target-device, UPnP and Diretta CUE checks.
+2. Complete Folder Browser NAS/USB, large-directory and materials acceptance, including the new scan/query paths.
+3. Complete five-provider, ListenBrainz, responsive Web and multi-Control long-run acceptance.
+4. Keep Node as the default release baseline; evaluate Bun separately after target-device acceptance.
+5. Run install, upgrade, rollback and final hardware checks against one fixed candidate, then release.
 
 ## Product scope
 
@@ -145,6 +172,8 @@ and stricter browser-origin controls require a later accepted product requiremen
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | [Atom Completed](./atom-completed.md)                                                              | Confirmed implementation and bounded acceptance history |
 | [Development guide](./atom-development.md)                                                         | Environment, checks and conventions                     |
+| [Upstream UI adoption plan](../upstream-ui-adoption-plan.md) (Chinese only)                        | Planned UI batches and independent fixes                |
+| [Node/Bun runtime comparison](../bun-runtime-experiment.md) (Chinese only)                         | Flavor implementation, benchmarks and limitations       |
 | [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)               | Core/Web artifacts and variants                         |
 | [Core deployment](./core-deployment.md)                                                            | systemd, durable data, install, upgrade and rollback    |
 | [GentooPlayer (OpenRC) service management](./gentooplayer-openrc.md)                               | OpenRC service development, deployment, upgrade, triage |

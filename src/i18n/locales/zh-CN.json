@@ -1220,11 +1220,12 @@
       "label": "暂停时冻结",
       "description": "暂停播放时同时停止流体背景动画"
     },
-    "coverLayout": {
-      "label": "封面布局",
-      "description": "全屏播放器封面的呈现方式",
-      "default": "默认",
-      "fullscreen": "全屏封面"
+    "playerLayout": {
+      "label": "播放页布局",
+      "description": "选择全屏播放页的呈现方式",
+      "classic": "经典",
+      "fullCover": "全屏封面",
+      "apple": "AM 风格"
     },
     "coverLyricRatio": {
       "label": "封面/歌词占比",

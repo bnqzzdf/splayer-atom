@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { createApp } from "vue";
+import piniaPersistedstate from "pinia-plugin-persistedstate";
 import { DEFAULT_SIDEBAR_NAV_GROUPS } from "@/types/settings";
 import { reconcileHiddenKeys, reconcileNavGroups, useSettingsStore } from "./settings";
 
@@ -9,6 +11,59 @@ describe("folder browse display preference", () => {
     const settings = useSettingsStore();
     expect(settings.appearance.folderBrowseSort).toBe("name");
     expect(settings.appearance.folderBrowseOrder).toBe("asc");
+  });
+});
+
+describe("player layout persistence migration", () => {
+  beforeEach(() => {
+    const entries = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    ["default", "classic"],
+    ["fullscreen", "fullCover"],
+    [undefined, "classic"],
+  ])("migrates legacy coverLayout %s into %s", (legacy, expected) => {
+    localStorage.setItem("settings", JSON.stringify({ player: { coverLayout: legacy } }));
+    const pinia = createPinia();
+    pinia.use(piniaPersistedstate);
+    createApp(() => null).use(pinia);
+    setActivePinia(pinia);
+
+    const settings = useSettingsStore();
+    expect(settings.player.layout).toBe(expected);
+    const persisted = JSON.parse(localStorage.getItem("settings") || "{}") as {
+      player?: Record<string, unknown>;
+    };
+    expect(persisted.player?.layout).toBe(expected);
+    expect(persisted.player).not.toHaveProperty("coverLayout");
+    localStorage.removeItem("settings");
+  });
+
+  it("retains the new layout rather than restoring the legacy cover preference", () => {
+    localStorage.setItem(
+      "settings",
+      JSON.stringify({ player: { layout: "apple", coverLayout: "fullscreen" } }),
+    );
+    const pinia = createPinia();
+    pinia.use(piniaPersistedstate);
+    createApp(() => null).use(pinia);
+    setActivePinia(pinia);
+
+    const settings = useSettingsStore();
+    expect(settings.player.layout).toBe("apple");
+    const persisted = JSON.parse(localStorage.getItem("settings") || "{}") as {
+      player?: Record<string, unknown>;
+    };
+    expect(persisted.player?.layout).toBe("apple");
+    expect(persisted.player).not.toHaveProperty("coverLayout");
+    localStorage.removeItem("settings");
   });
 });
 
