@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: Background Core
-    details: Node Core handles the library, queue, providers, downloads, plugins, and actual audio playback, so music keeps playing when a browser closes.
+    details: The default Node Core handles the library, queue, providers, downloads, plugins, and playback; an experimental Bun runtime flavor is also available. Music keeps playing when a browser closes.
   - title: Web Control
     details: Computers, tablets, and phones can connect to the same Core over HTTP/WebSocket and stay synchronized in real time.
   - title: HiFi outputs
@@ -27,13 +27,16 @@ features:
     details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-04
 
 ## Product boundary
 
-SPlayer Atom is adapted from SPlayer-Next and uses a **Node Core + Web Control** model. The current release target is Linux x86-64.
+SPlayer Atom is adapted from SPlayer-Next and uses a **Core + Web Control** model on Linux x86-64.
+Node is the default release baseline; Bun is an optional runtime flavor pending hardware and
+long-term stability acceptance.
 
 Continue with the [Delivery Handbook](./handbook/README.md) (project / development / operations / user / API),
 the [User Guide](./guide.md), [Build and Packaging](./build-and-packaging.md),
+[Roadmap](./atom-roadmap.md),
 [Core Deployment](./core-deployment.md), or
 [GentooPlayer / OpenRC](./gentooplayer-openrc.md).

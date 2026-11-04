@@ -2,23 +2,26 @@
 
 > Last updated: 2026-11-04
 
-The only formal product is **Linux x86-64 Node Core + Web Control**.
+This covers Linux x86-64 Core + Web Control builds. **Node is the default release baseline**;
+Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
+pending playback and release acceptance. See [Build Flavors](./build-flavors.md).
 
 ## Build targets
 
 | Target      | Command             | Output                                               |
 | ----------- | ------------------- | ---------------------------------------------------- |
 | Native      | `pnpm build:native` | `out/native/audio-engine.node`, `streaming-api.node` |
-| Node Core   | `pnpm build:core`   | `out/core/`                                          |
+| Core JS     | `pnpm build:core`   | `out/core/`                                          |
 | Web Control | `pnpm build:web`    | `out/renderer/`                                      |
 | Full build  | `pnpm build`        | all of the above                                     |
 
 ## Environment
 
 - Linux x86-64
-- **Runtime requirement**: Core validates the actual Node runtime at startup and needs at least `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2,35-39`); bundled-runtime carries its own reference Node
-- **Build requirement**: packaging any Core flavor requires the current process Node to be **exactly `24.22.2`**, for `system` and `bundled` alike (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`, `core/atom/runtime/nodeRuntime.ts:1`)
+- **Runtime requirement**: Node system packages require host Node `>=22.19.0`; Bun system packages require host Bun (project-tested `1.4.4`); bundled packages carry the selected runtime
+- **Build requirement**: packaging **any** flavor requires the build-process Node to be **exactly `24.22.2`**; Bun flavors additionally require Bun (pinned to `1.4.4`)
 - pnpm `>=10`
+- `mise.toml` pins Node `24.22.2` / Bun `1.4.4`; `mise install` can provision both
 - Rust stable
 - ALSA headers, Clang, pkg-config
 - `libarchive-tools`: needed only by the CI dependency install line (`.github/workflows/dev.yml:54`); no repository script uses it (packaging and extraction both use GNU `tar`), so local builds can omit it
@@ -45,12 +48,27 @@ Bundled runtime:
 pnpm package:core:bundled
 ```
 
+Experimental Bun flavor:
+
+```bash
+pnpm package:core:bun          # system-runtime
+pnpm package:core:bun:bundled  # bundled-runtime
+```
+
+All four commands share `scripts/atom/build-core-system.ts`. Use `--runtime=node|bun` and
+`--bundle-runtime` directly, or `ATOM_BUN_BIN` to select Bun. Legacy `--bundle-node`
+remains an alias for Node bundled.
+
 Artifacts:
 
 ```text
 out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz
 out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz
 ```
+
+These are Node filenames; Bun adds `-bun` immediately before `-system` or `-bundled`.
+Bundled Bun uses `runtime/bin/bun`. See the [runtime comparison](../bun-runtime-experiment.md)
+(Chinese only) for limitations and why Bun is not yet a formal release artifact.
 
 The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
 Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible build **content** is required; set `ATOM_BUILD_TIME=HHMMSS`
@@ -151,7 +169,9 @@ on the remote, so a tag always points at a commit that is findable in the shared
 - `atomCommit`
 - `sourceDirty`
 - platform / arch
-- Node range/reference/bundled state (`nodeRange` / `nodeReference` / `nodeBundled`)
+- Node compatibility/build reference (`nodeRange` / `nodeReference`) and embedded runtime flags
+  (`nodeBundled` / `bunBundled`)
+- `runtime.name/version/pluginHost`: runtime flavor, version and plugin Host flavor
 - `betterSqlite3`: the `better-sqlite3` version actually staged into the artifact
 - Core protocol version
 - data schema versions
@@ -218,7 +238,7 @@ chain. The checks include:
 - Core `/api/info`, session, library, cache
 - the Web root page
 - startup / SIGTERM
-- whether bundled-runtime really uses the Node inside the package
+- whether bundled-runtime really uses its embedded Node or Bun; Bun plugin Host IPC
 
 ## CI
 

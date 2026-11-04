@@ -2,23 +2,26 @@
 
 > 最后更新：2026-11-04
 
-本文描述当前唯一正式产品：**Linux x86-64 Node Core + Web Control**。
+本文描述 Linux x86-64 Core + Web Control 的构建。**Node 是默认正式基线**；
+Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
+运行时与部署方式的组合见[构建面](./build-flavors.md)。
 
 ## 构建面
 
 | 目标        | 命令                | 输出                                                 |
 | ----------- | ------------------- | ---------------------------------------------------- |
 | Native      | `pnpm build:native` | `out/native/audio-engine.node`, `streaming-api.node` |
-| Node Core   | `pnpm build:core`   | `out/core/`                                          |
+| Core JS     | `pnpm build:core`   | `out/core/`                                          |
 | Web Control | `pnpm build:web`    | `out/renderer/`                                      |
 | 全量        | `pnpm build`        | 上述全部                                             |
 
 ## 环境
 
 - Linux x86-64
-- **运行时要求**：Core 在启动时校验实际 Node runtime，最低 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2,35-39`）；bundled-runtime 自带 reference Node
-- **构建要求**：打包任何 flavor 的 Core 产物都要求当前进程 Node **恰好为 `24.22.2`**，`system` 与 `bundled` 都不例外（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`、`core/atom/runtime/nodeRuntime.ts:1`）
+- **运行时要求**：Node system 包需要系统 Node `>=22.19.0`；Bun system 包需要系统 Bun（项目使用 `1.4.4`）；bundled 包自带所选运行时
+- **构建要求**：打包任一 Flavor 时构建进程的 Node **必须恰好为 `24.22.2`**；构建 Bun Flavor 还需 Bun（项目固定 `1.4.4`）
 - pnpm `>=10`
+- `mise.toml` 固定 Node `24.22.2` / Bun `1.4.4`，可使用 `mise install` 准备工具链
 - Rust stable
 - ALSA headers、Clang、pkg-config
 - `libarchive-tools`：仅 CI 的依赖安装行需要（`.github/workflows/dev.yml:54`）；仓库脚本没有使用它（打包与解包都用 GNU `tar`），本地构建可以省略
@@ -45,12 +48,27 @@ bundled-runtime：
 pnpm package:core:bundled
 ```
 
+实验性 Bun Flavor：
+
+```bash
+pnpm package:core:bun          # system-runtime
+pnpm package:core:bun:bundled  # bundled-runtime
+```
+
+四种命令统一调用 `scripts/atom/build-core-system.ts`；可使用
+`--runtime=node|bun`、`--bundle-runtime`，或设置 `ATOM_BUN_BIN` 指定 Bun。
+旧参数 `--bundle-node` 仍保留为 Node bundled 的别名。
+
 输出：
 
 ```text
 out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz
 out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz
 ```
+
+以上是 Node 文件名；Bun 在 `-system` 或 `-bundled` 前插入 `-bun`。
+Bun 的包内运行时为 `runtime/bin/bun`；具体限制及非正式发布状态见
+[Node/Bun 运行时对照](./bun-runtime-experiment.md)。
 
 版本号来自 `package.json`，日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`。需要**内容**可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。
 
@@ -118,7 +136,8 @@ pnpm release:tag --dry-run  # 只做检查，不落标签
 - `atomCommit`
 - `sourceDirty`
 - platform / arch
-- Node range/reference/bundled 状态（`nodeRange` / `nodeReference` / `nodeBundled`）
+- Node 兼容范围/构建版本（`nodeRange` / `nodeReference`）与运行时携带状态（`nodeBundled` / `bunBundled`）
+- `runtime.name/version/pluginHost`：实际运行时 Flavor、版本与插件 Host Flavor
 - `betterSqlite3`：staging 时实际打包的 `better-sqlite3` 版本
 - Core protocol version
 - data schema versions
@@ -172,7 +191,7 @@ Diretta SDK 148 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本�
 - Core `/api/info`、session、library、cache
 - Web 根页
 - startup / SIGTERM
-- bundled-runtime 是否真正使用包内 Node
+- bundled-runtime 是否真正使用包内选定的 Node 或 Bun；Bun Flavor 的插件 Host IPC
 
 ## CI
 

@@ -2,7 +2,17 @@
 
 > Last updated: 2026-11-04
 
-SPlayer Atom has two deployment variants: system-runtime and bundled-runtime.
+SPlayer Atom's Core artifacts combine three independent dimensions:
+
+- **Runtime flavor**: `node` (default release baseline) or `bun` (experimental).
+- **Deployment**: `system-runtime` (use a host runtime) or `bundled-runtime` (ship the runtime).
+- **Audio capability / CPU**: without Diretta, or SDK 148 with an explicit `v2` / `v3` /
+  `v4` / `zen4` CPU variant.
+
+Node and Bun share the Core JS, Web, native addons, protocol and data schema, along with the
+build, staging, artifact smoke and `bin/splayer-atom-core` launcher. They are not two Core
+implementations. `mise.toml` pins build-time Node `24.22.2` and optional Bun `1.4.4`
+(`mise install`).
 
 ## Core native flavor
 
@@ -61,15 +71,30 @@ On 2026-09-23, no-Diretta and Diretta v3 packages passed software smoke from a d
 This does not establish a clean release artifact or Diretta Target playback; v2/v4 were not built
 in that run.
 
+## Runtime × deployment
+
+| Runtime            | system-runtime          | bundled-runtime                 |
+| ------------------ | ----------------------- | ------------------------------- |
+| Node (default)     | `pnpm package:core`     | `pnpm package:core:bundled`     |
+| Bun (experimental) | `pnpm package:core:bun` | `pnpm package:core:bun:bundled` |
+
+All commands use `scripts/atom/build-core-system.ts` with `--runtime=node|bun` and
+`--bundle-runtime`. Legacy `--bundle-node` remains valid for Node bundled. Set
+`ATOM_BUN_BIN` to provide a custom Bun executable. Every flavor is **built** using Node
+`24.22.2`, even when the packaged Core runs on Bun.
+
 ## system-runtime
 
 ```bash
 pnpm package:core
 ```
 
-Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`.
+Node produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`.
+The Bun artifact adds `-bun` before `-system`.
 
-At **runtime** that artifact requires a system Node `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2`). This differs from the **build** requirement: packaging any flavor requires the build process Node to be **exactly `24.22.2`** (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`).
+Node system-runtime requires host Node `>=22.19.0` at **runtime**. Bun system-runtime
+requires an available Bun (the project-tested version is `1.4.4`). This is different from the
+Node `24.22.2` **build** requirement shared by all flavors.
 
 ## bundled-runtime
 
@@ -77,6 +102,13 @@ At **runtime** that artifact requires a system Node `>=22.19.0` (`core/atom/runt
 pnpm package:core:bundled
 ```
 
-Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-bundled-linux-x64.tar.gz` and carries the reference Node runtime used for the build.
+Node bundled ships `runtime/bin/node`; Bun bundled ships `runtime/bin/bun` and inserts
+`-bun` before `-bundled` in the artifact filename. Neither requires that runtime to be
+installed separately on the target. `runtime.json` records `runtime.name/version/pluginHost`,
+`nodeBundled` and `bunBundled`. A `runtime/bun` marker selects Bun in the shared launcher.
 
-Both variants contain the same Core JS, Web Control, native addons, protocol version and data schema.
+The [runtime comparison](../bun-runtime-experiment.md) (Chinese only) records the bounded
+empty-library API benchmark, separate-process plugin Host and limitations. A VM Context is not
+a security sandbox for malicious plugins. Bun still needs target-hardware, prolonged playback,
+plugin, distribution and upgrade acceptance; it is not yet a formal release artifact. Review
+the Bun license and statically linked component obligations before redistributing bundled Bun.
