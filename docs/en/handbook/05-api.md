@@ -1,6 +1,6 @@
 # SPlayer Atom API Reference
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-04
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -127,9 +127,9 @@ Returns `CoreInfo`:
   "sourceDirty": false,
   "platform": "linux",
   "arch": "x64",
-  "node": "24.18.0",
+  "node": "24.22.2",
   "nodeRange": ">=22.19.0",
-  "nodeReference": "24.18.0",
+  "nodeReference": "24.22.2",
   "direttaSdkRelease": 148,
   "protocol": { "version": 1 },
   "capabilities": {

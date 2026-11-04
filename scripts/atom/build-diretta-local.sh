@@ -10,8 +10,8 @@ if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ "$(node -p 'process.versions.node')" != "24.18.0" ]; then
-  echo "[Diretta] 要求使用 Node.js 24.18.0，当前为 $(node --version)" >&2
+if [ "$(node -p 'process.versions.node')" != "24.22.2" ]; then
+  echo "[Diretta] 要求使用 Node.js 24.22.2，当前为 $(node --version)" >&2
   exit 1
 fi
 

@@ -5,7 +5,7 @@
 
 | 文件         | 作用                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `Dockerfile` | 构建镜像：Debian 11 (bullseye, glibc 2.31) + build-essential/clang/llvm + Node 24.18.0 + pnpm 11.5.2 + Rust stable |
+| `Dockerfile` | 构建镜像：Debian 11 (bullseye, glibc 2.31) + build-essential/clang/llvm + Node 24.22.2 + pnpm 11.5.2 + Rust stable |
 | `build.sh`   | **在容器内**跑的构建脚本：装依赖 → 编 native → 打产物 → 校验 glibc 与 Diretta 能力位                               |
 
 宿主侧的入口是 `scripts/atom/build-debian11-bundled.sh`（`pnpm package:core:debian11`），

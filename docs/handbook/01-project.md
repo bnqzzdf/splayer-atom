@@ -1,6 +1,6 @@
 # SPlayer Atom 项目书
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-04
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -304,7 +304,7 @@ Atom 不提供删除音乐文件的命令或 UI。所有清理只针对 Atom 自
 | 层 | 技术 | 版本/说明 |
 | --- | --- | --- |
 | Web | Vue 3、Vue Router 5、Pinia 4、vue-i18n 11 | Vite 7、UnoCSS、Reka UI |
-| Core | Node.js、TypeScript、Hono、ws、better-sqlite3、zod | Node `>=22.19.0`，打包参考 `24.18.0` |
+| Core | Node.js、TypeScript、Hono、ws、better-sqlite3、zod | Node `>=22.19.0`，打包参考 `24.22.2` |
 | 原生 | Rust、N-API、ffmpeg_audio、ALSA、lofty | workspace 四个 crate；CI 固定 Rust 1.98.0 |
 | 数据库 | SQLite WAL | `library.db`，schema 8 |
 | 测试 | Node test runner、Vitest + happy-dom、cargo test | `pnpm test`、`pnpm test:native` |

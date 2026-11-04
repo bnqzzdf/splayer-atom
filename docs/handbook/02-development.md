@@ -1,6 +1,6 @@
 # SPlayer Atom 开发手册
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-04
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -29,7 +29,7 @@ SPlayer Atom 是“一个 Core、多种客户端”的结构：
 | 组件 | 版本/说明 |
 | --- | --- |
 | Linux x86-64 | 原生模块只在 Linux 编译 |
-| Node.js | 日常开发 `>=22.19.0`；打包必须 **24.18.0** |
+| Node.js | 日常开发 `>=22.19.0`；打包必须 **24.22.2** |
 | pnpm | `>=10`，仓库锁定 `11.5.2` |
 | Rust | stable；CI 固定 `1.98.0` |
 | ALSA 开发头 | `libasound2-dev` |
@@ -52,7 +52,7 @@ pnpm install
 ### 2.3 版本契约
 
 - 运行时最低 Node：`>=22.19.0`（`core/atom/runtime/nodeRuntime.ts`）。
-- 发布参考 Node：`24.18.0`。
+- 发布参考 Node：`24.22.2`。
 - Core JS 的 Vite target 是 `node24`，但运行下限声明为 `22.19`。在 Node 22.19 上运行产物前，应先做一次启动烟测。
 - 数据库 schema：`8`；配置 schema：`3`；Core Protocol：`1`。
 
@@ -524,7 +524,7 @@ pnpm test:all
 
 ### 11.2 打包前置
 
-- 打包脚本要求 Node **24.18.0**（system 与 bundled 都一样）。
+- 打包脚本要求 Node **24.22.2**（system 与 bundled 都一样）。
 - 默认发布构建要求提交已推送到网络远端且工作树干净。
 - 本地试验可用 `--allow-unpublished`，但产物仍标记未发布身份。
 - Diretta 构建要求 `DIRETTA_SDK_ROOT` 指向 SDK 148，且选择 `v2|v3|v4|zen4`。

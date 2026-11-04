@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-04
 
 **简体中文** · [English](./README.en.md)
 
@@ -49,7 +49,7 @@ sudo systemctl enable --now splayer-atom-core
 需要：
 
 - Linux x86-64
-- Node.js 24.18.0（打包脚本会校验版本；日常开发 `>=22.19.0` 即可）
+- Node.js 24.22.2（打包脚本会校验版本；日常开发 `>=22.19.0` 即可）
 - pnpm `>=10`
 - Rust stable
 - ALSA 开发头文件、Clang、pkg-config

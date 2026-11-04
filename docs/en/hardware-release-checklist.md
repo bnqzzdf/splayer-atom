@@ -1,6 +1,6 @@
 # SPlayer Atom hardware release checklist
 
-> Last updated: 2026-10-03
+> Last updated: 2026-11-04
 
 This document records the manual acceptance steps for a target audio host. Source builds, fixtures and
 fake ALSA/Diretta cannot replace functional verification on the actual output device; DAC-side
@@ -99,7 +99,7 @@ native features, Diretta SDK and the verified source path are consistent.
 ## 1. Prerequisites
 
 - Use a Linux x86-64 Core `tar.gz` built from a clean checkout that has passed the final-artifact smoke.
-- Formal builds use reference Node `24.18.0`; the minimum requirement for running under system-runtime is Node `22.19.0`, and bundled-runtime must confirm that the actual process uses the Node inside the package.
+- Formal builds use reference Node `24.22.2`; the minimum requirement for running under system-runtime is Node `22.19.0`, and bundled-runtime must confirm that the actual process uses the Node inside the package.
 - A Diretta-branded artifact must record `diretta=true`, `direttaSdkRelease=148`, and be produced by the controlled SDK 148 gate.
 - ALSA acceptance uses an explicit real `alsa:hw:*` device and does not substitute `default`, PipeWire or PulseAudio.
 - The Linux Diretta Host Core runs as root; a normal user discovering a Target does not mean it has permission to connect.

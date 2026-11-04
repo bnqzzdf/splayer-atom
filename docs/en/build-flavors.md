@@ -1,6 +1,6 @@
 # SPlayer Atom Build Flavors
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-04
 
 SPlayer Atom has two deployment variants: system-runtime and bundled-runtime.
 
@@ -69,7 +69,7 @@ pnpm package:core
 
 Produces `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`.
 
-At **runtime** that artifact requires a system Node `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2`). This differs from the **build** requirement: packaging any flavor requires the build process Node to be **exactly `24.18.0`** (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`).
+At **runtime** that artifact requires a system Node `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2`). This differs from the **build** requirement: packaging any flavor requires the build process Node to be **exactly `24.22.2`** (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`).
 
 ## bundled-runtime
 

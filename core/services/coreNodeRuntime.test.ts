@@ -13,9 +13,19 @@ const coreInfoSource = readFileSync(
   "utf8",
 );
 
-test("Core runtime policy pins Node 24.18.0 as the release reference", () => {
-  assert.equal(CORE_NODE_REFERENCE, "24.18.0");
+test("Core runtime policy pins Node 24.22.2 across build environments", () => {
+  assert.equal(CORE_NODE_REFERENCE, "24.22.2");
   assert.equal(CORE_NODE_RANGE, ">=22.19.0");
+  const buildVersions = [
+    ["../../mise.toml", /^node = "([\d.]+)"$/m],
+    ["../../.github/workflows/dev.yml", /^  NODE_VERSION: ([\d.]+)$/m],
+    ["../../docker/atom-debian11/Dockerfile", /^ARG NODE_VERSION=([\d.]+)$/m],
+    ["../../scripts/atom/build-diretta-local.sh", /!= "([\d.]+)"/],
+  ] as const;
+  for (const [file, pattern] of buildVersions) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.equal(source.match(pattern)?.[1], CORE_NODE_REFERENCE, file);
+  }
 });
 
 test("Core accepts Node 22.19 and newer while keeping a separate release reference", () => {

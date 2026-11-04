@@ -1,6 +1,6 @@
 # SPlayer Atom 程序接口文档
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-04
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -127,9 +127,9 @@ Core 没有统一错误 envelope。客户端必须按端点处理：
   "sourceDirty": false,
   "platform": "linux",
   "arch": "x64",
-  "node": "24.18.0",
+  "node": "24.22.2",
   "nodeRange": ">=22.19.0",
-  "nodeReference": "24.18.0",
+  "nodeReference": "24.22.2",
   "direttaSdkRelease": 148,
   "protocol": { "version": 1 },
   "capabilities": {

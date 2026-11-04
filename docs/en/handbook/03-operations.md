@@ -1,6 +1,6 @@
 # SPlayer Atom Operations Manual
 
-> Last updated: 2026-10-26
+> Last updated: 2026-10-30
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >

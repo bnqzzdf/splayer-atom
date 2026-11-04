@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-10-03
+> Last updated: 2026-11-04
 
 The only formal product is **Linux x86-64 Node Core + Web Control**.
 
@@ -17,7 +17,7 @@ The only formal product is **Linux x86-64 Node Core + Web Control**.
 
 - Linux x86-64
 - **Runtime requirement**: Core validates the actual Node runtime at startup and needs at least `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts:2,35-39`); bundled-runtime carries its own reference Node
-- **Build requirement**: packaging any Core flavor requires the current process Node to be **exactly `24.18.0`**, for `system` and `bundled` alike (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`, `core/atom/runtime/nodeRuntime.ts:1`)
+- **Build requirement**: packaging any Core flavor requires the current process Node to be **exactly `24.22.2`**, for `system` and `bundled` alike (`scripts/atom/build-core-system.ts:34`, `scripts/atom/stage-core-system.ts:88`, `core/atom/runtime/nodeRuntime.ts:1`)
 - pnpm `>=10`
 - Rust stable
 - ALSA headers, Clang, pkg-config
@@ -222,7 +222,7 @@ chain. The checks include:
 
 ## CI
 
-`.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.18.0`
+`.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.22.2`
 and Rust stable. The workflow runs `pnpm typecheck`, `pnpm test`, `pnpm build`, and
 `pnpm package:core` in order, then uploads
 `out/splayer-atom-core-*-system-linux-x64.tar.gz` with `actions/upload-artifact`

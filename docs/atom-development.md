@@ -1,6 +1,6 @@
 # SPlayer Atom 开发环境
 
-> 最后更新：2026-10-25
+> 最后更新：2026-11-04
 
 项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
 开发工作流与约定。
@@ -13,8 +13,8 @@
 - Linux x86-64
 - `libasound2-dev`、`pkg-config`、`clang`（`libarchive-tools` 只有 CI 的依赖安装行需要，本地构建可省略）
 
-正式构建与 bundled-runtime 产物使用 reference Node `24.18.0`。运行时支持范围与发布参考版本定义在
-`core/atom/runtime/nodeRuntime.ts`。
+正式构建与 bundled-runtime 产物使用 reference Node `24.22.2`。运行时支持范围与发布参考版本定义在
+`core/atom/runtime/nodeRuntime.ts`。仓库的 `mise.toml` 固定相同版本，运行 `mise install` 后即可使用。
 
 ## 开始开发
 

@@ -1,6 +1,6 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-10-20
+> 最后更新：2026-11-04
 
 本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
 
@@ -11,9 +11,9 @@
 ## 运行期约定
 
 - Core 要求 Node `>=22.19.0`。
-- 发布 / 参考版本校验使用 Node `24.18.0`。
+- 发布 / 参考版本校验使用 Node `24.22.2`。
 - system-runtime 与 bundled-runtime 变体执行同一套 Core JS / 原生 / 协议约定。
-- bundled-runtime 在 `runtime/bin/node` 内携带发布参考版本 Node `24.18.0`；system-runtime 要求宿主机提供 Node `>=22.19.0`。
+- bundled-runtime 在 `runtime/bin/node` 内携带发布参考版本 Node `24.22.2`；system-runtime 要求宿主机提供 Node `>=22.19.0`。
 - 当前生产产物仅支持 Linux x86-64。硬件支持范围仍取决于发布验收矩阵。
 - Core HTTP/WS 只接受同源浏览器请求（拒绝跨站 `Origin`），`Host` 仅放行 IP、`localhost`、无点主机名与 `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`；
   经反向代理或自有域名访问时，用逗号分隔的 `ATOM_ALLOWED_HOSTS`（如 `music.example.com`）显式放行。

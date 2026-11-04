@@ -1,6 +1,6 @@
 # SPlayer Atom 硬件发布验收清单
 
-> 最后更新：2026-10-03
+> 最后更新：2026-11-04
 
 本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
 实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。
@@ -81,7 +81,7 @@ Diretta SDK 与已验证源码路径一致。
 ## 1. 前置条件
 
 - 使用从干净 checkout 生成并已通过 final-artifact smoke 的 Linux x86-64 Core `tar.gz`。
-- 正式构建使用 reference Node `24.18.0`；system-runtime 运行最低要求为 Node `22.19.0`，bundled-runtime 必须确认实际进程使用包内 Node。
+- 正式构建使用 reference Node `24.22.2`；system-runtime 运行最低要求为 Node `22.19.0`，bundled-runtime 必须确认实际进程使用包内 Node。
 - Diretta-branded artifact 必须记录 `diretta=true`、`direttaSdkRelease=148`，并由受控 SDK 148 gate 生成。
 - ALSA 验收使用明确的真实 `alsa:hw:*` device，不以 `default`、PipeWire 或 PulseAudio 代替。
 - Linux Diretta Host Core 以 root 运行；普通用户发现到 Target 不代表具备连接权限。

@@ -1,6 +1,6 @@
 # SPlayer Atom 构建面（Build Flavors）
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-04
 
 SPlayer Atom 有两个部署变体：system-runtime 与 bundled-runtime。
 
@@ -65,7 +65,7 @@ pnpm package:core
 
 产出 `splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-system-linux-x64.tar.gz`。
 
-该产物在**运行**时要求系统 Node 满足 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2`）。这与**构建**要求不同：打包任何 flavor 都要求构建进程的 Node **恰好为 `24.18.0`**（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`）。
+该产物在**运行**时要求系统 Node 满足 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2`）。这与**构建**要求不同：打包任何 flavor 都要求构建进程的 Node **恰好为 `24.22.2`**（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`）。
 
 ## bundled-runtime
 

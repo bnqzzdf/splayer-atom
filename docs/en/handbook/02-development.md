@@ -1,6 +1,6 @@
 # SPlayer Atom Development Manual
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-04
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -29,7 +29,7 @@ Two rules matter most:
 | Component | Version/notes |
 | --- | --- |
 | Linux x86-64 | Native modules compile only on Linux |
-| Node.js | `>=22.19.0` for development; packaging requires **24.18.0** |
+| Node.js | `>=22.19.0` for development; packaging requires **24.22.2** |
 | pnpm | `>=10`; repository pins `11.5.2` |
 | Rust | stable; CI pins `1.98.0` |
 | ALSA headers | `libasound2-dev` |
@@ -52,7 +52,7 @@ pnpm install
 ### 2.3 Version contract
 
 - Runtime floor: Node `>=22.19.0` (`core/atom/runtime/nodeRuntime.ts`).
-- Release reference Node: `24.18.0`.
+- Release reference Node: `24.22.2`.
 - The Core JS Vite target is `node24`, while the declared runtime floor is `22.19`. Smoke-test on Node 22.19 before shipping an artifact intended for it.
 - Database schema: `8`; config schema: `3`; Core Protocol: `1`.
 
@@ -522,7 +522,7 @@ A new assertion script must fail on the **unpatched** code before it passes on t
 
 ### 11.2 Packaging prerequisites
 
-- Packaging requires Node **24.18.0** (both system and bundled).
+- Packaging requires Node **24.22.2** (both system and bundled).
 - The default release build requires the commit to be pushed to a network remote and the worktree clean.
 - Local experiments may use `--allow-unpublished`, but the artifact remains marked unpublished.
 - Diretta builds require `DIRETTA_SDK_ROOT` pointing at SDK 148 and a `v2|v3|v4|zen4` variant.

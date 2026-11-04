@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-04
 
 [简体中文](./README.md) · **English**
 
@@ -49,7 +49,7 @@ Then open `http://<host IP>:14558` in a browser.
 Requirements:
 
 - Linux x86-64
-- Node.js 24.18.0 (the packaging script checks the version; `>=22.19.0` is enough for development)
+- Node.js 24.22.2 (the packaging script checks the version; `>=22.19.0` is enough for development)
 - pnpm `>=10`
 - Rust stable
 - ALSA development headers, Clang, pkg-config

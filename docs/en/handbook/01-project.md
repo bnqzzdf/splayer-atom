@@ -1,6 +1,6 @@
 # SPlayer Atom Project Book
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-04
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -304,7 +304,7 @@ Atom provides no command or UI for deleting music files. All cleanup is limited 
 | Layer | Technology | Version/notes |
 | --- | --- | --- |
 | Web | Vue 3, Vue Router 5, Pinia 4, vue-i18n 11 | Vite 7, UnoCSS, Reka UI |
-| Core | Node.js, TypeScript, Hono, ws, better-sqlite3, zod | Node `>=22.19.0`, packaging reference `24.18.0` |
+| Core | Node.js, TypeScript, Hono, ws, better-sqlite3, zod | Node `>=22.19.0`, packaging reference `24.22.2` |
 | Native | Rust, N-API, ffmpeg_audio, ALSA, lofty | Four workspace crates; CI pins Rust 1.98.0 |
 | Database | SQLite WAL | `library.db`, schema 8 |
 | Tests | Node test runner, Vitest + happy-dom, cargo test | `pnpm test`, `pnpm test:native` |

@@ -1,6 +1,6 @@
 # SPlayer Atom Development Setup
 
-> Last updated: 2026-10-15
+> Last updated: 2026-11-04
 
 Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
 live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.
@@ -13,8 +13,9 @@ live in the [roadmap](./atom-roadmap.md). This guide covers development workflow
 - Linux x86-64
 - `libasound2-dev`, `pkg-config`, `clang` (`libarchive-tools` is only needed by the CI dependency install line; local builds can omit it)
 
-Formal builds and bundled-runtime artifacts use reference Node `24.18.0`. The runtime support
-range and release reference are defined in `core/atom/runtime/nodeRuntime.ts`.
+Formal builds and bundled-runtime artifacts use reference Node `24.22.2`. The runtime support
+range and release reference are defined in `core/atom/runtime/nodeRuntime.ts`. The repository's
+`mise.toml` pins the same version; run `mise install` to use it.
 
 ## Start development
 

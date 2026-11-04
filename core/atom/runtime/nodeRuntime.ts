@@ -1,4 +1,4 @@
-export const CORE_NODE_REFERENCE = "24.18.0";
+export const CORE_NODE_REFERENCE = "24.22.2";
 export const CORE_NODE_RANGE = ">=22.19.0";
 
 interface NodeVersion {
@@ -30,7 +30,7 @@ export const isSupportedCoreNodeRuntime = (version: string): boolean => {
 
 /**
  * 在任何 Core database/native/plugin 模块加载前验证实际 Node runtime。
- * 支持范围与 reference runtime 分离：运行最低要求 Node 22.19，release 门禁固定 24.18.0。
+ * 支持范围与 reference runtime 分离：运行最低要求 Node 22.19，release 门禁固定 24.22.2。
  */
 export const assertSupportedCoreNodeRuntime = (version = process.versions.node): void => {
   if (isSupportedCoreNodeRuntime(version)) return;

@@ -1,6 +1,6 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-10-03
+> 最后更新：2026-11-04
 
 本文描述当前唯一正式产品：**Linux x86-64 Node Core + Web Control**。
 
@@ -17,7 +17,7 @@
 
 - Linux x86-64
 - **运行时要求**：Core 在启动时校验实际 Node runtime，最低 `>=22.19.0`（`core/atom/runtime/nodeRuntime.ts:2,35-39`）；bundled-runtime 自带 reference Node
-- **构建要求**：打包任何 flavor 的 Core 产物都要求当前进程 Node **恰好为 `24.18.0`**，`system` 与 `bundled` 都不例外（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`、`core/atom/runtime/nodeRuntime.ts:1`）
+- **构建要求**：打包任何 flavor 的 Core 产物都要求当前进程 Node **恰好为 `24.22.2`**，`system` 与 `bundled` 都不例外（`scripts/atom/build-core-system.ts:34`、`scripts/atom/stage-core-system.ts:88`、`core/atom/runtime/nodeRuntime.ts:1`）
 - pnpm `>=10`
 - Rust stable
 - ALSA headers、Clang、pkg-config
@@ -176,7 +176,7 @@ Diretta SDK 148 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本�
 
 ## CI
 
-`.github/workflows/dev.yml` 在 `ubuntu-24.04` Linux x86-64 环境中使用 Node `24.18.0`
+`.github/workflows/dev.yml` 在 `ubuntu-24.04` Linux x86-64 环境中使用 Node `24.22.2`
 与 Rust stable 构建 Core/Web。该 workflow 依次执行 `pnpm typecheck`、`pnpm test`、
 `pnpm build`、`pnpm package:core`，并用 `actions/upload-artifact` 上传
 `out/splayer-atom-core-*-system-linux-x64.tar.gz`（`.github/workflows/dev.yml:62-78`）。

@@ -1,6 +1,6 @@
 # SPlayer Atom Core Deployment and Upgrade
 
-> Last updated: 2026-10-20
+> Last updated: 2026-11-04
 
 This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
 
@@ -12,9 +12,9 @@ start/stop commands differ. See [GentooPlayer (OpenRC) Service Management](./gen
 ## Runtime contract
 
 - Core requires Node `>=22.19.0`.
-- Release/reference validation uses Node `24.18.0`.
+- Release/reference validation uses Node `24.22.2`.
 - The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
-- Bundled-runtime carries the exact release reference Node `24.18.0` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
+- Bundled-runtime carries the exact release reference Node `24.22.2` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
 - The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
 - Core HTTP/WS only accepts same-origin browser requests (cross-site `Origin` is rejected), and `Host` is limited to IPs, `localhost`, dotless hostnames and `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`;
   when serving through a reverse proxy or your own domain, allow it explicitly with a comma-separated `ATOM_ALLOWED_HOSTS` (for example `music.example.com`).

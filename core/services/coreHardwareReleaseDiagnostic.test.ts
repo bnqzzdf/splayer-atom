@@ -45,9 +45,9 @@ const responses = {
     sourceDirty: false,
     platform: "linux",
     arch: "x64",
-    node: "24.18.0",
+    node: "24.22.2",
     nodeRange: ">=22.19.0",
-    nodeReference: "24.18.0",
+    nodeReference: "24.22.2",
     protocol: { version: 1 },
     capabilities: {
       library: true,
