@@ -1,6 +1,7 @@
 import { fork } from "node:child_process";
 import path from "node:path";
 import { decodePluginIpc, encodePluginIpc } from "./pluginIpc";
+import { spawnSandboxedBunPluginHost } from "./bunPluginSandbox";
 
 export interface RuntimePluginHostStream {
   on: (event: "data", listener: (chunk: Buffer) => void) => unknown;
@@ -29,17 +30,13 @@ export const pluginHostExecArgv = (entry: string): string[] => [
 
 const spawnNodePluginHost: RuntimePluginHostSpawner = (entry) => {
   const bunParent = Boolean(process.versions.bun);
-  const child = fork(entry, [], {
-    stdio: ["ignore", "pipe", "pipe", "ipc"],
-    serialization: bunParent ? "json" : "advanced",
-    execArgv: pluginHostExecArgv(entry),
-    ...(bunParent
-      ? {
-          execPath: process.env.ATOM_PLUGIN_HOST_NODE_BIN || "node",
-          env: { ...process.env, ATOM_PLUGIN_IPC_JSON: "1" },
-        }
-      : {}),
-  });
+  const child = bunParent
+    ? spawnSandboxedBunPluginHost(entry)
+    : fork(entry, [], {
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+        serialization: "advanced",
+        execArgv: pluginHostExecArgv(entry),
+      });
   return {
     stdout: child.stdout,
     stderr: child.stderr,

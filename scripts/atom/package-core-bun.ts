@@ -36,9 +36,19 @@ cpSync(
 );
 chmodSync(path.join(stagedBun, "bin/splayer-atom-core"), 0o755);
 
+const stagedEntry = path.join(stagedBun, "app/plugin-host.js");
+const stagedSmoke = spawnSync(bunBinary, ["scripts/atom/check-bun-plugin-ipc.ts"], {
+  cwd: root,
+  encoding: "utf8",
+  env: { ...process.env, ATOM_PLUGIN_HOST_ENTRY: stagedEntry },
+});
+if (stagedSmoke.error || stagedSmoke.status !== 0 || stagedSmoke.signal) {
+  throw new Error(`Bun staged plugin host smoke failed: ${stagedSmoke.error?.message ?? ""}\n${stagedSmoke.stdout ?? ""}${stagedSmoke.stderr ?? ""}`);
+}
+
 const runtimeFile = path.join(stagedBun, "runtime.json");
 const runtime = JSON.parse(readFileSync(runtimeFile, "utf8")) as Record<string, unknown>;
-runtime.runtime = { name: "bun", version: bunVersion, pluginHost: "node" };
+runtime.runtime = { name: "bun", version: bunVersion, pluginHost: "bun-bwrap" };
 runtime.nodeBundled = false;
 runtime.bunBundled = false;
 writeFileSync(runtimeFile, `${JSON.stringify(runtime, null, 2)}\n`);
@@ -48,4 +58,4 @@ const archive = path.join(root, "out", fileName);
 rmSync(archive, { force: true });
 run("tar", ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", "-czf", archive, "."], stagedBun);
 console.log(`[BunPackage] PASS ${archive}`);
-console.log(`[BunPackage] Requires Bun ${bunVersion} and system Node >=22.19.0 for the plugin host`);
+console.log(`[BunPackage] Requires Bun ${bunVersion} and bubblewrap (unprivileged namespaces and seccomp)`);

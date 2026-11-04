@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { performance } from "node:perf_hooks";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const nodeBinary = process.env.ATOM_PLUGIN_HOST_NODE_BIN || process.execPath;
+const nodeBinary = process.env.ATOM_NODE_BIN || process.execPath;
 const bunBinary = process.env.ATOM_BUN_BIN || "bun";
 const rounds = Number(process.env.ATOM_BENCH_ROUNDS || 5);
 const requests = Number(process.env.ATOM_BENCH_REQUESTS || 100);
@@ -71,7 +71,6 @@ const run = async (runtime: RuntimeName): Promise<Result> => {
       ATOM_CACHE_DIR: path.join(temp, "cache"),
       ATOM_MUSIC_DIR: path.join(temp, "music"),
       ATOM_NODE_BIN: nodeBinary,
-      ATOM_PLUGIN_HOST_NODE_BIN: nodeBinary,
       ATOM_BUN_BIN: bunBinary,
       ATOM_SERVER_PORT: String(port),
     },
