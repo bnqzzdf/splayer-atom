@@ -230,9 +230,9 @@ const runTask = async (
     const policy = store.get("download.overwritePolicy");
 
     // skip 策略：用预估扩展名提前命中已存在文件则跳过
-    const guessExt = resolveExtension(req.declaredFormat, null, audioUrl);
+    const guessExt = resolveExtension(req.declaredFormat, null, audioUrl, null, "");
     const guessNoExt = path.join(targetDir, truncateFilename(baseName, guessExt));
-    if (policy === "skip" && fs.existsSync(`${guessNoExt}${guessExt}`)) {
+    if (policy === "skip" && guessExt && fs.existsSync(`${guessNoExt}${guessExt}`)) {
       task.status = "done";
       task.filePath = `${guessNoExt}${guessExt}`;
       task.finishedAt = Date.now();
@@ -244,6 +244,7 @@ const runTask = async (
     await fsp.mkdir(targetDir, { recursive: true });
 
     let mime: string | null = null;
+    let disposition: string | null = null;
     let total = req.declaredSize || 0;
     let received = 0;
     if (/^https?:\/\//i.test(audioUrl)) {
@@ -252,6 +253,7 @@ const runTask = async (
         throw new Error(`HTTP ${response.status}`);
       }
       mime = response.headers.get("content-type");
+      disposition = response.headers.get("content-disposition");
       if (isRejectedMime(mime)) throw new Error(`rejected mime ${mime}`);
       total = Number(response.headers.get("content-length")) || total;
       received = await streamToFile(
@@ -274,7 +276,7 @@ const runTask = async (
     if (received === 0) throw new Error("empty body");
     if (!(await looksLikeAudio(partPath))) throw new Error("not audio");
 
-    const ext = resolveExtension(req.declaredFormat, mime, audioUrl);
+    const ext = resolveExtension(req.declaredFormat, mime, audioUrl, disposition);
     const finalNoExt = path.join(targetDir, truncateFilename(baseName, ext));
     if (policy === "skip" && fs.existsSync(`${finalNoExt}${ext}`)) {
       await fsp.unlink(partPath).catch(() => {});

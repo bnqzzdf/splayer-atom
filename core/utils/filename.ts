@@ -142,22 +142,55 @@ const KNOWN_EXTS = new Set([
   ".aiff",
 ]);
 
+/** 只读取 Content-Disposition 的 filename 参数，不使用服务器文件名构造保存路径。 */
+export const extensionFromDisposition = (disposition: string | null): string | undefined => {
+  if (!disposition) return undefined;
+  const parameter = (name: string): string | undefined => {
+    const match = disposition.match(
+      new RegExp(`(?:^|;)\\s*${name}\\s*=\\s*(?:"([^"]*)"|([^;]*))`, "i"),
+    );
+    return (match?.[1] ?? match?.[2])?.trim();
+  };
+  const encoded = parameter("filename\\*");
+  if (encoded) {
+    const parts = encoded.match(/^([^']*)'[^']*'(.*)$/);
+    if (!parts || /^utf-8$/i.test(parts[1])) {
+      try {
+        const ext = path.extname(decodeURIComponent(parts ? parts[2] : encoded)).toLowerCase();
+        if (KNOWN_EXTS.has(ext)) return ext;
+      } catch {
+        // 不可信的编码退回普通 filename 参数。
+      }
+    }
+  }
+  const filename = parameter("filename");
+  if (!filename) return undefined;
+  const ext = path.extname(filename).toLowerCase();
+  return KNOWN_EXTS.has(ext) ? ext : undefined;
+};
+
 /**
  * 推断下载文件扩展名（含点）
- * 优先级：已声明格式 → Content-Type → URL 路径后缀 → 兜底 .mp3
+ * 优先级：有效声明格式 → 响应文件名 → Content-Type → URL 路径后缀 → 兜底 .mp3
  * @param declaredFormat - 已知格式（如 netease 的 flac/mp3）
  * @param contentType - 响应 Content-Type
  * @param url - 音频 URL
+ * @param contentDisposition - 响应文件名（仅取音频扩展名）
+ * @param fallback - 无格式线索时的默认值；传入空串可禁用下载前的猜测性跳过
  */
 export const resolveExtension = (
   declaredFormat: string | undefined,
   contentType: string | null,
   url: string,
+  contentDisposition: string | null = null,
+  fallback = ".mp3",
 ): string => {
   if (declaredFormat) {
     const ext = declaredFormat.startsWith(".") ? declaredFormat : `.${declaredFormat}`;
     if (KNOWN_EXTS.has(ext.toLowerCase())) return ext.toLowerCase();
   }
+  const responseExt = extensionFromDisposition(contentDisposition);
+  if (responseExt) return responseExt;
   if (contentType) {
     const mime = contentType.split(";")[0].trim().toLowerCase();
     if (MIME_EXT[mime]) return MIME_EXT[mime];
@@ -167,5 +200,5 @@ export const resolveExtension = (
     const ext = `.${match[1].toLowerCase()}`;
     if (KNOWN_EXTS.has(ext)) return ext;
   }
-  return ".mp3";
+  return fallback;
 };

@@ -86,7 +86,9 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
       touch targets, density changes and cross-page sorting persistence.
 - [x] FIX-1: Core rejects nested scan roots before mutation; Web no longer undoes the addition by
       deleting a root. Isolated database tests preserve tracks and playlist associations.
-- [ ] FIX-2: Recover download file extensions independently, with regression tests.
+- [x] FIX-2: Recover known audio extensions from Content-Disposition, preserving declared-format
+      precedence. A local HTTP stream regression checks extensionless URLs, generic MIME, skip
+      behavior, lyric sidecars, and temporary-part cleanup.
 - [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
       for Netease, QM, KG, Qobuz and TIDAL on the intended artifact. The QM/KG product paths and
       Qobuz browser OAuth/token-only login are implemented but have no real-account acceptance run

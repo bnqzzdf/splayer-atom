@@ -4,7 +4,13 @@ import test from "node:test";
 import os from "node:os";
 import path from "node:path";
 
-import { dedupePath, renderDownloadPath, truncateFilename } from "./filename";
+import {
+  dedupePath,
+  extensionFromDisposition,
+  renderDownloadPath,
+  resolveExtension,
+  truncateFilename,
+} from "./filename";
 
 test("下载文件名包含碟号、曲目号和完整作品标题", () => {
   assert.deepEqual(
@@ -56,4 +62,43 @@ test("超长重名文件仍能生成带序号且不超长的路径", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("响应文件名只提取合法的音频扩展名，优先解析 UTF-8 filename*", () => {
+  assert.equal(extensionFromDisposition('attachment; filename="CD1.FLAC"'), ".flac");
+  assert.equal(extensionFromDisposition("attachment; filename=track.APE"), ".ape");
+  assert.equal(
+    extensionFromDisposition(
+      "attachment; filename=wrong.mp3; filename*=UTF-8''%E6%B5%8B%E8%AF%95.WAV",
+    ),
+    ".wav",
+  );
+  assert.equal(extensionFromDisposition('attachment; filename="Part; 1.aiff"'), ".aiff");
+  assert.equal(extensionFromDisposition('attachment; filename="track.pdf"'), undefined);
+  assert.equal(extensionFromDisposition('attachment; filename="track.flac.exe"'), undefined);
+  assert.equal(extensionFromDisposition('attachment; creation-date="track.flac"'), undefined);
+  assert.equal(
+    extensionFromDisposition("attachment; filename*=UTF-8''broken%XX; filename=ok.ogg"),
+    ".ogg",
+  );
+  assert.equal(extensionFromDisposition(null), undefined);
+});
+
+test("扩展名优先级为有效声明、响应文件名、MIME、URL 和默认值", () => {
+  const url = "https://cdn.example/audio/no-extension?token=abc";
+  const disposition = 'attachment; filename="actual.flac"';
+  assert.equal(resolveExtension("wav", "audio/mpeg", url, disposition), ".wav");
+  assert.equal(resolveExtension("invalid", "audio/mpeg", url, disposition), ".flac");
+  assert.equal(resolveExtension(undefined, "application/octet-stream", url, disposition), ".flac");
+  assert.equal(
+    resolveExtension(undefined, "audio/mpeg", url, 'attachment; filename="bad.bin"'),
+    ".mp3",
+  );
+  assert.equal(
+    resolveExtension(undefined, "application/octet-stream", "https://cdn.example/file.WV?x=1"),
+    ".wv",
+  );
+  assert.equal(resolveExtension(undefined, "application/octet-stream", url), ".mp3");
+  assert.equal(resolveExtension(undefined, null, url, null, ""), "");
+  assert.equal(resolveExtension(undefined, null, "https://cdn.example/a.mp3", null, ""), ".mp3");
 });
