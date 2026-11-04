@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseDirettaCpuVariant, type DirettaCpuVariant } from "./diretta-sdk";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
+export type CoreRuntimeFlavor = "node" | "bun";
 
 type PackageReleaseMetadata = {
   productName?: string;
@@ -62,14 +63,15 @@ export const resolveCoreBuildTime = (
  * 名字里不带变体就无法判断「这个包能不能在手上这台机器跑」。
  * 不带 Diretta 的 ALSA-only 构建没有变体，后缀保持原样。
  *
- * @param bundleNode 是否内嵌 Node 运行时
+ * @param bundleNode 是否内嵌所选 Runtime（保留参数名以兼容既有 Node 调用）
  * @param direttaVariant Diretta CPU 变体；null 表示不带 Diretta
  */
 export const coreArtifactSuffix = (
   bundleNode: boolean,
   direttaVariant: DirettaCpuVariant | null = null,
+  runtime: CoreRuntimeFlavor = "node",
 ): string =>
-  `${direttaVariant ? `-diretta-${direttaVariant}` : ""}-${bundleNode ? "bundled" : "system"}-linux-x64.tar.gz`;
+  `${direttaVariant ? `-diretta-${direttaVariant}` : ""}${runtime === "bun" ? "-bun" : ""}-${bundleNode ? "bundled" : "system"}-linux-x64.tar.gz`;
 
 /**
  * 从 `out/native/build.json` 读取本次 native 构建用的 Diretta CPU 变体。
@@ -121,8 +123,9 @@ export const coreArtifactFileName = (
   buildDate: string,
   buildTime: string,
   direttaVariant: DirettaCpuVariant | null = null,
+  runtime: CoreRuntimeFlavor = "node",
 ): string =>
-  `splayer-atom-core-${version}-${shortCoreCommit(commit)}-${buildDate}-${buildTime}${coreArtifactSuffix(bundleNode, direttaVariant)}`;
+  `splayer-atom-core-${version}-${shortCoreCommit(commit)}-${buildDate}-${buildTime}${coreArtifactSuffix(bundleNode, direttaVariant, runtime)}`;
 
 /**
  * 兜底发现：`out/` 下最新的同 flavor 产物。
@@ -135,14 +138,18 @@ export const findLatestCoreArtifact = (
   repoRoot: string,
   bundleNode: boolean,
   direttaVariant: DirettaCpuVariant | null = null,
+  runtime: CoreRuntimeFlavor = "node",
 ): string => {
   const outDir = path.join(repoRoot, "out");
-  const suffix = coreArtifactSuffix(bundleNode, direttaVariant);
+  const suffix = coreArtifactSuffix(bundleNode, direttaVariant, runtime);
   if (!existsSync(outDir)) {
     throw new Error(`[CoreArtifact] 产物目录不存在: ${outDir}`);
   }
   const matches = readdirSync(outDir).filter(
-    (name) => name.startsWith("splayer-atom-core-") && name.endsWith(suffix),
+    (name) =>
+      name.startsWith("splayer-atom-core-") &&
+      name.endsWith(suffix) &&
+      (runtime === "bun" || !/-bun(?:-[\d.]+)?-(?:bundled|system)-linux-x64\.tar\.gz$/.test(name)),
   );
   if (matches.length === 0) {
     throw new Error(`[CoreArtifact] out/ 下没有匹配的产物: *${suffix}`);

@@ -66,7 +66,13 @@ sudo apt-get install --no-install-recommends -y libasound2-dev pkg-config clang
 pnpm install
 pnpm package:core            # 使用主机上的 Node.js
 pnpm package:core:bundled    # 安装包自带 Node.js
+pnpm package:core:bun        # 使用主机上的 Bun
+pnpm package:core:bun:bundled # 安装包自带 Bun
 ```
+
+构建脚本共用一套源码和验收流程；也可直接传入 `--runtime=node|bun` 与
+`--bundle-runtime`，Bun 构建时通过 `ATOM_BUN_BIN` 指定 Bun 可执行文件。
+Node 保持默认正式构建，Bun Flavor 需通过实际音频硬件验收后再作为正式发布物。
 
 带 Diretta 的版本需要提供 Diretta Host SDK，并按目标 CPU 选择变体（`v2` / `v3` / `v4` / `zen4`，见 [CPU 变体](./docs/cpu-variants.md)）：
 

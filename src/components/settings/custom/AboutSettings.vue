@@ -32,6 +32,10 @@ interface EnvItem {
 }
 
 const knownCommit = (commit: string): boolean => commit !== "unknown" && commit.length > 0;
+const coreRuntime = (info: CoreInfo): EnvItem => ({
+  label: info.runtime?.name === "bun" ? "Core Bun" : "Core Node.js",
+  value: info.runtime?.version ?? info.node,
+});
 
 /** 页面只展示用户识别当前运行环境所需的信息。 */
 const envItems = computed<EnvItem[]>(() => {
@@ -46,7 +50,7 @@ const envItems = computed<EnvItem[]>(() => {
     },
     ...(info
       ? [
-          { label: "Core Node.js", value: info.node },
+          coreRuntime(info),
           ...(info.capabilities.diretta && info.direttaSdkRelease
             ? [{ label: "Diretta", value: `SDK ${info.direttaSdkRelease}` }]
             : []),
@@ -71,7 +75,7 @@ const diagnosticItems = computed<EnvItem[]>(() => {
             label: t("settings.about.sourceTree"),
             value: t(info.sourceDirty ? "settings.about.dirty" : "settings.about.clean"),
           },
-          { label: "Core Node.js", value: info.node },
+          coreRuntime(info),
           ...(info.capabilities.diretta
             ? [
                 {

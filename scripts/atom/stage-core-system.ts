@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -23,6 +24,7 @@ import {
   resolveCoreBuildDate,
   resolveCoreBuildTime,
   shortCoreCommit,
+  type CoreRuntimeFlavor,
 } from "./core-artifact-name";
 import { DIRETTA_SDK_RELEASE, type DirettaCpuVariant } from "./diretta-sdk";
 import {
@@ -41,8 +43,14 @@ const streamingApiFile = path.join(root, "out", "native", "streaming-api.node");
 const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
-const bundleNode = args.delete("--bundle-node");
+const legacyBundleNode = args.delete("--bundle-node");
+const bundleRuntime = args.delete("--bundle-runtime") || legacyBundleNode;
 const allowUnpublished = args.delete("--allow-unpublished");
+const runtimeArg = [...args].find((arg) => arg.startsWith("--runtime="));
+if (runtimeArg) args.delete(runtimeArg);
+const runtime = (runtimeArg?.slice("--runtime=".length) ?? "node") as CoreRuntimeFlavor;
+if (runtime !== "node" && runtime !== "bun") throw new Error(`[CoreStage] 未知 runtime: ${runtime}`);
+if (legacyBundleNode && runtime !== "node") throw new Error("[CoreStage] --bundle-node 仅适用于 Node");
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
@@ -93,6 +101,13 @@ if (process.versions.node !== CORE_NODE_REFERENCE) {
 if (process.platform !== "linux" || process.arch !== "x64") {
   fail(`首个正式 Core staging 仅支持 linux-x64，当前为 ${process.platform}-${process.arch}`);
 }
+const bunBinary = process.env.ATOM_BUN_BIN || "bun";
+const bunVersionResult =
+  runtime === "bun" ? spawnSync(bunBinary, ["--version"], { encoding: "utf8" }) : null;
+if (bunVersionResult && (bunVersionResult.status !== 0 || !/^\d+\.\d+\.\d+$/.test(bunVersionResult.stdout.trim()))) {
+  fail(`Bun 不可用或版本无效: ${bunVersionResult.error?.message ?? bunVersionResult.stderr}`);
+}
+const runtimeVersion = runtime === "bun" ? bunVersionResult!.stdout.trim() : CORE_NODE_REFERENCE;
 
 requireDir(coreDir, "Core JS build");
 requireDir(rendererDir, "Web renderer build");
@@ -183,7 +198,11 @@ cpSync(
   path.join(outputDir, "bin", "splayer-atom-core"),
 );
 chmodSync(path.join(outputDir, "bin", "splayer-atom-core"), 0o755);
-if (bundleNode) {
+if (runtime === "bun") {
+  mkdirSync(path.join(outputDir, "runtime"), { recursive: true });
+  writeFileSync(path.join(outputDir, "runtime", "bun"), "");
+}
+if (bundleRuntime && runtime === "node") {
   const bundledNode = path.join(outputDir, "runtime", "bin", "node");
   const nodeLicense = path.resolve(path.dirname(process.execPath), "..", "LICENSE");
   requireFile(nodeLicense, "bundled Node license");
@@ -191,6 +210,18 @@ if (bundleNode) {
   cpSync(process.execPath, bundledNode);
   chmodSync(bundledNode, 0o755);
   cpSync(nodeLicense, path.join(outputDir, "runtime", "LICENSE"));
+}
+if (bundleRuntime && runtime === "bun") {
+  const bunPath = spawnSync(bunBinary, ["-p", "process.execPath"], { encoding: "utf8" });
+  if (bunPath.status !== 0 || !bunPath.stdout.trim()) fail("无法找到 Bun 可执行文件");
+  const bundledBun = path.join(outputDir, "runtime", "bin", "bun");
+  mkdirSync(path.dirname(bundledBun), { recursive: true });
+  cpSync(realpathSync(bunPath.stdout.trim()), bundledBun);
+  chmodSync(bundledBun, 0o755);
+  writeFileSync(
+    path.join(outputDir, "runtime", "BUN-LICENSE-NOTICE.txt"),
+    `Bun ${runtimeVersion} is developed by the Bun contributors. Review the Bun license and bundled-component redistribution obligations before public release:\nhttps://github.com/oven-sh/bun/blob/bun-v${runtimeVersion}/LICENSE.md\nhttps://bun.com/docs/project/license\n`,
+  );
 }
 mkdirSync(path.join(outputDir, "service"), { recursive: true });
 cpSync(
@@ -249,7 +280,9 @@ writeFileSync(
       arch: "x64",
       nodeRange: CORE_NODE_RANGE,
       nodeReference: CORE_NODE_REFERENCE,
-      nodeBundled: bundleNode,
+      nodeBundled: bundleRuntime && runtime === "node",
+      bunBundled: bundleRuntime && runtime === "bun",
+      runtime: { name: runtime, version: runtimeVersion, pluginHost: runtime },
       betterSqlite3: betterSqlitePackage.version ?? "unknown",
       protocolVersion: CORE_PROTOCOL_VERSION,
       dataSchema: {
@@ -307,12 +340,13 @@ if (archive) {
     root,
     "out",
     coreArtifactFileName(
-      bundleNode,
+      bundleRuntime,
       packageMetadata.version,
       sourceIdentity.commit,
       buildDate,
       buildTime,
       nativeBuild.direttaCpuVariant ?? null,
+      runtime,
     ),
   );
   rmSync(archiveFile, { force: true });

@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { once } from "node:events";
 import { performance } from "node:perf_hooks";
+import { findLatestCoreArtifact, readDirettaCpuVariantFromNativeBuild } from "./core-artifact-name";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const nodeBinary = process.env.ATOM_NODE_BIN || process.execPath;
@@ -14,6 +15,19 @@ const rounds = Number(process.env.ATOM_BENCH_ROUNDS || 5);
 const requests = Number(process.env.ATOM_BENCH_REQUESTS || 100);
 
 type RuntimeName = "node" | "bun";
+const stages = mkdtempSync(path.join(os.tmpdir(), "atom-runtime-bench-stages-"));
+for (const runtime of ["node", "bun"] as const) {
+  const stage = path.join(stages, runtime);
+  mkdirSync(stage);
+  const archive = findLatestCoreArtifact(
+    root,
+    false,
+    readDirettaCpuVariantFromNativeBuild(root),
+    runtime,
+  );
+  const extract = spawnSync("tar", ["-xzf", archive, "-C", stage]);
+  if (extract.status !== 0) throw new Error(`无法解压 ${runtime} benchmark artifact: ${archive}`);
+}
 interface Result {
   runtime: RuntimeName;
   startupMs: number;
@@ -53,7 +67,7 @@ const stop = async (child: ChildProcess): Promise<void> => {
 };
 
 const run = async (runtime: RuntimeName): Promise<Result> => {
-  const stage = path.join(root, runtime === "node" ? "out/core-system" : "out/core-bun-system");
+  const stage = path.join(stages, runtime);
   const launcher = path.join(stage, "bin/splayer-atom-core");
   if (!existsSync(launcher)) throw new Error(`Missing staged launcher: ${launcher}`);
   const temp = mkdtempSync(path.join(os.tmpdir(), `atom-${runtime}-bench-`));
@@ -70,8 +84,8 @@ const run = async (runtime: RuntimeName): Promise<Result> => {
       ATOM_DATA_DIR: path.join(temp, "data"),
       ATOM_CACHE_DIR: path.join(temp, "cache"),
       ATOM_MUSIC_DIR: path.join(temp, "music"),
-      ATOM_NODE_BIN: nodeBinary,
-      ATOM_BUN_BIN: bunBinary,
+      ATOM_NODE_BIN: runtime === "node" ? nodeBinary : "",
+      ATOM_BUN_BIN: runtime === "bun" ? bunBinary : "",
       ATOM_SERVER_PORT: String(port),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -153,3 +167,4 @@ const reportFile = path.join(root, "out/bun-node-benchmark.json");
 writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
 console.log(`[Benchmark] summary ${JSON.stringify(summary)}`);
 console.log(`[Benchmark] report ${reportFile}`);
+rmSync(stages, { recursive: true, force: true });

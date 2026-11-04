@@ -75,13 +75,16 @@ test("system-runtime staging is reference-Node and release-native only", () => {
   assert.match(stageSource, /AGPL license/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleRuntime,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
-  assert.match(stageSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(stageSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(stageSource, /const bundleRuntime = args\.delete\("--bundle-runtime"\)/);
+  assert.match(stageSource, /runtime === "bun"/);
   assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
   assert.match(stageSource, /requireFile\(nodeLicense, "bundled Node license"\)/);
   assert.match(stageSource, /runtime", "LICENSE"/);
-  assert.match(stageSource, /nodeBundled: bundleNode/);
+  assert.match(stageSource, /nodeBundled: bundleRuntime && runtime === "node"/);
+  assert.match(stageSource, /bunBundled: bundleRuntime && runtime === "bun"/);
   assert.match(stageSource, /productName: packageMetadata\.productName/);
   assert.match(stageSource, /atomVersion: packageMetadata\.version/);
   assert.match(stageSource, /buildDate: formatCoreBuildDate\(buildDate\)/);
@@ -94,9 +97,9 @@ test("system-runtime staging is reference-Node and release-native only", () => {
 });
 
 test("formal Core system build always rebuilds before staging and checks the final tar", () => {
-  assert.match(buildSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(buildSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
   assert.match(buildSource, /ATOM_BUILD_DATE: buildDate/);
-  assert.match(buildSource, /\.\.\.\(bundleNode \? \["--bundle-node"\] : \[\]\)/);
+  assert.match(buildSource, /\.\.\.\(bundleRuntime \? \["--bundle-runtime"\] : \[\]\)/);
   const nativeBuild = buildSource.indexOf("build-core-native.ts");
   const coreBuild = buildSource.indexOf("vite.core.config.ts");
   const webBuild = buildSource.indexOf('"vite.config.ts"');
@@ -127,12 +130,14 @@ test("system-runtime launcher and systemd unit execute the same Core entry", () 
 });
 
 test("final tar artifact smoke starts the extracted Core on an isolated port", () => {
-  assert.match(artifactCheckSource, /const bundleNode = args\.delete\("--bundle-node"\)/);
-  assert.match(artifactCheckSource, /runtime\.nodeBundled !== bundleNode/);
-  assert.match(artifactCheckSource, /bundleNode !== existsSync\(bundledNode\)/);
-  assert.match(artifactCheckSource, /bundleNode !== existsSync\(bundledNodeLicense\)/);
-  assert.match(artifactCheckSource, /bundled-runtime 缺少 Node LICENSE/);
-  assert.match(artifactCheckSource, /ATOM_NODE_BIN: bundleNode \? "" : process\.execPath/);
+  assert.match(artifactCheckSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(artifactCheckSource, /runtime\.nodeBundled !== \(bundleRuntime && runtimeFlavor === "node"\)/);
+  assert.match(artifactCheckSource, /runtime\.bunBundled !== \(bundleRuntime && runtimeFlavor === "bun"\)/);
+  assert.match(artifactCheckSource, /existsSync\(bundledNode\)/);
+  assert.match(artifactCheckSource, /existsSync\(bundledNodeLicense\)/);
+  assert.match(artifactCheckSource, /existsSync\(bundledBun\)/);
+  assert.match(artifactCheckSource, /ATOM_NODE_BIN: runtimeFlavor === "node"/);
+  assert.match(artifactCheckSource, /ATOM_BUN_BIN: runtimeFlavor === "bun"/);
   assert.match(artifactCheckSource, /realpathSync\(`\/proc\/\$\{child\.pid\}\/exe`\)/);
   assert.match(artifactCheckSource, /ATOM_SERVER_PORT: String\(port\)/);
   assert.match(artifactCheckSource, /cwd: tempDir/);
@@ -156,19 +161,19 @@ test("system and bundled runtime remain deployment variants of the same staged C
   assert.match(launcherSource, /NODE_BIN=\$ROOT_DIR\/runtime\/bin\/node/);
   assert.match(
     stageSource,
-    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleRuntime,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     buildSource,
-    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleRuntime,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     artifactCheckSource,
-    /coreArtifactFileName\([\s\S]{0,120}?bundleNode,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
+    /coreArtifactFileName\([\s\S]{0,120}?bundleRuntime,[\s\S]{0,40}?release\.version,[\s\S]{0,80}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant, runtime\)\}/,
   );
 
   // 打包时刻进入文件名：同一天多次构建不会互相覆盖
@@ -180,7 +185,7 @@ test("system and bundled runtime remain deployment variants of the same staged C
   // build-core-system 把时刻一次性下发，保证 stage 与 check 算出同一个文件名
   assert.match(buildSource, /ATOM_BUILD_TIME: buildTime/);
   // 单独运行/跨天复核时退回「取最新产物」，不再依赖秒级重建
-  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleNode, direttaVariant\)/);
+  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleRuntime, direttaVariant, runtimeFlavor\)/);
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {

@@ -10,14 +10,14 @@
 
 ## 运行期约定
 
-- Core 要求 Node `>=22.19.0`。
-- 发布 / 参考版本校验使用 Node `24.22.2`。
+- 默认 Runtime Flavor 为 Node，要求 Node `>=22.19.0`，构建参考版本为 `24.22.2`。
+- 可选 `--runtime=bun` Flavor 使用 Bun 运行 Core 与插件 Host；Bun 不要求目标机安装 Node。
 - system-runtime 与 bundled-runtime 变体执行同一套 Core JS / 原生 / 协议约定。
-- bundled-runtime 在 `runtime/bin/node` 内携带发布参考版本 Node `24.22.2`；system-runtime 要求宿主机提供 Node `>=22.19.0`。
+- bundled-runtime 在 `runtime/bin/node` 或 `runtime/bin/bun` 内携带所选运行时；system-runtime 要求宿主机提供对应运行时。
 - 当前生产产物仅支持 Linux x86-64。硬件支持范围仍取决于发布验收矩阵。
 - Core HTTP/WS 只接受同源浏览器请求（拒绝跨站 `Origin`），`Host` 仅放行 IP、`localhost`、无点主机名与 `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`；
   经反向代理或自有域名访问时，用逗号分隔的 `ATOM_ALLOWED_HOSTS`（如 `music.example.com`）显式放行。
-- 插件 host 子进程在 Node 权限模型（`--permission`）下运行，不能启动子进程、加载原生模块或写文件。
+- Node 插件 Host 保留 `--permission` 限制；Bun 插件 Host 通过独立 Bun 进程执行，未提供等价权限限制。两者的 VM Context 均**不是恶意插件安全沙箱**，只能运行可信来源插件。
 
 ## glibc 与发行版兼容（Debian 11）
 
@@ -32,7 +32,7 @@
 | `native/streaming-api.node`                            | `GLIBC_2.30`        |
 | `node_modules/better-sqlite3/prebuilds/linux-x64.node` | `GLIBC_2.29`        |
 
-**因此该产物可在任意 glibc >= 2.30 的 x86-64 Linux 上运行——即 Debian 11 及更新版本。**
+**上述 glibc 下限适用于已验证的 Node 构建及原生模块**；Bun bundled 还必须满足 Bun 二进制自身的指令集和动态库要求，不能直接套用 Node 的 Debian 11 兼容结论。
 
 ### Diretta SDK 与 glibc 下限
 
@@ -63,7 +63,7 @@ Diretta SDK 150 附带的预编译 `ACQUA` 库是在 glibc >= 2.38 上编译的�
 ├─ service/
 ├─ docs/
 ├─ data/
-├─ runtime/                      # 仅 bundled-runtime：bin/node
+├─ runtime/                      # bundled-runtime: bin/node 或 bin/bun；Bun 还带运行时标记
 ├─ runtime.json
 └─ LICENSE
 ```
@@ -80,9 +80,15 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core
 ```
 
-启动器优先使用显式给出的 `ATOM_NODE_BIN`；其次在存在 bundled 运行时时使用 `runtime/bin/node`；
-否则使用系统 `node` 可执行文件。技术构建命令为：system-runtime 用 `build-core-system.ts`，
-bundled-runtime 用 `build-core-system.ts --bundle-node`；两种归档都解包为同一套安装布局（无外层目录）。
+启动器按包内 Runtime Flavor 选择 Node/Bun，优先使用显式的 `ATOM_NODE_BIN` / `ATOM_BUN_BIN`，
+其次使用包内 `runtime/bin/`，最后使用系统对应的运行时。构建：
+`pnpm package:core`（Node system）、
+`pnpm package:core:bundled`（Node bundled）、
+`pnpm package:core:bun`（Bun system）、
+`pnpm package:core:bun:bundled`（Bun bundled）。
+这些命令全部调用同一个 `build-core-system.ts`；现有 `--bundle-node` 仍兼容，
+新参数为 `--runtime=node|bun` 与 `--bundle-runtime`。Bun Flavor 的验证条件及限制见
+[Runtime Flavor 对照](./bun-runtime-experiment.md)。
 
 ### 普通 ALSA Core 的 systemd
 

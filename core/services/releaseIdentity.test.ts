@@ -65,12 +65,12 @@ test("Core package filenames contain product version, build date and build time"
   assert.match(artifactNameSource, /\^\\d\{6\}\$/);
   assert.match(
     artifactNameSource,
-    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant\)\}/,
+    /splayer-atom-core-\$\{version\}-\$\{shortCoreCommit\(commit\)\}-\$\{buildDate\}-\$\{buildTime\}\$\{coreArtifactSuffix\(bundleNode, direttaVariant, runtime\)\}/,
   );
   // Diretta 变体进入文件名：同一版本会为不同 CPU 代次各出一个 tar，
   // 名字里不带变体就分不清能不能在手上这台机器跑。
   assert.match(artifactNameSource, /-diretta-\$\{direttaVariant\}/);
-  assert.match(artifactNameSource, /coreArtifactSuffix\(bundleNode, direttaVariant\)/);
+  assert.match(artifactNameSource, /coreArtifactSuffix\(bundleNode, direttaVariant, runtime\)/);
   assert.match(artifactNameSource, /export const readDirettaCpuVariantFromNativeBuild = /);
   // 变体清单必须覆盖 SDK 实际发布的 x86-64 型号
   assert.match(direttaSdkSource, /DIRETTA_CPU_VARIANTS = \["v2", "v3", "v4", "zen4"\] as const/);

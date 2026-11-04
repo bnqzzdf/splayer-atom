@@ -1,8 +1,8 @@
-# Bun Core 实验版本
+# Core Runtime Flavor：Node / Bun
 
 > 最后更新：2026-11-04
 
-本分支用于 Node Core 与 Bun Core 的对照验证，不替代原有 Node 发布流程。
+Node 与 Bun 已使用同一套 Core 源码、编译产物、打包入口和验收流程。默认正式运行时仍为 Node；Bun 是可选 Flavor，尚需各目标系统的长期播放回归。
 
 ## 构建
 
@@ -14,25 +14,27 @@ pnpm build:native
 pnpm typecheck
 pnpm build:core
 pnpm build:web
+pnpm package:core                     # Node system
+pnpm package:core:bundled             # Node bundled
 ATOM_BUN_BIN=/path/to/bun pnpm package:core:bun
 ATOM_BUN_BIN=/path/to/bun pnpm package:core:bun:bundled
 ```
 
-打包命令复用现有编译产物，通过原有 Node staging 和 artifact smoke 验证，再生成独立的产物：
+四个命令均使用 `scripts/atom/build-core-system.ts`，可以直接使用 `--runtime=node|bun` 与 `--bundle-runtime` 组合。现有 `--bundle-node` 仍等价于 Node bundled。打包时通过共同的 Core staging 与 artifact smoke 验证，再生成独立的产物：
 
-- **system-runtime**：`out/core-bun-system/`，需要系统提供 Bun。
-- **bundled-runtime**：`out/core-bun-bundled/`，自带 `runtime/bin/bun`，目标机不需要安装 Bun、Node 或 Bubblewrap。
+- **system-runtime**：需要系统提供所选 Node/Bun。
+- **bundled-runtime**：自带 `runtime/bin/node` 或 `runtime/bin/bun`，目标机不需要单独安装运行时。
 
-两者都不修改原有 Node artifact 的启动入口。Bun bundled 归档内保留 Atom 自带的 Web 和原生模块，另有 Bun 发行许可证提示；对外公开分发前需审核 Bun 及其静态链接组件的许可证义务。
+安装包共用 `bin/splayer-atom-core` 启动器、Web 与原生模块；Bun Flavor 通过 `runtime/bun` 标记选择自身运行时。Bun 归档名有 `-bun-` 后缀，Node 的历史归档命名不变。Bun bundled 另有发行许可证提示；公开分发前需审核 Bun 及其静态链接组件的许可证义务。
 
 ## 运行
 
 ```bash
-cd out/core-bun-system
+cd out/core-system
 ATOM_BUN_BIN=/path/to/bun ./bin/splayer-atom-core
 ```
 
-普通 Node artifact 仍运行 `node`。Bun 启动器在 Bun 缺失时会退出，插件 Host 通过 Bun 的 `child_process.fork` 运行在另一个 Bun 进程中。`/api/info` 的 `runtime` 字段显示真正的运行时，原 `node` 字段保留协议兼容信息。
+普通 Node artifact 仍运行 `node`。Bun Flavor 在 Bun 缺失时会退出，插件 Host 通过 Bun 的 `child_process.fork` 运行在另一个 Bun 进程中。`/api/info` 的 `runtime` 字段显示真正的运行时，原 `node` 字段保留协议兼容信息；「关于」页面优先显示真正的运行时。
 
 ### 独立测试 bundled 包的播放
 
@@ -40,7 +42,7 @@ ATOM_BUN_BIN=/path/to/bun ./bin/splayer-atom-core
 
 ```bash
 mkdir -p "$HOME/atom-bun-trial"
-tar -xzf splayer-atom-core-*-bun-*-bundled-linux-x64.tar.gz -C "$HOME/atom-bun-trial"
+tar -xzf splayer-atom-core-*-bun-bundled-linux-x64.tar.gz -C "$HOME/atom-bun-trial"
 export ATOM_DATA_DIR="$HOME/atom-bun-trial/data"
 export ATOM_CACHE_DIR="$HOME/atom-bun-trial/cache"
 export ATOM_SERVER_PORT=27234
@@ -54,6 +56,8 @@ export ATOM_SERVER_PORT=27234
 ```bash
 ATOM_BUN_BIN=/path/to/bun pnpm bench:core:bun
 ```
+
+基准脚本从 `out/` 中按 Runtime Flavor 找最新的 Node/Bun **system-runtime 归档**并分别解压，不依赖任何独立 Bun staging 目录；运行前需先为两个 Runtime 都生成归档。
 
 脚本交替启动 Node 和 Bun 各 5 次，用单独的临时 HOME、空白数据库、缓存和音乐目录测量 API 就绪耗时、静置主进程 RSS/PSS、100 次连续 `/api/info` HTTP 请求吞吐量。结果保存至 `out/bun-node-benchmark.json`。这不是播放性能、音质或长时间稳定性的基准。实际播放及 Diretta 硬件回归需要另外进行。
 

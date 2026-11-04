@@ -8,14 +8,21 @@ import {
   readDirettaCpuVariantFromNativeBuild,
   resolveCoreBuildDate,
   resolveCoreBuildTime,
+  type CoreRuntimeFlavor,
 } from "./core-artifact-name";
 import { resolveSourceIdentity, unpublishedIdentityMessage } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
-const bundleNode = args.delete("--bundle-node");
+const legacyBundleNode = args.delete("--bundle-node");
+const bundleRuntime = args.delete("--bundle-runtime") || legacyBundleNode;
 const allowUnpublished = args.delete("--allow-unpublished");
+const runtimeArg = [...args].find((arg) => arg.startsWith("--runtime="));
+if (runtimeArg) args.delete(runtimeArg);
+const runtime = (runtimeArg?.slice("--runtime=".length) ?? "node") as CoreRuntimeFlavor;
+if (runtime !== "node" && runtime !== "bun") throw new Error(`[CoreBuild] 未知 runtime: ${runtime}`);
+if (legacyBundleNode && runtime !== "node") throw new Error("[CoreBuild] --bundle-node 仅适用于 Node");
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);
@@ -53,6 +60,9 @@ const run = (label: string, command: string, commandArgs: string[]): void => {
   if (result.status !== 0)
     throw new Error(`[CoreBuild] ${label} 失败: ${result.status ?? "unknown"}`);
 };
+if (runtime === "bun") {
+  run("验证 Bun runtime", process.env.ATOM_BUN_BIN || "bun", ["--version"]);
+}
 
 run("构建 Core native release", bin("tsx"), [
   "scripts/atom/build-core-native.ts",
@@ -64,17 +74,24 @@ run("构建 Core native release", bin("tsx"), [
 const direttaVariant = readDirettaCpuVariantFromNativeBuild(root);
 run("构建 Core JS", bin("vite"), ["build", "-c", "scripts/atom/vite.core.config.ts"]);
 run("验收 Core plugin-host IPC", process.execPath, ["scripts/atom/check-core-plugin-host.mjs"]);
+if (runtime === "bun") {
+  run("验收 Bun plugin-host IPC", process.env.ATOM_BUN_BIN || "bun", [
+    "scripts/atom/check-bun-plugin-ipc.ts",
+  ]);
+}
 run("构建 Web Control", bin("vite"), ["build", "-c", "vite.config.ts"]);
 run("审计 Core build", process.execPath, ["scripts/atom/check-core-build.mjs"]);
-run(bundleNode ? "生成 bundled-runtime tar.gz" : "生成 system-runtime tar.gz", bin("tsx"), [
+run(bundleRuntime ? "生成 bundled-runtime tar.gz" : "生成 system-runtime tar.gz", bin("tsx"), [
   "scripts/atom/stage-core-system.ts",
   "--archive",
-  ...(bundleNode ? ["--bundle-node"] : []),
+  `--runtime=${runtime}`,
+  ...(bundleRuntime ? ["--bundle-runtime"] : []),
   ...(allowUnpublished ? ["--allow-unpublished"] : []),
 ]);
 run("验收最终 tar artifact", bin("tsx"), [
   "scripts/atom/check-core-artifact.ts",
-  ...(bundleNode ? ["--bundle-node"] : []),
+  `--runtime=${runtime}`,
+  ...(bundleRuntime ? ["--bundle-runtime"] : []),
 ]);
 
 console.log(
@@ -82,12 +99,13 @@ console.log(
     root,
     "out",
     coreArtifactFileName(
-      bundleNode,
+      bundleRuntime,
       release.version,
       sourceIdentity?.commit ?? "00000000",
       buildDate,
       buildTime,
       direttaVariant,
+      runtime,
     ),
   )}`,
 );
