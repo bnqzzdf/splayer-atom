@@ -2,6 +2,7 @@
 import { useLibraryStore } from "@/stores/library";
 import { toast } from "@/composables/useToast";
 import CoreDirectoryPicker from "@/web/CoreDirectoryPicker.vue";
+import { ErrorCode } from "@shared/types/errors";
 import IconLucideFolder from "~icons/lucide/folder";
 import IconLucideFolderPlus from "~icons/lucide/folder-plus";
 import IconLucideTrash2 from "~icons/lucide/trash-2";
@@ -32,7 +33,7 @@ const addDirectory = async (dir: string): Promise<void> => {
     const res = await libraryStore.addScanDir(dir);
     if (res.success) {
       emit("added");
-    } else if (res.error === "nested") {
+    } else if (res.error === ErrorCode.SCAN_DIR_NESTED) {
       toast.warning(t("library.nestedHint"));
     } else if (res.error) {
       toast.error(res.error);

@@ -75,6 +75,8 @@ export enum ErrorCode {
   SCAN_DIR_NOT_FOUND = "SCAN_DIR_NOT_FOUND",
   /** 用户取消了目录选择 */
   SCAN_DIR_NOT_SELECTED = "SCAN_DIR_NOT_SELECTED",
+  /** 与已注册根目录存在父子嵌套关系 */
+  SCAN_DIR_NESTED = "SCAN_DIR_NESTED",
 
   // 通用
   /** 加载已被更新的 load/stop 取代（快速切歌、停止），属正常竞态结果，前端静默处理 */

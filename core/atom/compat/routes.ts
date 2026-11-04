@@ -38,6 +38,11 @@ import type { TagEditRequest } from "@shared/types/tagEditor";
 import { getPlayer } from "@main/services/engine";
 import { cancelScan, getScanProgress, isScanning, startScan } from "@main/services/scanner";
 import { resolveCoreDirectory } from "@main/services/coreFilesystem";
+import {
+  hasNestedScanRoots,
+  normalizeScanRoot,
+  scanRootsOverlap,
+} from "@main/services/scanRootValidation";
 import { removePinsUnderRoot } from "@main/services/folderBrowser";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
 import { publishLibraryRevision } from "@main/services/libraryRevision";
@@ -219,7 +224,10 @@ export const buildAtomCompatRoutes = (): Hono => {
       return c.json({ success: false, error: "dirs_string_array_required" }, 400);
     }
     const dirs = body.dirs.map((dir) => dir.trim()).filter(Boolean);
-    const next = [...new Set(dirs)];
+    const next = [...new Set(await Promise.all(dirs.map(normalizeScanRoot)))];
+    if (hasNestedScanRoots(next)) {
+      return c.json({ success: false, error: "SCAN_DIR_NESTED" }, 409);
+    }
     const previous = store.get("library.scanDirs") as string[];
     store.set("library.scanDirs", next);
     for (const removed of previous.filter((dir) => !next.includes(dir))) {
@@ -240,7 +248,13 @@ export const buildAtomCompatRoutes = (): Hono => {
       return c.json({ success: false, error: errorMessage(error) }, 400);
     }
     const dirs = store.get("library.scanDirs") as string[];
-    if (dirs.includes(dir)) return c.json({ success: false, error: "SCAN_DIR_EXISTS" }, 409);
+    const normalizedDirs = await Promise.all(dirs.map(normalizeScanRoot));
+    if (normalizedDirs.includes(dir)) {
+      return c.json({ success: false, error: "SCAN_DIR_EXISTS" }, 409);
+    }
+    if (normalizedDirs.some((existing) => scanRootsOverlap(existing, dir))) {
+      return c.json({ success: false, error: "SCAN_DIR_NESTED" }, 409);
+    }
     const next = [...dirs, dir];
     store.set("library.scanDirs", next);
     publishCoreControlEvent({ type: "libraryRootsChanged", data: { paths: next } });

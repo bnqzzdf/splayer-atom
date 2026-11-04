@@ -180,33 +180,16 @@ export const useLibraryStore = defineStore("library", () => {
     scanProgress.value = null;
   };
 
-  /** 判断两个 Core 扫描根目录是否互相包含。 */
-  const conflictsWithScanDir = (dir: string): boolean =>
-    scanDirs.value.some(
-      (existing) =>
-        dir.startsWith(existing + "\\") ||
-        dir.startsWith(existing + "/") ||
-        existing.startsWith(dir + "\\") ||
-        existing.startsWith(dir + "/"),
-    );
-
   /** 添加一个已经由 Core 目录浏览器选定的扫描目录。 */
   const addScanDir = async (
     requestedDir: string,
   ): Promise<{ success: boolean; error?: string }> => {
     const dir = requestedDir.trim();
     if (!dir) return { success: false, error: "empty" };
-    if (conflictsWithScanDir(dir)) {
-      return { success: false, error: "nested" };
-    }
     const res = await libraryClient.addScanDir(dir);
     if (!res.success || !res.data) return res;
 
     const newDir = res.data as string;
-    if (conflictsWithScanDir(newDir)) {
-      await libraryClient.removeScanDir(newDir);
-      return { success: false, error: "nested" };
-    }
     if (!scanDirs.value.includes(newDir)) {
       scanDirs.value = [...scanDirs.value, newDir];
     }
