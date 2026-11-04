@@ -3,6 +3,7 @@ defineOptions({ name: "Songs" });
 
 import type { PlaybackContext } from "@shared/types/player";
 import { useLibraryStore } from "@/stores/library";
+import { useLibraryTracks } from "@/composables/useLibraryTracks";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import SongList from "@/components/list/SongList.vue";
 import { formatFileSize } from "@/utils/format";
@@ -32,14 +33,7 @@ const handlePlayAll = (): void => {
   player.playFrom(tracks.value, 0, playbackContext.value);
 };
 
-const ensureTracksLoaded = (): void => {
-  if (tracksLoadState.value === "idle" || tracksLoadState.value === "error") {
-    void libraryStore.load();
-  }
-};
-
-onMounted(ensureTracksLoaded);
-onActivated(ensureTracksLoaded);
+useLibraryTracks();
 </script>
 
 <template>

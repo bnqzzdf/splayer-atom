@@ -5,11 +5,11 @@ import type { JsScanEvent, JsScannedTrack } from "@splayer/audio-engine";
 import type { ScanProgress } from "@shared/types/library";
 import { getEngine } from "./engine";
 import {
-  getAllTracks,
+  getTracksByPhysicalPaths,
   upsertTracks,
   deleteTracksByPaths,
   getFileRecords,
-  getCueTrackPathsByDirs,
+  getCueTracksByDirs,
   type UpsertTrack,
 } from "@main/database";
 import { publishCoreControlEvent } from "@main/services/coreControlEvents";
@@ -105,7 +105,7 @@ const syncSacdTracks = async (aggregate: JsScannedTrack, generation: number): Pr
     }
 
     const isoKey = pathKey(isoPath);
-    const existingPaths = getAllTracks()
+    const existingPaths = getTracksByPhysicalPaths([isoPath])
       .filter((track) => {
         if (!track.path) return false;
         const source =
@@ -140,20 +140,11 @@ const syncSacdTracks = async (aggregate: JsScannedTrack, generation: number): Pr
  * 由独立的 skipUnchanged 参数决定。
  */
 export const buildScanExistingData = (dirs: string[]) => {
-  // 旧虚拟分轨已经有正确 path/mtime，但标题可能仍是 Track NN。这样的 ISO 必须
-  // 再 probe 一次，让修正后的 SACDTTxt 元数据覆盖占位标题；成功后下次恢复正常增量跳过。
-  const sacdMetadataRefresh = new Set(
-    getAllTracks().flatMap((track) => {
-      const isoPath = sacdIsoPathFromVirtual(track.path);
-      return isoPath && SACD_PLACEHOLDER_TITLE.test(track.title ?? "") ? [pathKey(isoPath)] : [];
-    }),
-  );
-
   const physical = new Map<
     string,
     ReturnType<typeof getFileRecords>[number] & { forceProbe?: boolean }
   >();
-  for (const record of getFileRecords()) {
+  for (const record of getFileRecords(dirs)) {
     const virtualIso = sacdIsoPathFromVirtual(record.path);
     if (virtualIso) {
       const key = pathKey(virtualIso);
@@ -161,9 +152,9 @@ export const buildScanExistingData = (dirs: string[]) => {
         physical.set(key, {
           ...record,
           path: virtualIso,
-          forceProbe: sacdMetadataRefresh.has(key),
+          forceProbe: SACD_PLACEHOLDER_TITLE.test(record.title),
         });
-      } else if (sacdMetadataRefresh.has(key)) {
+      } else if (SACD_PLACEHOLDER_TITLE.test(record.title)) {
         physical.get(key)!.forceProbe = true;
       }
       continue;
@@ -174,17 +165,14 @@ export const buildScanExistingData = (dirs: string[]) => {
     });
   }
 
-  return [...physical.values()].flatMap(({ cover, ...record }) => {
-    if (!pathInScanDirs(record.path, dirs)) return [];
+  return [...physical.values()].map(({ cover, title: _title, ...record }) => {
     const coverPath = fromCacheUrl(cover);
-    return [
-      {
-        ...record,
-        coverPath,
-        forceProbe:
-          record.forceProbe === true || (cover?.startsWith("cache://") === true && !coverPath),
-      },
-    ];
+    return {
+      ...record,
+      coverPath,
+      forceProbe:
+        record.forceProbe === true || (cover?.startsWith("cache://") === true && !coverPath),
+    };
   });
 };
 
@@ -196,7 +184,9 @@ const expandRemovedPaths = (removedPaths: string[]): string[] => {
     removedPaths.filter((value) => /\.iso$/i.test(value)).map((value) => pathKey(value)),
   );
   if (removedIsoKeys.size === 0) return [...result];
-  for (const track of getAllTracks()) {
+  for (const track of getTracksByPhysicalPaths(
+    removedPaths.filter((value) => /\.iso$/i.test(value)),
+  )) {
     const isoPath = sacdIsoPathFromVirtual(track.path);
     if (isoPath && removedIsoKeys.has(pathKey(isoPath))) result.add(track.path!);
   }
@@ -210,16 +200,10 @@ const syncCueTracks = async (
   unavailableDirs: string[] = [],
   incremental = true,
 ): Promise<number> => {
-  const allTracks = getAllTracks();
-  // 真实音频文件
-  const audioByPath = new Map(
-    allTracks.flatMap((track) =>
-      !track.cuePath && track.path ? [[pathKey(track.path), track] as const] : [],
-    ),
-  );
-  // 跳过未变化的 CUE
+  const existingTracks = getCueTracksByDirs(dirs);
+  if (cueFiles.length === 0 && existingTracks.length === 0) return 0;
   const existingByCue = new Map<string, { mtime: number; paths: string[] }>();
-  for (const track of allTracks) {
+  for (const track of existingTracks) {
     if (!track.cuePath || !track.path) continue;
     const key = pathKey(track.cuePath);
     const group = existingByCue.get(key);
@@ -242,7 +226,9 @@ const syncCueTracks = async (
       const content = await readFileAutoEncoding(cuePath);
       const audioPath = getCueAudioPath(content, cuePath);
       if (!audioPath) continue;
-      const audio = audioByPath.get(pathKey(audioPath));
+      const audio = getTracksByPhysicalPaths([audioPath]).find(
+        (track) => !track.cuePath && track.path && pathKey(track.path) === pathKey(audioPath),
+      );
       if (!audio || audio.duration <= 0) continue;
       const cueTracks = parseCueSheet(content, cuePath, audio.duration);
       for (const cueTrack of cueTracks) {
@@ -296,13 +282,15 @@ const syncCueTracks = async (
   }
 
   if (upserts.length > 0) upsertTracks(upserts);
-  const stalePaths = getCueTrackPathsByDirs(dirs).filter((trackPath) => {
-    if (nextPaths.has(trackPath)) return false;
-    // 不可达目录下的分轨不删除：从虚拟路径提取真实 cuePath 做目录判断
-    const realCuePath = extractCuePath(trackPath);
-    if (!realCuePath) return true;
-    return !unavailableDirs.some((dir) => pathInScanDirs(realCuePath, [dir]));
-  });
+  const stalePaths = existingTracks
+    .map((track) => track.path!)
+    .filter((trackPath) => {
+      if (nextPaths.has(trackPath)) return false;
+      // 不可达目录下的分轨不删除：从虚拟路径提取真实 cuePath 做目录判断
+      const realCuePath = extractCuePath(trackPath);
+      if (!realCuePath) return true;
+      return !unavailableDirs.some((dir) => pathInScanDirs(realCuePath, [dir]));
+    });
   if (stalePaths.length > 0) deleteTracksByPaths(stalePaths);
   if (upserts.length > 0 || stalePaths.length > 0) scanChanged = true;
   return nextPaths.size;
@@ -333,6 +321,7 @@ const finishScan = async (
   );
   const sacdCount = sacdCounts.reduce((sum, count) => sum + count, 0);
   scanning = false;
+  const changed = scanChanged;
   if (scanChanged) publishLibraryRevision();
   scanChanged = false;
   publishScanProgress({
@@ -341,6 +330,7 @@ const finishScan = async (
     scanned: event.scanned,
     scopeDirs: [...dirs],
     incremental,
+    changed,
   });
   libraryLog.info(
     `扫描完成: ${event.scanned}/${event.total} 个文件，CUE 分轨 ${cueCount} 首，SACD 分轨 ${sacdCount} 首`,
@@ -418,6 +408,7 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
         case "done": {
           void finishScan(normalizedDirs, event, generation, incremental).catch((error) => {
             scanning = false;
+            const changed = scanChanged;
             if (scanChanged) publishLibraryRevision();
             scanChanged = false;
             libraryLog.error("扫描收尾失败:", error);
@@ -427,6 +418,7 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
               scanned: event.scanned,
               scopeDirs: [...normalizedDirs],
               incremental,
+              changed,
             });
           });
           break;
@@ -448,8 +440,9 @@ export const cancelScan = (): void => {
   scanning = false;
   ++scanGeneration;
   pendingSacdSyncs = [];
+  const changed = scanChanged;
   if (scanChanged) publishLibraryRevision();
   scanChanged = false;
-  publishScanProgress({ ...currentScanProgress, phase: "done" });
+  publishScanProgress({ ...currentScanProgress, phase: "done", changed });
   libraryLog.info("已发送扫描取消信号");
 };

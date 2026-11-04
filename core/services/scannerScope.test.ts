@@ -60,7 +60,38 @@ test("scoped scanner existing-data projection never includes records outside the
       },
     ]);
 
+    const insert = database.getDb().prepare(`
+      INSERT INTO tracks (id, path, title, artists, duration, file_size, scanned_at)
+      VALUES (?, ?, 'Other', '[]', 1, 1, 1)
+    `);
+    database.getDb().transaction(() => {
+      for (let index = 0; index < 20_000; index++) {
+        insert.run(`other-${index}`, `/other/${index}.flac`);
+      }
+    })();
+    const db = database.getDb();
+    const prepare = db.prepare;
+    const statements: string[] = [];
+    db.prepare = new Proxy(prepare, {
+      apply(target, thisArg, args) {
+        statements.push(args[0]);
+        return Reflect.apply(target, thisArg, args);
+      },
+    });
+
     const projected = scanner.buildScanExistingData([scope]);
+    db.prepare = prepare;
+    assert.equal(statements.length, 1);
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${statements[0]}`)
+      .all(scope + "/", scope + "0") as { detail: string }[];
+    assert.ok(
+      plan.some((step) => /path>\? AND path<\?/.test(step.detail)),
+      JSON.stringify(plan),
+    );
+    assert.deepEqual(database.getFileRecords([]), []);
+    assert.equal(database.getFileRecords([scope, sibling]).length, 4);
+    assert.equal(database.getFileRecords(["/music/A sibling"]).length, 0);
     assert.deepEqual(
       projected.map((item) => item.path).sort(),
       [path.join(scope, "disc.iso"), path.join(scope, "track.flac")].sort(),

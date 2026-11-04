@@ -27,6 +27,10 @@ export const useLibraryStore = defineStore("library", () => {
   const scanProgress = ref<ScanProgress | null>(null);
   /** 是否已初始化 */
   const initialized = ref(false);
+  const revision = ref(0);
+  let tracksStale = true;
+  let trackConsumers = 0;
+  let tracksRequest: Promise<void> | null = null;
   /** 歌手头像缓存 */
   const artistAvatars = shallowRef<Record<string, string>>({});
   /** 本地红心 id */
@@ -111,8 +115,6 @@ export const useLibraryStore = defineStore("library", () => {
   const load = async (): Promise<void> => {
     tracksLoadState.value = "loading";
     tracksLoadError.value = null;
-    // 扫描进度是曲库域投影，由 store 常驻订阅，避免关闭设置页后丢失完成事件。
-    subscribeScanProgress();
     // 先从 IndexedDB 读缓存，立即渲染
     const [cached, legacyLiked] = await Promise.all([
       trackDb.getItem<Track[]>("tracks").catch(() => null),
@@ -220,7 +222,8 @@ export const useLibraryStore = defineStore("library", () => {
       scanning.value = false;
       scanProgress.value = null;
     }
-    await refreshTracksProjection();
+    tracksStale = true;
+    if (trackConsumers > 0) await refreshTracksProjection();
   };
 
   let unsubscribe: (() => void) | null = null;
@@ -228,26 +231,48 @@ export const useLibraryStore = defineStore("library", () => {
   let unsubscribeLibraryRootsChanged: (() => void) | null = null;
   let unsubscribeLibraryLikesChanged: (() => void) | null = null;
 
-  const refreshTracksProjection = async (): Promise<void> => {
-    tracksLoadState.value = "loading";
-    tracksLoadError.value = null;
-    const res = await libraryClient.getTracks();
-    if (!res.success || !res.data) {
-      tracksLoadState.value = "error";
-      tracksLoadError.value = res.error ?? "LIBRARY_LOAD_FAILED";
-      return;
-    }
-    tracks.value = res.data;
-    cacheTracks(res.data);
-    tracksLoadState.value = "success";
-    void loadArtistAvatars();
+  const refreshTracksProjection = (): Promise<void> => {
+    if (tracksRequest) return tracksRequest;
+    tracksRequest = (async () => {
+      const requestedRevision = revision.value;
+      tracksLoadState.value = "loading";
+      tracksLoadError.value = null;
+      const res = await libraryClient.getTracks();
+      if (!res.success || !res.data) {
+        tracksLoadState.value = "error";
+        tracksLoadError.value = res.error ?? "LIBRARY_LOAD_FAILED";
+        return;
+      }
+      tracks.value = res.data;
+      tracksStale = revision.value !== requestedRevision;
+      cacheTracks(res.data);
+      tracksLoadState.value = "success";
+    })().finally(() => {
+      tracksRequest = null;
+      if (
+        tracksStale &&
+        trackConsumers > 0 &&
+        !scanning.value &&
+        tracksLoadState.value === "success"
+      ) {
+        void refreshTracksProjection();
+      }
+    });
+    return tracksRequest;
+  };
+
+  const watchTracks = (): (() => void) => {
+    trackConsumers++;
+    if (!initialized.value) void load();
+    else if (tracksStale || tracksLoadState.value === "error") void refreshTracksProjection();
+    return () => {
+      trackConsumers--;
+    };
   };
 
   /** 监听扫描进度 */
   const subscribeScanProgress = (): void => {
-    unsubscribe?.();
-    unsubscribeLibraryChanged?.();
-    unsubscribeLibraryRootsChanged?.();
+    if (unsubscribe) return;
     unsubscribe = subscribeCoreControlEvent("libraryScanProgress", (data) => {
       scanProgress.value = data;
       if (data.phase === "scanning") {
@@ -255,16 +280,16 @@ export const useLibraryStore = defineStore("library", () => {
       } else if (data.phase === "done") {
         scanning.value = false;
         scanProgress.value = null;
-        refreshTracksProjection();
+        if (trackConsumers > 0 && tracksStale) void refreshTracksProjection();
       } else if (data.phase === "error") {
         scanning.value = false;
         scanProgress.value = null;
       }
     });
-    unsubscribeLibraryChanged = subscribeCoreControlEvent("libraryChanged", () => {
-      // 扫描过程由 done 时统一拉取全量曲库，避免扫描批次中重复拉取大 JSON。
-      // 定向 canonicalization / 标签写入等非扫描 mutation 则立即刷新全局曲库投影。
-      if (!scanning.value) refreshTracksProjection();
+    unsubscribeLibraryChanged = subscribeCoreControlEvent("libraryChanged", (data) => {
+      revision.value = data.revision;
+      tracksStale = true;
+      if (!scanning.value && trackConsumers > 0) void refreshTracksProjection();
     });
     unsubscribeLibraryRootsChanged = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
       scanDirs.value = [...data.paths];
@@ -368,6 +393,9 @@ export const useLibraryStore = defineStore("library", () => {
     };
   };
 
+  subscribeScanProgress();
+  onScopeDispose(unsubscribeScanProgress);
+
   return {
     tracks,
     tracksLoadState,
@@ -376,12 +404,14 @@ export const useLibraryStore = defineStore("library", () => {
     scanning,
     scanProgress,
     initialized,
+    revision,
     artistAvatars,
     likedOrderedIds,
     likedIdSet,
     isLiked,
     toggleLike,
     load,
+    watchTracks,
     startScan,
     cancelScan,
     addScanDir,

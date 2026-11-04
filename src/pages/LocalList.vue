@@ -50,6 +50,8 @@ const sortOptions = computed<SSelectOption[]>(() =>
 const source = shallowRef<ArtistSummary[] | AlbumSummary[]>([]);
 const loadState = ref<LibraryLoadState>("idle");
 const loadError = ref<string | null>(null);
+const active = ref(false);
+let loadedRevision = -1;
 
 type SortableCoverItem = CoverItem & {
   artist?: string;
@@ -154,6 +156,7 @@ const loadList = async (): Promise<void> => {
   if (loadState.value === "loading") return;
   loadState.value = "loading";
   loadError.value = null;
+  const requestedRevision = libraryStore.revision;
   const result =
     mode === "artist" ? await libraryStore.getArtistList() : await libraryStore.getAlbumList();
   if (!result.success || !result.data) {
@@ -162,17 +165,36 @@ const loadList = async (): Promise<void> => {
     return;
   }
   source.value = result.data;
+  loadedRevision = requestedRevision;
   loadState.value = "success";
   // 拉取当前列表中尚未缓存的歌手头像
   if (mode === "artist") void libraryStore.loadArtistAvatars();
 };
 
 const ensureListLoaded = (): void => {
-  if (loadState.value === "idle" || loadState.value === "error") void loadList();
+  if (
+    loadState.value === "idle" ||
+    loadState.value === "error" ||
+    loadedRevision !== libraryStore.revision
+  )
+    void loadList();
 };
 
-onMounted(ensureListLoaded);
-onActivated(ensureListLoaded);
+watch([() => libraryStore.revision, loadState], () => {
+  if (active.value && loadState.value === "success" && loadedRevision !== libraryStore.revision)
+    void loadList();
+});
+onMounted(() => {
+  active.value = true;
+  ensureListLoaded();
+});
+onActivated(() => {
+  active.value = true;
+  ensureListLoaded();
+});
+onDeactivated(() => {
+  active.value = false;
+});
 </script>
 
 <template>

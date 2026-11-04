@@ -7,6 +7,7 @@ import type { AlbumSummary, LibraryApi } from "@shared/types/library";
 import type { IpcResponse, Track } from "@shared/types/player";
 import messages from "@/i18n/locales/zh-CN.json";
 import { useLibraryStore } from "@/stores/library";
+import { useLibraryTracks } from "@/composables/useLibraryTracks";
 import type { subscribeCoreControlEvent } from "@/core/controlEventClient";
 import LocalList from "./LocalList.vue";
 import Songs from "./Songs.vue";
@@ -309,7 +310,9 @@ describe("歌曲列表加载", () => {
     expect(changeListener).toBeDefined();
     const response = deferred<IpcResponse<Track[]>>();
     mocks.getTracks.mockReturnValueOnce(response.promise);
-    scanListener!({ phase: "done", total: 1, scanned: 1 });
+    scanListener!({ phase: "scanning", total: 1, scanned: 0 });
+    changeListener!({ revision: 1 });
+    scanListener!({ phase: "done", total: 1, scanned: 1, changed: true });
     await flushPromises();
     expectLoading(wrapper);
     response.resolve({ success: false, error: "offline" });
@@ -317,7 +320,7 @@ describe("歌曲列表加载", () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(true);
     expect(wrapper.text()).not.toContain("暂无本地歌曲");
     mocks.getTracks.mockResolvedValueOnce({ success: true, data: [track] });
-    changeListener!({ revision: 1 });
+    changeListener!({ revision: 2 });
     await flushPromises();
     expect(wrapper.find("[data-list]").text()).toContain(track.title);
     expect(useLibraryStore().tracksLoadState).toBe("success");
@@ -401,5 +404,147 @@ describe("聚合结果与头像调用点", () => {
     await flushPromises();
     expect(wrapper.find("[data-list]").text()).toContain("艺术家");
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+  });
+});
+
+describe("扫描后的按需刷新", () => {
+  const listeners = () => ({
+    scan: mocks.subscribe.mock.calls.find(([type]) => type === "libraryScanProgress")![1],
+    changed: mocks.subscribe.mock.calls.find(([type]) => type === "libraryChanged")![1],
+  });
+
+  it("关闭本地标签或隐藏浏览器时暂停全量曲库刷新", async () => {
+    const enabled = ref(false);
+    let visibility: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    mountPage({
+      setup() {
+        useLibraryTracks(() => enabled.value);
+        return () => h("div");
+      },
+    });
+    await flushPromises();
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+    enabled.value = true;
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(1);
+    visibility = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    listeners().changed({ revision: 1 });
+    listeners().scan({ phase: "done", total: 1, scanned: 1, changed: true });
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(1);
+    enabled.value = false;
+    visibility = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(1);
+    enabled.value = true;
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it("无变化扫描不下载曲库、不写缓存，也不请求艺术家列表", async () => {
+    mountPage(Songs);
+    await flushPromises();
+    mocks.getTracks.mockClear();
+    mocks.setItem.mockClear();
+    const { scan } = listeners();
+    scan({ phase: "scanning", total: 0, scanned: 0 });
+    scan({ phase: "done", total: 0, scanned: 0, changed: false });
+    await flushPromises();
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+    expect(mocks.setItem).not.toHaveBeenCalled();
+    expect(mocks.getArtists).not.toHaveBeenCalled();
+  });
+
+  it("歌曲页隐藏时仅作废缓存，返回后才读取一次最新曲库", async () => {
+    const active = ref(true);
+    const wrapper = mountPage({
+      setup: () => () => h(KeepAlive, null, { default: () => (active.value ? h(Songs) : null) }),
+    });
+    await flushPromises();
+    active.value = false;
+    await flushPromises();
+    mocks.getTracks.mockClear();
+    mocks.setItem.mockClear();
+    const { scan, changed } = listeners();
+    scan({ phase: "scanning", total: 1, scanned: 0 });
+    changed({ revision: 1 });
+    scan({ phase: "done", total: 1, scanned: 1, changed: true });
+    await flushPromises();
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+    expect(mocks.setItem).not.toHaveBeenCalled();
+    mocks.getTracks.mockResolvedValueOnce({ success: true, data: [track] });
+    active.value = true;
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(1);
+    expect(wrapper.find("[data-list]").text()).toContain(track.title);
+  });
+
+  it("可见歌曲页只在变更扫描完成后刷新一次", async () => {
+    mountPage(Songs);
+    await flushPromises();
+    mocks.getTracks.mockClear();
+    const { scan, changed } = listeners();
+    scan({ phase: "scanning", total: 1, scanned: 0 });
+    changed({ revision: 1 });
+    await flushPromises();
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+    scan({ phase: "done", total: 1, scanned: 1, changed: true });
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(1);
+    expect(mocks.getArtists).not.toHaveBeenCalled();
+  });
+
+  it("专辑列表刷新自身结果，不读取全量歌曲", async () => {
+    mocks.route.name = "album-list";
+    mountPage(LocalList);
+    await flushPromises();
+    const { scan, changed } = listeners();
+    scan({ phase: "scanning", total: 1, scanned: 0 });
+    changed({ revision: 1 });
+    scan({ phase: "done", total: 1, scanned: 1, changed: true });
+    await flushPromises();
+    expect(mocks.getAlbums).toHaveBeenCalledTimes(2);
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+  });
+
+  it("隐藏的专辑列表在返回时更新，未变化扫描保留已有结果", async () => {
+    mocks.route.name = "album-list";
+    const active = ref(true);
+    mountPage({
+      setup: () => () =>
+        h(KeepAlive, null, { default: () => (active.value ? h(LocalList) : null) }),
+    });
+    await flushPromises();
+    active.value = false;
+    await flushPromises();
+    const { scan, changed } = listeners();
+    changed({ revision: 1 });
+    scan({ phase: "done", total: 0, scanned: 0, changed: false });
+    await flushPromises();
+    expect(mocks.getAlbums).toHaveBeenCalledTimes(1);
+    active.value = true;
+    await flushPromises();
+    expect(mocks.getAlbums).toHaveBeenCalledTimes(2);
+    scan({ phase: "scanning", total: 0, scanned: 0 });
+    scan({ phase: "done", total: 0, scanned: 0, changed: false });
+    await flushPromises();
+    expect(mocks.getAlbums).toHaveBeenCalledTimes(2);
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+  });
+
+  it("读取曲目期间的变更不会被旧响应清除", async () => {
+    const response = deferred<IpcResponse<Track[]>>();
+    mocks.getTracks.mockReturnValueOnce(response.promise);
+    const wrapper = mountPage(Songs);
+    await flushPromises();
+    listeners().changed({ revision: 1 });
+    mocks.getTracks.mockResolvedValueOnce({ success: true, data: [track] });
+    response.resolve({ success: true, data: [] });
+    await flushPromises();
+    expect(mocks.getTracks).toHaveBeenCalledTimes(2);
+    expect(wrapper.find("[data-list]").text()).toContain(track.title);
   });
 });

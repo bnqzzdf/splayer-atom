@@ -5,6 +5,7 @@ import type { PlaybackContext, Track } from "@shared/types/player";
 import type { ContentScope } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
 import { useLibraryStore } from "@/stores/library";
+import { useLibraryTracks } from "@/composables/useLibraryTracks";
 import { useUserStore } from "@/stores/user";
 import { useStatusStore } from "@/stores/status";
 import SongList from "@/components/list/SongList.vue";
@@ -77,9 +78,7 @@ const handlePlayAll = (): void => {
   player.playFrom(currentTracks.value, 0, playbackContext.value);
 };
 
-onMounted(() => {
-  if (!library.initialized) library.load();
-});
+useLibraryTracks(() => tab.value === "local");
 
 const songListRef = shallowRef<InstanceType<typeof SongList> | null>(null);
 

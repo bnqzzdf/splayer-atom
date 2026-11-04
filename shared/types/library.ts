@@ -38,6 +38,8 @@ export interface ScanProgress {
   scopeDirs?: string[];
   /** 本轮是否为增量扫描。 */
   incremental?: boolean;
+  /** 扫描结束时是否修改了曲库内容。 */
+  changed?: boolean;
 }
 
 /** 音乐库 API */

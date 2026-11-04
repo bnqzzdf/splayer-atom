@@ -1441,6 +1441,7 @@ onMounted(async () => {
     scanProgress.value = progress;
     if (
       progress.phase === "done" &&
+      progress.changed !== false &&
       currentPath.value &&
       progress.scopeDirs?.some((scope) => folderPathWithinRoot(currentPath.value, scope))
     ) {

@@ -172,18 +172,35 @@ export const getRandomTracks = (limit: number): Track[] => {
 /** 用于增量扫描比对的文件记录 */
 export interface FileRecord {
   path: string;
+  title: string;
   mtime: number;
   size: number;
   cover: string | null;
 }
 
-/** 获取所有真实音频文件记录及封面引用，用于增量扫描比对与缓存修复。 */
-export const getFileRecords = (): FileRecord[] => {
-  return getDb()
+const directoryCondition = (column: "path" | "cue_path", dirs: string[]) => {
+  const prefixes = [...new Set(dirs.map((dir) => path.resolve(dir)))].map((dir) =>
+    dir.endsWith(path.sep) ? dir : dir + path.sep,
+  );
+  return {
+    where: prefixes.map(() => `(${column} >= ? AND ${column} < ?)`).join(" OR ") || "0",
+    params: prefixes.flatMap((prefix) => [
+      prefix,
+      prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1),
+    ]),
+  };
+};
+
+export const getFileRecords = (dirs: string[]): FileRecord[] => {
+  const { where, params } = directoryCondition("path", dirs);
+  const rows = getDb()
     .prepare(
-      "SELECT path, COALESCE(file_mtime, 0) as mtime, file_size as size, cover FROM tracks WHERE cue_path IS NULL",
+      `SELECT path, title, cue_path AS cuePath, COALESCE(file_mtime, 0) as mtime, file_size as size, cover
+       FROM tracks WHERE ${where}`,
     )
-    .all() as FileRecord[];
+    .all(...params) as (FileRecord & { cuePath: string | null })[];
+  // cue_path 的空值索引会让 SQLite 忽略路径范围，先按路径取当前范围，再排除 CUE 分轨。
+  return rows.flatMap(({ cuePath, ...record }) => (cuePath === null ? [record] : []));
 };
 
 /** 按 canonical cover URL 找一个可重新生成该缓存封面的物理音源。 */
@@ -277,15 +294,21 @@ export const upsertTracks = (tracks: UpsertTrack[]): void => {
 
 /** 查询指定目录下的 CUE 虚拟曲目路径 */
 export const getCueTrackPathsByDirs = (dirs: string[]): string[] => {
-  if (dirs.length === 0) return [];
-  const rows: { path: string }[] = [];
-  const stmt = getDb().prepare("SELECT path FROM tracks WHERE cue_path LIKE ? ESCAPE '\\'");
-  for (const dir of dirs) {
-    const prefix = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + path.sep;
-    const escaped = prefix.replace(/[\\%_]/g, "\\$&");
-    rows.push(...(stmt.all(escaped + "%") as { path: string }[]));
-  }
+  const { where, params } = directoryCondition("cue_path", dirs);
+  const rows = getDb()
+    .prepare(`SELECT path FROM tracks WHERE ${where}`)
+    .all(...params) as {
+    path: string;
+  }[];
   return rows.map((row) => row.path);
+};
+
+export const getCueTracksByDirs = (dirs: string[]): Track[] => {
+  const { where, params } = directoryCondition("cue_path", dirs);
+  const rows = getDb()
+    .prepare(`SELECT * FROM tracks WHERE ${where}`)
+    .all(...params) as TrackRow[];
+  return rows.map(rowToTrack);
 };
 
 /** 批量删除曲目（按路径） */

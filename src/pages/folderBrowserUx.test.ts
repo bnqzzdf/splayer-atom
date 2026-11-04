@@ -139,6 +139,7 @@ test("Folder Search keeps truncation independent from pagination and resets it f
 test("Folder scan refreshes once at completion instead of reloading every library batch", () => {
   assert.ok(foldersSource.includes("if (scanCoversCurrent.value) return;"));
   assert.ok(foldersSource.includes('progress.phase === "done"'));
+  assert.ok(foldersSource.includes("progress.changed !== false"));
   assert.ok(foldersSource.includes("folderPathWithinRoot(currentPath.value, scope)"));
   assert.ok(
     foldersSource.includes('subscribeCoreControlEvent("libraryChanged", onLibraryRevision)'),

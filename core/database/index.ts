@@ -250,6 +250,7 @@ export {
   getFileRecords,
   getCoverSourcePath,
   getCueTrackPathsByDirs,
+  getCueTracksByDirs,
   upsertTracks,
   deleteTracksByPaths,
   searchTracks,
