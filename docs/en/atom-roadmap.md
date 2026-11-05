@@ -4,189 +4,56 @@
 
 ## Current status
 
-The first batch of Folder Browser improvements is implemented and passed functional acceptance on
-the current real library and browser on 2026-09-28; this is not a new output-hardware, account or
-release acceptance record.
+SPlayer Atom targets Linux x86-64 with a Core and Web Control product architecture.
+Node is the default runtime; Bun remains an optional experimental flavor.
 
-SPlayer Atom is a Linux x86-64 Core (Node is the default release baseline; Bun is an experimental
-runtime flavor) with Web Control as its only UI. The Web + Core migration,
-ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned Folder Browser,
-Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
-tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
-bundled packages can be built with or without Diretta. Confirmed implementation milestones are in
-[Atom Completed](./history/atom-completed.md).
+As of 2026-11-05, the maintainer marked **all 40 development, fix and acceptance items
+as complete** in the latest Chinese roadmap. Those items have been moved to
+[Completed Work](./history/atom-completed.md), grouped under ALSA/Diretta/UPnP,
+providers/Web, folder browsing, and builds/releases. Historical work is no longer
+presented as an active to-do list.
 
-The Folder Browser implements paged browsing, pinned folders, physical-name search,
-current-directory filtering, list/grid views, materials, scoped scan, recursive operations and
-batch actions on audio/container tracks. List/grid preference is persisted in `058c0e63`.
-First-batch display sorting, physical attributes, Web controls, navigation restore, scope notices
-and full-result batch selection from the
-[Folder Browser improvements](./history/folder-browser-improvements.md) are implemented and have passed
-functional acceptance on the current real library. Wider acceptance for NAS/USB, very large
-directories and the material viewer in the original plan is still open.
+A maintainer-confirmed completion status is distinct from independently reviewable
+acceptance evidence. Some newly checked hardware, real-account, browser, endurance
+and final-release acceptance items have no matching new report in the repository.
+This documentation update does not rerun tests or use an old artifact's measurements
+as evidence for v1.2.0. Original test results and their applicable commits, devices
+and artifacts remain documented in the [history archive](./history/README.md).
 
-Commits `75561bad` and `2041c17b` narrowed physical-path queries and partial scans to relevant
-paths and removed unnecessary whole-library projection refreshes without active consumers.
-These changes are implemented, but they do not establish a fresh real-library latency acceptance.
-Node and Bun now share the Core build, packaging and artifact verification paths (`85b5aa86`);
-`mise.toml` pins Node `24.22.2` and Bun `1.4.4` (`0e590b43`). See the
-[runtime comparison](../history/bun-runtime-experiment.md) (Chinese only); Bun is not yet a release candidate.
+## Subsequent development tasks
 
-This roadmap tracks remaining work and acceptance. Completed implementation plans, past artifact measurements and milestones are preserved in the [history archive](./history/README.md), without marking any outstanding gate as passed. Code establishes whether a path exists;
-hardware, real-account, browser and release acceptance require a recorded run. The
-[2026-09-22 ALSA record](./history/alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
-the [2026-09-23 FC4 retest](./history/alsa-acceptance-2026-09-23.md) covers the two fixes in installed
-artifact commit `3e420f78`. A later [local-module ALSA retest](./history/alsa-gap-fixes-2026-09-23.md)
-covers source changes through `53284360`; it is not an installed Core artifact. The no-hardware-pause
-fallback branch is retained for devices that need it and has software verification only.
-Identify each new artifact by its recorded Git commit, not by the package version alone.
+**No further development tasks at present.**
 
-Lasting constraints are in `AGENTS.md`; workflows are in the
-[development guide](./atom-development.md).
+No feature development, fixes or acceptance work are currently scheduled on this
+roadmap. Record new requirements or defects as new scoped tasks rather than
+automatically reopening completed historical plans.
 
-## Open work and acceptance
+## Version and release
 
-### ALSA and output
+- The current source product version is `1.2.0`.
+- The `dev` branch includes commit `5b8773c3`, and Git tag `v1.2.0`
+  has been pushed to GitHub.
+- A Git tag is not a GitHub Release. Whether a Release and downloadable
+  artifacts exist depends on the actual GitHub release record.
+- See [build flavors](./build-flavors.md) and the
+  [runtime comparison](../history/bun-runtime-experiment.md) (Chinese only)
+  for Node/Bun variants, past builds and scoped benchmarks.
 
-- [ ] Validate the [ALSA output plan](./history/alsa-output-plan.md) changes in a clean candidate Core
-      artifact. The [FC4 local-module retest](./history/alsa-gap-fixes-2026-09-23.md) passed short
-      Processed pitch/speed playback, pitch/speed seek and Direct basic playback. A
-      [2026-09-23 ALSA native runtime change review](./history/alsa-runtime-smoke-2026-09-23.md) of the same
-      source working tree separately records a partial smoke of Processed seek and Direct basic
-      playback. Check the supported modes, formats, transitions and resource trend on that
-      candidate; investigate a specific failure if observed. Shared `AlsaFrameWriter`, single
-      runtime ownership and bounded decoded/DSP queues are implemented. Separate mode control loops,
-      parameter-version tracking and an arbitrary cap on one upstream decoder frame are not
-      acceptance gates.
-- [ ] Complete target-device ALSA format and lifecycle checks on the clean candidate. Independent
-      PCM/DSD comparisons already establish exact data at the USB submission layer. Final DAC
-      bit-test or digital capture is needed only for a device-specific end-to-end claim; the
-      product's software guarantee ends at the ALSA HW submission boundary. A device without
-      hardware pause is needed only to claim its fallback path has been verified on that device.
-- [ ] Repeat UPnP hardware checks on the release candidate. The 2026-09-22 FC4 run discovered no
-      renderer; earlier AudioSys checks covered common formats, CUE, SACD, DSD and output switching.
-      The media listener passed 100 repeated aborted pulls on 2026-09-23, but no AudioSys Renderer
-      is currently available. Finish the second real-renderer long-run resource check in the
-      [UPnP plan](./history/upnp-output-plan.md) and record the final compatibility matrix.
-- [ ] Complete real Diretta CUE gapless acceptance in the
-      [Direct CUE plan](./history/direct-cue-gapless-plan.md), including adjacent PCM/DSD segments, seek,
-      queue changes and long-running boundary behavior.
+## Product scope and constraints
 
-### Providers and Web Control
-
-- [x] UI-1 implementation: an AM-style player, three-way layout switching, legacy preference
-      migration and shared transport controls have passed automated Node/Web tests, types, lint
-      and Web build (`09aa92f1`). See the
-      [upstream UI plan](../history/upstream-ui-adoption-plan.md) (Chinese only).
-- [ ] UI-1 manual acceptance: browser screenshots, responsive viewports, uninterrupted playback,
-      lyrics/queue behavior, hidden-tab recovery and Direct-mode controls still need validation.
-- [x] UI-2 implementation: normal/compact rows, virtual-list height updates, scoped per-page
-      sorting preferences and retirement of old global sorting, with automated regression coverage.
-- [ ] UI-2 browser acceptance: long lists, pagination, disc grouping, scroll-to-current, mobile
-      touch targets, density changes and cross-page sorting persistence.
-- [x] FIX-1: Core rejects nested scan roots before mutation; Web no longer undoes the addition by
-      deleting a root. Isolated database tests preserve tracks and playlist associations.
-- [x] FIX-2: Recover known audio extensions from Content-Disposition, preserving declared-format
-      precedence. A local HTTP stream regression checks extensionless URLs, generic MIME, skip
-      behavior, lyric sidecars, and temporary-part cleanup.
-- [ ] Record full real-account acceptance against [provider criteria](./live-provider-acceptance.md)
-      for Netease, QM, KG, Qobuz and TIDAL on the intended artifact. The QM/KG product paths and
-      Qobuz browser OAuth/token-only login are implemented but have no real-account acceptance run
-      for this tree. Existing UPnP notes verify selected real Netease/TIDAL online paths, not
-      complete provider matrices.
-- [ ] Add a bounded real-token ListenBrainz acceptance record for Now Playing, permanent listens,
-      401/429 handling, offline retry and restart. The current code implements these paths, but
-      the former completion checkbox had no corresponding run record in the repository.
-- [ ] Complete responsive Web Control acceptance at the representative viewports and actual mobile
-      devices in the [responsive plan](./history/web-responsive-plan.md). The layout is implemented; no
-      complete device/interaction acceptance record is in the repository.
-- [ ] Record long-running use with multiple real Web Controls across refresh, disconnect and
-      reconnect. The artifact smoke passed multiple WebSocket clients and reconnection; that is
-      narrower than long-running browser acceptance.
-
-### Folder browsing
-
-The [original plan](./history/local-folder-browser-plan.md) defines the implemented base features; the
-[improvements plan](./history/folder-browser-improvements.md) records the first batch and later direction.
-Display sorting is independent of the Core-owned directory playback order.
-
-- [x] First-batch Core display sorting: file name, modification time, disc/track number,
-      ascending/descending, pinned groups, physical attributes, sorting before pagination and
-      cursor-invalidation checks when the sort result changes.
-- [x] First-batch Web sort controls and browser-local preference, sort-related history state,
-      per-directory filter restore and deterministic back and containing-folder positioning; this
-      reuses the list/grid preference persistence.
-- [x] First-batch physical file names and required information, recursive/current-directory action
-      scope notices, select-all/invert over the complete current filter result and Core search
-      truncation notices.
-- [x] First-batch functional acceptance on the current real library and browser was completed on
-      2026-09-28: sorting, pinned groups, pagination beyond 200 items, rapid sort switching, back
-      positioning, filtering, search, batch selection and CUE/SACD container positioning all passed.
-      The final automated gates were Node 428/428 and Web 111/111. No on-device sample of batch
-      operations in a single directory with more than 200 songs was available; Folder Search is
-      functionally correct but feels slow. Neither point blocks first-batch functional acceptance.
-- [ ] Complete the wider manual acceptance for NAS/USB, very large directories and the material
-      viewer in sections 17/18 of the original plan.
-- [ ] If Folder Search latency is still clearly noticeable on a real library, measure and analyze
-      performance before deciding on specific optimizations.
-- [x] Optimize physical-path queries, partial scans and library projection refreshes
-      (`75561bad`, `2041c17b`). New real-library performance acceptance remains open.
-- [ ] Second batch: current-subtree recursive search, folder-associated album/artist shortcuts and
-      the batch failure notice are implemented; functional acceptance on a real library and browser
-      is still pending.
-
-### Release
-
-- [ ] Evaluate experimental Bun packages on target devices for PCM/DSD, ALSA/Diretta/UPnP,
-      seek/track switching, plugin Host, prolonged resource use, Debian 11/OpenRC, and upgrade/
-      rollback before considering a formal Bun release. The [empty-library API benchmark](../history/bun-runtime-experiment.md)
-      (Chinese only) is not audio or stability acceptance.
-- [ ] Build a clean artifact from the intended Git commit and complete the
-      [hardware checklist](./hardware-release-checklist.md) and
-      [deployment checklist](./core-deployment.md) on that same candidate, including install,
-      upgrade and rollback. The `cecee166` archive passed file comparison and extracted-artifact
-      smoke, but its observed seek/restart failures prevent closing final acceptance. Debian 11
-      bundled builds without Diretta and with SDK 150 Diretta v3 passed build/artifact smoke on
-      2026-09-23 from a dirty working tree; they are not clean release candidates or hardware
-      acceptance. v2/v4 remain selectable but have not been built in this record.
-- [ ] After those gates pass, prepare the stable release with artifact commit, hash, capabilities
-      and acceptance results recorded.
-
-## Current priorities
-
-Near-term development (separate from release gates):
-
-1. Complete browser/device acceptance for implemented UI-1 and UI-2 from the
-   [upstream UI plan](../history/upstream-ui-adoption-plan.md) (Chinese only).
-2. Keep the nested scan-root and download-extension fixes as separate changes, without expanding the UI scope.
-
-Release acceptance priorities:
-
-1. Validate ALSA and resource use on one clean candidate; complete target-device, UPnP and Diretta CUE checks.
-2. Complete Folder Browser NAS/USB, large-directory and materials acceptance, including the new scan/query paths.
-3. Complete five-provider, ListenBrainz, responsive Web and multi-Control long-run acceptance.
-4. Keep Node as the default release baseline; evaluate Bun separately after target-device acceptance.
-5. Run install, upgrade, rollback and final hardware checks against one fixed candidate, then release.
-
-## Product scope
-
-The current release targets one user on a trusted home/LAN network. Authentication, pairing, TLS
-and stricter browser-origin controls require a later accepted product requirement.
+The current product targets a single user on a trusted home/LAN network.
+Authentication, pairing, TLS and stricter browser-origin controls require
+a new accepted product requirement if pursued; they are not outstanding tasks
+from this roadmap. Follow `AGENTS.md` for lasting constraints and the
+[development guide](./atom-development.md) for workflows.
 
 ## Related documents
 
-| Document                                                                                           | Purpose                                                 |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [Atom Completed](./history/atom-completed.md)                                                              | Confirmed implementation and bounded acceptance history |
-| [Development guide](./atom-development.md)                                                         | Environment, checks and conventions                     |
-| [Upstream UI adoption plan](../history/upstream-ui-adoption-plan.md) (Chinese only)                        | Implemented UI batches, fixes and pending browser tests |
-| [Node/Bun runtime comparison](../history/bun-runtime-experiment.md) (Chinese only)                         | Flavor implementation, benchmarks and limitations       |
-| [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)               | Core/Web artifacts and variants                         |
-| [Core deployment](./core-deployment.md)                                                            | systemd, durable data, install, upgrade and rollback    |
-| [GentooPlayer (OpenRC) service management](./gentooplayer-openrc.md)                               | OpenRC service development, deployment, upgrade, triage |
-| [Hardware checklist](./hardware-release-checklist.md)                                              | ALSA, Diretta and UPnP release checks                   |
-| [Provider acceptance](./live-provider-acceptance.md)                                               | Real-account criteria                                   |
-| [ALSA plan](./history/alsa-output-plan.md), [UPnP plan](./history/upnp-output-plan.md)                             | Output implementation and remaining checks              |
-| [Folder Browser plan](./history/local-folder-browser-plan.md), [responsive plan](./history/web-responsive-plan.md) | Web feature and device criteria                         |
-| [Folder Browser improvements](./history/folder-browser-improvements.md)                                    | Display sorting, file information and batch acceptance  |
-| [Direct CUE plan](./history/direct-cue-gapless-plan.md), [lyric plan](./history/lyric-improvements.md)             | Gapless and lyric implementation                        |
+| Document | Purpose |
+| --- | --- |
+| [Completed Work](./history/atom-completed.md) | Closeout status for all 40 items, implementation and historical acceptance boundaries |
+| [History archive](./history/README.md) | Past plans, device checks and scoped results |
+| [Development guide](./atom-development.md) | Environment, checks and development conventions |
+| [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md) | Core/Web artifacts and Node/Bun flavors |
+| [Core deployment](./core-deployment.md) | systemd, install, upgrade and rollback |
+| [Hardware checklist](./hardware-release-checklist.md), [provider acceptance](./live-provider-acceptance.md) | Acceptance criteria and existing historical evidence |
