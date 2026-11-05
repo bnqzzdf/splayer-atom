@@ -179,7 +179,8 @@ mod imp {
             path: &Path,
             position_secs: f64,
         ) -> Result<(Self, f64)> {
-            let (source, actual_position) = DirectPcmSource::open_local_at(path, position_secs)?;
+            let (source, actual_position) =
+                DirectPcmSource::open_diretta_local_at(path, position_secs)?;
             Self::open_source(selector, source, actual_position)
         }
 
@@ -190,7 +191,7 @@ mod imp {
             end_frame75: Option<u64>,
         ) -> Result<(Self, f64)> {
             let (source, actual_position) =
-                DirectPcmSource::open_local_segment(path, start_frame75, end_frame75)?;
+                DirectPcmSource::open_diretta_local_segment(path, start_frame75, end_frame75)?;
             Self::open_source(selector, source, actual_position)
         }
 
@@ -204,8 +205,8 @@ mod imp {
             let target = CString::new(target).map_err(|_| anyhow!("invalid Diretta target id"))?;
             let format = source.format();
             anyhow::ensure!(
-                source.exact_integer_source(),
-                "Diretta strict Source Direct 只接受 lossless integer PCM"
+                source.diretta_integer_source(),
+                "Diretta Source Direct 需要可输出的 integer PCM"
             );
             let raw = unsafe {
                 atom_diretta_open_direct(
@@ -261,7 +262,7 @@ mod imp {
             &mut self,
             path: &Path,
         ) -> Result<DirectPcmFormat> {
-            self.source.replace_local_strict_while_paused(path)
+            self.source.replace_local_diretta_while_paused(path)
         }
 
         pub fn monitor(&self) -> DirectPcmMonitor {
@@ -269,7 +270,7 @@ mod imp {
         }
 
         pub fn stage_handle(&self) -> DirectPcmStageHandle {
-            self.source.strict_stage_handle()
+            self.source.diretta_stage_handle()
         }
 
         pub fn set_duration(&self, duration_secs: f64) {

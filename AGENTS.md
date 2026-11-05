@@ -32,8 +32,11 @@
 
 - Diretta is strict Source Direct: preserve PCM samples, effective bit depth, rate, and channels;
   preserve the native DSD logical one-bit sequence, rate, and channels.
-- Lossless decode/container adaptation is allowed. Wider transport slots must preserve effective
-  integer sample bits; DSF/DFF bit-order adaptation must preserve the logical DSD sequence.
+- Lossless decode/container adaptation is allowed and must remain bit-perfect. Lossy codecs may
+  play through Diretta after decoding; their float PCM may be converted to integer PCM on the
+  decoder thread, without altering the lossless integer path. Wider transport slots must preserve
+  effective lossless integer sample bits; DSF/DFF bit-order adaptation must preserve the logical
+  DSD sequence. Do not claim bit-perfect source fidelity for lossy input.
 - No resampling, remixing, normalization, ReplayGain, EQ/preamp, non-unity software gain, fade,
   tempo, pitch, re-encoding, PCM fallback, DoP, or DSD-to-PCM.
 - Never route strict Diretta through the normal `f32` DSP/resampler path. Reject unsupported Target

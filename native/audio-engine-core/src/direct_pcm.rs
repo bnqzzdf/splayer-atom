@@ -26,11 +26,15 @@ pub enum DirectPcmMemoryPath {
     ZeroCopyPacked,
     BitPerfectRepack,
     RepresentationRepack,
+    LossyFloatToSigned32,
 }
 
 impl DirectPcmMemoryPath {
     const fn needs_repack(self) -> bool {
-        matches!(self, Self::BitPerfectRepack | Self::RepresentationRepack)
+        matches!(
+            self,
+            Self::BitPerfectRepack | Self::RepresentationRepack | Self::LossyFloatToSigned32
+        )
     }
 }
 
@@ -95,16 +99,16 @@ impl DirectPcmFrame {
                     .context("Source Direct packed seek offset 溢出")?;
                 Ok(unsafe { ptr.add(offset) }.cast_const())
             }
-            DirectPcmMemoryPath::BitPerfectRepack | DirectPcmMemoryPath::RepresentationRepack => {
-                match &self.repack {
-                    DirectPcmRepackBuffer::Signed16(buffer) => Ok(buffer.as_ptr().cast()),
-                    DirectPcmRepackBuffer::Signed32(buffer) => Ok(buffer.as_ptr().cast()),
-                    DirectPcmRepackBuffer::Float32(buffer) => Ok(buffer.as_ptr().cast()),
-                    DirectPcmRepackBuffer::None => {
-                        bail!("Source Direct planar PCM 缺少 repack buffer")
-                    }
+            DirectPcmMemoryPath::BitPerfectRepack
+            | DirectPcmMemoryPath::RepresentationRepack
+            | DirectPcmMemoryPath::LossyFloatToSigned32 => match &self.repack {
+                DirectPcmRepackBuffer::Signed16(buffer) => Ok(buffer.as_ptr().cast()),
+                DirectPcmRepackBuffer::Signed32(buffer) => Ok(buffer.as_ptr().cast()),
+                DirectPcmRepackBuffer::Float32(buffer) => Ok(buffer.as_ptr().cast()),
+                DirectPcmRepackBuffer::None => {
+                    bail!("Source Direct planar PCM 缺少 repack buffer")
                 }
-            }
+            },
         }
     }
 
@@ -169,13 +173,47 @@ impl DirectPcmFrame {
             .checked_mul(channels)
             .context("Source Direct planar sample count 溢出")?;
         self.preallocate_repack(sample_format, total_samples)?;
-        ensure!(
-            !frame.extended_data.is_null(),
-            "Source Direct planar PCM 缺少 extended_data"
-        );
+        let source_format = frame.format as sys::AVSampleFormat;
+        if source_format != sys::AVSampleFormat_AV_SAMPLE_FMT_FLT {
+            ensure!(
+                !frame.extended_data.is_null(),
+                "Source Direct planar PCM 缺少 extended_data"
+            );
+        }
 
-        match (&mut self.repack, sample_format) {
-            (DirectPcmRepackBuffer::Signed16(output), DirectPcmSampleFormat::Signed16) => unsafe {
+        match (&mut self.repack, sample_format, source_format) {
+            (
+                DirectPcmRepackBuffer::Signed32(output),
+                DirectPcmSampleFormat::Signed32,
+                sys::AVSampleFormat_AV_SAMPLE_FMT_FLT,
+            ) => unsafe {
+                let packed = frame.data[0].cast::<f32>();
+                ensure!(
+                    !packed.is_null(),
+                    "Source Direct packed float PCM 缺少 data[0]"
+                );
+                for (index, value) in output.iter_mut().take(total_samples).enumerate() {
+                    *value = lossy_float_to_s32(*packed.add(start_sample * channels + index));
+                }
+            },
+            (
+                DirectPcmRepackBuffer::Signed32(output),
+                DirectPcmSampleFormat::Signed32,
+                sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP,
+            ) => unsafe {
+                for channel in 0..channels {
+                    let plane = (*frame.extended_data.add(channel)).cast::<f32>();
+                    ensure!(
+                        !plane.is_null(),
+                        "Source Direct planar float PCM plane 为空"
+                    );
+                    for index in 0..samples {
+                        output[index * channels + channel] =
+                            lossy_float_to_s32(*plane.add(start_sample + index));
+                    }
+                }
+            },
+            (DirectPcmRepackBuffer::Signed16(output), DirectPcmSampleFormat::Signed16, _) => unsafe {
                 interleave_planar::<i16>(
                     frame.extended_data,
                     channels,
@@ -184,7 +222,7 @@ impl DirectPcmFrame {
                     output,
                 )?;
             },
-            (DirectPcmRepackBuffer::Signed32(output), DirectPcmSampleFormat::Signed32) => unsafe {
+            (DirectPcmRepackBuffer::Signed32(output), DirectPcmSampleFormat::Signed32, _) => unsafe {
                 interleave_planar::<i32>(
                     frame.extended_data,
                     channels,
@@ -193,7 +231,7 @@ impl DirectPcmFrame {
                     output,
                 )?;
             },
-            (DirectPcmRepackBuffer::Float32(output), DirectPcmSampleFormat::Float32) => unsafe {
+            (DirectPcmRepackBuffer::Float32(output), DirectPcmSampleFormat::Float32, _) => unsafe {
                 interleave_planar::<f32>(
                     frame.extended_data,
                     channels,
@@ -214,7 +252,11 @@ impl DirectPcmFrame {
         self.sample_offset = 0;
     }
 
-    fn accept_decoded_frame(&mut self, valid_bits_hint: u8) -> Result<()> {
+    fn accept_decoded_frame(
+        &mut self,
+        valid_bits_hint: u8,
+        convert_lossy_float: bool,
+    ) -> Result<()> {
         let frame = unsafe { self.raw.as_ref() };
         let (sample_format, memory_path) = match frame.format as sys::AVSampleFormat {
             sys::AVSampleFormat_AV_SAMPLE_FMT_S16 => (
@@ -232,6 +274,14 @@ impl DirectPcmFrame {
             sys::AVSampleFormat_AV_SAMPLE_FMT_S32P => (
                 DirectPcmSampleFormat::Signed32,
                 DirectPcmMemoryPath::BitPerfectRepack,
+            ),
+            sys::AVSampleFormat_AV_SAMPLE_FMT_FLT if convert_lossy_float => (
+                DirectPcmSampleFormat::Signed32,
+                DirectPcmMemoryPath::LossyFloatToSigned32,
+            ),
+            sys::AVSampleFormat_AV_SAMPLE_FMT_FLTP if convert_lossy_float => (
+                DirectPcmSampleFormat::Signed32,
+                DirectPcmMemoryPath::LossyFloatToSigned32,
             ),
             sys::AVSampleFormat_AV_SAMPLE_FMT_FLT => (
                 DirectPcmSampleFormat::Float32,
@@ -259,10 +309,14 @@ impl DirectPcmFrame {
             DirectPcmSampleFormat::Signed32 => 32,
             DirectPcmSampleFormat::Float32 => 32,
         };
-        let valid_bits = match sample_format {
-            DirectPcmSampleFormat::Float32 => 32,
-            _ if valid_bits_hint > 0 && valid_bits_hint <= storage_bits => valid_bits_hint,
-            _ => storage_bits,
+        let valid_bits = if memory_path == DirectPcmMemoryPath::LossyFloatToSigned32 {
+            32
+        } else {
+            match sample_format {
+                DirectPcmSampleFormat::Float32 => 32,
+                _ if valid_bits_hint > 0 && valid_bits_hint <= storage_bits => valid_bits_hint,
+                _ => storage_bits,
+            }
         };
         let bytes_per_sample = usize::from(storage_bits / 8);
         let samples_per_channel =
@@ -272,32 +326,34 @@ impl DirectPcmFrame {
             .and_then(|samples| samples.checked_mul(bytes_per_sample))
             .context("Source Direct PCM payload 长度溢出")?;
 
-        match memory_path {
-            DirectPcmMemoryPath::ZeroCopyPacked => {
-                ensure!(
-                    !frame.data[0].is_null(),
-                    "Source Direct packed PCM 缺少 data[0]"
-                );
-                ensure!(frame.linesize[0] >= 0, "Source Direct PCM linesize 无效");
-                ensure!(
-                    usize::try_from(frame.linesize[0]).unwrap_or(0) >= payload_len,
-                    "Source Direct PCM payload 超过 FFmpeg frame buffer"
-                );
-            }
-            DirectPcmMemoryPath::BitPerfectRepack | DirectPcmMemoryPath::RepresentationRepack => {
-                ensure!(
-                    frame.linesize[0] >= 0,
-                    "Source Direct planar PCM linesize 无效"
-                );
-                let plane_len = samples_per_channel
-                    .checked_mul(bytes_per_sample)
-                    .context("Source Direct planar plane 长度溢出")?;
-                ensure!(
-                    usize::try_from(frame.linesize[0]).unwrap_or(0) >= plane_len,
-                    "Source Direct planar PCM plane 超过 FFmpeg frame buffer"
-                );
-                self.repack_planar(sample_format, 0)?;
-            }
+        let packed = memory_path == DirectPcmMemoryPath::ZeroCopyPacked
+            || (memory_path == DirectPcmMemoryPath::LossyFloatToSigned32
+                && frame.format as sys::AVSampleFormat == sys::AVSampleFormat_AV_SAMPLE_FMT_FLT);
+        if packed {
+            ensure!(
+                !frame.data[0].is_null(),
+                "Source Direct packed PCM 缺少 data[0]"
+            );
+            ensure!(frame.linesize[0] >= 0, "Source Direct PCM linesize 无效");
+            ensure!(
+                usize::try_from(frame.linesize[0]).unwrap_or(0) >= payload_len,
+                "Source Direct PCM payload 超过 FFmpeg frame buffer"
+            );
+        } else {
+            ensure!(
+                frame.linesize[0] >= 0,
+                "Source Direct planar PCM linesize 无效"
+            );
+            let plane_len = samples_per_channel
+                .checked_mul(bytes_per_sample)
+                .context("Source Direct planar plane 长度溢出")?;
+            ensure!(
+                usize::try_from(frame.linesize[0]).unwrap_or(0) >= plane_len,
+                "Source Direct planar PCM plane 超过 FFmpeg frame buffer"
+            );
+        }
+        if memory_path.needs_repack() {
+            self.repack_planar(sample_format, 0)?;
         }
 
         self.format = Some(DirectPcmFormat {
@@ -391,6 +447,13 @@ unsafe fn interleave_planar<T: Copy>(
         }
     }
     Ok(())
+}
+
+fn lossy_float_to_s32(sample: f32) -> i32 {
+    // 只在有损解码器输出 float 时作 PCM 表示转换，原始无损整数样本不经过此计算。
+    ((sample as f64) * 2_147_483_648.0)
+        .round()
+        .clamp(i32::MIN as f64, i32::MAX as f64) as i32
 }
 
 impl Drop for DirectPcmFrame {
@@ -493,6 +556,7 @@ pub struct DirectPcmDecoder {
     timeline_origin_pts: i64,
     valid_bits_hint: u8,
     lossless_codec: bool,
+    convert_lossy_float: bool,
     seek_packet_timeline: Option<VecDeque<DirectPcmPacketTimeline>>,
     active_seek_packet_timeline: Option<DirectPcmActivePacketTimeline>,
     last_frame_packet_timestamp: Option<i64>,
@@ -502,6 +566,14 @@ pub struct DirectPcmDecoder {
 
 impl DirectPcmDecoder {
     pub fn open_local(path: &Path) -> Result<Self> {
+        Self::open_local_with_policy(path, false)
+    }
+
+    fn open_diretta(path: &Path) -> Result<Self> {
+        Self::open_local_with_policy(path, true)
+    }
+
+    fn open_local_with_policy(path: &Path, convert_lossy_float: bool) -> Result<Self> {
         let path = path
             .to_str()
             .context("Source Direct 当前只接受 UTF-8 本地路径")?;
@@ -629,6 +701,7 @@ impl DirectPcmDecoder {
             timeline_origin_pts,
             valid_bits_hint,
             lossless_codec,
+            convert_lossy_float: convert_lossy_float && !lossless_codec,
             seek_packet_timeline: None,
             active_seek_packet_timeline: None,
             last_frame_packet_timestamp: None,
@@ -845,7 +918,7 @@ impl DirectPcmDecoder {
                             raw.nb_samples,
                         )
                     });
-                frame.accept_decoded_frame(self.valid_bits_hint)?;
+                frame.accept_decoded_frame(self.valid_bits_hint, self.convert_lossy_float)?;
                 return Ok(true);
             }
             if receive_result == sys::AVERROR_EOF {
@@ -983,7 +1056,7 @@ enum DirectPcmCommand {
     },
     ReplaceLocal {
         path: PathBuf,
-        require_exact_integer: bool,
+        require_diretta_integer: bool,
         response: mpsc::SyncSender<Result<DirectPcmFormat>>,
     },
 }
@@ -1273,6 +1346,13 @@ fn exact_integer_source(decoder: &DirectPcmDecoder, format: DirectPcmFormat) -> 
         )
 }
 
+fn diretta_integer_source(format: DirectPcmFormat) -> bool {
+    matches!(
+        format.sample_format,
+        DirectPcmSampleFormat::Signed16 | DirectPcmSampleFormat::Signed32
+    )
+}
+
 fn cue_frame75_to_pcm_sample(frame75: u64, sample_rate: u32) -> Result<u64> {
     let scaled = frame75
         .checked_mul(u64::from(sample_rate))
@@ -1440,7 +1520,7 @@ impl DirectPcmStaging {
         &self,
         path: &Path,
         current_format: DirectPcmFormat,
-        require_exact_integer: bool,
+        require_diretta_integer: bool,
         duration_micros: u64,
         generation: u64,
         start_frame75: Option<u64>,
@@ -1451,14 +1531,15 @@ impl DirectPcmStaging {
         let candidate = prepare_staged_pcm_source(
             path,
             current_format,
+            require_diretta_integer,
             duration_micros,
             generation,
             start_frame75,
             end_frame75,
         )?;
         ensure!(
-            !require_exact_integer || exact_integer_source(&candidate.decoder, candidate.format),
-            "Diretta strict Source Direct 只接受 lossless integer PCM"
+            !require_diretta_integer || diretta_integer_source(candidate.format),
+            "Diretta Source Direct 需要可输出的 integer PCM"
         );
         if self.epoch.load(Ordering::Acquire) != epoch {
             return Ok(false);
@@ -1522,12 +1603,17 @@ impl DirectPcmStaging {
 fn prepare_staged_pcm_source(
     path: &Path,
     current_format: DirectPcmFormat,
+    for_diretta: bool,
     mut duration_micros: u64,
     generation: u64,
     start_frame75: Option<u64>,
     end_frame75: Option<u64>,
 ) -> Result<StagedPcmSource> {
-    let mut decoder = DirectPcmDecoder::open_local(path)?;
+    let mut decoder = if for_diretta {
+        DirectPcmDecoder::open_diretta(path)?
+    } else {
+        DirectPcmDecoder::open_local(path)?
+    };
     let mut first_frame = DirectPcmFrame::new()?;
     let (remaining_frames, exact_total_frames) = if let Some(start_frame75) = start_frame75 {
         let (_, remaining, total) = prepare_pcm_segment_first_frame(
@@ -1599,9 +1685,13 @@ fn replace_pcm_ring(
     path: &Path,
     ring: &DirectPcmRing,
     current_format: DirectPcmFormat,
-    require_exact_integer: bool,
+    require_diretta_integer: bool,
 ) -> Result<(DirectPcmDecoder, DirectPcmFormat)> {
-    let mut decoder = DirectPcmDecoder::open_local(path)?;
+    let mut decoder = if require_diretta_integer {
+        DirectPcmDecoder::open_diretta(path)?
+    } else {
+        DirectPcmDecoder::open_local(path)?
+    };
     let mut prepared = DirectPcmFrame::new()?;
     ensure!(
         decoder.read_frame(&mut prepared)?,
@@ -1613,8 +1703,8 @@ fn replace_pcm_ring(
         "[Direct] 新音源 PCM wire format 与当前 Diretta connection 不一致"
     );
     ensure!(
-        !require_exact_integer || exact_integer_source(&decoder, new_format),
-        "Diretta strict Source Direct 只接受 lossless integer PCM"
+        !require_diretta_integer || diretta_integer_source(new_format),
+        "Diretta Source Direct 需要可输出的 integer PCM"
     );
 
     if new_format.memory_path.needs_repack() {
@@ -1700,7 +1790,7 @@ impl DirectPcmMonitor {
 pub struct DirectPcmStageHandle {
     staging: Arc<DirectPcmStaging>,
     format: DirectPcmFormat,
-    require_exact_integer: bool,
+    require_diretta_integer: bool,
 }
 
 impl DirectPcmStageHandle {
@@ -1722,7 +1812,7 @@ impl DirectPcmStageHandle {
         self.staging.stage(
             path,
             self.format,
-            self.require_exact_integer,
+            self.require_diretta_integer,
             duration_micros,
             generation,
             start_frame75,
@@ -1751,7 +1841,11 @@ impl DirectPcmSource {
     }
 
     pub fn open_local_at(path: &Path, position_secs: f64) -> Result<(Self, f64)> {
-        Self::open_local_configured(path, position_secs, None, None)
+        Self::open_local_configured(path, position_secs, None, None, false)
+    }
+
+    pub fn open_diretta_local_at(path: &Path, position_secs: f64) -> Result<(Self, f64)> {
+        Self::open_local_configured(path, position_secs, None, None, true)
     }
 
     pub fn open_local_segment(
@@ -1759,7 +1853,15 @@ impl DirectPcmSource {
         start_frame75: u64,
         end_frame75: Option<u64>,
     ) -> Result<(Self, f64)> {
-        Self::open_local_configured(path, 0.0, Some(start_frame75), end_frame75)
+        Self::open_local_configured(path, 0.0, Some(start_frame75), end_frame75, false)
+    }
+
+    pub fn open_diretta_local_segment(
+        path: &Path,
+        start_frame75: u64,
+        end_frame75: Option<u64>,
+    ) -> Result<(Self, f64)> {
+        Self::open_local_configured(path, 0.0, Some(start_frame75), end_frame75, true)
     }
 
     fn open_local_configured(
@@ -1767,8 +1869,13 @@ impl DirectPcmSource {
         position_secs: f64,
         start_frame75: Option<u64>,
         end_frame75: Option<u64>,
+        for_diretta: bool,
     ) -> Result<(Self, f64)> {
-        let mut decoder = DirectPcmDecoder::open_local(path)?;
+        let mut decoder = if for_diretta {
+            DirectPcmDecoder::open_diretta(path)?
+        } else {
+            DirectPcmDecoder::open_local(path)?
+        };
         let ring = Arc::new(DirectPcmRing::new()?);
         let first_slot = &ring.slots[0];
         first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
@@ -1879,14 +1986,14 @@ impl DirectPcmSource {
                         }
                         Ok(DirectPcmCommand::ReplaceLocal {
                             path,
-                            require_exact_integer,
+                            require_diretta_integer,
                             response,
                         }) => {
                             let result = replace_pcm_ring(
                                 &path,
                                 &producer_ring,
                                 active_format,
-                                require_exact_integer,
+                                require_diretta_integer,
                             );
                             match result {
                                 Ok((new_decoder, new_format)) => {
@@ -2083,6 +2190,10 @@ impl DirectPcmSource {
         self.exact_integer.load(Ordering::Acquire)
     }
 
+    pub fn diretta_integer_source(&self) -> bool {
+        diretta_integer_source(self.format)
+    }
+
     pub fn monitor(&self) -> DirectPcmMonitor {
         DirectPcmMonitor {
             ring: Arc::clone(&self.ring),
@@ -2094,15 +2205,15 @@ impl DirectPcmSource {
         DirectPcmStageHandle {
             staging: Arc::clone(&self.staging),
             format: self.format,
-            require_exact_integer: false,
+            require_diretta_integer: false,
         }
     }
 
-    pub fn strict_stage_handle(&self) -> DirectPcmStageHandle {
+    pub fn diretta_stage_handle(&self) -> DirectPcmStageHandle {
         DirectPcmStageHandle {
             staging: Arc::clone(&self.staging),
             format: self.format,
-            require_exact_integer: true,
+            require_diretta_integer: true,
         }
     }
 
@@ -2171,13 +2282,13 @@ impl DirectPcmSource {
     fn replace_local_with_policy(
         &mut self,
         path: &Path,
-        require_exact_integer: bool,
+        require_diretta_integer: bool,
     ) -> Result<DirectPcmFormat> {
         let (response_tx, response_rx) = mpsc::sync_channel(0);
         self.control_tx
             .send(DirectPcmCommand::ReplaceLocal {
                 path: path.to_owned(),
-                require_exact_integer,
+                require_diretta_integer,
                 response: response_tx,
             })
             .context("提交 Source Direct PCM handoff 失败")?;
@@ -2192,7 +2303,7 @@ impl DirectPcmSource {
         self.replace_local_with_policy(path, false)
     }
 
-    pub fn replace_local_strict_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
+    pub fn replace_local_diretta_while_paused(&mut self, path: &Path) -> Result<DirectPcmFormat> {
         self.replace_local_with_policy(path, true)
     }
 }
@@ -2340,6 +2451,130 @@ mod tests {
                 "Source Direct core must not depend on {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn lossy_float_conversion_clips_to_pcm32_without_gain_or_resampling() {
+        assert_eq!(lossy_float_to_s32(-1.0), i32::MIN);
+        assert_eq!(lossy_float_to_s32(1.0), i32::MAX);
+        assert_eq!(lossy_float_to_s32(-0.5), -1_073_741_824);
+        assert_eq!(lossy_float_to_s32(0.5), 1_073_741_824);
+        assert_eq!(lossy_float_to_s32(0.0), 0);
+        assert_eq!(lossy_float_to_s32(2.0), i32::MAX);
+        assert_eq!(lossy_float_to_s32(-2.0), i32::MIN);
+    }
+
+    #[test]
+    fn diretta_accepts_mp3_and_aac_decoded_pcm_without_altering_normal_reader() {
+        for (extension, bytes) in [
+            (
+                "mp3",
+                include_bytes!("../tests/fixtures/lossy-stereo-44100.mp3").as_slice(),
+            ),
+            (
+                "m4a",
+                include_bytes!("../tests/fixtures/lossy-stereo-44100.m4a").as_slice(),
+            ),
+        ] {
+            let fixture = TempAudioFile::from_bytes(extension, bytes);
+            let mut normal_decoder = DirectPcmDecoder::open_local(&fixture.path).unwrap();
+            let mut normal_frame = DirectPcmFrame::new().unwrap();
+            assert!(normal_decoder.read_frame(&mut normal_frame).unwrap());
+
+            let mut diretta_decoder = DirectPcmDecoder::open_diretta(&fixture.path).unwrap();
+            let mut diretta_frame = DirectPcmFrame::new().unwrap();
+            assert!(diretta_decoder.read_frame(&mut diretta_frame).unwrap());
+            let format = diretta_frame.format().unwrap();
+            assert_eq!(format.sample_rate, 44_100);
+            assert_eq!(format.channels, 2);
+            assert!(!exact_integer_source(&diretta_decoder, format));
+            assert!(diretta_integer_source(format));
+
+            let normal_format = normal_frame.format().unwrap();
+            if normal_format.sample_format == DirectPcmSampleFormat::Float32 {
+                assert_eq!(format.valid_bits, 32);
+                assert_eq!(format.storage_bits, 32);
+                assert_eq!(format.sample_format, DirectPcmSampleFormat::Signed32);
+                assert_eq!(
+                    format.memory_path,
+                    DirectPcmMemoryPath::LossyFloatToSigned32
+                );
+            } else {
+                assert_eq!(format, normal_format);
+            }
+            let original = normal_frame.payload_bytes().unwrap();
+            let integers = diretta_frame.payload_bytes().unwrap();
+            assert_eq!(original.len(), integers.len());
+            if normal_format.sample_format == DirectPcmSampleFormat::Float32 {
+                for (float, integer) in original.chunks_exact(4).zip(integers.chunks_exact(4)) {
+                    let sample = f32::from_le_bytes(float.try_into().unwrap());
+                    let converted = i32::from_le_bytes(integer.try_into().unwrap());
+                    assert_eq!(converted, lossy_float_to_s32(sample));
+                }
+            } else {
+                assert_eq!(original, integers);
+            }
+            let (mut source, _) =
+                DirectPcmSource::open_diretta_local_at(&fixture.path, 0.0).unwrap();
+            assert!(source.diretta_integer_source());
+            assert!(!source.exact_integer_source());
+            let actual_seek = source.seek_while_paused(0.08).unwrap();
+            assert!((0.0..0.15).contains(&actual_seek));
+            assert_eq!(source.format(), format);
+        }
+    }
+
+    #[test]
+    fn diretta_lossy_staging_and_handoff_preserve_pcm_wire_format() {
+        let mp3 = TempAudioFile::from_bytes(
+            "mp3",
+            include_bytes!("../tests/fixtures/lossy-stereo-44100.mp3"),
+        );
+        let aac = TempAudioFile::from_bytes(
+            "m4a",
+            include_bytes!("../tests/fixtures/lossy-stereo-44100.m4a"),
+        );
+        for fixture in [&mp3, &aac] {
+            let (mut source, _) =
+                DirectPcmSource::open_diretta_local_at(&fixture.path, 0.0).unwrap();
+            let format = source.format();
+            let stage = source.diretta_stage_handle();
+            assert!(stage
+                .stage_local(&fixture.path, 0.25, 1, None, None)
+                .unwrap());
+            assert_eq!(
+                source
+                    .replace_local_diretta_while_paused(&fixture.path)
+                    .unwrap(),
+                format
+            );
+            assert!(source.diretta_integer_source());
+            assert!(!source.exact_integer_source());
+        }
+        let (mp3_source, _) = DirectPcmSource::open_diretta_local_at(&mp3.path, 0.0).unwrap();
+        assert!(
+            mp3_source
+                .diretta_stage_handle()
+                .stage_local(&aac.path, 0.25, 2, None, None)
+                .is_err(),
+            "MP3 PCM16 与 AAC PCM32 的不同 wire format 必须分开建立连接"
+        );
+    }
+
+    #[test]
+    fn diretta_lossless_pcm_still_preserves_original_integer_samples() {
+        let samples = [i16::MIN, i16::MAX, -1, 1, 0, 42];
+        let pcm: Vec<u8> = samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let fixture = TempAudioFile::wav(44_100, 16, &pcm);
+        let mut decoder = DirectPcmDecoder::open_diretta(&fixture.path).unwrap();
+        let mut frame = DirectPcmFrame::new().unwrap();
+        assert!(decoder.read_frame(&mut frame).unwrap());
+        assert!(exact_integer_source(&decoder, frame.format().unwrap()));
+        assert!(diretta_integer_source(frame.format().unwrap()));
+        assert_eq!(frame.payload_bytes().unwrap(), pcm);
     }
 
     #[test]
@@ -3151,7 +3386,7 @@ mod tests {
         raw.data[0] = samples.as_mut_ptr().cast::<u8>();
         raw.linesize[0] = i32::try_from(samples.len() * size_of::<f32>()).unwrap();
 
-        frame.accept_decoded_frame(0).unwrap();
+        frame.accept_decoded_frame(0, false).unwrap();
         assert_eq!(
             frame.format().unwrap(),
             DirectPcmFormat {
@@ -3189,7 +3424,7 @@ mod tests {
         raw.extended_data = raw.data.as_mut_ptr();
         raw.linesize[0] = i32::try_from(left.len() * size_of::<f32>()).unwrap();
 
-        frame.accept_decoded_frame(0).unwrap();
+        frame.accept_decoded_frame(0, false).unwrap();
         assert_eq!(
             frame.format().unwrap().memory_path,
             DirectPcmMemoryPath::RepresentationRepack

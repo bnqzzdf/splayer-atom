@@ -64,12 +64,12 @@ const isNativeCancelledError = (error: unknown): boolean => String(error).includ
 /**
  * 原生报「当前输出不接受该音源格式」。
  *
- * 典型是 Diretta strict Source Direct 只吃无损整数 PCM：音源本身拿到了，
+ * 典型是 Diretta 的 PCM wire format 无法由 Target 接收：音源本身拿到了，
  * 是输出侧拒绝。这类失败与网络无关，必须与 NETWORK_ERROR 区分开——
  * 否则用户会照着「请检查网络」去查一个根本不存在的网络问题。
  */
 const isNativeOutputFormatError = (error: unknown): boolean =>
-  /strict Source Direct|只接受 lossless integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
+  /strict Source Direct|只接受 lossless integer PCM|Diretta Source Direct 需要可输出的 integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
     String(error),
   );
 

@@ -129,7 +129,7 @@ test("QM 未登录时给「需要登录」而不是「需要会员」", () => {
   assert.match(qm, /ErrorCode\.PROVIDER_LOGIN_REQUIRED/);
 });
 
-test("KG hi-res 收敛到无损档，避免拿到 mp3 被 strict 输出拒绝", () => {
+test("KG hi-res 优先映射到 FLAC，无法获取无损时仍可回退有损", () => {
   const map = resolverSource
     .split("const KUGOU_LEVEL: Record<PluginQuality, string> = {")[1]
     ?.split("};")[0];

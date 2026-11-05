@@ -82,7 +82,7 @@ export const playbackSourceErrorCode = (error: unknown): ErrorCode => {
   // 输出侧格式约束要单独识别：它既不是网络问题也不是解析问题，
   // 归到 NETWORK_ERROR 会让用户去查网络，完全误导。
   if (
-    /strict Source Direct|只接受 lossless integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
+    /strict Source Direct|只接受 lossless integer PCM|Diretta Source Direct 需要可输出的 integer PCM|PCM wire format 与当前 Diretta connection 不一致/i.test(
       message,
     )
   ) {
@@ -245,9 +245,8 @@ const QQMUSIC_LEVEL: Record<PluginQuality, string> = {
  * 注意 hi-res **不能**映射到酷狗的 `high` 档：实测同一首歌
  * `quality=high` 返回的是 **mp3**，而 `quality=flac` 才返回 **flac**。
  * `high` 在酷狗是「最高可用」而非「无损」，对没有真 hi-res 的曲子会给出有损音源，
- * 在 Diretta strict Source Direct 这类只吃无损 PCM 的输出上会直接加载失败。
- * 因此这里把 hi-res 收敛到 flac，先保证无损；确实拿不到无损时由
- * 模块自身的降档链给 320/128，并由 OUTPUT_FORMAT_UNSUPPORTED 给出准确原因。
+ * 因此这里把 hi-res 收敛到 flac，优先保留无损质量；拿不到无损时，
+ * 模块的降档链仍可提供 320/128，而 Diretta 可以解码并播放这些有损音源。
  */
 const KUGOU_LEVEL: Record<PluginQuality, string> = {
   lq: "lq",

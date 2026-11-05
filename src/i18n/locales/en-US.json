@@ -1899,7 +1899,7 @@
     "PROVIDER_LOGIN_REQUIRED": "Sign in to {platform} before playing this track",
     "SUBSCRIBE_LOGIN_REQUIRED": "Sign in to NetEase Cloud Music before saving playlists, albums or artists",
     "SUBSCRIBE_REJECTED": "NetEase Cloud Music rejected this save action (server-side risk control or rate limit). Verify the state in the NetEase client later",
-    "OUTPUT_FORMAT_UNSUPPORTED": "The current output rejects this source format: Diretta strict Source Direct accepts only lossless integer PCM. Use a lossless source or change the output mode",
+    "OUTPUT_FORMAT_UNSUPPORTED": "The selected output does not support the decoded PCM/DSD format or sample rate. Check device capabilities or choose another source",
     "SCAN_NO_DIRS": "No scan directories configured",
     "SCAN_DIR_EXISTS": "Directory already exists",
     "SCAN_DIR_NOT_FOUND": "Directory not found",

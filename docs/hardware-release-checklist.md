@@ -26,6 +26,11 @@
 - PCM 与 Native DSD 混合格式队列已完成过夜循环长时间播放，连续 format transition 未观察到
   播放中断或格式切换异常。
 
+Diretta 现在还允许播放有损编码音源（例如 MP3/AAC）：先由独立解码线程解码，
+必要时将有损浮点 PCM 转为整数 PCM32，再按原采样率、声道数交给 Diretta。
+这不改变原有无损整数 PCM 的 bit-perfect 路径；**有损编码不能声明原音源 bit-perfect**。
+这是代码能力说明，不代表此次变更已经在真实 Diretta Target 上验收。
+
 ALSA HW 双模式实现另有开发期实机记录，用户于 2026-09-22 确认：
 
 - 已实际试听两天，覆盖 Direct/Processed 及各自支持的 PCM/Native DSD。
