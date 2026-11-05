@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: Background Core
-    details: The default Node Core handles the library, queue, providers, downloads, plugins, and playback; an experimental Bun runtime flavor is also available. Music keeps playing when a browser closes.
+    details: The default Node Core handles the local library, queue, downloads, plugins, and playback; an experimental Bun runtime flavor is also available. Music keeps playing when a browser closes.
   - title: Web Control
     details: Computers, tablets, and phones can connect to the same Core over HTTP/WebSocket and stay synchronized in real time.
   - title: HiFi outputs
@@ -27,7 +27,7 @@ features:
     details: The only supported release target, shipped as system-runtime and bundled-runtime tar.gz artifacts.
 ---
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 ## Product boundary
 

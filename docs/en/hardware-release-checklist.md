@@ -1,6 +1,6 @@
 # SPlayer Atom hardware release checklist
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 This document records the manual acceptance steps for a target audio host. Source builds, fixtures and
 fake ALSA/Diretta cannot replace functional verification on the actual output device; DAC-side
@@ -43,7 +43,7 @@ the user on 2026-09-22:
 This completes the development-period listening, parameter cross-check and lifecycle acceptance for the
 scope above; matching parameters do not mean that valid PCM samples or the DSD logical bit sequence have
 been compared bit by bit. The later independent USB driver submission-layer comparison is recorded in
-the [ALSA acceptance record](./alsa-acceptance-2026-09-22.md); the final release package still requires
+the [ALSA acceptance record](./history/alsa-acceptance-2026-09-22.md); the final release package still requires
 separate acceptance. That layer of evidence supports the software output guarantee and does not mean the
 DAC-side digital output has been verified bit by bit.
 
@@ -74,7 +74,7 @@ paused, the position reset to zero and the output path was cleared. In the same 
 showed `native outputFailed, playback paused for explicit recovery`. This reproduction covers a failure
 path that the user listening record had not yet exposed. After the `c3e135ab` fix, FC4 re-verification
 was completed on the `3e420f78` package, which includes the fix; see the
-[2026-09-23 record](./alsa-acceptance-2026-09-23.md). This failure remains a historical result of the
+[2026-09-23 record](./history/alsa-acceptance-2026-09-23.md). This failure remains a historical result of the
 old `cecee166` package and does not represent acceptance of a later release candidate.
 
 Both rounds of testing ended by restoring the original queue, Direct mode and the original FC4 output,
@@ -89,7 +89,7 @@ round-trip switching, restart/SIGTERM during playback, FC4 disconnect and reconn
 artifact smoke, and found the problem that pressing Play directly after a restart does not load the
 queue. That software problem was likewise fixed in `c3e135ab` and re-verified on FC4 with the
 `3e420f78` package. The full scope, results, package/source hashes and evidence boundaries are in
-[2026-09-22 ALSA and release package measurement](./alsa-acceptance-2026-09-22.md).
+[2026-09-22 ALSA and release package measurement](./history/alsa-acceptance-2026-09-22.md).
 
 These results belong to the current development-period hardware baseline. A formal release does not need
 to re-prove the verified implementation principle, but it must still use the **final clean artifact**

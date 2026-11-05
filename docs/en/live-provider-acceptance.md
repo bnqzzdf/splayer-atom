@@ -1,11 +1,11 @@
 # SPlayer Atom live provider acceptance
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-05
 
 This document defines the real-account acceptance records for Netease, QM, KG, Qobuz and TIDAL. Static tests, mocks, public metadata queries and credential-free software harnesses cannot mark these items complete.
 
 Status (repository record, 2026-09-23): Core/Web have integrated the five platforms; QM/KG QR-code login, Cookie, search, detail and Core source paths, as well as Qobuz browser OAuth and token-only login, are implemented.
-These new paths have not yet completed real-account acceptance against a candidate package from this repository. Passing artifact startup acceptance in both Debian 11 modes does not equal platform-account or audio-hardware acceptance. Section 12 "real hardware" of the [UPnP plan](./upnp-output-plan.md) records part of the real online playback for Netease/TIDAL, and Section 7 of the [Qobuz OAuth plan](./qobuz-oauth-plan.md) records the real-hardware verification result for Qobuz browser OAuth; they belong to the records of their respective plans and do not replace this document's candidate-package acceptance matrix;
+These new paths have not yet completed real-account acceptance against a candidate package from this repository. Passing artifact startup acceptance in both Debian 11 modes does not equal platform-account or audio-hardware acceptance. Section 12 "real hardware" of the [UPnP plan](./history/upnp-output-plan.md) records part of the real online playback for Netease/TIDAL, and Section 7 of the [Qobuz OAuth plan](./history/qobuz-oauth-plan.md) records the real-hardware verification result for Qobuz browser OAuth; they belong to the records of their respective plans and do not replace this document's candidate-package acceptance matrix;
 this document still has no candidate-package acceptance result covering the full matrix below,
 and see also the [Roadmap](./atom-roadmap.md).
 

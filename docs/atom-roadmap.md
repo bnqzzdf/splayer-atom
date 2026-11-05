@@ -1,6 +1,6 @@
 # SPlayer Atom 路线图
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 ## 当前状态
 
@@ -12,11 +12,11 @@ SPlayer Atom 是一套 Linux x86-64 Core（Node 为默认正式基线、Bun 为�
 ALSA HW Direct / Processed 路径、Diretta Source Direct、UPnP 输出、Core 拥有的 Folder Browser、
 Direct CUE 无缝路径、响应式 Web 布局以及歌词 P0/P1 实现都已进入当前代码树。Netease、QQ音乐、
 酷狗、Qobuz 与 TIDAL 的 Core/Web 路径均已具备。Debian 11 bundled 包可以在带或不带 Diretta 的
-情况下构建。已确认的实现里程碑见 [Atom 已完成](./atom-completed.md)。
+情况下构建。已确认的实现里程碑见 [Atom 已完成](./history/atom-completed.md)。
 
 Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当前目录筛选、列表/网格展示、素材、
 范围扫描、递归操作及音频/容器曲目的批量操作。列表/网格偏好已在 `058c0e63` 持久化。
-[文件夹浏览改进方案](./folder-browser-improvements.md)的第一批显示排序、物理属性、Web 控件、
+[文件夹浏览改进方案](./history/folder-browser-improvements.md)的第一批显示排序、物理属性、Web 控件、
 导航恢复、范围提示和完整结果批量选择已实现，并完成当前真实曲库的功能验收。
 原方案中 NAS/USB、超大目录与素材查看器的更广验收仍待完成。
 
@@ -25,12 +25,12 @@ Folder Browser 已实现分页浏览、固定目录、物理名称搜索、当�
 这属于已实现的性能修正，不代表 Folder Search 延迟已在所有真实曲库上复测通过。
 Node/Bun 共用 Core 源码、构建与产物验收流程，四种运行时/携带方式已可构建
 （`85b5aa86`）；`mise.toml` 固定 Node `24.22.2`、Bun `1.4.4`（`0e590b43`）。
-Bun 的实验基准与限制见[运行时对照](./bun-runtime-experiment.md)，尚不等同于正式发布验收。
+Bun 的实验基准与限制见[运行时对照](./history/bun-runtime-experiment.md)，尚不等同于正式发布验收。
 
-本路线图跟踪剩余工作与验收。代码只能确立某条路径是否存在；硬件、真实账户、浏览器与发布验收
-需要一次记录的运行。[2026-09-22 ALSA 记录](./alsa-acceptance-2026-09-22.md) 覆盖产物提交
-`cecee166`；[2026-09-23 FC4 复测](./alsa-acceptance-2026-09-23.md) 覆盖已安装产物提交
-`3e420f78` 中的两处修复。之后的 [本地模块 ALSA 复测](./alsa-gap-fixes-2026-09-23.md) 覆盖
+本路线图跟踪剩余工作与验收。阶段性方案、旧产物实测与已完成记录已整理到[历史归档](./history/README.md)，但未完成的验收门禁仍保留在本路线图。代码只能确立某条路径是否存在；硬件、真实账户、浏览器与发布验收
+需要一次记录的运行。[2026-09-22 ALSA 记录](./history/alsa-acceptance-2026-09-22.md) 覆盖产物提交
+`cecee166`；[2026-09-23 FC4 复测](./history/alsa-acceptance-2026-09-23.md) 覆盖已安装产物提交
+`3e420f78` 中的两处修复。之后的 [本地模块 ALSA 复测](./history/alsa-gap-fixes-2026-09-23.md) 覆盖
 截至 `53284360` 的源码变更；它不是已安装的 Core 产物。无硬件暂停的兜底分支为需要它的设备保留，
 且仅做过软件验证。每个新产物都应以其记录的 Git 提交来标识，而不是只看包版本号。
 
@@ -40,10 +40,10 @@ Bun 的实验基准与限制见[运行时对照](./bun-runtime-experiment.md)，
 
 ### ALSA 与输出
 
-- [ ] 在干净的候选 Core 产物中验证 [ALSA 输出方案](./alsa-output-plan.md) 的变更。
-      [FC4 本地模块复测](./alsa-gap-fixes-2026-09-23.md) 已通过短时 Processed 变调/变速播放、
+- [ ] 在干净的候选 Core 产物中验证 [ALSA 输出方案](./history/alsa-output-plan.md) 的变更。
+      [FC4 本地模块复测](./history/alsa-gap-fixes-2026-09-23.md) 已通过短时 Processed 变调/变速播放、
       变调/变速 seek 与 Direct 基础播放。同一源码工作树的
-      [2026-09-23 native 运行态改动复核](./alsa-runtime-smoke-2026-09-23.md) 另记录了 Processed
+      [2026-09-23 native 运行态改动复核](./history/alsa-runtime-smoke-2026-09-23.md) 另记录了 Processed
       seek 与 Direct 基础播放的局部 smoke。在该候选上检查受支持的模式、格式、切换与资源趋势；
       若观察到具体故障再行排查。共享 `AlsaFrameWriter`、单一运行期归属以及有界解码/DSP 队列均已
       实现。各自独立的模式控制循环、参数版本跟踪，以及对单个上游解码帧的任意上限都不是验收门禁。
@@ -54,14 +54,14 @@ Bun 的实验基准与限制见[运行时对照](./bun-runtime-experiment.md)，
 - [ ] 在发布候选上重做 UPnP 硬件检查。2026-09-22 的 FC4 运行没有发现渲染器；更早的 AudioSys
       检查覆盖了常见格式、CUE、SACD、DSD 与输出切换。媒体监听器于 2026-09-23 通过了 100 次
       重复的终止拉取，但当前没有可用的 AudioSys Renderer。完成
-      [UPnP 方案](./upnp-output-plan.md) 中第二次真实渲染器长时运行资源检查，并记录最终的兼容性矩阵。
+      [UPnP 方案](./history/upnp-output-plan.md) 中第二次真实渲染器长时运行资源检查，并记录最终的兼容性矩阵。
 - [ ] 完成真实 Diretta CUE 无缝验收，见
-      [Direct CUE 方案](./direct-cue-gapless-plan.md)，包括相邻 PCM/DSD 段、seek、
+      [Direct CUE 方案](./history/direct-cue-gapless-plan.md)，包括相邻 PCM/DSD 段、seek、
       队列变更与长时运行的边界行为。
 
 ### Provider 与 Web Control
 
-本轮上游界面吸收已有[分批方案](./upstream-ui-adoption-plan.md)：
+本轮上游界面吸收已有[分批方案](./history/upstream-ui-adoption-plan.md)：
 AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）、紧凑列表与排序隔离（UI-2）
 均已实现、待浏览器验收；扫描目录嵌套和下载扩展名两个小修均已实现并通过隔离回归。
 已排除项目与低频候选见方案范围，不据此勾选现有发布门禁。
@@ -84,15 +84,15 @@ AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）、紧凑列表与�
       路径，而不是完整的 provider 矩阵。
 - [ ] 为 Now Playing、永久收听、401/429 处理、离线重试与重启补一份有界的真实 token ListenBrainz
       验收记录。当前代码实现了这些路径，但此前的完成勾选项在仓库中没有对应的运行记录。
-- [ ] 在[响应式方案](./web-responsive-plan.md)中的代表性视口与实际移动设备上完成响应式
+- [ ] 在[响应式方案](./history/web-responsive-plan.md)中的代表性视口与实际移动设备上完成响应式
       Web Control 验收。布局已实现；仓库中没有完整的设备/交互验收记录。
 - [ ] 记录多个真实 Web Control 在刷新、断开与重连情况下的长时运行使用。产物冒烟测试已通过
       多个 WebSocket 客户端与重连；这比长时运行的浏览器验收范围更窄。
 
 ### 文件夹浏览
 
-[原方案](./local-folder-browser-plan.md)定义已实现的基础功能；
-[改进方案](./folder-browser-improvements.md)记录第一批改进与后续方向。显示排序独立于 Core 拥有的目录播放顺序。
+[原方案](./history/local-folder-browser-plan.md)定义已实现的基础功能；
+[改进方案](./history/folder-browser-improvements.md)记录第一批改进与后续方向。显示排序独立于 Core 拥有的目录播放顺序。
 
 - [x] 第一批 Core 显示排序：文件名、修改时间、碟/轨号、升降序、固定分组、物理属性、分页前排序及
       排序结果变化时的游标失效校验。
@@ -115,7 +115,7 @@ AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）、紧凑列表与�
 
 - [ ] 在实验 Bun Flavor 上分别完成目标设备 PCM/DSD、ALSA/Diretta/UPnP、切歌/seek、
       插件 Host、长期资源趋势、Debian 11/OpenRC 与升级回滚验收，再决定是否列入正式发布；
-      [现有空库 API 基准](./bun-runtime-experiment.md)不能代替音频或稳定性验收。
+      [现有空库 API 基准](./history/bun-runtime-experiment.md)不能代替音频或稳定性验收。
 - [ ] 从目标 Git 提交构建一个干净产物，并在同一候选上完成
       [硬件清单](./hardware-release-checklist.md)与
       [部署清单](./core-deployment.md)，包括安装、升级与回滚。`cecee166` 归档通过了文件对比与
@@ -128,7 +128,7 @@ AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）、紧凑列表与�
 
 近期开发批次（与发布门禁并行，不自动扩大范围）：
 
-1. 按[上游 UI 方案](./upstream-ui-adoption-plan.md)完成 UI-1、UI-2 的浏览器/设备验收；
+1. 按[上游 UI 方案](./history/upstream-ui-adoption-plan.md)完成 UI-1、UI-2 的浏览器/设备验收；
    两批代码已实现，发布前仍需实机复核。
 2. FIX-1 扫描目录嵌套和 FIX-2 下载扩展名已作为独立小修完成；实际服务部署前仍需核对构建产物。
 
@@ -149,16 +149,16 @@ AM 播放页与经典/全屏封面/AM 快捷切换（UI-1）、紧凑列表与�
 
 | 文档                                                                                          | 用途                                |
 | --------------------------------------------------------------------------------------------- | ----------------------------------- |
-| [Atom 已完成](./atom-completed.md)                                                            | 已确认的实现与有界验收历史          |
+| [Atom 已完成](./history/atom-completed.md)                                                            | 已确认的实现与有界验收历史          |
 | [开发指南](./atom-development.md)                                                             | 环境、检查与约定                    |
-| [上游界面吸收与小修](./upstream-ui-adoption-plan.md)                                          | 待实施范围、分批顺序与验收标准      |
-| [Node/Bun 运行时对照](./bun-runtime-experiment.md)                                            | 运行时 Flavor、基准与限制           |
+| [上游界面吸收与小修](./history/upstream-ui-adoption-plan.md)                                          | 已实现分批范围与待完成的浏览器验收  |
+| [Node/Bun 运行时对照](./history/bun-runtime-experiment.md)                                            | 运行时 Flavor、基准与限制           |
 | [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md)                        | Core/Web 产物与变体                 |
 | [Core 部署](./core-deployment.md)                                                             | systemd、持久状态、安装、升级与回滚 |
 | [GentooPlayer（OpenRC）服务管理](./gentooplayer-openrc.md)                                    | OpenRC 服务开发、部署、升级与排障   |
 | [硬件清单](./hardware-release-checklist.md)                                                   | ALSA、Diretta 与 UPnP 发布检查      |
 | [Provider 验收](./live-provider-acceptance.md)                                                | 真实账户验收标准                    |
-| [ALSA 方案](./alsa-output-plan.md)、[UPnP 方案](./upnp-output-plan.md)                        | 输出实现与剩余检查                  |
-| [Folder Browser 方案](./local-folder-browser-plan.md)、[响应式方案](./web-responsive-plan.md) | Web 功能与设备验收标准              |
-| [文件夹浏览改进方案](./folder-browser-improvements.md)                                        | 显示排序、文件信息与分批验收        |
-| [Direct CUE 方案](./direct-cue-gapless-plan.md)、[歌词方案](./lyric-improvements.md)          | 无缝与歌词实现                      |
+| [ALSA 方案](./history/alsa-output-plan.md)、[UPnP 方案](./history/upnp-output-plan.md)                        | 输出实现与剩余检查                  |
+| [Folder Browser 方案](./history/local-folder-browser-plan.md)、[响应式方案](./history/web-responsive-plan.md) | Web 功能与设备验收标准              |
+| [文件夹浏览改进方案](./history/folder-browser-improvements.md)                                        | 显示排序、文件信息与分批验收        |
+| [Direct CUE 方案](./history/direct-cue-gapless-plan.md)、[歌词方案](./history/lyric-improvements.md)          | 无缝与歌词实现                      |

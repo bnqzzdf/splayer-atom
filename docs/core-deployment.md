@@ -1,6 +1,6 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
 
@@ -88,7 +88,7 @@ cd /opt/splayer-atom-core
 `pnpm package:core:bun:bundled`（Bun bundled）。
 这些命令全部调用同一个 `build-core-system.ts`；现有 `--bundle-node` 仍兼容，
 新参数为 `--runtime=node|bun` 与 `--bundle-runtime`。Bun Flavor 的验证条件及限制见
-[Runtime Flavor 对照](./bun-runtime-experiment.md)。
+[Runtime Flavor 对照](./history/bun-runtime-experiment.md)。
 
 ### 普通 ALSA Core 的 systemd
 

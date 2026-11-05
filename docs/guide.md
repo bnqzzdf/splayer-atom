@@ -1,8 +1,8 @@
 # 使用指南
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-05
 
-SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览器中的 Web Control 组成。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
+SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Core 和浏览器中的 Web Control 组成。Node 是默认正式运行时，Bun 是实验性 Flavor。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
 
 ## 曲库
 
@@ -10,9 +10,13 @@ SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Node Core 和浏览�
 
 支持本地曲目搜索、专辑/歌手聚合、标签编辑，以及 CUE / SACD stereo 虚拟分轨。
 
+文件夹浏览支持分页、固定目录、物理名称搜索、当前目录筛选、列表/网格展示，以及指定范围扫描和批量操作。歌曲列表可切换常规/紧凑密度；排序偏好按页面类别分别保存，不会改变 Core 的曲库或队列顺序。
+
 ## 播放与队列
 
 播放队列、当前曲目、循环/随机模式、自动下一首、错误恢复和播放进度都由 Core 管理。关闭或刷新浏览器不会中断 Core 中正在进行的播放。
+
+播放页左上角可切换经典、全屏封面和 AM 三种布局。布局偏好保存在当前浏览器中，多台 Web Control 不必使用相同布局。
 
 ## 输出
 

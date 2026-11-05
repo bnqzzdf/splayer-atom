@@ -1,6 +1,6 @@
 # SPlayer Atom 硬件发布验收清单
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 本文记录目标音频主机的手工验收步骤。源码构建、fixture 与 fake ALSA/Diretta 不能替代
 实际输出设备的功能验证；DAC 端 bitstream 证据仅在作端到端精确性声明时要求。
@@ -34,7 +34,7 @@ ALSA HW 双模式实现另有开发期实机记录，用户于 2026-09-22 确认
 
 这完成了上述范围的开发期试听、参数核对与生命周期验收；参数一致不等于有效 PCM 样本或
 DSD 逻辑位序列已逐位比较。后续独立 USB 驱动提交层比对已记录在
-[ALSA 验收记录](./alsa-acceptance-2026-09-22.md)；最终发布包仍需单独验收。该层证据
+[ALSA 验收记录](./history/alsa-acceptance-2026-09-22.md)；最终发布包仍需单独验收。该层证据
 支撑软件输出保证，不代表 DAC 端数字输出已逐位验证。
 
 ### 2026-09-22 本机自动化实测补充
@@ -60,7 +60,7 @@ HTTP 400。随后从停止状态重新加载同一 FLAC 为 Processed，seek 到
 `[Other] processed playback 缺少已协商 ALSA 输出`，播放器转为 paused、位置归零、
 output path 清空。同期 Core 日志出现 `native outputFailed, playback paused for explicit recovery`。
 该复现覆盖了用户试听记录中尚未暴露的失败路径。`c3e135ab` 修复后，已在包含修复的
-`3e420f78` 包上完成 FC4 复验；见 [2026-09-23 记录](./alsa-acceptance-2026-09-23.md)。
+`3e420f78` 包上完成 FC4 复验；见 [2026-09-23 记录](./history/alsa-acceptance-2026-09-23.md)。
 本段失败仍是旧包 `cecee166` 的历史结果，不代表后续发布候选的验收。
 
 两轮测试结束均恢复原队列、Direct 模式及原 FC4 输出，保持停止，设备 PCM 状态为 `closed`。
@@ -72,7 +72,7 @@ output path 清空。同期 Core 日志出现 `native outputFailed, playback pau
 FC4 断开重连及 clean artifact smoke，并发现重启后直接 Play 不加载队列的问题。
 该软件问题同样已在 `c3e135ab` 修复，并在 `3e420f78` 包上完成 FC4 复验。
 完整范围、结果、包/音源 hash 和证据边界见
-[2026-09-22 ALSA 与发布包实测](./alsa-acceptance-2026-09-22.md)。
+[2026-09-22 ALSA 与发布包实测](./history/alsa-acceptance-2026-09-22.md)。
 
 这些结果属于当前开发期硬件基线。正式发布时无需重新证明已验证的实现原理，但仍必须使用准备发布的
 **最终 clean artifact** 做一次 release-candidate hardware smoke，以证明发布包、native feature、

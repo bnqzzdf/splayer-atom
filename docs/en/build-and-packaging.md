@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 This covers Linux x86-64 Core + Web Control builds. **Node is the default release baseline**;
 Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
@@ -67,7 +67,7 @@ out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]
 ```
 
 These are Node filenames; Bun adds `-bun` immediately before `-system` or `-bundled`.
-Bundled Bun uses `runtime/bin/bun`. See the [runtime comparison](../bun-runtime-experiment.md)
+Bundled Bun uses `runtime/bin/bun`. See the [runtime comparison](../history/bun-runtime-experiment.md)
 (Chinese only) for limitations and why Bun is not yet a formal release artifact.
 
 The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.

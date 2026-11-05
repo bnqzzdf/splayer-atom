@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: 后台 Core
-    details: 默认 Node Core 负责曲库、队列、在线服务、下载、插件和实际音频播放，另提供实验性 Bun Flavor；浏览器关闭后音乐仍可继续播放。
+    details: 默认 Node Core 负责本地曲库、队列、下载、插件和实际音频播放，另提供实验性 Bun Flavor；浏览器关闭后音乐仍可继续播放。
   - title: Web Control
     details: 电脑、平板或手机浏览器都可以通过 HTTP/WebSocket 连接同一个 Core，并实时同步播放状态。
   - title: HiFi 输出
@@ -27,7 +27,7 @@ features:
     details: 当前唯一正式发布平台，提供 system-runtime 与 bundled-runtime tar.gz artifact。
 ---
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 ## 产品边界
 

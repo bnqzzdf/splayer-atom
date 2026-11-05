@@ -1,8 +1,8 @@
 # Native Modules
 
-> Last updated: 2026-10-03
+> Last updated: 2026-11-05
 
-SPlayer Atom native code exists only for the Linux x86-64 Node Core runtime.
+SPlayer Atom native modules target the Linux x86-64 Core. Node is the default release runtime and Bun is an experimental flavor; both share the same N-API addons and packaging pipeline. See [build flavors](./build-flavors.md).
 
 ## Modules
 

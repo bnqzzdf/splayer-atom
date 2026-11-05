@@ -1,12 +1,14 @@
 # SPlayer Atom 文档手册
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-05
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
 > 适用范围：Linux x86-64 上的 Node Core + Web Control 部署形态
 
 本目录把分散在 README、`docs/` 与源码中的信息整理为五份正式交付文档。它们面向不同读者，但共享同一套代码事实：产品版本、Core Protocol 版本、数据库 schema、配置 schema 与端口约定均以本文档标注的基线为准。
+
+**版本说明**：手册各篇仍以 `5693b3fc` 为写作基线，不应当作 2026-11-05 最新 `dev`（`56b41611`）的完整功能清单。后续新增了实验性 Bun Runtime Flavor、AM 播放页与紧凑列表等能力；现行功能、构建方式和未完成验收请分别查阅[使用指南](../guide.md)、[构建面](../build-flavors.md)、[路线图](../atom-roadmap.md)，阶段性记录见[历史归档](../history/README.md)。
 
 ## 文档清单
 
@@ -45,7 +47,7 @@
 - 插件开发：`docs/plugins/`
 - 硬件验收：`docs/hardware-release-checklist.md`
 - 在线服务验收：`docs/live-provider-acceptance.md`
-- 路线图与已完成事项：`docs/atom-roadmap.md`、`docs/atom-completed.md`
+- 路线图与已完成事项：`docs/atom-roadmap.md`、`docs/history/atom-completed.md`
 
 若本目录与专题文档冲突，以代码与专题文档中的可复核证据为准，并应尽快修正本目录。
 
@@ -54,3 +56,4 @@
 | 日期 | 基线 | 变更 |
 | --- | --- | --- |
 | 2026-10-26 | `5693b3fc` / `1.1.3` | 首次整理五份交付文档 |
+| 2026-11-05 | `56b41611` / `1.1.3` | 标注手册历史基线与当前文档入口；不改写原始验收数据 |

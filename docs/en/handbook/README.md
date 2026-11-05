@@ -1,12 +1,14 @@
 # SPlayer Atom Documentation Handbook
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-05
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
 > Scope: the Node Core + Web Control deployment on Linux x86-64
 
 This directory consolidates information scattered across the README, `docs/`, and the source into five formal deliverables. They address different audiences but share one set of code facts: product version, Core Protocol version, database schema, config schema, and port conventions all refer to the baseline above.
+
+**Baseline note:** The five handbook chapters remain a snapshot of `5693b3fc`, not a complete description of the current `dev` branch at `56b41611` (2026-11-05). Newer changes include the experimental Bun runtime flavor, AM player layout, and compact song lists. Use the [user guide](../guide.md), [build flavors](../build-flavors.md), and [roadmap](../atom-roadmap.md) for current behavior and pending acceptance; see the [history archive](../history/README.md) for phase-specific records.
 
 ## Documents
 
@@ -45,7 +47,7 @@ This directory is a **delivery-level consolidation**; it does not replace the fo
 - Plugin development: `docs/en/plugins/`
 - Hardware acceptance: `docs/hardware-release-checklist.md` (Chinese only)
 - Live provider acceptance: `docs/live-provider-acceptance.md` (Chinese only)
-- Roadmap and completed work: `docs/en/atom-roadmap.md`, `docs/en/atom-completed.md`
+- Roadmap and completed work: `docs/en/atom-roadmap.md`, `docs/en/history/atom-completed.md`
 
 If this directory conflicts with a topic document, the reproducible evidence in code and the topic document wins; this directory should be corrected.
 
@@ -54,3 +56,4 @@ If this directory conflicts with a topic document, the reproducible evidence in 
 | Date | Baseline | Change |
 | --- | --- | --- |
 | 2026-10-26 | `5693b3fc` / `1.1.3` | Initial five-document delivery |
+| 2026-11-05 | `56b41611` / `1.1.3` | Clarified the handbook snapshot and current guides; original acceptance evidence unchanged |

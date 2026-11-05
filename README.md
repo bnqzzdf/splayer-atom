@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 **简体中文** · [English](./README.en.md)
 
@@ -11,16 +11,12 @@ SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Ne
 ## 功能
 
 - **本地曲库**：目录扫描与增量更新、专辑 / 歌手 / 文件夹浏览、标签编辑、CUE 与 SACD 立体声分轨
-- **在线音乐**：网易云音乐、QQ 音乐、酷狗音乐、Qobuz、TIDAL
-- **自建媒体服务器**：Subsonic、Navidrome、OpenSubsonic、Airsonic、Gonic、LMS、Jellyfin、Emby
 - **歌词**：LRC、QRC、YRC、KRC、TTML、LyS、SRT、ASS，支持逐字和双语显示
 - **音频输出**
   - ALSA：可使用均衡器、响度、变速
   - Diretta：采样率、位深、声道原样输出，DSD 原生传输，不做任何处理；目标设备不支持的格式会直接报错
   - UPnP 渲染器
 - **其他**：经典 / 全屏封面 / AM 风格播放页、无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
-
-Atom 不提供删除音乐文件的功能，清理操作只涉及它自己的缓存和临时文件。
 
 ## 安装
 
@@ -75,7 +71,7 @@ pnpm package:core:bun:bundled # 安装包自带 Bun
 构建脚本共用一套源码和验收流程；也可直接传入 `--runtime=node|bun` 与
 `--bundle-runtime`，Bun 构建时通过 `ATOM_BUN_BIN` 指定 Bun 可执行文件。
 Node 保持默认正式构建，Bun Flavor 尚需目标设备的长期播放、插件及部署验收，不是正式发布物。
-参见 [Node/Bun 运行时对照与限制](./docs/bun-runtime-experiment.md)。
+参见 [Node/Bun 运行时对照与限制](./docs/history/bun-runtime-experiment.md)。
 
 带 Diretta 的版本需要提供 Diretta Host SDK，并按目标 CPU 选择变体（`v2` / `v3` / `v4` / `zen4`，见 [CPU 变体](./docs/cpu-variants.md)）：
 
@@ -105,9 +101,9 @@ cargo test --workspace
 
 | 目录                       | 内容                                                                    |
 | -------------------------- | ----------------------------------------------------------------------- |
-| `core/`                    | Core（Node/Bun）：曲库、队列、播放控制、在线服务、HTTP / WebSocket 接口 |
+| `core/`                    | Core（Node/Bun）：曲库、队列、播放控制、HTTP / WebSocket 接口 |
 | `src/`                     | Web 控制界面（Vue 3）                                                   |
-| `native/`                  | Rust 原生模块：音频引擎、Qobuz / TIDAL、Diretta SDK 绑定                |
+| `native/`                  | Rust 原生模块：音频引擎、协议扩展与 Diretta SDK 绑定                     |
 | `shared/types/`            | Core 与 Web 共用的类型定义                                              |
 | `scripts/atom/`、`docker/` | 构建与打包脚本                                                          |
 
@@ -117,11 +113,11 @@ cargo test --workspace
 - [使用指南](./docs/guide.md)
 - [Core 部署与升级](./docs/core-deployment.md) · [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)
 - [构建与打包](./docs/build-and-packaging.md) · [构建面](./docs/build-flavors.md) · [CPU 变体](./docs/cpu-variants.md)
-- [开发环境](./docs/atom-development.md) · [路线图](./docs/atom-roadmap.md) · [已完成事项](./docs/atom-completed.md)
-- [Node/Bun 运行时对照](./docs/bun-runtime-experiment.md) · [上游界面吸收与小修计划](./docs/upstream-ui-adoption-plan.md)
-- [原生模块](./docs/native.md) · [Qobuz / TIDAL 协议引擎](./docs/streaming-rust-guide.md)
+- [开发环境](./docs/atom-development.md) · [路线图](./docs/atom-roadmap.md) · [历史归档](./docs/history/README.md)
+- [Node/Bun 运行时对照记录](./docs/history/bun-runtime-experiment.md)
+- [原生模块](./docs/native.md)
 - [插件开发](./docs/plugins/) · [插件使用](./docs/plugins-usage.md) · [类型参考](./docs/types.md)
-- [硬件发布验收](./docs/hardware-release-checklist.md) · [在线服务验收](./docs/live-provider-acceptance.md)
+- [硬件发布验收](./docs/hardware-release-checklist.md)
 
 英文文档在 [`docs/en/`](./docs/en/)。`pnpm docs:dev` 可在本地预览文档站。
 

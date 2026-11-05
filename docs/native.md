@@ -1,8 +1,8 @@
 # 原生模块
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-05
 
-SPlayer Atom 的原生运行时只服务于 Linux x86-64 Node Core。
+SPlayer Atom 的原生模块服务于 Linux x86-64 Core。Node 为默认正式运行时，Bun 是实验性 Runtime Flavor；两者共用相同的 N-API 原生模块及打包流程，见[构建面](./build-flavors.md)。
 
 ## 模块
 

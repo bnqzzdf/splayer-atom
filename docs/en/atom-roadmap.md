@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 ## Current status
 
@@ -14,14 +14,14 @@ ALSA HW Direct / Processed paths, Diretta Source Direct, UPnP output, Core-owned
 Direct CUE gapless path, responsive Web layout and lyric P0/P1 implementation are in the current
 tree. Core/Web paths for Netease, QQ Music, Kugou, Qobuz and TIDAL are present. Debian 11
 bundled packages can be built with or without Diretta. Confirmed implementation milestones are in
-[Atom Completed](./atom-completed.md).
+[Atom Completed](./history/atom-completed.md).
 
 The Folder Browser implements paged browsing, pinned folders, physical-name search,
 current-directory filtering, list/grid views, materials, scoped scan, recursive operations and
 batch actions on audio/container tracks. List/grid preference is persisted in `058c0e63`.
 First-batch display sorting, physical attributes, Web controls, navigation restore, scope notices
 and full-result batch selection from the
-[Folder Browser improvements](./folder-browser-improvements.md) are implemented and have passed
+[Folder Browser improvements](./history/folder-browser-improvements.md) are implemented and have passed
 functional acceptance on the current real library. Wider acceptance for NAS/USB, very large
 directories and the material viewer in the original plan is still open.
 
@@ -30,13 +30,13 @@ paths and removed unnecessary whole-library projection refreshes without active 
 These changes are implemented, but they do not establish a fresh real-library latency acceptance.
 Node and Bun now share the Core build, packaging and artifact verification paths (`85b5aa86`);
 `mise.toml` pins Node `24.22.2` and Bun `1.4.4` (`0e590b43`). See the
-[runtime comparison](../bun-runtime-experiment.md) (Chinese only); Bun is not yet a release candidate.
+[runtime comparison](../history/bun-runtime-experiment.md) (Chinese only); Bun is not yet a release candidate.
 
-This roadmap tracks remaining work and acceptance. Code establishes whether a path exists;
+This roadmap tracks remaining work and acceptance. Completed implementation plans, past artifact measurements and milestones are preserved in the [history archive](./history/README.md), without marking any outstanding gate as passed. Code establishes whether a path exists;
 hardware, real-account, browser and release acceptance require a recorded run. The
-[2026-09-22 ALSA record](./alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
-the [2026-09-23 FC4 retest](./alsa-acceptance-2026-09-23.md) covers the two fixes in installed
-artifact commit `3e420f78`. A later [local-module ALSA retest](./alsa-gap-fixes-2026-09-23.md)
+[2026-09-22 ALSA record](./history/alsa-acceptance-2026-09-22.md) covers artifact commit `cecee166`;
+the [2026-09-23 FC4 retest](./history/alsa-acceptance-2026-09-23.md) covers the two fixes in installed
+artifact commit `3e420f78`. A later [local-module ALSA retest](./history/alsa-gap-fixes-2026-09-23.md)
 covers source changes through `53284360`; it is not an installed Core artifact. The no-hardware-pause
 fallback branch is retained for devices that need it and has software verification only.
 Identify each new artifact by its recorded Git commit, not by the package version alone.
@@ -48,10 +48,10 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### ALSA and output
 
-- [ ] Validate the [ALSA output plan](./alsa-output-plan.md) changes in a clean candidate Core
-      artifact. The [FC4 local-module retest](./alsa-gap-fixes-2026-09-23.md) passed short
+- [ ] Validate the [ALSA output plan](./history/alsa-output-plan.md) changes in a clean candidate Core
+      artifact. The [FC4 local-module retest](./history/alsa-gap-fixes-2026-09-23.md) passed short
       Processed pitch/speed playback, pitch/speed seek and Direct basic playback. A
-      [2026-09-23 ALSA native runtime change review](./alsa-runtime-smoke-2026-09-23.md) of the same
+      [2026-09-23 ALSA native runtime change review](./history/alsa-runtime-smoke-2026-09-23.md) of the same
       source working tree separately records a partial smoke of Processed seek and Direct basic
       playback. Check the supported modes, formats, transitions and resource trend on that
       candidate; investigate a specific failure if observed. Shared `AlsaFrameWriter`, single
@@ -67,9 +67,9 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
       renderer; earlier AudioSys checks covered common formats, CUE, SACD, DSD and output switching.
       The media listener passed 100 repeated aborted pulls on 2026-09-23, but no AudioSys Renderer
       is currently available. Finish the second real-renderer long-run resource check in the
-      [UPnP plan](./upnp-output-plan.md) and record the final compatibility matrix.
+      [UPnP plan](./history/upnp-output-plan.md) and record the final compatibility matrix.
 - [ ] Complete real Diretta CUE gapless acceptance in the
-      [Direct CUE plan](./direct-cue-gapless-plan.md), including adjacent PCM/DSD segments, seek,
+      [Direct CUE plan](./history/direct-cue-gapless-plan.md), including adjacent PCM/DSD segments, seek,
       queue changes and long-running boundary behavior.
 
 ### Providers and Web Control
@@ -77,7 +77,7 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 - [x] UI-1 implementation: an AM-style player, three-way layout switching, legacy preference
       migration and shared transport controls have passed automated Node/Web tests, types, lint
       and Web build (`09aa92f1`). See the
-      [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+      [upstream UI plan](../history/upstream-ui-adoption-plan.md) (Chinese only).
 - [ ] UI-1 manual acceptance: browser screenshots, responsive viewports, uninterrupted playback,
       lyrics/queue behavior, hidden-tab recovery and Direct-mode controls still need validation.
 - [x] UI-2 implementation: normal/compact rows, virtual-list height updates, scoped per-page
@@ -98,7 +98,7 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
       401/429 handling, offline retry and restart. The current code implements these paths, but
       the former completion checkbox had no corresponding run record in the repository.
 - [ ] Complete responsive Web Control acceptance at the representative viewports and actual mobile
-      devices in the [responsive plan](./web-responsive-plan.md). The layout is implemented; no
+      devices in the [responsive plan](./history/web-responsive-plan.md). The layout is implemented; no
       complete device/interaction acceptance record is in the repository.
 - [ ] Record long-running use with multiple real Web Controls across refresh, disconnect and
       reconnect. The artifact smoke passed multiple WebSocket clients and reconnection; that is
@@ -106,8 +106,8 @@ Lasting constraints are in `AGENTS.md`; workflows are in the
 
 ### Folder browsing
 
-The [original plan](./local-folder-browser-plan.md) defines the implemented base features; the
-[improvements plan](./folder-browser-improvements.md) records the first batch and later direction.
+The [original plan](./history/local-folder-browser-plan.md) defines the implemented base features; the
+[improvements plan](./history/folder-browser-improvements.md) records the first batch and later direction.
 Display sorting is independent of the Core-owned directory playback order.
 
 - [x] First-batch Core display sorting: file name, modification time, disc/track number,
@@ -139,7 +139,7 @@ Display sorting is independent of the Core-owned directory playback order.
 
 - [ ] Evaluate experimental Bun packages on target devices for PCM/DSD, ALSA/Diretta/UPnP,
       seek/track switching, plugin Host, prolonged resource use, Debian 11/OpenRC, and upgrade/
-      rollback before considering a formal Bun release. The [empty-library API benchmark](../bun-runtime-experiment.md)
+      rollback before considering a formal Bun release. The [empty-library API benchmark](../history/bun-runtime-experiment.md)
       (Chinese only) is not audio or stability acceptance.
 - [ ] Build a clean artifact from the intended Git commit and complete the
       [hardware checklist](./hardware-release-checklist.md) and
@@ -157,7 +157,7 @@ Display sorting is independent of the Core-owned directory playback order.
 Near-term development (separate from release gates):
 
 1. Complete browser/device acceptance for implemented UI-1 and UI-2 from the
-   [upstream UI plan](../upstream-ui-adoption-plan.md) (Chinese only).
+   [upstream UI plan](../history/upstream-ui-adoption-plan.md) (Chinese only).
 2. Keep the nested scan-root and download-extension fixes as separate changes, without expanding the UI scope.
 
 Release acceptance priorities:
@@ -177,16 +177,16 @@ and stricter browser-origin controls require a later accepted product requiremen
 
 | Document                                                                                           | Purpose                                                 |
 | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [Atom Completed](./atom-completed.md)                                                              | Confirmed implementation and bounded acceptance history |
+| [Atom Completed](./history/atom-completed.md)                                                              | Confirmed implementation and bounded acceptance history |
 | [Development guide](./atom-development.md)                                                         | Environment, checks and conventions                     |
-| [Upstream UI adoption plan](../upstream-ui-adoption-plan.md) (Chinese only)                        | Planned UI batches and independent fixes                |
-| [Node/Bun runtime comparison](../bun-runtime-experiment.md) (Chinese only)                         | Flavor implementation, benchmarks and limitations       |
+| [Upstream UI adoption plan](../history/upstream-ui-adoption-plan.md) (Chinese only)                        | Implemented UI batches, fixes and pending browser tests |
+| [Node/Bun runtime comparison](../history/bun-runtime-experiment.md) (Chinese only)                         | Flavor implementation, benchmarks and limitations       |
 | [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)               | Core/Web artifacts and variants                         |
 | [Core deployment](./core-deployment.md)                                                            | systemd, durable data, install, upgrade and rollback    |
 | [GentooPlayer (OpenRC) service management](./gentooplayer-openrc.md)                               | OpenRC service development, deployment, upgrade, triage |
 | [Hardware checklist](./hardware-release-checklist.md)                                              | ALSA, Diretta and UPnP release checks                   |
 | [Provider acceptance](./live-provider-acceptance.md)                                               | Real-account criteria                                   |
-| [ALSA plan](./alsa-output-plan.md), [UPnP plan](./upnp-output-plan.md)                             | Output implementation and remaining checks              |
-| [Folder Browser plan](./local-folder-browser-plan.md), [responsive plan](./web-responsive-plan.md) | Web feature and device criteria                         |
-| [Folder Browser improvements](./folder-browser-improvements.md)                                    | Display sorting, file information and batch acceptance  |
-| [Direct CUE plan](./direct-cue-gapless-plan.md), [lyric plan](./lyric-improvements.md)             | Gapless and lyric implementation                        |
+| [ALSA plan](./history/alsa-output-plan.md), [UPnP plan](./history/upnp-output-plan.md)                             | Output implementation and remaining checks              |
+| [Folder Browser plan](./history/local-folder-browser-plan.md), [responsive plan](./history/web-responsive-plan.md) | Web feature and device criteria                         |
+| [Folder Browser improvements](./history/folder-browser-improvements.md)                                    | Display sorting, file information and batch acceptance  |
+| [Direct CUE plan](./history/direct-cue-gapless-plan.md), [lyric plan](./history/lyric-improvements.md)             | Gapless and lyric implementation                        |

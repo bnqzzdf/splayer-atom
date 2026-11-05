@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 [简体中文](./README.md) · **English**
 
@@ -11,8 +11,6 @@ It runs as a background service and is controlled from a browser on any computer
 ## Features
 
 - **Local library**: folder scanning with incremental updates, album / artist / folder browsing, tag editing, CUE and stereo SACD track splitting
-- **Streaming**: NetEase Cloud Music, QQ Music, Kugou, Qobuz, TIDAL
-- **Self-hosted servers**: Subsonic, Navidrome, OpenSubsonic, Airsonic, Gonic, LMS, Jellyfin, Emby
 - **Lyrics**: LRC, QRC, YRC, KRC, TTML, LyS, SRT, ASS, with word-by-word and bilingual display
 - **Audio output**
   - ALSA, with EQ, loudness, and playback speed
@@ -20,7 +18,6 @@ It runs as a background service and is controlled from a browser on any computer
   - UPnP renderers
 - **Also**: Classic / Fullscreen Cover / AM-style player layouts, gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
 
-Atom has no feature for deleting music files. Cleanup only touches its own cache and temporary files.
 
 ## Installation
 
@@ -75,7 +72,7 @@ The checked-in `mise.toml` pins Node `24.22.2` and Bun `1.4.4` (run `mise instal
 Both runtimes use the shared `--runtime=node|bun` and `--bundle-runtime` packaging options;
 `ATOM_BUN_BIN` can specify a custom Bun executable. Node remains the default release baseline.
 The Bun flavor is **experimental**, pending long-running playback, plugin, deployment and
-target-device acceptance. See [Node/Bun runtime comparison and limitations](./docs/bun-runtime-experiment.md)
+target-device acceptance. See [Node/Bun runtime comparison and limitations](./docs/history/bun-runtime-experiment.md)
 (Chinese only).
 
 Diretta builds need the Diretta Host SDK and a variant matching the target CPU (`v2` / `v3` / `v4` / `zen4`, see [CPU variants](./docs/cpu-variants.md), Chinese only):
@@ -106,9 +103,9 @@ Layout:
 
 | Directory                  | Contents                                                                           |
 | -------------------------- | ---------------------------------------------------------------------------------- |
-| `core/`                    | Core (Node/Bun): library, queue, playback control, streaming, HTTP / WebSocket API |
+| `core/`                    | Core (Node/Bun): library, queue, playback control, HTTP / WebSocket API            |
 | `src/`                     | Web control UI (Vue 3)                                                             |
-| `native/`                  | Rust native modules: audio engine, Qobuz / TIDAL, Diretta SDK bindings             |
+| `native/`                  | Rust native modules: audio engine, protocol extensions, Diretta SDK bindings       |
 | `shared/types/`            | Types shared by Core and Web                                                       |
 | `scripts/atom/`, `docker/` | Build and packaging scripts                                                        |
 
@@ -118,11 +115,11 @@ Layout:
 - [User guide](./docs/en/guide.md)
 - [Core deployment and upgrades](./docs/en/core-deployment.md) · [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md)
 - [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/cpu-variants.md) (Chinese only)
-- [Development setup](./docs/en/atom-development.md) · [Roadmap](./docs/en/atom-roadmap.md) · [Completed work](./docs/en/atom-completed.md)
-- [Node/Bun runtime comparison](./docs/bun-runtime-experiment.md) · [Planned upstream UI adoption](./docs/upstream-ui-adoption-plan.md) (Chinese only)
-- [Native modules](./docs/en/native.md) · [Qobuz / TIDAL protocol engine](./docs/streaming-rust-guide.md) (Chinese only)
+- [Development setup](./docs/en/atom-development.md) · [Roadmap](./docs/en/atom-roadmap.md) · [History archive](./docs/en/history/README.md)
+- [Node/Bun runtime comparison record](./docs/history/bun-runtime-experiment.md) (Chinese only)
+- [Native modules](./docs/en/native.md)
 - [Plugin development](./docs/en/plugins/) · [Plugin usage](./docs/en/plugins-usage.md) · [Type reference](./docs/en/types.md)
-- [Hardware release acceptance](./docs/hardware-release-checklist.md) (Chinese only) · [Live provider acceptance](./docs/live-provider-acceptance.md) (Chinese only)
+- [Hardware release acceptance](./docs/hardware-release-checklist.md) (Chinese only)
 
 English docs live in [`docs/en/`](./docs/en/). Run `pnpm docs:dev` to preview the docs site locally.
 

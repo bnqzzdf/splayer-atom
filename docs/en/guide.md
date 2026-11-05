@@ -1,8 +1,8 @@
 # User Guide
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-05
 
-SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 Node Core plus a browser-based Web Control. After deploying Core, open the Web page served by Core.
+SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 Core plus a browser-based Web Control. Node is the default release runtime, while Bun is an experimental flavor. After deploying Core, open the Web page served by Core.
 
 ## Library
 
@@ -10,9 +10,13 @@ Add music directories from the Core host and start a scan. Directory selection r
 
 Local search, album/artist aggregation, tag editing, CUE virtual tracks, and SACD stereo virtual tracks are supported.
 
+Folder browsing supports paging, pinned directories, physical-name search, current-directory filtering, list/grid views, scoped scanning, and batch operations. Song lists offer regular and compact densities, with sorting preferences stored separately by page category rather than changing the Core queue.
+
 ## Playback and queue
 
 Core manages the queue, current track, repeat/shuffle modes, auto-next, error recovery, and playback position. Refreshing or closing a browser does not interrupt playback running in Core.
+
+The player layout switcher in the top-left of the player view offers Classic, Fullscreen Cover, and AM layouts. Each browser keeps its own display preference.
 
 ## Outputs
 

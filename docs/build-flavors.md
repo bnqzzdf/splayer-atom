@@ -1,6 +1,6 @@
 # SPlayer Atom 构建面（Build Flavors）
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-05
 
 SPlayer Atom 的 Core 构建由三条**独立维度**组合：
 
@@ -102,6 +102,6 @@ Bun 产物在 `-bundled` 前增加 `-bun`。两者都不要求目标机另装对
 Bun 产物还带有 `runtime/bun` 标记，供共用启动器选用正确运行时。
 
 Bun 的空库 API 基准、独立 plugin Host 及安全限制记录在
-[Node/Bun 运行时对照](./bun-runtime-experiment.md)。Bun 插件 Host 的 VM Context
+[Node/Bun 运行时对照](./history/bun-runtime-experiment.md)。Bun 插件 Host 的 VM Context
 不是恶意插件安全沙箱；Bun 包尚需真实硬件、长期播放、插件、发行版与升级验收，
 当前不应视为正式发布物。公开分发 Bun bundled 包前需审核其许可证和静态链接组件义务。

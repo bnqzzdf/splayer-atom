@@ -24,6 +24,7 @@ const zhTheme: DefaultTheme.Config = {
         { text: "Build Flavors", link: "/build-flavors" },
         { text: "CPU 变体", link: "/cpu-variants" },
         { text: "原生模块", link: "/native" },
+        { text: "历史归档", link: "/history/README" },
         { text: "插件开发", link: "/plugins/" },
       ],
     },
@@ -69,7 +70,7 @@ const zhTheme: DefaultTheme.Config = {
         { text: "开发环境", link: "/atom-development" },
         { text: "原生模块", link: "/native" },
         { text: "Qobuz / TIDAL Rust", link: "/streaming-rust-guide" },
-        { text: "UPnP 输出方案", link: "/upnp-output-plan" },
+        { text: "历史归档", link: "/history/README" },
         { text: "贡献指南", link: "/contributing" },
         {
           text: "插件开发",
@@ -116,6 +117,7 @@ const enTheme: DefaultTheme.Config = {
         { text: "Roadmap", link: "/en/atom-roadmap" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
+        { text: "History Archive", link: "/en/history/README" },
         { text: "Plugin Development", link: "/en/plugins/" },
       ],
     },
@@ -148,6 +150,7 @@ const enTheme: DefaultTheme.Config = {
         { text: "GentooPlayer / OpenRC", link: "/en/gentooplayer-openrc" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Native Modules", link: "/en/native" },
+        { text: "History Archive", link: "/en/history/README" },
         { text: "Contributing", link: "/en/contributing" },
         {
           text: "Plugin Development",

@@ -1,6 +1,6 @@
 # SPlayer Atom Build Flavors
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-05
 
 SPlayer Atom's Core artifacts combine three independent dimensions:
 
@@ -107,7 +107,7 @@ Node bundled ships `runtime/bin/node`; Bun bundled ships `runtime/bin/bun` and i
 installed separately on the target. `runtime.json` records `runtime.name/version/pluginHost`,
 `nodeBundled` and `bunBundled`. A `runtime/bun` marker selects Bun in the shared launcher.
 
-The [runtime comparison](../bun-runtime-experiment.md) (Chinese only) records the bounded
+The [runtime comparison](../history/bun-runtime-experiment.md) (Chinese only) records the bounded
 empty-library API benchmark, separate-process plugin Host and limitations. A VM Context is not
 a security sandbox for malicious plugins. Bun still needs target-hardware, prolonged playback,
 plugin, distribution and upgrade acceptance; it is not yet a formal release artifact. Review
