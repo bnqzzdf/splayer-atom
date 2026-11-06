@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { migrate } from "@main/database/migration";
 
 test("scoped scanner existing-data projection never includes records outside the subtree", async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), "splayer-scanner-scope-"));
@@ -41,7 +42,17 @@ test("scoped scanner existing-data projection never includes records outside the
       {
         id: "a-sacd",
         path: `${path.join(scope, "disc.iso")}|Track01|0|1000`,
-        title: "Track 01",
+        title: "Named track",
+        artists: [],
+        duration: 1000,
+        fileSize: 30,
+        mtime: 300,
+        ctime: 290,
+      },
+      {
+        id: "a-sacd-placeholder",
+        path: `${path.join(scope, "disc.iso")}|Track02|1|1000`,
+        title: "Track 02",
         artists: [],
         duration: 1000,
         fileSize: 30,
@@ -70,6 +81,8 @@ test("scoped scanner existing-data projection never includes records outside the
       }
     })();
     const db = database.getDb();
+    db.pragma("user_version = 8");
+    migrate(db);
     const prepare = db.prepare;
     const statements: string[] = [];
     db.prepare = new Proxy(prepare, {
@@ -90,7 +103,7 @@ test("scoped scanner existing-data projection never includes records outside the
       JSON.stringify(plan),
     );
     assert.deepEqual(database.getFileRecords([]), []);
-    assert.equal(database.getFileRecords([scope, sibling]).length, 4);
+    assert.equal(database.getFileRecords([scope, sibling]).length, 5);
     assert.equal(database.getFileRecords(["/music/A sibling"]).length, 0);
     assert.deepEqual(
       projected.map((item) => item.path).sort(),
@@ -102,10 +115,17 @@ test("scoped scanner existing-data projection never includes records outside the
       "records outside the requested subtree must never reach native deletion detection",
     );
     assert.equal(
-      projected.find((item) => item.path.endsWith("disc.iso"))?.forceProbe,
-      true,
+      projected.find((item) => item.path.endsWith("disc.iso"))?.mtime,
+      0,
       "legacy placeholder SACD metadata keeps its one-time refresh behavior inside scope",
     );
+    db.prepare("UPDATE tracks SET file_mtime = 300 WHERE id = 'a-sacd-placeholder'").run();
+    migrate(db);
+    const refreshedIso = scanner
+      .buildScanExistingData([scope])
+      .find((item) => item.path.endsWith("disc.iso"));
+    assert.equal(refreshedIso?.mtime, 300);
+    assert.equal(refreshedIso?.forceProbe, false);
   } finally {
     database.closeDatabase();
     if (previousDataDir === undefined) delete process.env.ATOM_DATA_DIR;

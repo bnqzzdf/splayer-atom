@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 8;
+export const DATABASE_SCHEMA_VERSION = 9;
 
 type TableInfoRow = { name: string };
 
@@ -138,6 +138,20 @@ export const migrate = (d: Database.Database): void => {
         d.exec("ALTER TABLE tracks ADD COLUMN disc INTEGER");
       }
       v = 8;
+    }
+
+    // 旧版 SACD 文本解析可能留下占位标题，作废一次文件指纹后由扫描写回。
+    if (v < 9) {
+      if (hasColumn(d, "tracks", "path") && hasColumn(d, "tracks", "title")) {
+        d.exec(`
+          UPDATE tracks
+          SET file_mtime = NULL
+          WHERE cue_path IS NULL AND instr(lower(path), '.iso|track') > 0
+            AND lower(replace(title, ' ', '')) GLOB 'track[0-9]*'
+            AND substr(replace(title, ' ', ''), 6) NOT GLOB '*[^0-9]*'
+        `);
+      }
+      v = 9;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

@@ -168,7 +168,6 @@ test("library scanner expands SACD ISO through the Atom-owned sync seam", () => 
   assert.match(scannerService, /getEngine\(\)\.probeSacdTracks\(isoPath\)/);
   assert.match(scannerService, /sacdIsoPathFromVirtual/);
   assert.match(scannerService, /forceProbe: \/\\\.iso\$\/i\.test\(record\.path\)/);
-  assert.match(scannerService, /SACD_PLACEHOLDER_TITLE/);
   assert.match(scannerService, /pendingSacdSyncs/);
   assert.match(sacdInput, /parseSacdVirtualPath/);
   assert.match(localPhysicalSource, /SACD_VIRTUAL_PATH/);

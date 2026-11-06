@@ -177,7 +177,6 @@ export const getRandomTracks = (limit: number): Track[] => {
 /** 用于增量扫描比对的文件记录 */
 export interface FileRecord {
   path: string;
-  title: string;
   mtime: number;
   size: number;
   cover: string | null;
@@ -200,7 +199,7 @@ export const getFileRecords = (dirs: string[]): FileRecord[] => {
   const { where, params } = directoryCondition("path", dirs);
   const rows = getDb()
     .prepare(
-      `SELECT path, title, cue_path AS cuePath, COALESCE(file_mtime, 0) as mtime, file_size as size, cover
+      `SELECT path, cue_path AS cuePath, COALESCE(file_mtime, 0) as mtime, file_size as size, cover
        FROM tracks WHERE ${where}`,
     )
     .all(...params) as (FileRecord & { cuePath: string | null })[];

@@ -30,8 +30,6 @@ let scanGeneration = 0;
 let pendingSacdSyncs: Promise<number>[] = [];
 let scanChanged = false;
 
-const SACD_PLACEHOLDER_TITLE = /^Track\s*0*\d+$/i;
-
 const isSacdAggregate = (track: JsScannedTrack): boolean =>
   /\.iso$/i.test(track.path) && /^sacd_/i.test(track.codec);
 
@@ -148,15 +146,9 @@ export const buildScanExistingData = (dirs: string[]) => {
     const virtualIso = sacdIsoPathFromVirtual(record.path);
     if (virtualIso) {
       const key = pathKey(virtualIso);
-      if (!physical.has(key)) {
-        physical.set(key, {
-          ...record,
-          path: virtualIso,
-          forceProbe: SACD_PLACEHOLDER_TITLE.test(record.title),
-        });
-      } else if (SACD_PLACEHOLDER_TITLE.test(record.title)) {
-        physical.get(key)!.forceProbe = true;
-      }
+      const existing = physical.get(key);
+      if (!existing) physical.set(key, { ...record, path: virtualIso });
+      else if (record.mtime === 0) existing.mtime = 0;
       continue;
     }
     physical.set(pathKey(record.path), {
@@ -165,7 +157,7 @@ export const buildScanExistingData = (dirs: string[]) => {
     });
   }
 
-  return [...physical.values()].map(({ cover, title: _title, ...record }) => {
+  return [...physical.values()].map(({ cover, ...record }) => {
     const coverPath = fromCacheUrl(cover);
     return {
       ...record,
