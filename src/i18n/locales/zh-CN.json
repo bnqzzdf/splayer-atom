@@ -1224,8 +1224,7 @@
       "label": "播放页布局",
       "description": "选择全屏播放页的呈现方式",
       "classic": "经典",
-      "fullCover": "全屏封面",
-      "apple": "AM 风格"
+      "fullCover": "全屏封面"
     },
     "coverLyricRatio": {
       "label": "封面/歌词占比",

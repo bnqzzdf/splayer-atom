@@ -314,7 +314,6 @@ const appearanceCategory: SettingCategory = {
           options: [
             { value: "classic", labelKey: "settings.playerLayout.classic" },
             { value: "fullCover", labelKey: "settings.playerLayout.fullCover" },
-            { value: "apple", labelKey: "settings.playerLayout.apple" },
           ],
           defaultValue: "classic",
         },

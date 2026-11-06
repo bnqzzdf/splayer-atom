@@ -37,7 +37,7 @@ describe("browser presentation persistence migration", () => {
     expect(persisted.player).not.toHaveProperty("coverLayout");
   });
 
-  it("retains the new layout rather than restoring the legacy cover preference", () => {
+  it("migrates the retired AM layout to classic and clears the legacy cover preference", () => {
     localStorage.setItem(
       "settings",
       JSON.stringify({ player: { layout: "apple", coverLayout: "fullscreen" } }),
@@ -48,11 +48,11 @@ describe("browser presentation persistence migration", () => {
     setActivePinia(pinia);
 
     const settings = useSettingsStore();
-    expect(settings.player.layout).toBe("apple");
+    expect(settings.player.layout).toBe("classic");
     const persisted = JSON.parse(localStorage.getItem("settings") || "{}") as {
       player?: Record<string, unknown>;
     };
-    expect(persisted.player?.layout).toBe("apple");
+    expect(persisted.player?.layout).toBe("classic");
     expect(persisted.player).not.toHaveProperty("coverLayout");
   });
 

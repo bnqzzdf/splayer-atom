@@ -4,7 +4,6 @@ import { useMediaStore } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { usePlaybackTime } from "@/composables/usePlaybackTime";
 import { getCurrentTime } from "@/services/playback";
-import type { PlayerLayout } from "@/types/settings";
 import type { QualityLevel } from "@/utils/quality";
 import { useFavorite } from "@/composables/useFavorite";
 import { useDownload, buildDownloadQualityItems } from "@/composables/useDownload";
@@ -34,7 +33,6 @@ const { t } = useI18n();
 const { isPlaying, isPlayerExpanded, showLyric } = storeToRefs(status);
 
 const { isMobile } = useResponsiveLayout();
-const isShortViewport = useMediaQuery("(max-height: 560px)");
 const isPhoneLandscape = useMediaQuery("(max-width: 1023px) and (max-height: 560px)");
 const compactPlayer = computed(() => isMobile.value || isPhoneLandscape.value);
 
@@ -106,12 +104,10 @@ watch(
 );
 
 const fullscreenCover = computed(() => settings.player.layout === "fullCover");
-const appleLayout = computed(() => settings.player.layout === "apple");
 const coverWidth = computed(() => `${settings.player.coverLyricRatio * 100}%`);
 
 const coverCentered = computed(() => {
   if (fullscreenCover.value || status.fullQueueOpen) return false;
-  if (appleLayout.value) return !showLyric.value || !hasLyric.value;
   return !showLyric.value || (settings.player.autoCenterCover && !hasLyric.value);
 });
 
@@ -244,15 +240,11 @@ const playerLayoutItems = computed(() => [
     key: "fullCover",
     label: `${settings.player.layout === "fullCover" ? "✓ " : ""}${t("settings.playerLayout.fullCover")}`,
   },
-  {
-    key: "apple",
-    label: `${settings.player.layout === "apple" ? "✓ " : ""}${t("settings.playerLayout.apple")}`,
-  },
 ]);
 
 const selectPlayerLayout = (key: string): void => {
-  if (key === "classic" || key === "fullCover" || key === "apple") {
-    settings.player.layout = key as PlayerLayout;
+  if (key === "classic" || key === "fullCover") {
+    settings.player.layout = key;
   }
 };
 
@@ -386,11 +378,11 @@ const showComments = (): void => {
               compactPlayer && (status.fullQueueOpen || mobileLyricActive)
                 ? 'opacity-0 pointer-events-none invisible z-0 scale-95'
                 : 'opacity-100 pointer-events-auto visible z-10 scale-100',
-              compactPlayer ? 'px-4' : appleLayout ? 'px-6 xl:px-10' : 'px-12',
+              compactPlayer ? 'px-4' : 'px-12',
               compactPlayer && hasLyric ? 'cursor-pointer' : '',
             ]"
             :style="{
-              width: compactPlayer ? '100%' : appleLayout ? '50%' : coverWidth,
+              width: compactPlayer ? '100%' : coverWidth,
               transform:
                 !compactPlayer && coverCentered ? 'translateX(calc(50vw - 50%))' : undefined,
             }"
@@ -418,22 +410,6 @@ const showComments = (): void => {
               </Transition>
             </div>
 
-            <!-- AM 布局：封面下方集中显示信息、进度与控制 -->
-            <div
-              v-else-if="appleLayout"
-              class="relative w-full max-w-[min(35vh,400px)] max-h-full min-w-0 overflow-y-auto flex flex-col items-center gap-3"
-            >
-              <Transition name="scale-switch" mode="out-in">
-                <div :key="displayTrack?.id" class="w-full min-w-0 flex flex-col items-center">
-                  <PlayerCover />
-                  <div class="w-full min-w-0 pt-3">
-                    <PlayerData align="center" />
-                  </div>
-                </div>
-              </Transition>
-              <PlayerTransport v-if="!isShortViewport" class="w-full" />
-            </div>
-
             <!-- 经典桌面端（大图与绝对定位歌曲信息） -->
             <div v-else class="relative w-[clamp(200px,85%,50vh)] -translate-y-[11vh]">
               <Transition name="scale-switch" mode="out-in">
@@ -457,7 +433,7 @@ const showComments = (): void => {
             :style="{
               width: compactPlayer
                 ? '100%'
-                : fullscreenCover || appleLayout
+                : fullscreenCover
                   ? '50%'
                   : `calc(100% - ${coverWidth})`,
             }"
@@ -570,7 +546,7 @@ const showComments = (): void => {
             :style="{
               width: compactPlayer
                 ? '100%'
-                : fullscreenCover || appleLayout
+                : fullscreenCover
                   ? '50%'
                   : `calc(100% - ${coverWidth})`,
             }"
@@ -669,10 +645,7 @@ const showComments = (): void => {
             </SDropdownMenu>
           </div>
 
-          <PlayerTransport
-            v-if="!appleLayout || compactPlayer || isShortViewport"
-            class="w-full md:w-[clamp(320px,35%,480px)]"
-          />
+          <PlayerTransport class="w-full md:w-[clamp(320px,35%,480px)]" />
 
           <!-- 手机下底部工具行：Fav, Comments, Playlist, Download, Toolbar -->
           <div

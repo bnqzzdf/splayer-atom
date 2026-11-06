@@ -16,7 +16,7 @@ SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Ne
   - ALSA：可使用均衡器、响度、变速
   - Diretta：采样率、位深、声道原样输出，DSD 原生传输，不做任何处理；目标设备不支持的格式会直接报错
   - UPnP 渲染器
-- **其他**：经典 / 全屏封面 / AM 风格播放页、无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
+- **其他**：经典 / 全屏封面播放页、无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
 
 ## 安装
 

@@ -6,10 +6,11 @@ import type { SongListDensity, SongSortPreferences } from "@/types/list";
 
 /** 播放器背景类型 */
 export type PlayerBgType = "blur" | "solid" | "animation";
-export type PlayerLayout = "classic" | "fullCover" | "apple";
+export type PlayerLayout = "classic" | "fullCover";
 
 export const resolvePlayerLayout = (value: unknown, legacy: unknown): PlayerLayout => {
-  if (value === "classic" || value === "fullCover" || value === "apple") return value;
+  if (value === "classic" || value === "fullCover") return value;
+  if (value === "apple") return "classic";
   return legacy === "fullscreen" ? "fullCover" : "classic";
 };
 

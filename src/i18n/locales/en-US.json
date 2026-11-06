@@ -1224,8 +1224,7 @@
       "label": "Now Playing Layout",
       "description": "Choose the full-screen player layout",
       "classic": "Classic",
-      "fullCover": "Fullscreen Cover",
-      "apple": "AM Style"
+      "fullCover": "Fullscreen Cover"
     },
     "coverLyricRatio": {
       "label": "Cover/Lyrics Ratio",

@@ -16,7 +16,7 @@ It runs as a background service and is controlled from a browser on any computer
   - ALSA, with EQ, loudness, and playback speed
   - Diretta: sample rate, bit depth, and channels are sent unchanged and DSD is sent natively, with no processing; formats the target doesn't support fail with an explicit error
   - UPnP renderers
-- **Also**: Classic / Fullscreen Cover / AM-style player layouts, gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
+- **Also**: Classic / Fullscreen Cover player layouts, gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
 
 
 ## Installation
