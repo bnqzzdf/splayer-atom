@@ -3,7 +3,7 @@ import { useMediaStore } from "@/stores/media";
 import { useStatusStore } from "@/stores/status";
 import { playerClient } from "@/core/playerClient";
 
-withDefaults(defineProps<{ fullscreen?: boolean }>(), { fullscreen: false });
+withDefaults(defineProps<{ fullscreen?: boolean; fadeDown?: boolean }>(), { fullscreen: false });
 
 const media = useMediaStore();
 const status = useStatusStore();
@@ -35,7 +35,10 @@ watchEffect(async () => {
   <div
     :class="
       fullscreen
-        ? 'player-cover-fullscreen w-full h-full aspect-auto rounded-none bg-transparent overflow-hidden shrink-0'
+        ? [
+            'player-cover-fullscreen w-full h-full aspect-auto rounded-none bg-transparent overflow-hidden shrink-0',
+            fadeDown && 'player-cover-fade-down',
+          ]
         : [
             'w-full aspect-square rounded-[32px] overflow-hidden shrink-0',
             'shadow-[0_0_20px_10px_rgba(0,0,0,0.1)]',
@@ -64,5 +67,9 @@ watchEffect(async () => {
     rgba(0, 0, 0, 0.03) 92%,
     rgba(0, 0, 0, 0) 100%
   );
+}
+
+.player-cover-fade-down {
+  mask-image: linear-gradient(to bottom, #000 80%, transparent);
 }
 </style>

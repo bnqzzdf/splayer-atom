@@ -33,6 +33,7 @@ const { t } = useI18n();
 const { isPlaying, isPlayerExpanded, showLyric } = storeToRefs(status);
 
 const { isMobile } = useResponsiveLayout();
+const isPortrait = useMediaQuery("(orientation: portrait)");
 const isPhoneLandscape = useMediaQuery("(max-width: 1023px) and (max-height: 560px)");
 const compactPlayer = computed(() => isMobile.value || isPhoneLandscape.value);
 
@@ -104,6 +105,9 @@ watch(
 );
 
 const fullscreenCover = computed(() => settings.player.layout === "fullCover");
+const portraitFullscreenCover = computed(
+  () => fullscreenCover.value && isMobile.value && isPortrait.value,
+);
 const coverWidth = computed(() => `${settings.player.coverLyricRatio * 100}%`);
 
 const coverCentered = computed(() => {
@@ -114,6 +118,9 @@ const coverCentered = computed(() => {
 /** 移动端是否处于歌词展示模式：需同时满足移动端、未打开播放列表、用户开启歌词且当前歌曲存在歌词 */
 const mobileLyricActive = computed(
   () => compactPlayer.value && !status.fullQueueOpen && showLyric.value && hasLyric.value,
+);
+const portraitCoverVisible = computed(
+  () => portraitFullscreenCover.value && !status.fullQueueOpen && !mobileLyricActive.value,
 );
 
 const pageVisible = ref(!document.hidden);
@@ -290,8 +297,19 @@ const showComments = (): void => {
         <!-- 背景 -->
         <PlayerBackground />
         <!-- 全屏封面 -->
-        <div v-if="fullscreenCover" class="absolute inset-y-0 left-0 w-[60%]">
-          <PlayerCover fullscreen />
+        <div
+          v-if="fullscreenCover"
+          class="absolute"
+          :class="
+            portraitFullscreenCover
+              ? [
+                  'inset-x-0 top-0 h-1/2 pointer-events-none transition-opacity duration-300',
+                  portraitCoverVisible ? 'opacity-100' : 'opacity-0',
+                ]
+              : 'inset-y-0 left-0 w-[60%]'
+          "
+        >
+          <PlayerCover fullscreen :fade-down="portraitFullscreenCover" />
         </div>
         <!-- 顶/底栏渐变遮罩（全屏封面模式） -->
         <div
@@ -367,7 +385,13 @@ const showComments = (): void => {
         <!-- 主区域 -->
         <div
           class="absolute top-14 inset-x-0 overflow-hidden"
-          :class="compactPlayer ? 'bottom-36' : 'bottom-36 md:bottom-20'"
+          :class="
+            portraitFullscreenCover
+              ? 'bottom-44'
+              : compactPlayer
+                ? 'bottom-36'
+                : 'bottom-36 md:bottom-20'
+          "
           @mousemove="onMainMove"
         >
           <!-- 封面与歌曲信息 -->
@@ -440,7 +464,7 @@ const showComments = (): void => {
           >
             <!-- 全屏封面模式下的标题信息 -->
             <div
-              v-if="fullscreenCover"
+              v-if="fullscreenCover && (!portraitFullscreenCover || mobileLyricActive)"
               class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
               :style="{ fontSize: lyricFontSize }"
             >
@@ -570,11 +594,21 @@ const showComments = (): void => {
             compactPlayer
               ? 'flex-col gap-2'
               : 'flex-col md:flex-row gap-2 md:gap-4 md:px-4 md:py-0 md:h-20',
+            portraitCoverVisible ? 'top-1/2' : '',
             immersive ? 'opacity-0 pointer-events-none' : 'opacity-100',
           ]"
           @mouseenter="onBarEnter"
           @mouseleave="onBarLeave"
         >
+          <div
+            v-if="portraitCoverVisible"
+            class="flex min-h-0 w-full flex-1 flex-col overflow-y-auto"
+          >
+            <div class="my-auto w-full py-2">
+              <PlayerData simple />
+            </div>
+          </div>
+
           <!-- 桌面左侧操作区 -->
           <div
             class="flex-1 min-w-0 items-center justify-start gap-2"
@@ -649,8 +683,13 @@ const showComments = (): void => {
 
           <!-- 手机下底部工具行：Fav, Comments, Playlist, Download, Toolbar -->
           <div
-            class="items-center justify-between w-full pt-1 border-t border-t-solid border-t-cover/10"
-            :class="compactPlayer ? 'flex' : 'flex md:hidden'"
+            class="items-center w-full pt-1 border-t border-t-solid border-t-cover/10"
+            :class="[
+              compactPlayer ? 'flex' : 'flex md:hidden',
+              portraitFullscreenCover
+                ? 'flex-wrap justify-center gap-x-3 gap-y-1'
+                : 'justify-between',
+            ]"
           >
             <div class="flex items-center gap-1">
               <SButton
