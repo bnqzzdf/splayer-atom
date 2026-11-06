@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, OnceLock};
 use std::thread;
 use std::time::{Instant, SystemTime};
 
@@ -119,21 +119,19 @@ fn collect_removed_paths<T>(
 ///
 /// 新 API 下 AudioReader 不再要求重采样参数，扫库每文件省一次 SwrContext 分配
 pub fn probe_fast(path: &str, cover_cache_dir: Option<&str>) -> Option<ScannedTrack> {
-    let directory_cover = metadata::find_directory_cover(Path::new(path));
-    probe_fast_with_directory_cover(path, cover_cache_dir, directory_cover.as_deref())
+    let directory_cover = cover_cache_dir.and_then(|cache_dir| {
+        let source = metadata::find_directory_cover(Path::new(path))?;
+        Some(DirectoryCover::new(source, cache_dir))
+    });
+    probe_fast_with_directory_cover(path, cover_cache_dir, directory_cover.as_ref())
 }
 
 fn probe_fast_with_directory_cover(
     path: &str,
     cover_cache_dir: Option<&str>,
-    directory_cover: Option<&Path>,
+    directory_cover: Option<&DirectoryCover>,
 ) -> Option<ScannedTrack> {
-    let directory_cover_thumbnail = || {
-        cover_cache_dir.and_then(|dir| {
-            directory_cover
-                .and_then(|cover| metadata::extract_directory_cover_thumbnail(cover, dir))
-        })
-    };
+    let directory_cover_thumbnail = || directory_cover?.thumbnail(cover_cache_dir?).cloned();
     if crate::sacd::is_sacd_iso_path(path) {
         if let Ok(mut reader) = crate::sacd::IsoReader::open(path) {
             if let Ok(disc) = crate::sacd::SacdDisc::parse(&mut reader) {
@@ -216,11 +214,11 @@ fn probe_fast_with_directory_cover(
         let dsd_cover = cover_cache_dir
             .and_then(|dir| {
                 dsd_reader.as_ref().and_then(|reader| {
-                    metadata::extract_cover_thumbnail_with_directory_cover(
+                    metadata::extract_cover_thumbnail_with_fallback(
                         reader,
                         path,
                         dir,
-                        directory_cover,
+                        directory_cover_thumbnail,
                     )
                 })
             })
@@ -314,7 +312,12 @@ fn probe_fast_with_directory_cover(
         metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), path);
 
     let cover = cover_cache_dir.and_then(|dir| {
-        metadata::extract_cover_thumbnail_with_directory_cover(&reader, path, dir, directory_cover)
+        metadata::extract_cover_thumbnail_with_fallback(
+            &reader,
+            path,
+            dir,
+            directory_cover_thumbnail,
+        )
     });
 
     Some(ScannedTrack {
@@ -339,30 +342,74 @@ fn probe_fast_with_directory_cover(
     })
 }
 
+struct DirectoryCover {
+    source: PathBuf,
+    cache_path: PathBuf,
+    thumbnail: OnceLock<Option<String>>,
+}
+
+impl DirectoryCover {
+    fn new(source: PathBuf, cache_dir: &str) -> Self {
+        Self {
+            cache_path: metadata::directory_cover_thumb_path(&source, cache_dir),
+            source,
+            thumbnail: OnceLock::new(),
+        }
+    }
+
+    fn thumbnail(&self, cache_dir: &str) -> Option<&String> {
+        self.thumbnail
+            .get_or_init(|| metadata::extract_directory_cover_thumbnail(&self.source, cache_dir))
+            .as_ref()
+    }
+}
+
 fn cached_directory_cover(
-    cache: &mut HashMap<PathBuf, Option<PathBuf>>,
+    cache: &mut HashMap<PathBuf, Option<Arc<DirectoryCover>>>,
     source: &Path,
-) -> Option<PathBuf> {
+    cache_dir: &str,
+) -> Option<Arc<DirectoryCover>> {
     let parent = source.parent()?.to_path_buf();
     cache
         .entry(parent)
-        .or_insert_with(|| metadata::find_directory_cover(source))
+        .or_insert_with(|| {
+            metadata::find_directory_cover(source)
+                .map(|cover| Arc::new(DirectoryCover::new(cover, cache_dir)))
+        })
         .clone()
 }
+
+fn cover_requires_probe(
+    cached: Option<&str>,
+    directory_cover: Option<&DirectoryCover>,
+    cache_dir: &str,
+) -> bool {
+    let Some(cached) = cached.map(Path::new) else {
+        return directory_cover.is_some();
+    };
+    if metadata::is_directory_cover_thumbnail(cached) {
+        return directory_cover.is_none_or(|cover| {
+            cached != cover.cache_path || cover.thumbnail(cache_dir).is_none()
+        });
+    }
+    !cached.exists()
+}
+
+type ProbeFile = (String, u64, u64, u64, Option<Arc<DirectoryCover>>);
 
 struct ProbeResult {
     path: String,
     mtime: u64,
     ctime: u64,
     size: u64,
-    directory_cover: Option<PathBuf>,
+    has_directory_cover: bool,
     track: Option<ScannedTrack>,
     elapsed_ms: u128,
 }
 
 /// 并行执行独立文件的元数据探测，结果仍按收集顺序交给上层，保持进度和数据库写入稳定。
 fn probe_audio_files_parallel(
-    files: &[(String, u64, u64, u64, Option<PathBuf>)],
+    files: &[ProbeFile],
     cover_cache_dir: Option<&str>,
     cancel: &AtomicBool,
     on_result: &mut impl FnMut(ProbeResult),
@@ -406,7 +453,7 @@ fn probe_audio_files_parallel(
                             mtime: *mtime,
                             ctime: *ctime,
                             size: *size,
-                            directory_cover: directory_cover.clone(),
+                            has_directory_cover: directory_cover.is_some(),
                             track,
                             elapsed_ms: started.elapsed().as_millis(),
                         },
@@ -491,11 +538,11 @@ pub fn scan_directories(
 
     // 第一遍：收集所有音频文件路径
     let walk_start = Instant::now();
-    let mut audio_files: Vec<(String, u64, u64, u64, Option<PathBuf>)> = Vec::new();
+    let mut audio_files: Vec<ProbeFile> = Vec::new();
     let mut scanned_paths: Vec<String> = Vec::new();
     let mut cue_files: Vec<String> = Vec::new();
     // 扫描结束即释放；避免同一目录的每首曲目都重复枚举封面文件。
-    let mut directory_cover_cache: HashMap<PathBuf, Option<PathBuf>> = HashMap::new();
+    let mut directory_cover_cache = HashMap::new();
     // 本轮不可达的目录（NAS 掉线 / 移动硬盘未挂载），其下已有记录不得报告为已删除
     let mut unavailable_dirs: Vec<String> = Vec::new();
 
@@ -577,25 +624,26 @@ pub fn scan_directories(
                 continue;
             };
             scanned_paths.push(path_str.clone());
+            let unchanged_cover = existing
+                .get(path_str.as_str())
+                .filter(|(old_mtime, old_size, _, force_probe)| {
+                    skip_unchanged && !force_probe && *old_mtime == mtime && *old_size == size
+                })
+                .map(|(_, _, cover, _)| *cover);
+            // 内嵌封面使用稳定路径，缓存被清理后由 Core 按图片请求重建。
+            if let Some(cover) = unchanged_cover {
+                if cover_cache_dir.is_none_or(|dir| {
+                    cover.is_some_and(|cover| {
+                        Path::new(cover) == metadata::cover_thumb_path(&path_str, dir)
+                    })
+                }) {
+                    continue;
+                }
+            }
             let directory_cover = cover_cache_dir
-                .and_then(|_| cached_directory_cover(&mut directory_cover_cache, path));
-            // 增量比对：mtime 和 size 都未变化则跳过
-            if let Some(&(old_mtime, old_size, cover_path, force_probe)) =
-                existing.get(path_str.as_str())
-            {
-                let cover_is_current = cover_cache_dir.is_none_or(|cache_dir| {
-                    !metadata::cover_cache_needs_refresh(
-                        cover_path,
-                        cache_dir,
-                        directory_cover.as_deref(),
-                    )
-                });
-                if skip_unchanged
-                    && !force_probe
-                    && old_mtime == mtime
-                    && old_size == size
-                    && cover_is_current
-                {
+                .and_then(|dir| cached_directory_cover(&mut directory_cover_cache, path, dir));
+            if let (Some(cover), Some(dir)) = (unchanged_cover, cover_cache_dir) {
+                if !cover_requires_probe(cover, directory_cover.as_deref(), dir) {
                     continue;
                 }
             }
@@ -640,7 +688,7 @@ pub fn scan_directories(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned());
 
-        let has_cover_cache_miss = result.directory_cover.is_some()
+        let has_cover_cache_miss = result.has_directory_cover
             && result
                 .track
                 .as_ref()

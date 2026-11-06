@@ -29,7 +29,7 @@ pub fn find_directory_cover(source: &Path) -> Option<PathBuf> {
 }
 
 /// 同目录封面按图片路径共享一份缩略图，避免同专辑每首曲目重复缓存。
-fn directory_cover_thumb_path(source: &Path, cache_dir: &str) -> PathBuf {
+pub(crate) fn directory_cover_thumb_path(source: &Path, cache_dir: &str) -> PathBuf {
     let mut hasher = DefaultHasher::new();
     source.hash(&mut hasher);
     let hash = hasher.finish();
@@ -48,7 +48,7 @@ fn source_is_newer(source: &Path, cached: &Path) -> bool {
 
 pub fn extract_directory_cover_thumbnail(source: &Path, cache_dir: &str) -> Option<String> {
     let thumb_file = directory_cover_thumb_path(source, cache_dir);
-    if thumb_file.exists() && !source_is_newer(source, &thumb_file) {
+    if thumb_file.is_file() && !source_is_newer(source, &thumb_file) {
         return Some(thumb_file.to_string_lossy().into_owned());
     }
 
@@ -58,39 +58,18 @@ pub fn extract_directory_cover_thumbnail(source: &Path, cache_dir: &str) -> Opti
     Some(thumb_file.to_string_lossy().into_owned())
 }
 
-/// 判断未变化的音频是否需要因为封面缓存状态而重新探测。
-pub fn cover_cache_needs_refresh(
-    cached_cover: Option<&str>,
-    cache_dir: &str,
-    directory_cover: Option<&Path>,
-) -> bool {
-    let Some(cached_cover) = cached_cover else {
-        return directory_cover.is_some();
-    };
-    let cached_path = Path::new(cached_cover);
-    if !cached_path.exists() {
-        return true;
-    }
-    if !cached_path
-        .file_name()
+pub(crate) fn is_directory_cover_thumbnail(path: &Path) -> bool {
+    path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.starts_with(DIRECTORY_THUMB_PREFIX))
-    {
-        return false;
-    }
-    let Some(directory_cover) = directory_cover else {
-        return true;
-    };
-    cached_path != directory_cover_thumb_path(directory_cover, cache_dir)
-        || source_is_newer(directory_cover, cached_path)
 }
 
 /// 从 reader 中提取封面缩略图，写入缓存目录，返回缩略图路径。
-pub fn extract_cover_thumbnail_with_directory_cover(
+pub(crate) fn extract_cover_thumbnail_with_fallback(
     reader: &AudioReader,
     source: &str,
     cache_dir: &str,
-    directory_cover: Option<&Path>,
+    directory_cover: impl FnOnce() -> Option<String>,
 ) -> Option<String> {
     let thumb_file = cover_thumb_path(source, cache_dir);
 
@@ -104,8 +83,7 @@ pub fn extract_cover_thumbnail_with_directory_cover(
         return Some(thumb_file.to_string_lossy().into_owned());
     }
 
-    let directory_cover = directory_cover?;
-    extract_directory_cover_thumbnail(directory_cover, cache_dir)
+    directory_cover()
 }
 
 /// 提取内嵌封面；没有内嵌图时查找同目录约定封面。
@@ -115,12 +93,9 @@ pub fn extract_cover_thumbnail(
     cache_dir: &str,
 ) -> Option<String> {
     let directory_cover = find_directory_cover(Path::new(source));
-    extract_cover_thumbnail_with_directory_cover(
-        reader,
-        source,
-        cache_dir,
-        directory_cover.as_deref(),
-    )
+    extract_cover_thumbnail_with_fallback(reader, source, cache_dir, || {
+        extract_directory_cover_thumbnail(directory_cover.as_deref()?, cache_dir)
+    })
 }
 
 /// 拿原始封面字节（供 SMTC / 全屏播放器使用，不缓存）
@@ -245,17 +220,12 @@ mod tests {
             cached,
             extract_directory_cover_thumbnail(&cover, cache.to_str().unwrap()).unwrap(),
         );
-        assert!(!cover_cache_needs_refresh(
-            Some(&cached),
-            cache.to_str().unwrap(),
-            Some(&cover),
-        ));
         fs::remove_file(&cached).unwrap();
-        assert!(cover_cache_needs_refresh(
-            Some(&cached),
-            cache.to_str().unwrap(),
-            Some(&cover),
-        ));
+        assert_eq!(
+            Some(cached.clone()),
+            extract_directory_cover_thumbnail(&cover, cache.to_str().unwrap())
+        );
+        assert!(Path::new(&cached).exists());
         let _ = fs::remove_dir_all(root);
     }
 }

@@ -89,15 +89,14 @@ fn list_cover_subdirs(dir: &Path) -> Vec<PathBuf> {
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
-            path.is_dir()
-                && path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| {
-                        COVER_SUBDIRS
-                            .iter()
-                            .any(|expected| name.eq_ignore_ascii_case(expected))
-                    })
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    COVER_SUBDIRS
+                        .iter()
+                        .any(|expected| name.eq_ignore_ascii_case(expected))
+                })
+                && path.is_dir()
         })
         .collect::<Vec<_>>();
     subdirs.sort_by_cached_key(|path| path.to_string_lossy().to_ascii_lowercase());
@@ -110,14 +109,11 @@ fn list_dir_images(dir: &Path) -> Option<Vec<PathBuf>> {
     let mut images = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
         // 无扩展名的文件直接跳过，不影响其他文件的扫描
         let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
             continue;
         };
-        if COVER_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
+        if COVER_EXTS.contains(&ext.to_ascii_lowercase().as_str()) && path.is_file() {
             images.push(path);
         }
     }

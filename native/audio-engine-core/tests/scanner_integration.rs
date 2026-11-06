@@ -408,3 +408,83 @@ fn scanned_track_holds_all_expected_fields() {
     assert_eq!(track.mtime, 1_000_000);
     assert_eq!(track.ctime, 500_000);
 }
+
+#[test]
+fn incremental_scan_repairs_shared_cover_without_probing_unchanged_audio() {
+    use audio_engine_core::metadata::{cover_thumb_path, extract_directory_cover_thumbnail};
+    use audio_engine_core::scanner::{file_stat, scan_directories};
+
+    let dir = unique_temp_dir("incremental-cover-repair");
+    let music = dir.join("music");
+    let cache = dir.join("cache");
+    fs::create_dir(&music).unwrap();
+    let cache_dir = cache.to_str().unwrap();
+    let cover_source = music.join("cover.png");
+    image::RgbImage::from_pixel(2, 2, image::Rgb([200, 0, 0]))
+        .save(&cover_source)
+        .unwrap();
+    let shared_cover = extract_directory_cover_thumbnail(&cover_source, cache_dir).unwrap();
+    let original = fs::read(&shared_cover).unwrap();
+    let records: Vec<_> = (0..3)
+        .map(|i| {
+            let wav = music.join(format!("{i}.wav"));
+            write_test_wav(&wav);
+            let (mtime, _, size) = file_stat(&wav).unwrap();
+            let path = wav.to_str().unwrap();
+            let cover_path = if i == 2 {
+                cover_thumb_path(path, cache_dir)
+                    .to_str()
+                    .unwrap()
+                    .to_owned()
+            } else {
+                shared_cover.clone()
+            };
+            FileRecord {
+                path: path.to_owned(),
+                mtime,
+                size,
+                cover_path: Some(cover_path),
+                force_probe: false,
+            }
+        })
+        .collect();
+
+    let scan = || {
+        let sink = EventSink::default();
+        scan_directories(
+            &[music.to_str().unwrap().to_owned()],
+            Some(cache_dir),
+            Some(&records),
+            true,
+            &AtomicBool::new(false),
+            &|event| sink.0.lock().unwrap().push(event),
+        );
+        let events = sink.take_events();
+        assert!(matches!(
+            events.as_slice(),
+            [
+                ScanEvent::Progress { total: 0, .. },
+                ScanEvent::Done { total: 0, .. }
+            ]
+        ));
+    };
+
+    fs::File::options()
+        .write(true)
+        .open(&shared_cover)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH)
+        .unwrap();
+    image::RgbImage::from_pixel(2, 2, image::Rgb([0, 0, 200]))
+        .save(&cover_source)
+        .unwrap();
+    scan();
+    let refreshed = fs::read(&shared_cover).unwrap();
+    assert_ne!(refreshed, original);
+
+    fs::remove_file(&shared_cover).unwrap();
+    scan();
+    assert_eq!(fs::read(&shared_cover).unwrap(), refreshed);
+    assert!(!PathBuf::from(records[2].cover_path.as_ref().unwrap()).exists());
+    fs::remove_dir_all(&dir).unwrap();
+}
