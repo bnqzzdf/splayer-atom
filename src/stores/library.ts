@@ -88,12 +88,8 @@ export const useLibraryStore = defineStore("library", () => {
   };
 
   /** 批量预取头像 */
-  const loadArtistAvatars = async (): Promise<void> => {
-    const list = await getArtistList();
-    if (!list.success || !list.data) return;
-    const names = list.data
-      .filter((item) => !artistAvatars.value[normalizeArtistName(item.name)])
-      .map((item) => item.name);
+  const loadArtistAvatars = async (artistNames: string[]): Promise<void> => {
+    const names = artistNames.filter((name) => !artistAvatars.value[normalizeArtistName(name)]);
     if (!names.length) return;
     const res = await libraryClient.prefetchArtistAvatars(names).catch(() => null);
     if (!res?.success || !res.data) return;

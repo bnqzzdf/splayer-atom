@@ -42,14 +42,15 @@ export const localAlbumRoot = (value: string): string => {
   return path.resolve(directory);
 };
 
+export const localAlbumKey = (albumName: string, sourcePath: string): string =>
+  `${albumName.trim()}\0${localAlbumRoot(sourcePath)}`;
+
+export const createLocalAlbumIdFromKey = (key: string): string =>
+  createHash("sha256").update(key).digest("hex").slice(0, 20);
+
 /**
  * 生成不依赖专辑标题唯一性的本地专辑 ID。
  * 同名专辑只要位于不同物理专辑目录就会得到不同 ID；多碟目录仍共享同一 ID。
  */
 export const createLocalAlbumId = (albumName: string, sourcePath: string): string =>
-  createHash("sha256")
-    .update(albumName.trim())
-    .update("\0")
-    .update(localAlbumRoot(sourcePath))
-    .digest("hex")
-    .slice(0, 20);
+  createLocalAlbumIdFromKey(localAlbumKey(albumName, sourcePath));

@@ -375,20 +375,23 @@ describe("聚合结果与头像调用点", () => {
   });
 
   it("艺术家查询失败不触发头像预取", async () => {
+    mocks.route.name = "artist-list";
     mocks.getArtists.mockResolvedValueOnce({ success: false, error: "offline" });
-    await expect(useLibraryStore().loadArtistAvatars()).resolves.toBeUndefined();
+    mountPage(LocalList);
+    await flushPromises();
     expect(mocks.prefetchArtistAvatars).not.toHaveBeenCalled();
   });
 
   it("头像预取失败不影响已经成功加载的艺术家列表", async () => {
     mocks.route.name = "artist-list";
-    mocks.getArtists.mockResolvedValue({
+    mocks.getArtists.mockResolvedValueOnce({
       success: true,
       data: [{ name: "艺术家", trackCount: 1 }],
     });
     const wrapper = mountPage(LocalList);
     await flushPromises();
-    expect(mocks.prefetchArtistAvatars).toHaveBeenCalled();
+    expect(mocks.getArtists).toHaveBeenCalledTimes(1);
+    expect(mocks.prefetchArtistAvatars).toHaveBeenCalledWith(["艺术家"]);
     expect(wrapper.find("[data-list]").text()).toContain("艺术家");
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   });

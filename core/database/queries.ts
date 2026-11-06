@@ -2,7 +2,12 @@ import path from "node:path";
 import type { Track, Artist, Album, AudioQuality } from "@shared/types/player";
 import type { AlbumSummary, ArtistSummary } from "@shared/types/library";
 import type { LibraryStats } from "@shared/types/stats";
-import { createLocalAlbumId, inferDiscNumberFromPath } from "@main/utils/localAlbum";
+import {
+  createLocalAlbumId,
+  createLocalAlbumIdFromKey,
+  inferDiscNumberFromPath,
+  localAlbumKey,
+} from "@main/utils/localAlbum";
 import { getDb } from "./index";
 
 /** 数据库行类型 */
@@ -386,6 +391,7 @@ export const getAlbumList = (): AlbumSummary[] => {
     "path" | "cue_path" | "cue_audio_path" | "album" | "artists" | "cover" | "scanned_at"
   >[];
 
+  const albumIds = new Map<string, string>();
   const albums = new Map<
     string,
     {
@@ -402,7 +408,12 @@ export const getAlbumList = (): AlbumSummary[] => {
     if (!row.album) continue;
     const album = JSON.parse(row.album) as Album;
     if (!album.name) continue;
-    const id = createLocalAlbumId(album.name, albumPhysicalSource(row));
+    const key = localAlbumKey(album.name, albumPhysicalSource(row));
+    let id = albumIds.get(key);
+    if (id === undefined) {
+      id = createLocalAlbumIdFromKey(key);
+      albumIds.set(key, id);
+    }
     const existing = albums.get(id) ?? {
       id,
       name: album.name,

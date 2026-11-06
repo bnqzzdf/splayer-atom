@@ -167,8 +167,7 @@ const loadList = async (): Promise<void> => {
   source.value = result.data;
   loadedRevision = requestedRevision;
   loadState.value = "success";
-  // 拉取当前列表中尚未缓存的歌手头像
-  if (mode === "artist") void libraryStore.loadArtistAvatars();
+  if (mode === "artist") void libraryStore.loadArtistAvatars(result.data.map((item) => item.name));
 };
 
 const ensureListLoaded = (): void => {
