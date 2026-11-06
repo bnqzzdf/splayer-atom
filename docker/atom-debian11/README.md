@@ -9,7 +9,7 @@
 | `build.sh`   | **在容器内**跑的构建脚本：装依赖 → 编 native → 打产物 → 校验 glibc 与 Diretta 能力位                               |
 
 宿主侧的入口是 `scripts/atom/build-debian11-bundled.sh`（`pnpm package:core:debian11`），
-它负责建镜像、建缓存卷、把仓库与 SDK 挂进容器，然后执行 `build.sh`。
+它负责建镜像、挂载仓库与 SDK，并在隔离的编译目录中执行 `build.sh`。验收通过后，宿主 `out/` 只接收最终归档。
 
 ## 为什么用 Debian 11
 
@@ -77,20 +77,36 @@ ATOM_DEBIAN11_NETWORK=default pnpm package:core:debian11 --without-diretta
 
 ## 缓存卷
 
-驱动脚本会创建四个具名卷，避免每次重新下载依赖：
+驱动脚本使用以下具名卷来缓存依赖和 Debian 11 的 Rust 编译结果：
 
 ```
 splayer-atom-debian11-node-modules
 splayer-atom-debian11-pnpm-store
 splayer-atom-debian11-cargo-registry
 splayer-atom-debian11-cargo-git
+splayer-atom-debian11-target
 ```
 
 名字都可以用环境变量覆盖（`ATOM_DEBIAN11_*`）。想彻底重来就删掉这几个卷。
 
 ## 注意
 
-- 仓库以 bind mount 挂进容器，`out/` 会直接写在宿主的工作树上。
+- 容器的 `out/` 是临时卷，`target/` 使用独立的 Debian 11 缓存卷。只将验收通过的归档以调用者的所有权导出到宿主 `out/`，因此可以在同一工作区接着运行本机构建。
 - 带 Diretta 时 SDK 是**只读**挂载（`/opt/diretta-sdk`），SDK 本体不会进入产物。
 - `.dockerignore` 排除了 `.git` / `node_modules` / `out` / `target` / `*.tar.gz`，
   镜像里不带这些；运行时靠卷和 bind mount 提供。
+
+如果旧版 Debian 11 构建留下了 root 所有的中间文件，导致本机构建报 `EACCES`，在仓库根目录修复一次所有权：
+
+```bash
+for dir in out target node_modules; do
+  if [ -d "$dir" ]; then
+    sudo chown -h "$(id -u):$(id -g)" "$dir"
+  fi
+done
+for dir in out/native out/core out/renderer out/core-system target/core-audio; do
+  if [ -d "$dir" ]; then
+    sudo chown -hR "$(id -u):$(id -g)" "$dir"
+  fi
+done
+```

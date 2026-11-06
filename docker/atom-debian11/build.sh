@@ -4,6 +4,7 @@
 # 由 scripts/atom/build-debian11-bundled.sh 通过 docker run 调用，所需环境变量：
 #   ATOM_DEBIAN11_DIRETTA_MODE  with | without
 #   ATOM_DEBIAN11_BUNDLE_RUNTIME  true | false
+#   ATOM_DEBIAN11_EXPORT_OWNER  宿主 UID:GID
 #   DIRETTA_CPU_VARIANT         with 时必填：v2 | v3 | v4 | zen4
 #   DIRETTA_SDK_ROOT            with 时必填，宿主 SDK 只读挂载进来的路径
 #
@@ -131,7 +132,7 @@ flavor=$MODE-diretta
 if [ "$MODE" = with ]; then
   flavor=$flavor-$VARIANT
 fi
-debian_archive=${archive%.tar.gz}-debian11-$flavor.tar.gz
+archive_name=${archive##*/}
+debian_archive=/export/${archive_name%.tar.gz}-debian11-$flavor.tar.gz
 mv "$archive" "$debian_archive"
-sha256sum "$debian_archive"
-echo "[Debian11] PASS $debian_archive"
+chown "$ATOM_DEBIAN11_EXPORT_OWNER" "$debian_archive"

@@ -8,6 +8,7 @@ NODE_VOLUME=${ATOM_DEBIAN11_NODE_VOLUME:-splayer-atom-debian11-node-modules}
 PNPM_VOLUME=${ATOM_DEBIAN11_PNPM_VOLUME:-splayer-atom-debian11-pnpm-store}
 CARGO_REGISTRY_VOLUME=${ATOM_DEBIAN11_CARGO_REGISTRY_VOLUME:-splayer-atom-debian11-cargo-registry}
 CARGO_GIT_VOLUME=${ATOM_DEBIAN11_CARGO_GIT_VOLUME:-splayer-atom-debian11-cargo-git}
+TARGET_VOLUME=${ATOM_DEBIAN11_TARGET_VOLUME:-splayer-atom-debian11-target}
 CARGO_HTTP_TIMEOUT=${CARGO_HTTP_TIMEOUT:-600}
 CARGO_HTTP_LOW_SPEED_LIMIT=${CARGO_HTTP_LOW_SPEED_LIMIT:-1}
 CARGO_NET_RETRY=${CARGO_NET_RETRY:-10}
@@ -108,12 +109,15 @@ run_docker volume inspect "$CARGO_GIT_VOLUME" >/dev/null 2>&1 \
   || run_docker volume create "$CARGO_GIT_VOLUME" >/dev/null
 run_docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-echo "[Debian11] 在隔离 node_modules 和 pnpm store 的容器内打包（Diretta: $DIRETTA_MODE）"
+mkdir -p "$ROOT_DIR/out" "$ROOT_DIR/target" "$ROOT_DIR/node_modules"
+export_dir=$(mktemp -d "$ROOT_DIR/out/.debian11-export.XXXXXX")
+trap 'rm -rf -- "$export_dir"' EXIT
+
+echo "[Debian11] 在隔离依赖、编译缓存和输出的容器内打包（Diretta: $DIRETTA_MODE）"
 set -- --volume "$ROOT_DIR:/src"
 if [ -f "$ROOT_DIR/.git" ]; then
   GIT_COMMON_DIR=$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir)
-  set -- "$@" --volume "$ROOT_DIR:$ROOT_DIR" --volume "$GIT_COMMON_DIR:$GIT_COMMON_DIR:ro" \
-    --env GIT_OPTIONAL_LOCKS=0
+  set -- "$@" --volume "$ROOT_DIR:$ROOT_DIR:ro" --volume "$GIT_COMMON_DIR:$GIT_COMMON_DIR:ro"
 fi
 if [ "$DIRETTA_MODE" = with ]; then
   set -- "$@" --volume "$SDK_ROOT:/opt/diretta-sdk:ro" \
@@ -125,6 +129,9 @@ run_docker run --rm \
   --network "$DOCKER_NETWORK" \
   "$@" \
   --volume "$NODE_VOLUME:/src/node_modules" \
+  --volume "$TARGET_VOLUME:/src/target" \
+  --volume /src/out \
+  --volume "$export_dir:/export" \
   --volume "$PNPM_VOLUME:/root/.local/share/pnpm/store" \
   --volume "$CARGO_REGISTRY_VOLUME:/root/.cargo/registry" \
   --volume "$CARGO_GIT_VOLUME:/root/.cargo/git" \
@@ -132,9 +139,21 @@ run_docker run --rm \
   --env "CARGO_HTTP_TIMEOUT=$CARGO_HTTP_TIMEOUT" \
   --env "CARGO_HTTP_LOW_SPEED_LIMIT=$CARGO_HTTP_LOW_SPEED_LIMIT" \
   --env "CARGO_NET_RETRY=$CARGO_NET_RETRY" \
+  --env GIT_OPTIONAL_LOCKS=0 \
+  --env "ATOM_DEBIAN11_EXPORT_OWNER=$(id -u):$(id -g)" \
   --env "ATOM_DEBIAN11_DIRETTA_MODE=$DIRETTA_MODE" \
   --env "ATOM_DEBIAN11_BUNDLE_RUNTIME=$BUNDLE_RUNTIME" \
   --volume "$ROOT_DIR/docker/atom-debian11/build.sh:/usr/local/bin/atom-debian11-build.sh:ro" \
   --workdir /src \
   "$IMAGE_NAME" \
   sh /usr/local/bin/atom-debian11-build.sh
+
+set -- "$export_dir"/splayer-atom-core-*.tar.gz
+if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
+  echo "[Debian11] 容器未导出唯一归档" >&2
+  exit 1
+fi
+archive=${1##*/}
+mv "$1" "$ROOT_DIR/out/$archive"
+(cd "$ROOT_DIR" && sha256sum "out/$archive")
+echo "[Debian11] PASS out/$archive"
