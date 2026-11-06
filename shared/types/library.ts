@@ -72,7 +72,7 @@ export interface LibraryApi {
   /** 随机取多首曲目 */
   getRandomTracks: (limit: number) => Promise<IpcResponse<Track[]>>;
   /** 获取扫描状态 */
-  isScanning: () => Promise<IpcResponse<boolean>>;
+  getScanProgress: () => Promise<IpcResponse<ScanProgress>>;
   /** 添加 Core 扫描目录。 */
   addScanDir: (dir: string) => Promise<IpcResponse<string>>;
   /** 移除扫描目录及其下曲目 */

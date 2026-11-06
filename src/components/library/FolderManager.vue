@@ -9,7 +9,10 @@ import IconLucideTrash2 from "~icons/lucide/trash-2";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
-const { scanDirs } = storeToRefs(libraryStore);
+const { scanDirs, scanDirsLoadState } = storeToRefs(libraryStore);
+const loadingDirs = computed(() => ["idle", "loading"].includes(scanDirsLoadState.value));
+
+onMounted(() => void libraryStore.loadScanDirs());
 
 const emit = defineEmits<{
   (e: "added"): void;
@@ -73,16 +76,39 @@ const handleRemove = async (): Promise<void> => {
         <div class="text-sm truncate text-on-surface">{{ folderName(dir) }}</div>
         <div class="text-xs truncate text-on-surface-variant/60 font-mono">{{ dir }}</div>
       </div>
-      <SButton variant="ghost" size="small" @click="confirmRemove(dir)">
+      <SButton variant="ghost" size="small" :disabled="loadingDirs" @click="confirmRemove(dir)">
         <template #icon><IconLucideTrash2 /></template>
       </SButton>
     </div>
 
-    <div v-if="scanDirs.length === 0" class="py-4 text-center text-on-surface-variant/50 text-sm">
+    <div v-if="scanDirsLoadState === 'error'" role="alert" class="flex items-center gap-2 text-sm">
+      <span>{{ t("library.directoriesLoadFailed") }}</span>
+      <SButton variant="ghost" size="small" @click="libraryStore.loadScanDirs()">
+        {{ t("common.retry") }}
+      </SButton>
+    </div>
+    <div
+      v-else-if="loadingDirs && scanDirs.length === 0"
+      role="status"
+      class="py-4 text-center text-on-surface-variant/50 text-sm"
+    >
+      {{ t("common.loading") }}
+    </div>
+    <div
+      v-else-if="scanDirs.length === 0"
+      class="py-4 text-center text-on-surface-variant/50 text-sm"
+    >
       {{ t("library.emptyHint") }}
     </div>
 
-    <SButton class="mt-1" variant="secondary" :loading="adding" block @click="handleAdd">
+    <SButton
+      class="mt-1"
+      variant="secondary"
+      :disabled="loadingDirs"
+      :loading="adding"
+      block
+      @click="handleAdd"
+    >
       <template #icon><IconLucideFolderPlus /></template>
       {{ t("library.addFolder") }}
     </SButton>

@@ -694,6 +694,7 @@
     "title": "本地曲库",
     "empty": "本地曲库为空",
     "emptyHint": "尚未添加音乐目录",
+    "directoriesLoadFailed": "音乐目录加载失败",
     "noLocalSongs": "暂无本地歌曲",
     "noLocalAlbums": "暂无本地专辑",
     "noLocalArtists": "暂无本地艺术家",

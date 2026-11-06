@@ -694,6 +694,7 @@
     "title": "Local Library",
     "empty": "Local library is empty",
     "emptyHint": "No music directories added",
+    "directoriesLoadFailed": "Could not load music directories",
     "noLocalSongs": "No local songs",
     "noLocalAlbums": "No local albums",
     "noLocalArtists": "No local artists",

@@ -21,10 +21,14 @@ export const useLibraryStore = defineStore("library", () => {
   const tracksLoadError = ref<string | null>(null);
   /** 扫描目录列表 */
   const scanDirs = ref<string[]>([]);
+  const scanDirsLoadState = ref<LibraryLoadState>("idle");
+  let scanDirsRequest: Promise<void> | null = null;
+  let scanDirsEventVersion = 0;
   /** 是否正在扫描 */
   const scanning = ref(false);
   /** 扫描进度 */
   const scanProgress = ref<ScanProgress | null>(null);
+  let scanProgressVersion = 0;
   /** 是否已初始化 */
   const initialized = ref(false);
   const revision = ref(0);
@@ -37,6 +41,8 @@ export const useLibraryStore = defineStore("library", () => {
   const likedOrderedIds = shallowRef<string[]>([]);
   /** 本地红心 id 集合 */
   const likedIdSet = shallowRef<Set<string>>(new Set());
+  let likesLoaded = false;
+  let likesRequest: Promise<void> | null = null;
 
   /** 应用 Core 权威本地红心快照。 */
   const applyLikedIds = (ids: string[]): void => {
@@ -45,7 +51,10 @@ export const useLibraryStore = defineStore("library", () => {
   };
 
   /** 是否已收藏 */
-  const isLiked = (trackId: string): boolean => likedIdSet.value.has(trackId);
+  const isLiked = (trackId: string): boolean => {
+    if (!likesLoaded && !likesRequest) void loadLikes();
+    return likedIdSet.value.has(trackId);
+  };
 
   /**
    * 切换收藏
@@ -53,6 +62,7 @@ export const useLibraryStore = defineStore("library", () => {
    */
   const toggleLike = async (trackId: string): Promise<boolean> => {
     if (!trackId) return false;
+    await loadLikes();
     const liked = !likedIdSet.value.has(trackId);
     const result = await libraryClient.setTrackLiked(trackId, liked);
     if (!result.success || !result.data) {
@@ -107,73 +117,76 @@ export const useLibraryStore = defineStore("library", () => {
     trackDb.setItem("tracks", toRaw(items)).catch(() => {});
   };
 
-  /** 加载曲目和目录列表 */
-  const load = async (): Promise<void> => {
-    tracksLoadState.value = "loading";
-    tracksLoadError.value = null;
-    // 先从 IndexedDB 读缓存，立即渲染
-    const [cached, legacyLiked] = await Promise.all([
-      trackDb.getItem<Track[]>("tracks").catch(() => null),
-      trackDb.getItem<string[]>(LIKED_IDS_KEY).catch(() => null),
-    ]);
-    if (cached?.length) tracks.value = cached;
-    // 拿最新数据并回写缓存；旧浏览器红心只做一次并集合并迁移。
-    const likesPromise =
-      Array.isArray(legacyLiked) && legacyLiked.length > 0
-        ? libraryClient.importLikedTrackIds(legacyLiked)
-        : libraryClient.getLikedTrackIds();
-    const [, dirsRes, likesRes] = await Promise.all([
-      refreshTracksProjection(),
-      libraryClient.getScanDirs(),
-      likesPromise,
-    ]);
-    if (dirsRes.success && dirsRes.data) scanDirs.value = dirsRes.data;
-    if (likesRes.success && likesRes.data) {
-      applyLikedIds(likesRes.data);
+  const loadLikes = async (): Promise<void> => {
+    if (likesLoaded) return;
+    if (likesRequest) return likesRequest;
+    likesRequest = (async () => {
+      const legacyLiked = await trackDb.getItem<string[]>(LIKED_IDS_KEY).catch(() => null);
+      const previousIds = likedOrderedIds.value;
+      const result =
+        Array.isArray(legacyLiked) && legacyLiked.length > 0
+          ? await libraryClient.importLikedTrackIds(legacyLiked)
+          : await libraryClient.getLikedTrackIds();
+      if (!result.success || !result.data) return;
+      if (previousIds === likedOrderedIds.value) applyLikedIds(result.data);
+      likesLoaded = true;
       if (Array.isArray(legacyLiked)) void trackDb.removeItem(LIKED_IDS_KEY).catch(() => {});
-    }
-    initialized.value = true;
-    // 同步服务端真实扫描状态，防止残留
-    try {
-      const scanStatus = await libraryClient.isScanning();
-      if (scanStatus.success && scanStatus.data) {
-        const isCurrentlyScanning = Boolean(
-          (scanStatus.data as any).is_scanning ?? scanStatus.data,
-        );
-        scanning.value = isCurrentlyScanning;
-        if (!isCurrentlyScanning) scanProgress.value = null;
-      } else {
-        scanning.value = false;
-        scanProgress.value = null;
-      }
-    } catch {
-      scanning.value = false;
-      scanProgress.value = null;
-    }
+    })().finally(() => {
+      likesRequest = null;
+    });
+    return likesRequest;
+  };
+
+  const loadScanDirs = (): Promise<void> => {
+    if (scanDirsRequest) return scanDirsRequest;
+    scanDirsLoadState.value = "loading";
+    const version = scanDirsEventVersion;
+    scanDirsRequest = libraryClient
+      .getScanDirs()
+      .then((result) => {
+        if (version !== scanDirsEventVersion) return;
+        if (result.success && result.data) {
+          scanDirs.value = result.data;
+          scanDirsLoadState.value = "success";
+        } else {
+          scanDirsLoadState.value = "error";
+        }
+      })
+      .finally(() => {
+        scanDirsRequest = null;
+      });
+    return scanDirsRequest;
+  };
+
+  const syncScanProgress = async (): Promise<void> => {
+    const version = scanProgressVersion;
+    const result = await libraryClient.getScanProgress();
+    if (version !== scanProgressVersion || !result.success || !result.data) return;
+    scanning.value = result.data.phase === "scanning";
+    scanProgress.value = scanning.value ? result.data : null;
   };
 
   /** 开始扫描 */
   const startScan = async (incremental = true): Promise<void> => {
     if (scanning.value) return;
+    const version = ++scanProgressVersion;
     scanning.value = true;
     scanProgress.value = { phase: "scanning", total: 0, scanned: 0 };
-    try {
-      const res = await libraryClient.scan(incremental);
-      if (!res.success) {
-        scanning.value = false;
-        scanProgress.value = null;
-      }
-    } catch {
+    const res = await libraryClient.scan(incremental);
+    if (!res.success && version === scanProgressVersion) {
       scanning.value = false;
       scanProgress.value = null;
+      void syncScanProgress();
     }
   };
 
   /** 取消扫描 */
   const cancelScan = async (): Promise<void> => {
-    await libraryClient.cancelScan();
-    scanning.value = false;
-    scanProgress.value = null;
+    const result = await libraryClient.cancelScan();
+    if (result.success && scanning.value) {
+      scanProgressVersion++;
+      await syncScanProgress();
+    }
   };
 
   /** 添加一个已经由 Core 目录浏览器选定的扫描目录。 */
@@ -194,10 +207,12 @@ export const useLibraryStore = defineStore("library", () => {
 
   /** 移除扫描目录 */
   const removeScanDir = async (dir: string): Promise<void> => {
-    await libraryClient.removeScanDir(dir);
+    const result = await libraryClient.removeScanDir(dir);
+    if (!result.success) return;
     scanDirs.value = scanDirs.value.filter((d) => d !== dir);
     // 移除目录取消正在进行的扫描
     if (scanning.value) {
+      scanProgressVersion++;
       scanning.value = false;
       scanProgress.value = null;
     }
@@ -213,9 +228,13 @@ export const useLibraryStore = defineStore("library", () => {
   const refreshTracksProjection = (): Promise<void> => {
     if (tracksRequest) return tracksRequest;
     tracksRequest = (async () => {
-      const requestedRevision = revision.value;
       tracksLoadState.value = "loading";
       tracksLoadError.value = null;
+      if (!initialized.value) {
+        const cached = await trackDb.getItem<Track[]>("tracks").catch(() => null);
+        if (cached?.length) tracks.value = cached;
+      }
+      const requestedRevision = revision.value;
       const res = await libraryClient.getTracks();
       if (!res.success || !res.data) {
         tracksLoadState.value = "error";
@@ -227,6 +246,7 @@ export const useLibraryStore = defineStore("library", () => {
       cacheTracks(res.data);
       tracksLoadState.value = "success";
     })().finally(() => {
+      initialized.value = true;
       tracksRequest = null;
       if (
         tracksStale &&
@@ -242,8 +262,10 @@ export const useLibraryStore = defineStore("library", () => {
 
   const watchTracks = (): (() => void) => {
     trackConsumers++;
-    if (!initialized.value) void load();
-    else if (tracksStale || tracksLoadState.value === "error") void refreshTracksProjection();
+    void loadLikes();
+    if (!initialized.value || tracksStale || tracksLoadState.value === "error") {
+      void refreshTracksProjection();
+    }
     return () => {
       trackConsumers--;
     };
@@ -253,6 +275,7 @@ export const useLibraryStore = defineStore("library", () => {
   const subscribeScanProgress = (): void => {
     if (unsubscribe) return;
     unsubscribe = subscribeCoreControlEvent("libraryScanProgress", (data) => {
+      scanProgressVersion++;
       scanProgress.value = data;
       if (data.phase === "scanning") {
         scanning.value = true;
@@ -271,7 +294,9 @@ export const useLibraryStore = defineStore("library", () => {
       if (!scanning.value && trackConsumers > 0) void refreshTracksProjection();
     });
     unsubscribeLibraryRootsChanged = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
+      scanDirsEventVersion++;
       scanDirs.value = [...data.paths];
+      scanDirsLoadState.value = "success";
     });
     unsubscribeLibraryLikesChanged = subscribeCoreControlEvent("libraryLikesChanged", ({ ids }) => {
       applyLikedIds(ids);
@@ -380,6 +405,7 @@ export const useLibraryStore = defineStore("library", () => {
     tracksLoadState,
     tracksLoadError,
     scanDirs,
+    scanDirsLoadState,
     scanning,
     scanProgress,
     initialized,
@@ -389,7 +415,9 @@ export const useLibraryStore = defineStore("library", () => {
     likedIdSet,
     isLiked,
     toggleLike,
-    load,
+    load: refreshTracksProjection,
+    loadScanDirs,
+    syncScanProgress,
     watchTracks,
     startScan,
     cancelScan,

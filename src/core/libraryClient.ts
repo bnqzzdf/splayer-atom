@@ -1,4 +1,4 @@
-import type { AlbumSummary, ArtistSummary, LibraryApi } from "@shared/types/library";
+import type { AlbumSummary, ArtistSummary, LibraryApi, ScanProgress } from "@shared/types/library";
 import type { IpcResponse, Track } from "@shared/types/player";
 import type { TagEditRequest, TagWriteOutcome, TrackTags } from "@shared/types/tagEditor";
 import { request } from "@/core/controlClient";
@@ -115,8 +115,8 @@ export const libraryClient: LibraryApi = {
       (await request<{ data: Track[] }>(`/library/random?limit=${limit}`)).data.map(mapTrack),
     ),
 
-  isScanning: () =>
-    asIpc(async () => (await request<{ data: boolean }>("/library/is-scanning")).data),
+  getScanProgress: () =>
+    asIpc(async () => (await request<{ data: ScanProgress }>("/library/scan-progress")).data),
 
   addScanDir: (dir) => {
     if (!dir?.trim()) return Promise.resolve({ success: false, error: "CORE_DIRECTORY_REQUIRED" });

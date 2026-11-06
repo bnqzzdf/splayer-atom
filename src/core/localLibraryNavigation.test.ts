@@ -18,10 +18,7 @@ test("local browsing uses Home Albums Artists Songs with /library compatibility 
 test("Songs is a pure browsing page while local library maintenance lives in Settings", () => {
   assert.doesNotMatch(songsSource, /FolderManager|startScan\(|cancelScan\(|scanProgress|scanDirs/);
   assert.match(localLibrarySettingsSource, /FolderManager/);
-  assert.match(
-    localLibrarySettingsSource,
-    /if \(!initialized\.value\) await libraryStore\.load\(\)/,
-  );
+  assert.match(localLibrarySettingsSource, /libraryStore\.syncScanProgress\(\)/);
   assert.match(localLibrarySettingsSource, /libraryStore\.startScan\(true\)/);
   assert.match(localLibrarySettingsSource, /libraryStore\.startScan\(false\)/);
   assert.match(localLibrarySettingsSource, /libraryStore\.cancelScan\(\)/);

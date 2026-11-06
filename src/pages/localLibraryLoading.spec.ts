@@ -9,6 +9,7 @@ import messages from "@/i18n/locales/zh-CN.json";
 import { useLibraryStore } from "@/stores/library";
 import { useLibraryTracks } from "@/composables/useLibraryTracks";
 import type { subscribeCoreControlEvent } from "@/core/controlEventClient";
+import LocalLibrarySettings from "@/components/settings/custom/LocalLibrarySettings.vue";
 import LocalList from "./LocalList.vue";
 import Songs from "./Songs.vue";
 
@@ -21,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   getArtists: vi.fn<LibraryApi["getArtists"]>(),
   getScanDirs: vi.fn<LibraryApi["getScanDirs"]>(),
   getLikedTrackIds: vi.fn<LibraryApi["getLikedTrackIds"]>(),
-  isScanning: vi.fn<LibraryApi["isScanning"]>(),
+  getScanProgress: vi.fn<LibraryApi["getScanProgress"]>(),
   prefetchArtistAvatars: vi.fn<LibraryApi["prefetchArtistAvatars"]>(),
   subscribe: vi.fn<typeof subscribeCoreControlEvent>(() => () => {}),
 }));
@@ -38,6 +39,7 @@ vi.mock("@/settings/useSettingsDialog", () => ({
 }));
 vi.mock("@/utils/navigate", () => ({ navigateToAlbum: vi.fn(), navigateToArtist: vi.fn() }));
 vi.mock("@/core/player", () => ({ playFrom: vi.fn() }));
+vi.mock("@/web/CoreDirectoryPicker.vue", () => ({ default: { template: "<div />" } }));
 vi.mock("vue-router", () => ({ useRoute: () => mocks.route }));
 vi.mock("@/components/list/CoverList.vue", () => ({
   default: { props: ["items"], template: "<div data-list>{{ items }}</div>" },
@@ -84,6 +86,8 @@ const mountPage = (component: Component) => {
         },
         SSelect: true,
         SLoading: true,
+        CoreDirectoryPicker: true,
+        SDialog: true,
         IconLucideSearch: true,
         IconLucideSettings2: true,
         IconLucideMusic: true,
@@ -117,7 +121,10 @@ beforeEach(() => {
   mocks.getArtists.mockReset().mockResolvedValue({ success: true, data: [] });
   mocks.getScanDirs.mockReset().mockResolvedValue({ success: true, data: [] });
   mocks.getLikedTrackIds.mockReset().mockResolvedValue({ success: true, data: [] });
-  mocks.isScanning.mockReset().mockResolvedValue({ success: true, data: false });
+  mocks.getScanProgress.mockReset().mockResolvedValue({
+    success: true,
+    data: { phase: "done", scanned: 0, total: 0 },
+  });
   mocks.prefetchArtistAvatars.mockReset().mockResolvedValue({ success: false, error: "offline" });
 });
 
@@ -186,6 +193,33 @@ describe.each([
     await wrapper.find("input").setValue("不存在的条目");
     expect(wrapper.text()).toContain("没有匹配的");
     expect(wrapper.text()).not.toContain(empty);
+  });
+});
+
+describe("本地曲库设置", () => {
+  it("独立请求目录和扫描状态，并区分加载、失败和空列表", async () => {
+    const dirs = deferred<IpcResponse<string[]>>();
+    mocks.getScanDirs.mockReturnValueOnce(dirs.promise);
+    mocks.getScanProgress.mockResolvedValueOnce({
+      success: true,
+      data: { phase: "scanning", scanned: 0, total: 0 },
+    });
+    const wrapper = mountPage(LocalLibrarySettings);
+    await flushPromises();
+    expect(wrapper.find('[role="status"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("正在扫描 0/0");
+    expect(wrapper.text()).not.toContain("尚未添加音乐目录");
+    expect(mocks.getTracks).not.toHaveBeenCalled();
+    expect(mocks.getLikedTrackIds).not.toHaveBeenCalled();
+    expect(mocks.getItem).not.toHaveBeenCalled();
+    dirs.resolve({ success: false, error: "offline" });
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').text()).toContain("音乐目录加载失败");
+    expect(wrapper.text()).not.toContain("尚未添加音乐目录");
+    mocks.getScanDirs.mockResolvedValueOnce({ success: true, data: ["/music/albums"] });
+    await retry(wrapper);
+    await flushPromises();
+    expect(wrapper.text()).toContain("/music/albums");
   });
 });
 
@@ -274,27 +308,14 @@ describe("歌曲列表加载", () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   });
 
-  it("曲目成功与否不由目录、红心、扫描状态或头像结果决定", async () => {
-    mocks.getScanDirs.mockResolvedValueOnce({ success: false, error: "dirs failed" });
+  it("曲目成功与否不由红心结果决定，且无需读取目录或扫描状态", async () => {
     mocks.getLikedTrackIds.mockResolvedValueOnce({ success: false, error: "likes failed" });
-    mocks.isScanning.mockResolvedValueOnce({ success: false, error: "scan failed" });
-    mocks.getArtists.mockResolvedValueOnce({ success: false, error: "avatars failed" });
     const wrapper = mountPage(Songs);
     await flushPromises();
     expect(useLibraryStore().tracksLoadState).toBe("success");
     expect(wrapper.text()).toContain("暂无本地歌曲");
-  });
-
-  it("目录请求尚未完成时，曲目请求成功就能确认空库", async () => {
-    const dirs = deferred<IpcResponse<string[]>>();
-    mocks.getScanDirs.mockReturnValueOnce(dirs.promise);
-    const wrapper = mountPage(Songs);
-    await flushPromises();
-    expect(useLibraryStore().initialized).toBe(false);
-    expect(useLibraryStore().tracksLoadState).toBe("success");
-    expect(wrapper.text()).toContain("暂无本地歌曲");
-    dirs.resolve({ success: true, data: [] });
-    await flushPromises();
+    expect(mocks.getScanDirs).not.toHaveBeenCalled();
+    expect(mocks.getScanProgress).not.toHaveBeenCalled();
   });
 
   it("扫描完成后的刷新也区分加载、失败和恢复", async () => {

@@ -4,16 +4,14 @@ import FolderManager from "@/components/library/FolderManager.vue";
 
 const { t } = useI18n();
 const libraryStore = useLibraryStore();
-const { scanDirs, scanning, scanProgress, initialized } = storeToRefs(libraryStore);
+const { scanDirs, scanning, scanProgress } = storeToRefs(libraryStore);
 
 const scanPercent = computed(() => {
   if (!scanProgress.value?.total) return 0;
   return Math.min(100, Math.round((scanProgress.value.scanned / scanProgress.value.total) * 100));
 });
 
-onMounted(async () => {
-  if (!initialized.value) await libraryStore.load();
-});
+onMounted(() => void libraryStore.syncScanProgress());
 </script>
 
 <template>
