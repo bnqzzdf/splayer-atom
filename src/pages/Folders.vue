@@ -1502,7 +1502,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="currentPath && !searchQuery.trim()" class="mt-3 flex min-w-0 items-center gap-1">
-        <SButton variant="text" size="small" @click="goHome">
+        <SButton variant="text" size="small" class="shrink-0 whitespace-nowrap" @click="goHome">
           <template #icon><IconFolder class="size-4" /></template>
           {{ t("folder.label") }}
         </SButton>

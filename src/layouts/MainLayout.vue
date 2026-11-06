@@ -117,9 +117,8 @@ const playerBarInnerClass = computed(() => {
 </script>
 
 <template>
-  <!-- 主界面：支持 svh、dvh 与 safe area -->
   <div
-    class="h-full h-screen h-[100svh] h-[100dvh] flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center"
+    class="fixed inset-0 flex overflow-hidden bg-app text-on-surface transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.7,0,0.3,1)] origin-center md:static md:h-screen"
     :class="isPlayerExpanded ? 'scale-95 opacity-0 pointer-events-none' : ''"
   >
     <!-- 侧边栏：手机隐藏，平板与桌面常驻 -->
