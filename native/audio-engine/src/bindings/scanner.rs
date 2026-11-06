@@ -105,7 +105,7 @@ pub struct JsScanEvent {
 /// 批量扫描目录，通过回调推送进度和结果
 ///
 /// 在后台线程中执行，不阻塞 Node.js 事件循环。
-/// 每处理约 100 个文件回调一次 progress 事件，完成后回调 done 事件。
+/// 遍历结束及每处理一批文件时回调 progress 事件，完成后回调 done 事件。
 #[napi(
     ts_args_type = "dirs: Array<string>, callback: (event: JsScanEvent) => void, coverCacheDir?: string | undefined | null, incrementalData?: Array<FileRecord> | undefined | null, skipUnchanged?: boolean | undefined | null"
 )]
@@ -180,7 +180,13 @@ pub fn scan_dirs(
         );
 
         // 扫描结束后清除全局取消标志
-        *SCAN_CANCEL.lock() = None;
+        let mut active = SCAN_CANCEL.lock();
+        if active
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, &cancel))
+        {
+            *active = None;
+        }
     });
 
     Ok(())

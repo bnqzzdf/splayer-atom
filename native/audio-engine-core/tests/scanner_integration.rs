@@ -75,8 +75,16 @@ fn scan_empty_directory_produces_done_event() {
     let _ = fs::remove_dir_all(&dir);
 
     let events = sink.take_events();
-    assert_eq!(events.len(), 1);
-    match &events[0] {
+    assert_eq!(events.len(), 2);
+    assert!(matches!(
+        events[0],
+        ScanEvent::Progress {
+            scanned: 0,
+            total: 0,
+            ..
+        }
+    ));
+    match &events[1] {
         ScanEvent::Done {
             scanned,
             total,
@@ -110,8 +118,8 @@ fn scan_nonexistent_directory_reports_unavailable() {
     );
 
     let events = sink.take_events();
-    assert_eq!(events.len(), 1);
-    match &events[0] {
+    assert_eq!(events.len(), 2);
+    match &events[1] {
         ScanEvent::Done {
             scanned,
             total,
@@ -316,8 +324,8 @@ fn force_rescan_processes_unchanged_existing_file() {
         &incremental_callback,
     );
     let incremental = incremental_sink.take_events();
-    assert_eq!(incremental.len(), 1);
-    match &incremental[0] {
+    assert_eq!(incremental.len(), 2);
+    match &incremental[1] {
         ScanEvent::Done { scanned, total, .. } => {
             assert_eq!(*scanned, 0);
             assert_eq!(*total, 0);

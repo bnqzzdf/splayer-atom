@@ -189,8 +189,9 @@ const expandRemovedPaths = (removedPaths: string[]): string[] => {
 const syncCueTracks = async (
   cueFiles: string[],
   dirs: string[],
-  unavailableDirs: string[] = [],
-  incremental = true,
+  unavailableDirs: string[],
+  incremental: boolean,
+  generation: number,
 ): Promise<number> => {
   const existingTracks = getCueTracksByDirs(dirs);
   if (cueFiles.length === 0 && existingTracks.length === 0) return 0;
@@ -207,6 +208,7 @@ const syncCueTracks = async (
   const nextPaths = new Set<string>();
 
   for (const cuePath of cueFiles) {
+    if (generation !== scanGeneration) return 0;
     try {
       const cueStat = await fs.stat(cuePath);
       const existing = existingByCue.get(pathKey(cuePath));
@@ -273,6 +275,7 @@ const syncCueTracks = async (
     }
   }
 
+  if (generation !== scanGeneration) return 0;
   if (upserts.length > 0) upsertTracks(upserts);
   const stalePaths = existingTracks
     .map((track) => track.path!)
@@ -296,8 +299,8 @@ const finishScan = async (
   incremental: boolean,
 ): Promise<void> => {
   const sacdCounts = await Promise.all(pendingSacdSyncs);
-  pendingSacdSyncs = [];
   if (generation !== scanGeneration) return;
+  pendingSacdSyncs = [];
 
   const removedPaths = expandRemovedPaths(event.removedPaths ?? []);
   if (removedPaths.length > 0) {
@@ -310,7 +313,9 @@ const finishScan = async (
     dirs,
     event.unavailableDirs ?? [],
     incremental,
+    generation,
   );
+  if (generation !== scanGeneration) return;
   const sacdCount = sacdCounts.reduce((sum, count) => sum + count, 0);
   scanning = false;
   const changed = scanChanged;
@@ -350,55 +355,69 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
     return false;
   }
 
+  const startedAt = performance.now();
   const normalizedDirs = [...new Set(dirs.map((dir) => path.resolve(dir)))];
   scanning = true;
   scanChanged = false;
   const generation = ++scanGeneration;
   pendingSacdSyncs = [];
-  currentScanProgress = {
+  publishScanProgress({
     phase: "scanning",
+    stage: "discovering",
     total: 0,
     scanned: 0,
     scopeDirs: [...normalizedDirs],
     incremental,
-  };
-  publishCoreControlEvent({ type: "libraryScanProgress", data: currentScanProgress });
+  });
   libraryLog.info(`开始扫描 ${normalizedDirs.length} 个目录 (增量=${incremental})`);
 
-  // existing data 同时用于删除检测；是否跳过未变化文件由最后一个参数独立控制。
-  const existingData = buildScanExistingData(normalizedDirs);
-
-  const engine = getEngine();
-  engine.scanDirs(
-    normalizedDirs,
-    (event: JsScanEvent) => {
-      switch (event.eventType) {
-        case "progress": {
-          // 已取消则丢弃滞后批次，避免写回已删除目录的曲目
-          if (!scanning) break;
-          // 普通文件直接写库；SACD 聚合探测结果由 Atom seam 异步展开成虚拟分轨。
-          if (event.tracks && event.tracks.length > 0) {
-            const ordinary = event.tracks.filter((track) => !isSacdAggregate(track));
-            if (ordinary.length > 0) {
-              upsertTracks(ordinary.map(scannedToUpsert));
-              scanChanged = true;
-            }
-            for (const track of event.tracks.filter(isSacdAggregate)) {
-              pendingSacdSyncs.push(syncSacdTracks(track, generation));
-            }
+  let preparedAt = startedAt;
+  let probingAt: number | undefined;
+  const onScanEvent = (event: JsScanEvent) => {
+    if (generation !== scanGeneration) return;
+    switch (event.eventType) {
+      case "progress": {
+        probingAt ??= performance.now();
+        // 普通文件直接写库；SACD 聚合探测结果由 Atom seam 异步展开成虚拟分轨。
+        if (event.tracks && event.tracks.length > 0) {
+          const ordinary = event.tracks.filter((track) => !isSacdAggregate(track));
+          if (ordinary.length > 0) {
+            upsertTracks(ordinary.map(scannedToUpsert));
+            scanChanged = true;
           }
-          publishScanProgress({
-            phase: "scanning",
-            total: event.total,
-            scanned: event.scanned,
-            current: event.current,
-            scopeDirs: [...normalizedDirs],
-            incremental,
-          });
-          break;
+          for (const track of event.tracks.filter(isSacdAggregate)) {
+            pendingSacdSyncs.push(syncSacdTracks(track, generation));
+          }
         }
-        case "done": {
-          void finishScan(normalizedDirs, event, generation, incremental).catch((error) => {
+        publishScanProgress({
+          phase: "scanning",
+          stage: event.total > 0 ? "probing" : "finalizing",
+          total: event.total,
+          scanned: event.scanned,
+          current: event.current,
+          scopeDirs: [...normalizedDirs],
+          incremental,
+        });
+        break;
+      }
+      case "done": {
+        const finalizingAt = performance.now();
+        publishScanProgress({
+          ...currentScanProgress,
+          stage: "finalizing",
+          total: event.total,
+          scanned: event.scanned,
+        });
+        void finishScan(normalizedDirs, event, generation, incremental)
+          .then(() => {
+            if (generation !== scanGeneration) return;
+            const probeStartedAt = probingAt ?? finalizingAt;
+            libraryLog.info(
+              `扫描耗时: 准备 ${Math.round(preparedAt - startedAt)} ms，遍历 ${Math.round(probeStartedAt - preparedAt)} ms，探测及批量入库 ${Math.round(finalizingAt - probeStartedAt)} ms，收尾 ${Math.round(performance.now() - finalizingAt)} ms`,
+            );
+          })
+          .catch((error) => {
+            if (generation !== scanGeneration) return;
             scanning = false;
             const changed = scanChanged;
             if (scanChanged) publishLibraryRevision();
@@ -413,14 +432,29 @@ export const startScan = (dirs: string[], incremental = true): boolean => {
               changed,
             });
           });
-          break;
-        }
+        break;
       }
-    },
-    getCoverCacheDir(),
-    existingData,
-    incremental,
-  );
+    }
+  };
+  try {
+    getEngine().scanDirs(
+      normalizedDirs,
+      onScanEvent,
+      getCoverCacheDir(),
+      buildScanExistingData(normalizedDirs),
+      incremental,
+    );
+  } catch (error) {
+    scanning = false;
+    publishScanProgress({
+      ...currentScanProgress,
+      phase: "error",
+      stage: undefined,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+  preparedAt = performance.now();
   return true;
 };
 
@@ -435,6 +469,6 @@ export const cancelScan = (): void => {
   const changed = scanChanged;
   if (scanChanged) publishLibraryRevision();
   scanChanged = false;
-  publishScanProgress({ ...currentScanProgress, phase: "done", changed });
+  publishScanProgress({ ...currentScanProgress, phase: "done", stage: undefined, changed });
   libraryLog.info("已发送扫描取消信号");
 };

@@ -91,10 +91,13 @@ test("scoped scan lifecycle keeps CUE/SACD cleanup local and reports actual chan
       async () => {
         const revision = getLibraryRevision();
         assert.equal(scanner.startScan([scope]), true);
+        assert.equal(scanner.getScanProgress().stage, "discovering");
         assert.deepEqual(
           existing.map((record) => record.path),
           [physical],
         );
+        callback({ eventType: "progress", total: 0, scanned: 0 });
+        assert.equal(scanner.getScanProgress().stage, "finalizing");
         assert.equal((await finish()).changed, false);
         assert.equal(getLibraryRevision(), revision);
       },
@@ -151,6 +154,7 @@ test("scoped scan lifecycle keeps CUE/SACD cleanup local and reports actual chan
           },
         ],
       });
+      assert.equal(scanner.getScanProgress().stage, "probing");
       assert.equal((await finish({ total: 1, scanned: 1 })).changed, true);
       assert.equal(database.getTracksByPhysicalPaths([physical])[0].title, "Updated");
     });
@@ -190,6 +194,17 @@ test("scoped scan lifecycle keeps CUE/SACD cleanup local and reports actual chan
       assert.equal((await finish({ removedPaths: [iso] })).changed, true);
       assert.deepEqual(database.getTracksByPhysicalPaths([iso]), []);
       assert.equal(database.getTracksByPhysicalPaths([path.join(sibling, "disc.iso")]).length, 1);
+    });
+    await t.test("late callbacks from a cancelled scan cannot finish its replacement", async () => {
+      scanner.startScan([scope]);
+      const cancelledCallback = callback;
+      scanner.cancelScan();
+      scanner.startScan([scope]);
+      cancelledCallback({ eventType: "progress", total: 1, scanned: 1 });
+      cancelledCallback({ eventType: "done", total: 1, scanned: 1 });
+      assert.equal(scanner.isScanning(), true);
+      assert.equal(scanner.getScanProgress().stage, "discovering");
+      assert.equal((await finish()).changed, false);
     });
   } finally {
     removeWsClient(ws);

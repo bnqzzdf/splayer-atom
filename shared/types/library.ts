@@ -26,6 +26,7 @@ export interface ArtistSummary {
 /** 扫描进度事件 */
 export interface ScanProgress {
   phase: "scanning" | "done" | "error";
+  stage?: "discovering" | "probing" | "finalizing";
   /** 总文件数 */
   total: number;
   /** 已扫描文件数 */

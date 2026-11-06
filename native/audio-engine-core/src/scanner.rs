@@ -548,6 +548,9 @@ pub fn scan_directories(
                 }
             });
         for entry in walker {
+            if cancel.load(Ordering::Relaxed) {
+                return;
+            }
             let entry = match entry {
                 Ok(entry) => entry,
                 Err(error) => {
@@ -603,6 +606,9 @@ pub fn scan_directories(
         }
     }
 
+    if cancel.load(Ordering::Relaxed) {
+        return;
+    }
     let total = audio_files.len() as u32;
     let walk_elapsed = walk_start.elapsed();
     info!(
@@ -614,6 +620,12 @@ pub fn scan_directories(
 
     // 第二遍：并行提取元数据，分批回调
     let parse_start = Instant::now();
+    callback(ScanEvent::Progress {
+        scanned: 0,
+        total,
+        current: None,
+        tracks: Vec::new(),
+    });
     let mut scanned: u32 = 0;
     let mut batch: Vec<ScannedTrack> = Vec::with_capacity(BATCH_SIZE);
     let mut slow_probes = 0_u32;

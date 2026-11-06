@@ -1431,13 +1431,10 @@ const onLibraryRevision = (): void => {
   refreshOnRevision();
 };
 
-onMounted(async () => {
-  try {
-    scanProgress.value = await folderBrowserClient.scanProgress();
-  } catch {
-    scanProgress.value = null;
-  }
+onMounted(() => {
+  let receivedProgress = false;
   unsubscribeScan = subscribeCoreControlEvent("libraryScanProgress", (progress) => {
+    receivedProgress = true;
     scanProgress.value = progress;
     if (
       progress.phase === "done" &&
@@ -1448,6 +1445,12 @@ onMounted(async () => {
       void refreshCurrent();
     }
   });
+  void folderBrowserClient
+    .scanProgress()
+    .then((progress) => {
+      if (!receivedProgress && unsubscribeScan) scanProgress.value = progress;
+    })
+    .catch(() => {});
   unsubscribeRevision = subscribeCoreControlEvent("libraryChanged", onLibraryRevision);
   unsubscribePins = subscribeCoreControlEvent("folderPinsChanged", () => {
     void loadRoots();
@@ -1468,6 +1471,7 @@ onBeforeUnmount(() => {
   searchAbortController = null;
   saveViewerState();
   unsubscribeScan?.();
+  unsubscribeScan = null;
   unsubscribeRevision?.();
   unsubscribePins?.();
   unsubscribeRoots?.();
@@ -1681,7 +1685,13 @@ onBeforeUnmount(() => {
             v-if="scanCoversCurrent && scanProgress"
             class="text-xs tabular-nums text-on-surface-variant/60"
           >
-            {{ scanProgress.scanned }}/{{ scanProgress.total || "—" }}
+            <template v-if="scanProgress.stage === 'discovering'">
+              {{ t("library.scanDiscovering") }}
+            </template>
+            <template v-else-if="scanProgress.stage === 'finalizing'">
+              {{ t("library.scanFinalizing") }}
+            </template>
+            <template v-else>{{ scanProgress.scanned }}/{{ scanProgress.total || "—" }}</template>
           </div>
         </template>
       </div>

@@ -23,7 +23,7 @@ test("scanner keeps one authoritative progress snapshot beside its existing scan
   );
   assert.match(
     scannerSource,
-    /publishScanProgress\(\{ \.\.\.currentScanProgress, phase: "done", changed \}\)/,
+    /publishScanProgress\(\{ \.\.\.currentScanProgress, phase: "done", stage: undefined, changed \}\)/,
   );
 });
 

@@ -171,7 +171,7 @@ export const useLibraryStore = defineStore("library", () => {
     if (scanning.value) return;
     const version = ++scanProgressVersion;
     scanning.value = true;
-    scanProgress.value = { phase: "scanning", total: 0, scanned: 0 };
+    scanProgress.value = { phase: "scanning", stage: "discovering", total: 0, scanned: 0 };
     const res = await libraryClient.scan(incremental);
     if (!res.success && version === scanProgressVersion) {
       scanning.value = false;

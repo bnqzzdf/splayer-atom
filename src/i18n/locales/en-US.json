@@ -717,6 +717,8 @@
     "cancelScan": "Cancel Scan",
     "scanning": "Scanning...",
     "scanProgress": "Scanning {scanned}/{total}",
+    "scanDiscovering": "Finding files…",
+    "scanFinalizing": "Updating the library…",
     "folders": "Music Directories",
     "foldersDescription": "Songs are automatically synced when added or removed",
     "removeFolder": "Remove Directory",

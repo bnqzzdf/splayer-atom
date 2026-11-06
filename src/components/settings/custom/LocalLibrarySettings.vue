@@ -66,12 +66,25 @@ onMounted(() => void libraryStore.syncScanProgress());
         class="flex items-center gap-2 rounded-lg bg-on-surface/4 px-3 py-2 text-sm text-on-surface-variant/70"
       >
         <SLoading class="size-3.5 shrink-0 text-primary" />
-        <span class="tabular-nums">
+        <span v-if="scanProgress.stage === 'discovering'">{{ t("library.scanDiscovering") }}</span>
+        <span v-else-if="scanProgress.stage === 'finalizing'">
+          {{ t("library.scanFinalizing") }}
+        </span>
+        <span v-else class="tabular-nums">
           {{
             t("library.scanProgress", { scanned: scanProgress.scanned, total: scanProgress.total })
           }}
         </span>
-        <span class="font-mono text-on-surface-variant/45">{{ scanPercent }}%</span>
+        <span
+          v-if="
+            scanProgress.stage !== 'discovering' &&
+            scanProgress.stage !== 'finalizing' &&
+            scanProgress.total
+          "
+          class="font-mono text-on-surface-variant/45"
+        >
+          {{ scanPercent }}%
+        </span>
       </div>
       <p v-else class="text-xs text-on-surface-variant/50">{{ t("library.scanIdleHint") }}</p>
     </section>

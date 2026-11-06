@@ -202,12 +202,12 @@ describe("本地曲库设置", () => {
     mocks.getScanDirs.mockReturnValueOnce(dirs.promise);
     mocks.getScanProgress.mockResolvedValueOnce({
       success: true,
-      data: { phase: "scanning", scanned: 0, total: 0 },
+      data: { phase: "scanning", stage: "discovering", scanned: 0, total: 0 },
     });
     const wrapper = mountPage(LocalLibrarySettings);
     await flushPromises();
     expect(wrapper.find('[role="status"]').exists()).toBe(true);
-    expect(wrapper.text()).toContain("正在扫描 0/0");
+    expect(wrapper.text()).toContain("正在查找文件");
     expect(wrapper.text()).not.toContain("尚未添加音乐目录");
     expect(mocks.getTracks).not.toHaveBeenCalled();
     expect(mocks.getLikedTrackIds).not.toHaveBeenCalled();

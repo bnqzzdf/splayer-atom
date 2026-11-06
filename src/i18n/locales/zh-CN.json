@@ -717,6 +717,8 @@
     "cancelScan": "取消扫描",
     "scanning": "正在扫描...",
     "scanProgress": "正在扫描 {scanned}/{total}",
+    "scanDiscovering": "正在查找文件…",
+    "scanFinalizing": "正在整理曲库…",
     "folders": "音乐目录",
     "foldersDescription": "文件夹内歌曲增删自动同步",
     "removeFolder": "移除此目录",
