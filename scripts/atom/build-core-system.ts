@@ -10,7 +10,11 @@ import {
   resolveCoreBuildTime,
   type CoreRuntimeFlavor,
 } from "./core-artifact-name";
-import { resolveSourceIdentity, unpublishedIdentityMessage } from "./sourceIdentity";
+import {
+  resolveSourceIdentity,
+  sourceIdentityFailureMessage,
+  unpublishedIdentityMessage,
+} from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
@@ -34,7 +38,8 @@ const sourceIdentity = resolveSourceIdentity(root);
 const buildEnv = { ...process.env, ATOM_BUILD_DATE: buildDate, ATOM_BUILD_TIME: buildTime };
 
 // native 构建很慢，身份不合格就在这里失败，不要等跑完再报同样的错
-if (sourceIdentity && sourceIdentity.published !== true && !allowUnpublished) {
+if (!sourceIdentity) throw new Error(`[CoreBuild] ${sourceIdentityFailureMessage()}`);
+if (sourceIdentity.published !== true && !allowUnpublished) {
   throw new Error(unpublishedIdentityMessage(sourceIdentity));
 }
 
@@ -101,7 +106,7 @@ console.log(
     coreArtifactFileName(
       bundleRuntime,
       release.version,
-      sourceIdentity?.commit ?? "00000000",
+      sourceIdentity.commit,
       buildDate,
       buildTime,
       direttaVariant,

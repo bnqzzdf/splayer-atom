@@ -14,6 +14,9 @@ set -eu
 MODE=${ATOM_DEBIAN11_DIRETTA_MODE:-without}
 VARIANT=${DIRETTA_CPU_VARIANT:-}
 
+# 容器以 root 运行，Git 需要信任宿主用户拥有的源码挂载路径才能读取提交身份。
+git config --global --add safe.directory /src
+
 echo "[Debian11] $(. /etc/os-release; echo "$PRETTY_NAME")  内核glibc=$(ldd --version | head -1 | awk '{print $NF}')  Diretta=$MODE${VARIANT:+ ($VARIANT)}"
 
 if [ "$MODE" = with ]; then
