@@ -36,6 +36,7 @@ const { isMobile } = useResponsiveLayout();
 const isPortrait = useMediaQuery("(orientation: portrait)");
 const isPhoneLandscape = useMediaQuery("(max-width: 1023px) and (max-height: 560px)");
 const compactPlayer = computed(() => isMobile.value || isPhoneLandscape.value);
+const portraitPhone = computed(() => isMobile.value && isPortrait.value);
 
 const lyricRef = ref<InstanceType<typeof Lyrics> | InstanceType<typeof AMLLLyrics>>();
 const lyricMounted = ref(false);
@@ -105,9 +106,7 @@ watch(
 );
 
 const fullscreenCover = computed(() => settings.player.layout === "fullCover");
-const portraitFullscreenCover = computed(
-  () => fullscreenCover.value && isMobile.value && isPortrait.value,
-);
+const portraitFullscreenCover = computed(() => fullscreenCover.value && portraitPhone.value);
 const coverWidth = computed(() => `${settings.player.coverLyricRatio * 100}%`);
 
 const coverCentered = computed(() => {
@@ -386,7 +385,7 @@ const showComments = (): void => {
         <div
           class="absolute top-14 inset-x-0 overflow-hidden"
           :class="
-            portraitFullscreenCover
+            portraitPhone && (fullscreenCover || mobileLyricActive)
               ? 'bottom-44'
               : compactPlayer
                 ? 'bottom-36'
@@ -455,17 +454,14 @@ const showComments = (): void => {
                 : 'opacity-100 pointer-events-auto visible z-10',
             ]"
             :style="{
-              width: compactPlayer
-                ? '100%'
-                : fullscreenCover
-                  ? '50%'
-                  : `calc(100% - ${coverWidth})`,
+              width: compactPlayer ? '100%' : `calc(100% - ${coverWidth})`,
             }"
           >
-            <!-- 全屏封面模式下的标题信息 -->
+            <!-- 经典视图预留同样的标题高度，避免切换布局时歌词跳动。 -->
             <div
-              v-if="fullscreenCover && (!portraitFullscreenCover || mobileLyricActive)"
+              v-if="lyricAreaVisible && (fullscreenCover || hasLyric)"
               class="shrink-0 pt-2 pb-6 pl-[calc(1em-0.5rem)]"
+              :class="{ invisible: !fullscreenCover }"
               :style="{ fontSize: lyricFontSize }"
             >
               <PlayerData align="left" simple />
