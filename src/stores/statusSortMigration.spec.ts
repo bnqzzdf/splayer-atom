@@ -1,18 +1,12 @@
 import { createApp } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import piniaPersistedstate from "pinia-plugin-persistedstate";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { useStatusStore } from "./status";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => localStorage.removeItem("status"));
 
 it("drops unscoped legacy song sorting from persisted status", () => {
-  const entries = new Map<string, string>();
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => entries.get(key) ?? null,
-    setItem: (key: string, value: string) => entries.set(key, value),
-    removeItem: (key: string) => entries.delete(key),
-  });
   localStorage.setItem(
     "status",
     JSON.stringify({ sortField: "title", sortOrder: "desc", settingsCategory: "appearance" }),

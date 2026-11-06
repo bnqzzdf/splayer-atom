@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createApp } from "vue";
 import piniaPersistedstate from "pinia-plugin-persistedstate";
@@ -15,15 +15,7 @@ describe("folder browse display preference", () => {
 });
 
 describe("browser presentation persistence migration", () => {
-  beforeEach(() => {
-    const entries = new Map<string, string>();
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => entries.get(key) ?? null,
-      setItem: (key: string, value: string) => entries.set(key, value),
-      removeItem: (key: string) => entries.delete(key),
-    });
-  });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => localStorage.removeItem("settings"));
 
   it.each([
     ["default", "classic"],
@@ -43,7 +35,6 @@ describe("browser presentation persistence migration", () => {
     };
     expect(persisted.player?.layout).toBe(expected);
     expect(persisted.player).not.toHaveProperty("coverLayout");
-    localStorage.removeItem("settings");
   });
 
   it("retains the new layout rather than restoring the legacy cover preference", () => {
@@ -63,7 +54,6 @@ describe("browser presentation persistence migration", () => {
     };
     expect(persisted.player?.layout).toBe("apple");
     expect(persisted.player).not.toHaveProperty("coverLayout");
-    localStorage.removeItem("settings");
   });
 
   it("restores compact density and page-scoped sort without leaking arbitrary keys", () => {
