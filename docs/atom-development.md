@@ -1,6 +1,6 @@
 # SPlayer Atom 开发环境
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-06
 
 项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
 开发工作流与约定。
@@ -105,10 +105,11 @@ Linux 实机 Diretta 连接/播放验收以 root 运行 Host 进程。遵循[部
 pnpm package:core
 pnpm package:core:bundled
 pnpm package:core:debian11 --without-diretta
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 ```
 
 Debian 11 构建器还接受 `--with-diretta --diretta-variant=v2|v3|v4|zen4`，SDK 148 通过
-`DIRETTA_SDK_ROOT` 指定；见[构建面](./build-flavors.md#debian-11-bundled-构建)。
+`DIRETTA_SDK_ROOT` 指定；见[构建面](./build-flavors.md#debian-11-构建)。
 
 验收最终的 Linux x86-64 `tar.gz`，包括运行时元数据、native addon 加载、Web 根页、HTTP/WS 端点、
 plugin-host IPC、启动与终止。真实的 ALSA/Diretta/PCM/Native-DSD/UPnP 与长跑行为需要单独的硬件验收；

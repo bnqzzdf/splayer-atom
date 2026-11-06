@@ -1,6 +1,6 @@
 # SPlayer Atom Development Setup
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-06
 
 Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
 live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.
@@ -113,10 +113,11 @@ Linux live Diretta connection/playback validation runs the Host process as root.
 pnpm package:core
 pnpm package:core:bundled
 pnpm package:core:debian11 --without-diretta
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 ```
 
 The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4|zen4` with SDK 148 set
-through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-bundled-build).
+through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-build).
 
 Validate the final Linux x86-64 `tar.gz`, including runtime metadata, native addon loading, Web root,
 HTTP/WS endpoints, plugin-host IPC, startup, and termination. Real ALSA/Diretta/PCM/Native-DSD/UPnP

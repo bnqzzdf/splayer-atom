@@ -3,6 +3,7 @@
 #
 # 由 scripts/atom/build-debian11-bundled.sh 通过 docker run 调用，所需环境变量：
 #   ATOM_DEBIAN11_DIRETTA_MODE  with | without
+#   ATOM_DEBIAN11_BUNDLE_RUNTIME  true | false
 #   DIRETTA_CPU_VARIANT         with 时必填：v2 | v3 | v4 | zen4
 #   DIRETTA_SDK_ROOT            with 时必填，宿主 SDK 只读挂载进来的路径
 #
@@ -48,14 +49,18 @@ npm --prefix "$sqlite_dir" run build-release
 cp "$sqlite_dir/build/Release/better_sqlite3.node" "$sqlite_dir/prebuilds/linux-x64.node"
 
 echo "[3/4] 构建 Core 产物"
+set --
 if [ "$MODE" = with ]; then
-  pnpm exec tsx scripts/atom/build-core-system.ts \
-    --require-diretta "--diretta-variant=$VARIANT" --bundle-node
-else
-  # 不带 Diretta 的 ALSA-only 构建：注意不能设置 DIRETTA_SDK_ROOT，
-  # build-core-native.ts 只要看到它就会走 Diretta 分支并要求指定变体。
-  pnpm package:core:bundled
+  set -- "$@" --require-diretta "--diretta-variant=$VARIANT"
 fi
+if [ "${ATOM_DEBIAN11_BUNDLE_RUNTIME:-false}" = true ]; then
+  set -- "$@" --bundle-runtime
+fi
+# 与 Core 打包共用时刻，避免给 out/ 中同一形态的旧包加上 Debian 11 标签。
+build_stamp=$(date +%Y%m%d-%H%M%S)
+export ATOM_BUILD_DATE=${ATOM_BUILD_DATE:-${build_stamp%-*}}
+export ATOM_BUILD_TIME=${ATOM_BUILD_TIME:-${build_stamp#*-}}
+pnpm exec tsx scripts/atom/build-core-system.ts "$@"
 
 echo "[4/4] 校验"
 
@@ -89,9 +94,15 @@ report_avx out/core-system/native/audio-engine.node
 report_avx out/core-system/native/streaming-api.node
 
 # runtime.json 的能力位必须与本次构建模式一致，否则产物会被误发。
-node -e '
-const runtime = require("./out/core-system/runtime.json");
+archive=$(./node_modules/.bin/tsx -e '
+import { readFileSync } from "node:fs";
+import { coreArtifactFileName, resolveCoreBuildDate, resolveCoreBuildTime } from "./scripts/atom/core-artifact-name";
+const runtime = JSON.parse(readFileSync("out/core-system/runtime.json", "utf8"));
 const withDiretta = process.env.ATOM_DEBIAN11_DIRETTA_MODE === "with";
+const bundled = process.env.ATOM_DEBIAN11_BUNDLE_RUNTIME === "true";
+if (runtime.nodeBundled !== bundled) {
+  throw new Error("Node 产物部署形态与构建参数不一致");
+}
 if (runtime.capabilities.diretta !== withDiretta || runtime.diretta !== withDiretta) {
   throw new Error("Diretta 产物能力位与构建模式不一致");
 }
@@ -101,8 +112,9 @@ if (withDiretta && runtime.direttaCpuVariant !== process.env.DIRETTA_CPU_VARIANT
 if (!withDiretta && runtime.direttaCpuVariant != null) {
   throw new Error("不带 Diretta 的产物不应携带 CPU 变体");
 }
-console.log(`  runtime.json: diretta=${runtime.diretta} variant=${runtime.direttaCpuVariant ?? "-"} commit=${String(runtime.atomCommit).slice(0, 8)} dirty=${runtime.sourceDirty}`);
-'
+console.error(`  runtime.json: nodeBundled=${runtime.nodeBundled} diretta=${runtime.diretta} variant=${runtime.direttaCpuVariant ?? "-"} commit=${String(runtime.atomCommit).slice(0, 8)} dirty=${runtime.sourceDirty}`);
+console.log(`out/${coreArtifactFileName(bundled, runtime.atomVersion, runtime.atomCommit, resolveCoreBuildDate(), resolveCoreBuildTime(), runtime.direttaCpuVariant)}`);
+')
 
 # Diretta 的 ACQUA 库引用了 glibc 2.38 才有的 C23 整数解析符号，
 # 靠 native/diretta-sys/src/glibc_compat.c 的 weak 定义兜住；
@@ -114,14 +126,12 @@ if [ "$MODE" = with ] && \
   exit 1
 fi
 
-# 产物名带打包时刻（YYYYMMDD-HHMMSS），无法从 runtime.json 重建，直接取 out/ 下最新的那个
-archive=$(ls -t out/splayer-atom-core-*-bundled-linux-x64.tar.gz 2>/dev/null | head -1)
 test -f "$archive"
 flavor=$MODE-diretta
 if [ "$MODE" = with ]; then
   flavor=$flavor-$VARIANT
 fi
 debian_archive=${archive%.tar.gz}-debian11-$flavor.tar.gz
-cp "$archive" "$debian_archive"
+mv "$archive" "$debian_archive"
 sha256sum "$debian_archive"
 echo "[Debian11] PASS $debian_archive"

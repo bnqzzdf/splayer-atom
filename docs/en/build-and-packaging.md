@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-06
 
 This covers Linux x86-64 Core + Web Control builds. **Node is the default release baseline**;
 Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
@@ -195,13 +195,19 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 The SDK release must match the version pinned by the repository; a missing or mismatched SDK fails
 before staging (`scripts/atom/build-core-native.ts:51-56`). The SDK itself is not bundled.
 
-## Debian 11 bundled package
+## Debian 11 package
 
-For a glibc-compatible bundled artifact, use the pinned Debian 11 builder. It builds inside a
-container on glibc 2.31, and the default has no Diretta:
+The Debian 11 builder uses glibc 2.31 inside a container. By default it produces a system-runtime
+package without Diretta, requiring Node `>=22.19.0` on the target machine:
 
 ```bash
 pnpm package:core:debian11 --without-diretta
+```
+
+Add `--bundle-runtime` (or the compatibility alias `--bundle-node`) to include Node:
+
+```bash
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 ```
 
 To include Diretta, provide the path to SDK 148 and select the target CPU variant:
@@ -215,7 +221,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
 the artifact **can run on the target CPU at all**, not merely how fast it is; see
 [CPU variants](./cpu-variants.md). The SDK is mounted read-only at build time and its files are never
 placed into the artifact. The script checks the glibc version of the native addons, the Diretta
-capability bit, and startup of the artifact. The two modes are retained separately as
+capability bit, and startup of the artifact. After validation, the archive is renamed to
 `out/*-debian11-without-diretta.tar.gz` and `out/*-debian11-with-diretta-<variant>.tar.gz`.
 SDK 148's ACQUA library uses an old-glibc compatibility shim for integer parsing.
 

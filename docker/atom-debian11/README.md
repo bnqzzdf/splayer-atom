@@ -19,26 +19,31 @@ glibc 上链接。Debian 11 是 glibc **2.31**，正好卡住这个下限。
 `build.sh` 的最后一步会逐个检查原生模块的 `GLIBC_*` 需求，超过 2.31 直接让构建失败——
 宁可在这里失败，也不要把一个在目标机上加载不了的产物发出去。
 
-Diretta SDK 150 的 ACQUA 预编译库引用了 glibc 2.38 才提供的 C23 整数解析符号
+Diretta SDK 148 的 ACQUA 预编译库引用了 glibc 2.38 才提供的 C23 整数解析符号
 （`__isoc23_strtol` / `__isoc23_strtoll`），由 `native/diretta-sys/src/glibc_compat.c`
 提供的 weak 定义兜住；构建收尾会确认这两个符号没有以「未定义」形式留在 addon 里。
 
 ## 用法
 
 ```bash
-# 不带 Diretta（ALSA-only）
+# 默认：不带 Diretta 的 system-runtime
 pnpm package:core:debian11 --without-diretta
 
+# 内置 Node 的 bundled-runtime
+pnpm package:core:debian11 --without-diretta --bundle-runtime
+
 # 带 Diretta，必须指定 CPU 变体
-DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_150 \
+DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-产物：
+两种 Diretta 模式都可加 `--bundle-runtime`（兼容别名 `--bundle-node`）。system-runtime 需要目标机提供 Node `>=22.19.0`。
+
+验收通过后，归档会重命名为以下格式，只保留带 Debian 11 后缀的文件：
 
 ```
-out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>-debian11-without-diretta.tar.gz
-out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>[-diretta-<变体>]-debian11-with-diretta-<变体>.tar.gz
+out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>-<system|bundled>-linux-x64-debian11-without-diretta.tar.gz
+out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>-diretta-<变体>-<system|bundled>-linux-x64-debian11-with-diretta-<变体>.tar.gz
 ```
 
 ## CPU 变体怎么选
@@ -54,7 +59,7 @@ out/splayer-atom-core-<版本>-<提交号>-<日期>-<时刻>[-diretta-<变体>]-
 | `zen4` | AMD Zen 4                    | Ryzen 7000 / EPYC 9004              |
 
 原则：**取目标机支持的最高代次**。低变体产物在高代次机器上照样能跑，反过来不行。
-（SDK 150 没有发布 v1 库，所以不存在带 Diretta 的 v1 产物；需要 v1 只能用 ALSA-only。）
+（SDK 148 没有发布 v1 库，所以不存在带 Diretta 的 v1 产物；需要 v1 只能用 ALSA-only。）
 
 详见 [`docs/cpu-variants.md`](../../docs/cpu-variants.md)。
 

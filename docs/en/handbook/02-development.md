@@ -1,6 +1,6 @@
 # SPlayer Atom Development Manual
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-06
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -512,7 +512,8 @@ A new assertion script must fail on the **unpatched** code before it passes on t
 | Web only | `pnpm build:web` |
 | system package | `pnpm package:core` |
 | bundled package | `pnpm package:core:bundled` |
-| Debian 11 package | `pnpm package:core:debian11 --without-diretta` |
+| Debian 11 system package | `pnpm package:core:debian11 --without-diretta` |
+| Debian 11 bundled package | `pnpm package:core:debian11 --without-diretta --bundle-runtime` |
 | Local Diretta package | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` |
 | Source package | `pnpm package:source` |
 | Release tag | `pnpm release:tag --dry-run` / `pnpm release:tag --push` |
@@ -563,6 +564,7 @@ DIRETTA_SDK_ROOT=/path/to/SDK \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
+The default is system-runtime. Append `--bundle-runtime` to either command to include Node.
 The container build checks that the three native modules require no glibc symbol above 2.31 and cross-checks the Diretta variant.
 
 ### 11.6 CI

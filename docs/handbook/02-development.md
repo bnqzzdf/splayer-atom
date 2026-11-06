@@ -1,6 +1,6 @@
 # SPlayer Atom 开发手册
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-06
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -514,7 +514,8 @@ pnpm test:all
 | 仅 Web | `pnpm build:web` |
 | system 包 | `pnpm package:core` |
 | bundled 包 | `pnpm package:core:bundled` |
-| Debian 11 包 | `pnpm package:core:debian11 --without-diretta` |
+| Debian 11 system 包 | `pnpm package:core:debian11 --without-diretta` |
+| Debian 11 bundled 包 | `pnpm package:core:debian11 --without-diretta --bundle-runtime` |
 | Diretta 本机包 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` |
 | 源码包 | `pnpm package:source` |
 | 发布标签 | `pnpm release:tag --dry-run` / `pnpm release:tag --push` |
@@ -565,6 +566,7 @@ DIRETTA_SDK_ROOT=/path/to/SDK \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
+默认生成 system-runtime；需要内置 Node 时，在任一命令末尾添加 `--bundle-runtime`。
 容器构建会检查三个原生模块的最高 glibc 符号不超过 2.31，并复核 Diretta 变体一致性。
 
 ### 11.6 CI

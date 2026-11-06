@@ -1,6 +1,6 @@
 # SPlayer Atom Project Book
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-06
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -347,7 +347,8 @@ Qobuz, TIDAL, ListenBrainz, and self-hosted server credential files are written 
 | --- | --- | --- | --- |
 | system-runtime | `pnpm package:core` | Host Node | Node `>=22.19.0` |
 | bundled-runtime | `pnpm package:core:bundled` | Bundled `runtime/bin/node` | No system Node needed |
-| Debian 11 bundled | `pnpm package:core:debian11` | Bundled Node | glibc `>=2.30` |
+| Debian 11 system | `pnpm package:core:debian11` | Host Node | glibc `>=2.30`, Node `>=22.19.0` |
+| Debian 11 bundled | `pnpm package:core:debian11 --bundle-runtime` | Bundled Node | glibc `>=2.30` |
 | Diretta variant | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` or build script | Depends on `--bundle-node` | root + SDK 148 + matching CPU variant |
 | Source package | `pnpm package:source` | N/A | Published commit and clean tree |
 
@@ -361,7 +362,7 @@ Artifact names include version, 8-character commit, date, time, Diretta variant,
 - Core-owned Folder Browser, Direct CUE gapless path, responsive Web layout, lyrics P0/P1.
 - Core/Web paths for NetEase, QQ Music, Kugou, Qobuz, and TIDAL.
 - Plugin system, ListenBrainz, downloads, cache, stats, localization.
-- Debian 11 bundled builds (with/without Diretta) are buildable; system/bundled artifacts have automated smoke tests.
+- Debian 11 system and bundled packages support both Diretta modes and have automated smoke tests.
 
 ### 12.2 Items still requiring recorded acceptance
 

@@ -1,6 +1,6 @@
 # SPlayer Atom Build Flavors
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-06
 
 SPlayer Atom's Core artifacts combine three independent dimensions:
 
@@ -49,22 +49,24 @@ must specify it explicitly; it is not silently defaulted to `v2`.
 
 The SDK remains external and is not bundled.
 
-## Debian 11 bundled build
+## Debian 11 build
 
-The Debian 11 builder uses glibc 2.31 and can package either capability set:
+The Debian 11 builder uses glibc 2.31 and produces a system-runtime package by default. Add
+`--bundle-runtime` (or `--bundle-node`) to include Node, with or without Diretta:
 
 ```bash
 pnpm package:core:debian11 --without-diretta
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-The first mode is the default. The second mode mounts SDK 148 read-only and uses its selected
+Diretta is disabled by default. The Diretta build mounts SDK 148 read-only and uses its selected
 `v2`, `v3`, `v4`, or `zen4` x86-64 libraries. The build checks the packaged native modules against glibc
 2.31, checks the Diretta capability metadata, and runs the extracted-artifact smoke. SDK 148's
 ACQUA library receives the required old-glibc integer parsing compatibility symbols at link time;
-the SDK files are not packaged. Mode-specific copies are retained as
+the SDK files are not packaged. After validation, the archive is renamed to
 `*-debian11-without-diretta.tar.gz` and `*-debian11-with-diretta-<variant>.tar.gz`.
 
 On 2026-09-23, no-Diretta and Diretta v3 packages passed software smoke from a dirty working tree.

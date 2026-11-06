@@ -1,6 +1,6 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-06
 
 本文描述 Linux x86-64 Core + Web Control 的构建。**Node 是默认正式基线**；
 Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
@@ -160,12 +160,18 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 
 SDK release 必须匹配仓库固定版本；缺失或不匹配会在 staging 前失败。SDK 本体不进入 artifact。
 
-## Debian 11 bundled package
+## Debian 11 package
 
-Debian 11 构建在容器内使用 glibc 2.31。默认不包含 Diretta：
+Debian 11 构建在容器内使用 glibc 2.31。默认生成不含 Diretta 的 system-runtime，目标机需提供 Node `>=22.19.0`：
 
 ```bash
 pnpm package:core:debian11 --without-diretta
+```
+
+需要内置 Node 时，显式添加 `--bundle-runtime`（`--bundle-node` 是兼容别名）：
+
+```bash
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 ```
 
 包含 Diretta 时，提供 SDK 148 路径并选择目标 CPU 变体：
@@ -175,7 +181,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-`v2`、`v3`、`v4`、`zen4` 对应 SDK 的 x86-64 库变体——变体决定产物**能不能在目标 CPU 上跑**，不只是快慢，详见 [CPU 变体](./cpu-variants.md)。构建时只读挂载 SDK，不把 SDK 文件放入产物。脚本会检查 native addon 的 glibc 版本、Diretta 能力位和产物启动。两种模式分别保留为
+`v2`、`v3`、`v4`、`zen4` 对应 SDK 的 x86-64 库变体——变体决定产物**能不能在目标 CPU 上跑**，不只是快慢，详见 [CPU 变体](./cpu-variants.md)。构建时只读挂载 SDK，不把 SDK 文件放入产物。脚本会检查 native addon 的 glibc 版本、Diretta 能力位和产物启动。验收通过后，归档重命名为
 `out/*-debian11-without-diretta.tar.gz` 和 `out/*-debian11-with-diretta-<variant>.tar.gz`。
 Diretta SDK 148 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本仓库兼容层提供。
 

@@ -1,6 +1,6 @@
 # SPlayer Atom 构建面（Build Flavors）
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-06
 
 SPlayer Atom 的 Core 构建由三条**独立维度**组合：
 
@@ -44,22 +44,23 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
 
 SDK 始终是外部的，不随包捆绑。
 
-## Debian 11 bundled 构建
+## Debian 11 构建
 
-Debian 11 构建机使用 glibc 2.31，两种能力集都能打包：
+Debian 11 构建机使用 glibc 2.31。默认生成 system-runtime；带或不带 Diretta 都可添加 `--bundle-runtime`（或 `--bundle-node`）内置 Node：
 
 ```bash
 pnpm package:core:debian11 --without-diretta
+pnpm package:core:debian11 --without-diretta --bundle-runtime
 
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-第一种模式是默认模式。第二种模式只读挂载 SDK 148，并使用其选定的
+默认不带 Diretta。带 Diretta 时只读挂载 SDK 148，并使用其选定的
 `v2`、`v3`、`v4` 或 `zen4` x86-64 库。构建会按 glibc
 2.31 检查打包后的 native 模块、检查 Diretta 能力元数据，并运行解包产物的 smoke。SDK 148 的
 ACQUA 库在链接时获得旧 glibc 所需的整数解析兼容符号；
-SDK 文件不会被打包。各模式的副本分别保留为
+SDK 文件不会被打包。验收通过后，归档重命名为
 `*-debian11-without-diretta.tar.gz` 与 `*-debian11-with-diretta-<variant>.tar.gz`。
 
 2026-09-23，无 Diretta 与 Diretta v3 包在脏工作树上通过了软件 smoke。

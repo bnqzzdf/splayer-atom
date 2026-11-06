@@ -1,6 +1,6 @@
 # SPlayer Atom 项目书
 
-> 最后更新：2026-11-04
+> 最后更新：2026-11-06
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -347,7 +347,8 @@ Qobuz、TIDAL、ListenBrainz、自建流媒体服务器的凭据文件写后 `06
 | --- | --- | --- | --- |
 | system-runtime | `pnpm package:core` | 宿主机 Node | Node `>=22.19.0` |
 | bundled-runtime | `pnpm package:core:bundled` | 包内 `runtime/bin/node` | 无需系统 Node |
-| Debian 11 bundled | `pnpm package:core:debian11` | 包内 Node | glibc `>=2.30` |
+| Debian 11 system | `pnpm package:core:debian11` | 宿主机 Node | glibc `>=2.30`，Node `>=22.19.0` |
+| Debian 11 bundled | `pnpm package:core:debian11 --bundle-runtime` | 包内 Node | glibc `>=2.30` |
 | Diretta 变体 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` 或构建脚本 | 视 `--bundle-node` | root + SDK 148 + CPU 变体匹配 |
 | 源码包 | `pnpm package:source` | 不适用 | 需已发布提交与干净工作树 |
 
@@ -361,7 +362,7 @@ Qobuz、TIDAL、ListenBrainz、自建流媒体服务器的凭据文件写后 `06
 - Core 拥有的 Folder Browser、Direct CUE 无缝路径、响应式 Web 布局、歌词 P0/P1。
 - 网易云、QQ 音乐、酷狗、Qobuz、TIDAL 的 Core/Web 路径。
 - 插件系统、ListenBrainz、下载、缓存、统计、多语言。
-- Debian 11 bundled 包（带/不带 Diretta）可构建；system/bundled 产物自动 smoke。
+- Debian 11 可构建 system/bundled 包（带/不带 Diretta）；产物自动 smoke。
 
 ### 12.2 仍需记录验收的事项
 
