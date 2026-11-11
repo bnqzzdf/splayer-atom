@@ -125,3 +125,36 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 检查：包名/架构、变体表、ELF 架构、bundled Node、better-sqlite3 prebuild、每个
 `runtime.json` 的 `arch/diretta/direttaCpuVariant`、包内 SHA256SUMS、install.sh 语法与权限、
 禁止符号链接。x86 包额外检查 v1 的 `diretta=false`；arm 包只允许 arm64。
+
+## 验收记录（2026-11-11）
+
+构建环境：
+
+- x86 五变体：`.133` Debian 11 builder 容器，Node 24.22.2，Diretta SDK 148。
+- arm64：`.230` aarch64 原生构建，Rust 1.99.0，Diretta SDK 148 aarch64 库。
+
+产物：
+
+| 包 | 大小 | SHA256 |
+| --- | --- | --- |
+| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-x86_64-multi.tar.gz` | 90 MB | `c595e493f1f8f00423166073c1555e0573ddb5e6395c7f54ba4de03e4f31da52` |
+| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-aarch64-multi.tar.gz` | 55 MB | `a31f5cfdc978bef13c27f61d888ac0a3ce584cf42f8215804ffcb14e0bc33ad5` |
+
+包闸门：
+
+- x86：`v1 v2 v3 v4 zen4` 全部 ELF x86-64，v1 `diretta=false`，其余 `diretta=true/sdk=148`；
+  bundled Node 与 better-sqlite3 为 x64；PASS。
+- arm：`arm64` ELF aarch64，`diretta=true/sdk=148/variant=arm64`；bundled Node 与
+  better-sqlite3 为 arm64；PASS。
+
+安装/启动验证：
+
+- `.137` x86 包 `--cpu v4`：安装到测试前缀，Core `/api/info` 返回 `arch=x64`、
+  `node=24.22.2`、`direttaSdkRelease=148`、`capabilities.diretta=true`；native 加载成功。
+- `.137` x86 包 `--cpu v1`：`direttaSdkRelease=null`、`capabilities.diretta=false`；native 加载成功。
+- `.230` arm 包 `--cpu arm64`：`arch=arm64`、`node=24.22.2`、`direttaSdkRelease=148`、
+  `capabilities.diretta=true`；native 加载成功。
+- arm64 编译中发现并修复 `direct_pcm.rs` 的 `c_char` 有符号性（`a5a25b14`），x86 不受影响。
+
+说明：安装目录默认 `/opt/splayer-atom-core`；测试使用独立前缀以免覆盖已有生产 Core。
+audiosys 环境可用 `--prefix /audiosys` 或 `--prefix /audiosys/splayer-atom-core`。

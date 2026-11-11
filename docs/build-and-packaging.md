@@ -4,7 +4,8 @@
 
 本文描述 Linux x86-64 Core + Web Control 的构建。**Node 是默认正式基线**；
 Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
-运行时与部署方式的组合见[构建面](./build-flavors.md)。
+运行时与部署方式的组合见[构建面](./build-flavors.md)。多架构/多 CPU 变体
+（x86 v1/v2/v3/v4/zen4 + arm64）见[多架构构建与安装](./multiarch-build.md)。
 
 ## 构建面
 
