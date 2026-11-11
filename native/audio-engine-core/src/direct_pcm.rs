@@ -2361,7 +2361,7 @@ fn ffmpeg_result(code: i32, action: &str) -> Result<()> {
 }
 
 fn ffmpeg_error(code: i32, action: &str) -> anyhow::Error {
-    let mut buffer = [0_i8; 256];
+    let mut buffer = [0 as std::ffi::c_char; 256];
     let message = unsafe {
         sys::av_strerror(code, buffer.as_mut_ptr(), buffer.len());
         CStr::from_ptr(buffer.as_ptr())
