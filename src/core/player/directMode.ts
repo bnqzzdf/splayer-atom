@@ -40,6 +40,9 @@ export const isAlsaHardwareOutputSelected = (): boolean => {
   return deviceId != null && isDirectAlsaHardwareOutput(deviceId);
 };
 
+export const isUpnpOutputSelected = (): boolean =>
+  isUpnpOutput(useSettingsStore().player.outputDevice);
+
 /**
  * 输出模式被选中后，UI 层只投影 Core 的处理能力；保存的 processed 参数始终保持休眠。
  */

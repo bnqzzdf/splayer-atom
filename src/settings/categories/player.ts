@@ -5,6 +5,7 @@ import DirectModeNotice from "@/components/settings/custom/DirectModeNotice.vue"
 import {
   isAlsaHardwareOutputSelected,
   isSampleProcessingUnavailableSelected,
+  isUpnpOutputSelected,
 } from "@/core/player/directMode";
 import IconLucidePlay from "~icons/lucide/play";
 
@@ -139,6 +140,17 @@ const playerCategory: SettingCategory = {
           type: "custom",
           component: AlsaPlaybackModeSelector,
           visible: isAlsaHardwareOutputSelected,
+        },
+        {
+          key: "sacdUpnpFormat",
+          type: "select",
+          binding: { store: "settings", path: "system.player.sacdUpnpFormat" },
+          options: [
+            { value: "dff", labelKey: "settings.sacdUpnpFormat.dff" },
+            { value: "dsf", labelKey: "settings.sacdUpnpFormat.dsf" },
+          ],
+          defaultValue: "dff",
+          visible: isUpnpOutputSelected,
         },
         {
           key: "pauseOnDeviceSwitch",

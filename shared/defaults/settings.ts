@@ -10,6 +10,7 @@ export const defaultSystemConfig: SystemConfig = {
     fadeDuration: 200,
     outputDevice: null,
     alsaPlaybackMode: "direct",
+    sacdUpnpFormat: "dff",
     volume: 1,
     songLevel: "hq",
     allowTrialPlay: false,

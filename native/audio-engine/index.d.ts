@@ -142,6 +142,9 @@ export declare function extractCueWav(cuePath: string, trackNum: number, outputP
 /** Atom UPnP 使用的离线 SACD stereo track -> DSF 提取。 */
 export declare function extractSacdDsf(isoPath: string, trackNum: number, outputPath: string): Promise<JsDsdExtractResult>
 
+/** Atom UPnP 使用的离线 SACD stereo track -> DST 压缩 DFF 提取；不执行 DST 解码。 */
+export declare function extractSacdDff(isoPath: string, trackNum: number, outputPath: string): Promise<JsDsdExtractResult>
+
 /** 已有文件记录，用于增量扫描比对 */
 export interface FileRecord {
   path: string

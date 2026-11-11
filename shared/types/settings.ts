@@ -38,6 +38,9 @@ export interface EqualizerSettings {
 /** ALSA 本地输出的显式播放模式。 */
 export type AlsaPlaybackMode = "direct" | "processed";
 
+/** SACD UPnP 输出格式；dff 直通 DST，dsf 为兼容转码。 */
+export type SacdUpnpFormat = "dff" | "dsf";
+
 /** 播放器配置 */
 export interface PlayerSettings {
   /** 加载后自动播放 */
@@ -52,6 +55,8 @@ export interface PlayerSettings {
   outputDevice: string | null;
   /** ALSA 本地输出模式；Diretta/UPnP 不读取此偏好。 */
   alsaPlaybackMode: AlsaPlaybackMode;
+  /** SACD UPnP 输出格式；dff 直通 DST，dsf 为兼容转码。 */
+  sacdUpnpFormat: SacdUpnpFormat;
   /** 默认音量（0.0 ~ 1.0） */
   volume: number;
   /** 在线歌曲音质偏好；影响 Core 实际音源解析 */

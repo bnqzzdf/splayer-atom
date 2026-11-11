@@ -909,6 +909,12 @@
       "direct": "Direct",
       "processed": "PCM Processing"
     },
+    "sacdUpnpFormat": {
+      "label": "SACD UPnP Output",
+      "description": "DFF passes DST-compressed data directly and requires Renderer support. DSF is more compatible but the Core must decode first.",
+      "dff": "DFF (DST passthrough)",
+      "dsf": "DSF (compatible transcode)"
+    },
     "pauseOnDeviceSwitch": {
       "label": "Pause on Device Switch",
       "description": "Pause playback when switching the output device, e.g. when a Bluetooth device disconnects"

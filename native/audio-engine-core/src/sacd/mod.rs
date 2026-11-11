@@ -6,12 +6,14 @@
 //! 3. 纯 Rust MPEG-4 DST 算术无损解压算法 (`dst::DstDecoder`)；
 //! 4. 双声道音频帧提取，输出逐字节交错的 MSB-first DSD (`SacdTrackReader`)。
 
+pub mod dsdiff;
 pub mod dst;
 pub mod iso_reader;
 pub mod scarletbook;
 pub mod stream;
 pub mod virtual_dsf;
 
+pub use dsdiff::DsdiffWriter;
 pub use dst::{ArithmeticDecoder, DstDecoder};
 pub use iso_reader::{IsoReader, SACD_SECTOR_SIZE};
 pub use scarletbook::{

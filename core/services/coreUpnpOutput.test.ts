@@ -124,10 +124,9 @@ test("terminal Core commands invalidate pending slow UPnP media preparation", ()
 
 test("UPnP projects quality from the actual local representation", () => {
   assert.match(upnpMedia, /getEngine\(\)\.probeMediaQuality\(filePath\)/);
-  assert.match(
-    upnpMedia,
-    /const quality = \(await probeUpnpMediaQuality\(filePath\)\) \?\? track\.quality/,
-  );
+  assert.match(upnpMedia, /generated\?\.skipProbe/);
+  assert.match(upnpMedia, /await probeUpnpMediaQuality\(filePath\)/);
+  assert.match(upnpMedia, /track\.quality/);
   assert.match(session, /quality: media\.quality/);
   assert.match(session, /item\.track = \{ \.\.\.item\.track, quality: mediaInfo\.quality \}/);
   assert.match(session, /quality: mediaInfo\.quality, externalLyrics: \[\]/);
@@ -187,15 +186,22 @@ test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   assert.match(media, /extractUpnpCueWav\(track\.cuePath, cueNum\)/);
   assert.match(media, /extractUpnpCueDsf\(track\.cuePath, cueNum\)/);
   assert.match(media, /extractUpnpSacdDsf\(sacd\.isoPath, sacd\.trackNum\)/);
-  assert.doesNotMatch(session, /extractUpnpCueWav|extractUpnpCueDsf|extractUpnpSacdDsf/);
+  assert.match(media, /extractUpnpSacdDff\(sacd\.isoPath, sacd\.trackNum\)/);
+  assert.match(media, /store\.get\("player\.sacdUpnpFormat"\)/);
+  assert.doesNotMatch(
+    session,
+    /extractUpnpCueWav|extractUpnpCueDsf|extractUpnpSacdDsf|extractUpnpSacdDff/,
+  );
   assert.match(media, /getEngine\(\)\.extractCueWav/);
   assert.match(media, /getEngine\(\)\.extractCueDsf/);
   assert.match(media, /getEngine\(\)\.extractSacdDsf/);
+  assert.match(media, /getEngine\(\)\.extractSacdDff/);
   assert.match(atomExtract, /audio_engine_core::media_extract::extract_cue_track_to_wav/);
   assert.match(atomExtract, /audio_engine_core::media_extract::extract_cue_track_to_dsf/);
   assert.match(atomExtract, /audio_engine_core::media_extract::extract_sacd_track_to_dsf/);
+  assert.match(atomExtract, /audio_engine_core::media_extract::extract_sacd_track_to_dsdiff/);
   assert.match(coreExtract, /DirectPcmDecoder::open_local/);
-  assert.match(coreExtract, /SacdTrackReader::open_track/);
-  assert.doesNotMatch(session, /extractUpnpCueDff|extractUpnpSacdDff/);
-  assert.doesNotMatch(nativePlayer, /extractCueWav|extractCueDsf|extractSacdDsf|media_extract/i);
+  assert.match(coreExtract, /SacdTrackReader::open_track_raw/);
+  assert.match(coreExtract, /extract_sacd_track_to_dsdiff/);
+  assert.doesNotMatch(nativePlayer, /extractCueWav|extractCueDsf|extractSacdDsf|extractSacdDff|media_extract/i);
 });
