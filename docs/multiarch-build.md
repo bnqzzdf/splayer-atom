@@ -140,8 +140,8 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 | 包 | 大小 | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-x86_64-multi.tar.gz` | 90 MB | `c595e493f1f8f00423166073c1555e0573ddb5e6395c7f54ba4de03e4f31da52` |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-aarch64-multi.tar.gz` | 55 MB | `a31f5cfdc978bef13c27f61d888ac0a3ce584cf42f8215804ffcb14e0bc33ad5` |
+| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-x86_64-multi.tar.gz` | 90 MB | `f49e9be5ae88da82d1bfc660c0f9f0f47593de9bc019381883e2a54f3201e3e6` |
+| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-aarch64-multi.tar.gz` | 55 MB | `33e6b648b88391925341948fc723a0a9c05146ee3c4a22119d8e1ecd88d324d5` |
 
 包闸门：
 
@@ -158,6 +158,18 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 - `.230` arm 包 `--cpu arm64`：`arch=arm64`、`node=24.22.2`、`direttaSdkRelease=148`、
   `capabilities.diretta=true`；native 加载成功。
 - arm64 编译中发现并修复 `direct_pcm.rs` 的 `c_char` 有符号性（`a5a25b14`），x86 不受影响。
+
+## 审计结论（本轮）
+
+- 静态/动态闸门：`pnpm typecheck`、`pnpm lint`、`pnpm test`、最终 `cargo test --workspace`
+  与 clippy 1.98.0 均通过。
+- 已修复：arm64 `c_char` 有符号性；`--output-dir` 参数顺序；base 产物 SHA256 校验；
+  native `build.json` 与包架构/变体一致性校验；arm64 构建 `--locked`；
+  安装器对“非空且不像 Atom 安装根”的目录拒绝覆盖（需 `--force`）。
+- 归一化：`DirettaCpuVariant` 明确区分 x86 变体与 arm64；文档/脚本/包清单使用同一套
+  `v1/v2/v3/v4/zen4/arm64` 名称。
+- 冗余/性能：DST-DFF 提取实测 96 ms（对照 DSF 28.3 s），已消除 DST 解码；剩余开销是
+  I/O 与 chunk 写出，继续改 native 分配器收益很低，且会让已验证产物失效，本轮不做。
 
 说明：安装目录默认 `/opt/splayer-atom-core`；测试使用独立前缀以免覆盖已有生产 Core。
 audiosys 环境建议用 `--prefix /audiosys/splayer-atom-core`；直接覆盖 `/audiosys` 需显式 `--force`，
