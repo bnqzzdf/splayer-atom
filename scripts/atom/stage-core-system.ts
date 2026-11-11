@@ -43,14 +43,13 @@ const streamingApiFile = path.join(root, "out", "native", "streaming-api.node");
 const require = createRequire(import.meta.url);
 const args = new Set(process.argv.slice(2));
 const archive = args.delete("--archive");
-const legacyBundleNode = args.delete("--bundle-node");
-const bundleRuntime = args.delete("--bundle-runtime") || legacyBundleNode;
+const bundleRuntime = args.delete("--bundle-runtime");
 const allowUnpublished = args.delete("--allow-unpublished");
 const runtimeArg = [...args].find((arg) => arg.startsWith("--runtime="));
 if (runtimeArg) args.delete(runtimeArg);
 const runtime = (runtimeArg?.slice("--runtime=".length) ?? "node") as CoreRuntimeFlavor;
-if (runtime !== "node" && runtime !== "bun") throw new Error(`[CoreStage] 未知 runtime: ${runtime}`);
-if (legacyBundleNode && runtime !== "node") throw new Error("[CoreStage] --bundle-node 仅适用于 Node");
+if (runtime !== "node" && runtime !== "bun")
+  throw new Error(`[CoreStage] 未知 runtime: ${runtime}`);
 if (args.size > 0) throw new Error(`[CoreStage] 未知参数: ${[...args].join(" ")}`);
 const packageMetadata = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
@@ -104,7 +103,10 @@ if (process.platform !== "linux" || process.arch !== "x64") {
 const bunBinary = process.env.ATOM_BUN_BIN || "bun";
 const bunVersionResult =
   runtime === "bun" ? spawnSync(bunBinary, ["--version"], { encoding: "utf8" }) : null;
-if (bunVersionResult && (bunVersionResult.status !== 0 || !/^\d+\.\d+\.\d+$/.test(bunVersionResult.stdout.trim()))) {
+if (
+  bunVersionResult &&
+  (bunVersionResult.status !== 0 || !/^\d+\.\d+\.\d+$/.test(bunVersionResult.stdout.trim()))
+) {
   fail(`Bun 不可用或版本无效: ${bunVersionResult.error?.message ?? bunVersionResult.stderr}`);
 }
 const runtimeVersion = runtime === "bun" ? bunVersionResult!.stdout.trim() : CORE_NODE_REFERENCE;

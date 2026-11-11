@@ -13,6 +13,7 @@ export const getKugouSession = (): Record<string, string> => getSessionCookies("
 
 export const mergeKugouSession = (values: Record<string, string>): void => {
   saveSessionCookies("kugou", { ...getKugouSession(), ...values });
+  cache.clear();
 };
 
 export const clearKugouSession = (): void => {
@@ -22,6 +23,7 @@ export const clearKugouSession = (): void => {
     ...(session.dfid ? { dfid: session.dfid } : {}),
   };
   saveSessionCookies("kugou", device);
+  cache.clear();
 };
 
 /** 2 分钟响应缓存 */
@@ -68,13 +70,10 @@ const cacheSet = (key: string, value: unknown, ttl = DEFAULT_TTL): void => {
   cache.set(key, { value, expireAt: Date.now() + ttl });
 };
 
-export const clearKugouCache = (): void => {
-  cache.clear();
-};
-
 const isEmptyResult = (value: unknown): boolean => {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
+  if (typeof v.code === "number" && v.code !== 200) return true;
   if (Array.isArray(v.songs) && v.songs.length === 0) return true;
   if (Array.isArray(v.albums) && v.albums.length === 0) return true;
   if (Array.isArray(v.artists) && v.artists.length === 0) return true;

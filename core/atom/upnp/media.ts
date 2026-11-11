@@ -152,8 +152,8 @@ const parseRange = (header: string | undefined, size: number): ByteRange | "inva
 
   if (!match[1]) {
     const suffix = Number(match[2]);
-    if (!Number.isInteger(suffix) || suffix <= 0) return "invalid";
-    return { start: Math.max(0, size - suffix), end: Math.max(0, size - 1) };
+    if (!Number.isInteger(suffix) || suffix <= 0 || size <= 0) return "invalid";
+    return { start: Math.max(0, size - suffix), end: size - 1 };
   }
 
   const start = Number(match[1]);

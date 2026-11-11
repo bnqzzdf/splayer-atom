@@ -55,11 +55,11 @@ test("request guard rejects cross-site, opaque-origin and DNS-rebinding requests
 test("request guard allows Vite origin on the same host in dev mode", async () => {
   const app = buildApp(true);
   assert.equal(
-    (await post(app, { host: "192.168.1.5:14559", origin: "http://192.168.1.5:5173" })).status,
+    (await post(app, { host: "192.168.1.5:14558", origin: "http://192.168.1.5:5173" })).status,
     200,
   );
   assert.equal(
-    (await post(app, { host: "192.168.1.5:14559", origin: "http://evil.example:5173" })).status,
+    (await post(app, { host: "192.168.1.5:14558", origin: "http://evil.example:5173" })).status,
     403,
   );
 });

@@ -7,10 +7,16 @@ import {
 } from "./auth";
 import { callStreamingNative } from "@main/apis/streamingNative";
 import { runtimeEnvironment } from "@main/atom/runtime/environment";
+import { coreLog } from "@main/utils/logger";
 
 export type TidalParams = Record<string, unknown>;
 
 let tidalCallTail: Promise<void> = Promise.resolve();
+let authGeneration = 0;
+
+const assertCurrentAuthGeneration = (generation: number): void => {
+  if (generation !== authGeneration) throw new Error("TIDAL request superseded by logout");
+};
 
 const withTidalCallLock = async <T>(task: () => Promise<T>): Promise<T> => {
   let release!: () => void;
@@ -124,22 +130,31 @@ const authStatus = async (): Promise<unknown> => {
   return { ...projection, ...remote };
 };
 
+// 先取 token 并立即清本地凭据，远端吊销放后台执行，避免等待锁或 30s 请求阻塞退出。
 const authLogout = async (): Promise<unknown> => {
-  try {
-    return await callStreamingNative("tidal", "auth_logout", nativeAuth(), {});
-  } finally {
-    clearTidalAuth();
-  }
+  const auth = nativeAuth();
+  authGeneration++;
+  clearTidalAuth();
+  void callStreamingNative("tidal", "auth_logout", auth, {}).catch((error) => {
+    coreLog.warn("[tidal] 远端登出失败（本地凭据已清除，不影响登出）：", error);
+  });
+  return { status: "success", loggedIn: false };
 };
 
 /**
  * TIDAL Core 入口：Node Core 只持有 session，平台协议全部委托给 Rust streaming-api。
  */
-const callTidalUnlocked = async (name: string, params: TidalParams = {}): Promise<unknown> => {
+const callTidalUnlocked = async (
+  name: string,
+  params: TidalParams,
+  generation: number,
+): Promise<unknown> => {
+  assertCurrentAuthGeneration(generation);
   if (name === "auth_status" || name === "status" || name === "user_detail") {
-    return authStatus();
+    const status = await authStatus();
+    assertCurrentAuthGeneration(generation);
+    return status;
   }
-  if (name === "auth_logout" || name === "logout") return authLogout();
 
   const nativeParams =
     name === "track_getStreamUrl" || name === "song_url"
@@ -150,9 +165,12 @@ const callTidalUnlocked = async (name: string, params: TidalParams = {}): Promis
     nativeResponse = await callStreamingNative("tidal", name, nativeAuth(), nativeParams);
   } catch (error) {
     const refreshed = asRecord((error as { refreshedAuth?: unknown }).refreshedAuth);
-    if (stringValue(refreshed.accessToken)) persistRefreshedAuth(refreshed);
+    if (generation === authGeneration && stringValue(refreshed.accessToken)) {
+      persistRefreshedAuth(refreshed);
+    }
     throw error;
   }
+  assertCurrentAuthGeneration(generation);
   const response = unwrapRefreshedResponse(nativeResponse);
   if (
     name === "auth_exchange" ||
@@ -182,5 +200,8 @@ const callTidalUnlocked = async (name: string, params: TidalParams = {}): Promis
   return response;
 };
 
-export const callTidal = async (name: string, params: TidalParams = {}): Promise<unknown> =>
-  withTidalCallLock(() => callTidalUnlocked(name, params));
+export const callTidal = async (name: string, params: TidalParams = {}): Promise<unknown> => {
+  if (name === "auth_logout" || name === "logout") return authLogout();
+  const generation = authGeneration;
+  return withTidalCallLock(() => callTidalUnlocked(name, params, generation));
+};

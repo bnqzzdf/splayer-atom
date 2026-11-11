@@ -46,7 +46,7 @@ const direttaCpuVariant: DirettaCpuVariant | null = direttaSdkRoot
     : null
   : null;
 if (direttaSdkRoot && !direttaCpuVariant) {
-  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4");
+  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4|zen4");
 }
 const direttaSdkRelease = direttaSdkRoot ? readDirettaSdkRelease(direttaSdkRoot) : null;
 if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {

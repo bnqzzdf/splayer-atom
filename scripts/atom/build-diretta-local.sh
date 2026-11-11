@@ -2,8 +2,13 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-SDK_ROOT=${DIRETTA_SDK_ROOT:-/home/bnqzzdf/code/DirettaHostSDK_148}
+SDK_ROOT=${DIRETTA_SDK_ROOT:-}
 CPU_VARIANT=${DIRETTA_CPU_VARIANT:-v3}
+
+if [ -z "$SDK_ROOT" ]; then
+  echo "[Diretta] 请设置 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148" >&2
+  exit 1
+fi
 
 if ! command -v node >/dev/null 2>&1 || ! command -v pnpm >/dev/null 2>&1; then
   echo "[Diretta] 需要可用的 Node.js 和 pnpm" >&2
@@ -27,4 +32,4 @@ DIRETTA_CPU_VARIANT="$CPU_VARIANT" \
 pnpm exec tsx scripts/atom/build-core-system.ts \
   --require-diretta \
   --diretta-variant="$CPU_VARIANT" \
-  --bundle-node
+  --bundle-runtime

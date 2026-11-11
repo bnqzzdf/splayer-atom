@@ -181,6 +181,9 @@
     "pathPlaceholder": "输入 Core 主机上的目录路径"
   },
   "nav": {
+    "title": "导航",
+    "back": "后退",
+    "forward": "前进",
     "home": "首页",
     "songs": "歌曲",
     "liked": "我喜欢的音乐",
@@ -1440,12 +1443,12 @@
       "cookiePlaceholder": "请输入 Cookie",
       "toast": {
         "loginSuccess": "{name} 登录成功：{user}",
-        "loginFailed": "{name} 登录失败，请重试",
         "logoutDone": "已断开 {name} 连接",
         "logoutFailed": "断开 {name} 连接失败，请重试",
         "cookieSuccess": "{name} Cookie 设置成功",
         "cookieInvalid": "Cookie 无效，请检查后重试"
-      }
+      },
+      "cookieHint": "请粘贴从网页端请求头中获取的完整 Cookie 字符串"
     },
     "networkProxyProtocol": {
       "label": "网络代理",
@@ -1716,6 +1719,38 @@
       "button": "清空全部",
       "confirmTitle": "清空全部数据库缓存？",
       "confirmDesc": "将删除上方全部数据库缓存，操作不可恢复"
+    },
+    "pluginImport": {
+      "label": "导入插件",
+      "description": "从 URL 导入扩展脚本并管理插件来源"
+    },
+    "pluginList": {
+      "label": "插件列表",
+      "description": "查看已安装插件、检查更新、启用或卸载"
+    },
+    "streamingServerList": {
+      "label": "媒体源服务器",
+      "description": "添加、编辑、测试并连接 Navidrome / Subsonic / Jellyfin / Emby"
+    },
+    "neteaseAccount": {
+      "label": "网易云音乐账号",
+      "description": "扫码或 Cookie 登录 NCM 账号"
+    },
+    "qqmusicAccount": {
+      "label": "QQ 音乐账号",
+      "description": "QQ / 微信扫码或 Cookie 登录 QM 账号"
+    },
+    "kugouAccount": {
+      "label": "酷狗音乐账号",
+      "description": "扫码或 Cookie 登录 KG 账号"
+    },
+    "qobuzAccount": {
+      "label": "Qobuz 账号",
+      "description": "连接或管理 Qobuz 平台会话"
+    },
+    "tidalAccount": {
+      "label": "TIDAL 账号",
+      "description": "连接或管理 TIDAL 平台会话"
     }
   },
   "collection": {

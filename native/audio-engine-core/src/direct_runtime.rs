@@ -625,7 +625,9 @@ impl DirectPlayback {
             DirectTransport::AlsaPcm(_) => "decoded-pcm",
             DirectTransport::AlsaDsd(_) => "native-dsd",
             #[cfg(feature = "diretta")]
-            DirectTransport::DirettaPcm(_) => "exact-pcm",
+            DirectTransport::DirettaPcm(value) if value.exact_pcm() => "exact-pcm",
+            #[cfg(feature = "diretta")]
+            DirectTransport::DirettaPcm(_) => "decoded-pcm",
             #[cfg(feature = "diretta")]
             DirectTransport::DirettaDsd(_) => "native-dsd",
             #[cfg(test)]

@@ -47,7 +47,9 @@ pub fn init_logger(log_dir: &str, is_dev: bool) {
     let crate_name = env!("CARGO_PKG_NAME").replace('-', "_");
 
     // 文件层：TRACE，带完整信息
-    let file_filter = Targets::new().with_target(&crate_name, LevelFilter::TRACE);
+    let file_filter = Targets::new()
+        .with_target(&crate_name, LevelFilter::TRACE)
+        .with_target("audio_engine", LevelFilter::TRACE);
     let file_layer = fmt::layer()
         .with_writer(non_blocking)
         .with_ansi(false)
@@ -61,7 +63,9 @@ pub fn init_logger(log_dir: &str, is_dev: bool) {
     } else {
         LevelFilter::WARN
     };
-    let stdout_filter = Targets::new().with_target(&crate_name, stdout_level);
+    let stdout_filter = Targets::new()
+        .with_target(&crate_name, stdout_level)
+        .with_target("audio_engine", stdout_level);
     let stdout_layer = fmt::layer()
         .with_writer(std::io::stdout)
         .with_ansi(true)

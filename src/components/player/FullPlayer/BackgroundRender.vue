@@ -59,18 +59,24 @@ const updateRendererState = () => {
 const syncRendererMotion = () => {
   const renderer = bgRenderRef.value;
   if (!renderer) return;
+  if (document.hidden) {
+    renderer.pause();
+    return;
+  }
 
   if (props.playing) {
     renderer.setStaticMode(false);
     renderer.setFlowSpeed(props.flowSpeed);
     renderer.resume();
   } else {
+    renderer.setStaticMode(true);
     renderer.setFlowSpeed(0);
     renderer.resume();
   }
 };
 
 onMounted(() => {
+  document.addEventListener("visibilitychange", syncRendererMotion);
   if (!wrapperRef.value) return;
 
   // 初始化 AMLL 底层渲染器
@@ -87,6 +93,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", syncRendererMotion);
   const renderer = bgRenderRef.value;
   if (renderer) {
     // 同步释放底层 Canvas 与 WebGL 上下文，避免上下文泄漏

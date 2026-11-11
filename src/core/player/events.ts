@@ -51,6 +51,7 @@ const reconcileSessionTrack = async (
 
     // trackLoaded 丢失时旧 detail/歌词也属于上一曲；先原子清掉旧 presentation 再恢复已加载 Track。
     media.clear();
+    abLoop.reset();
     media.setTrack(loaded.track, loaded.detail ?? undefined);
     media.setPlaybackContext(queue.getQueueItem(session.index)?.context);
     status.trackLoading = false;
@@ -73,6 +74,7 @@ const reconcileSessionPresentation = (session: PlaybackSessionSnapshot): void =>
   if (!session.current) {
     status.trackLoading = false;
     media.clear();
+    abLoop.reset();
     return;
   }
   if (isSameTrackIdentity(media.track, session.current)) {
@@ -107,6 +109,7 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
       playback.setDuration(status.duration);
       playback.setPlaying(event.data.autoPlay);
       cacheScheduler.cancel();
+      abLoop.reset();
       void lyricLoader.loadForTrack(event.data.detail ?? null);
       extractColorFromUrl(projectedTrack.cover ?? projectedTrack.coverOriginal ?? null);
       void coverLoader.loadCoverForTrack(projectedTrack);
@@ -126,6 +129,7 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
         status.position = adjusted;
         // 播放栏歌词依赖 status snapshot 推进，不能只等待稀疏 position event。
         useMediaStore().updateLyricIndex(adjusted + status.lyricOffsetMs);
+        if (event.data.state === "playing") abLoop.checkLoop(adjusted);
       }
       status.duration = event.data.duration;
       status.volume = event.data.volume;

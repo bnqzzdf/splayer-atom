@@ -62,7 +62,7 @@ describe("Folder Browser Core Protocol client", () => {
     ).resolves.toEqual({ count: 1, failed: [], added: 1 });
 
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "http://localhost:14559/api/library/folders/playlist-track",
+      "http://localhost:14558/api/library/folders/playlist-track",
     );
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
       playlistId: "playlist-1",

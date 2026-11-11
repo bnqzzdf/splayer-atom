@@ -1,14 +1,8 @@
 import type { NowPlayingSnapshot } from "@shared/types/nowPlaying";
 import type { LyricData } from "@shared/types/lyrics";
 import type { Track } from "@shared/types/player";
-import { controlAssetUrl } from "./controlAssets";
+import { mapTrack } from "./controlAssets";
 import { request } from "./controlClient";
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
 
 /** Web Control 的 Core NowPlaying query/command client。 */
 export const nowPlayingClient = {
@@ -34,6 +28,6 @@ export const nowPlayingClient = {
     void request("/now-playing/lyric-offset", {
       method: "POST",
       body: JSON.stringify({ trackId, source, offsetMs }),
-    });
+    }).catch(() => {});
   },
 };

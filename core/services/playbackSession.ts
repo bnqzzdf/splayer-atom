@@ -1361,7 +1361,9 @@ export const onNativeSourceError = (): boolean => {
     }
     if (queue.length <= 1) {
       ++loadGeneration;
+      invalidatePlaybackPreload();
       getPlayer().stop();
+      nowPlaying.onPlayStateChange("stopped");
       active = false;
       publish();
       return;

@@ -44,9 +44,9 @@ describe("Streaming Core Protocol client", () => {
     });
     await expect(streamingClient.sync("server-1", true)).resolves.toBe(true);
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/streaming/config");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/streaming/server");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/streaming/sync");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/streaming/config");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/streaming/server");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14558/api/streaming/sync");
   });
 
   it("projects streaming-cover URLs for Web without losing the Core canonical form", async () => {

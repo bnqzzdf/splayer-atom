@@ -29,6 +29,7 @@ struct AlsaDirectPcmState {
     duration_micros: AtomicU64,
     transition_count: AtomicU64,
     boundary_generation: AtomicU64,
+    exact_integer: AtomicBool,
     playing: AtomicBool,
     finished: AtomicBool,
     source_failed: AtomicBool,
@@ -45,6 +46,7 @@ impl AlsaDirectPcmState {
             duration_micros: AtomicU64::new(duration_to_micros(duration_secs)),
             transition_count: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
+            exact_integer: AtomicBool::new(false),
             playing: AtomicBool::new(false),
             finished: AtomicBool::new(false),
             source_failed: AtomicBool::new(false),
@@ -72,6 +74,8 @@ impl AlsaDirectPcmState {
             .store(boundary.duration_micros, Ordering::Release);
         self.boundary_generation
             .store(boundary.generation, Ordering::Release);
+        self.exact_integer
+            .store(boundary.exact_integer, Ordering::Release);
         self.transition_count.fetch_add(1, Ordering::AcqRel);
     }
 }
@@ -342,6 +346,9 @@ impl AlsaDirectPcmConnection {
         let config = handle.config();
 
         let state = Arc::new(AlsaDirectPcmState::new(duration_secs));
+        state
+            .exact_integer
+            .store(source.exact_integer_source(), Ordering::Release);
         let cancel = Arc::new(AtomicBool::new(false));
         let consumer = source.consumer();
         let (input, preparer) = if zero_copy_transport(source_format, config.format) {
@@ -402,7 +409,7 @@ impl AlsaDirectPcmConnection {
     }
 
     pub fn exact_pcm(&self) -> bool {
-        self.source.exact_integer_source()
+        self.state.exact_integer.load(Ordering::Acquire)
     }
 
     pub fn config(&self) -> AlsaPcmConfig {
@@ -489,6 +496,9 @@ impl AlsaDirectPcmConnection {
                 && format.sample_format == self.source_format.sample_format,
             "ALSA direct PCM handoff 格式需要重新协商"
         );
+        self.state
+            .exact_integer
+            .store(self.source.exact_integer_source(), Ordering::Release);
         self.source_format = format;
         self.duration_secs = duration_secs;
         Ok(format)
@@ -1122,20 +1132,24 @@ mod tests {
     #[test]
     fn boundary_commits_only_after_played_position_reaches_it() {
         let state = AlsaDirectPcmState::new(1.0);
+        state.exact_integer.store(true, Ordering::Release);
         let mut pending = VecDeque::from([PendingBoundary {
             frame: 480,
             boundary: DirectPcmBoundary {
                 duration_micros: 2_000_000,
                 generation: 7,
+                exact_integer: false,
             },
         }]);
         commit_boundaries(&state, &mut pending, 479);
         assert_eq!(state.transition_count.load(Ordering::Acquire), 0);
+        assert!(state.exact_integer.load(Ordering::Acquire));
         commit_boundaries(&state, &mut pending, 480);
         assert_eq!(state.transition_count.load(Ordering::Acquire), 1);
         assert_eq!(state.track_base_frame.load(Ordering::Acquire), 480);
         assert_eq!(state.boundary_generation.load(Ordering::Acquire), 7);
         assert_eq!(state.duration_micros.load(Ordering::Acquire), 2_000_000);
+        assert!(!state.exact_integer.load(Ordering::Acquire));
     }
 
     #[test]

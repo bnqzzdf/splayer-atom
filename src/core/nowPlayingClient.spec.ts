@@ -33,14 +33,14 @@ describe("NowPlaying Core Protocol client", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "http://localhost:14559/api/now-playing/lyric-offset/query",
+      "http://localhost:14558/api/now-playing/lyric-offset/query",
     );
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
       trackId: "track-1",
       source,
     });
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      "http://localhost:14559/api/now-playing/lyric-offset",
+      "http://localhost:14558/api/now-playing/lyric-offset",
     );
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
       trackId: "track-1",

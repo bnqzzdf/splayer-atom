@@ -35,7 +35,7 @@ describe("Stats Core Protocol client", () => {
     const { statsClient } = await import("./statsClient");
     await expect(statsClient.getStatsSummary()).resolves.toMatchObject({ totalPlayCount: 6 });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/stats/summary");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/stats/summary");
   });
 
   it("projects Web artwork and canonicalizes favorite event tracks", async () => {

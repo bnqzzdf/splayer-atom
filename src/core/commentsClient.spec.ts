@@ -36,8 +36,8 @@ describe("Comments Core Protocol client", () => {
       }),
     ).resolves.toMatchObject({ ok: true });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/comments/sources");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/comments/music");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/comments/sources");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/comments/music");
   });
 
   it("canonicalizes Web cache artwork before sending a Track to Core", async () => {

@@ -893,7 +893,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <!-- 空状态 -->
-      <div v-else-if="collection" key="empty" class="flex-1 flex items-center justify-center">
+      <div v-else key="empty" class="flex-1 flex items-center justify-center">
         <div class="text-center text-on-surface-variant/50">
           <IconLucideMusic class="size-12 mx-auto mb-3 opacity-30" />
           <div class="text-sm">{{ t("collection.empty") }}</div>

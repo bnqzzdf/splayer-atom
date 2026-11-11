@@ -38,9 +38,9 @@ describe("Playlist Core Protocol client", () => {
     ).resolves.toMatchObject({ id: "playlist-1" });
     await expect(playlistClient.addTracks("playlist-1", ["track-1"])).resolves.toBe(1);
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/playlists");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/playlists");
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      "http://localhost:14559/api/playlists/playlist-1/tracks",
+      "http://localhost:14558/api/playlists/playlist-1/tracks",
     );
   });
 

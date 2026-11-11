@@ -64,6 +64,7 @@ const hasMore = ref(false);
 const error = ref("");
 /** 翻页游标：已取到的条目数 */
 let offset = 0;
+let loadSeq = 0;
 
 /** CoverList 只认 CoverItem，点击时再按 id 找回 HomeItem（跳转要靠它的 kind） */
 const items = computed<CoverItem[]>(() => homeItems.value.map(homeItemToCoverItem));
@@ -156,39 +157,46 @@ const fetchPage = async (): Promise<{ list: HomeItem[]; more: boolean }> => {
 };
 
 const load = async (): Promise<void> => {
+  const seq = ++loadSeq;
   loading.value = true;
+  loadingMore.value = false;
   error.value = "";
   offset = 0;
   homeItems.value = [];
   hasMore.value = false;
   try {
     const { list, more } = await fetchPage();
+    if (seq !== loadSeq) return;
     homeItems.value = list;
     offset = list.length;
     hasMore.value = more;
     if (!list.length) error.value = t("platformHome.empty");
   } catch (err) {
+    if (seq !== loadSeq) return;
     error.value = err instanceof Error ? err.message : t("platformHome.loadFailed");
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 };
 
 const loadMore = async (): Promise<void> => {
   if (loading.value || loadingMore.value || !hasMore.value) return;
+  const seq = loadSeq;
   loadingMore.value = true;
   try {
     const { list, more } = await fetchPage();
+    if (seq !== loadSeq) return;
     homeItems.value = [...homeItems.value, ...list];
     offset += list.length;
     // 返回空页时停手，否则游标不前进会反复请求同一页
     hasMore.value = more && list.length > 0;
   } catch (err) {
+    if (seq !== loadSeq) return;
     // 翻页失败保留已加载内容，只停下继续加载，并把原因显示出来
     hasMore.value = false;
     error.value = err instanceof Error ? err.message : t("platformHome.loadFailed");
   } finally {
-    loadingMore.value = false;
+    if (seq === loadSeq) loadingMore.value = false;
   }
 };
 

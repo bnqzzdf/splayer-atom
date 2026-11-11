@@ -12,13 +12,24 @@ pub mod user;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::Value;
 
 use crate::error::StreamingError;
 use config::{TIDAL_API_BASE, TIDAL_DEFAULT_COUNTRY, TIDAL_USER_AGENT};
+
+static TIDAL_HTTP: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn shared_http_client() -> &'static reqwest::Client {
+    TIDAL_HTTP.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default()
+    })
+}
 
 /// 自动刷新结果：(access_token, refresh_token, expires_at)。
 type RefreshedTokens = (String, Option<String>, Option<u64>);
@@ -46,12 +57,8 @@ impl TidalClient {
         client_id: Option<String>,
         client_secret: Option<String>,
     ) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()
-            .unwrap_or_default();
         Self {
-            http,
+            http: shared_http_client().clone(),
             access_token,
             refresh_token,
             user_id,

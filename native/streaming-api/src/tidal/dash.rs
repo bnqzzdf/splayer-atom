@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use regex::Regex;
 use tokio::fs;
@@ -6,6 +7,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::config::TIDAL_USER_AGENT;
 use crate::error::StreamingError;
+
+static DASH_PART_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TidalDashDescriptor {
@@ -213,7 +216,8 @@ pub async fn materialize_dash(
         return Ok((final_path, descriptor));
     }
 
-    let part_path = final_path.with_extension("mp4.part");
+    let sequence = DASH_PART_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let part_path = final_path.with_extension(format!("mp4.part.{sequence}"));
     let _ = fs::remove_file(&part_path).await;
     let mut output = fs::File::create(&part_path)
         .await

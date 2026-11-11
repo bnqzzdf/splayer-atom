@@ -284,7 +284,7 @@ const onTidalAuthorize = async (): Promise<void> => {
   tidalCallbackUrl.value = "";
   try {
     const info = await tidalApi.authAuthorize();
-    window.open(info.url, "_blank", "noopener");
+    openExternal(info.url);
     tidalPkceMessage.value =
       "请在打开的 TIDAL 页面完成授权；授权后浏览器会跳到 com.player.tidal/auth 报错页（正常现象），请复制地址栏完整 URL 粘贴到下方。";
   } catch (err) {
@@ -382,7 +382,7 @@ const onTidalRequestDeviceCode = async (): Promise<void> => {
 /** 调度下次轮询 */
 const scheduleNextPoll = (): void => {
   const info = tidalDeviceInfo.value;
-  if (!info) return;
+  if (!info || !props.open) return;
   const intervalSec = Math.max(2, info.interval || 2);
   tidalPollTimer.value = setTimeout(() => {
     onTidalPoll();
@@ -392,13 +392,14 @@ const scheduleNextPoll = (): void => {
 /** 第二步：轮询 token */
 const onTidalPoll = async (): Promise<void> => {
   const info = tidalDeviceInfo.value;
-  if (!info) return;
+  if (!info || !props.open) return;
   try {
     const res = await tidalApi.authTokenPoll(
       info.deviceCode,
       tidalClientId.value.trim() || undefined,
       tidalClientSecret.value.trim() || undefined,
     );
+    if (!props.open || tidalDeviceInfo.value !== info) return;
     if (res.status === "success") {
       tidalPollStatus.value = "success";
       tidalPollMessage.value = `登录成功：${res.username ?? "已登录"}`;
@@ -501,7 +502,7 @@ const onAccountLoginSuccess = (): void => {
         <div class="pt-3">
           <PlatformLoginPanel
             platform="netease"
-            :active="activeTab === 'netease'"
+            :active="open && activeTab === 'netease'"
             @success="onAccountLoginSuccess"
           />
         </div>
@@ -511,7 +512,7 @@ const onAccountLoginSuccess = (): void => {
         <div class="pt-3">
           <PlatformLoginPanel
             platform="qqmusic"
-            :active="activeTab === 'qqmusic'"
+            :active="open && activeTab === 'qqmusic'"
             @success="onAccountLoginSuccess"
           />
         </div>
@@ -521,7 +522,7 @@ const onAccountLoginSuccess = (): void => {
         <div class="pt-3">
           <PlatformLoginPanel
             platform="kugou"
-            :active="activeTab === 'kugou'"
+            :active="open && activeTab === 'kugou'"
             @success="onAccountLoginSuccess"
           />
         </div>

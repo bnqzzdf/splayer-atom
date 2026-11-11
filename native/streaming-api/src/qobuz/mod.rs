@@ -11,6 +11,7 @@ pub mod song_url;
 pub mod user;
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
@@ -19,14 +20,10 @@ use crate::error::StreamingError;
 use config::{QOBUZ_API_BASE, QOBUZ_FIREFOX_UA};
 use credentials::{get_credentials, get_working_secret};
 
-pub struct QobuzClient {
-    http: reqwest::Client,
-    pub user_auth_token: Option<String>,
-    pub user_id: Option<String>,
-}
+static QOBUZ_HTTP: OnceLock<reqwest::Client> = OnceLock::new();
 
-impl QobuzClient {
-    pub fn new(user_auth_token: Option<String>, user_id: Option<String>) -> Self {
+fn shared_http_client() -> &'static reqwest::Client {
+    QOBUZ_HTTP.get_or_init(|| {
         let mut builder = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .user_agent(QOBUZ_FIREFOX_UA);
@@ -45,9 +42,20 @@ impl QobuzClient {
             }
         }
 
-        let http = builder.build().unwrap_or_default();
+        builder.build().unwrap_or_default()
+    })
+}
+
+pub struct QobuzClient {
+    http: reqwest::Client,
+    pub user_auth_token: Option<String>,
+    pub user_id: Option<String>,
+}
+
+impl QobuzClient {
+    pub fn new(user_auth_token: Option<String>, user_id: Option<String>) -> Self {
         Self {
-            http,
+            http: shared_http_client().clone(),
             user_auth_token,
             user_id,
         }

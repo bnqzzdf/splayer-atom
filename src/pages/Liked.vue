@@ -180,6 +180,7 @@ const handleMoreMenu = (key: string): void => {
           source="local"
           enable-sort
           sort-scope="liked"
+          :playback-context="playbackContext"
         />
       </div>
       <div

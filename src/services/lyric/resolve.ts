@@ -221,12 +221,17 @@ export const resolveTTMLOverlay = async (
   online: OnlineResult,
 ): Promise<ResolvedLyric | null> => {
   if (!shouldTryTTMLByFormat(online.source.format)) return null;
-  const candidates = await Promise.all(
-    TTML_PLATFORMS.map(async (platform) => ({
-      platform,
-      response: await requestTTMLOverlay(track, platform),
-    })),
-  );
+  const candidates = (
+    await Promise.all(
+      TTML_PLATFORMS.map(async (platform) => {
+        try {
+          return { platform, response: await requestTTMLOverlay(track, platform) };
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
   const match = candidates.find(
     (candidate): candidate is typeof candidate & { response: { ok: true; data: string } } =>
       candidate.response.ok && !!candidate.response.data,

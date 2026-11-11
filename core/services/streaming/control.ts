@@ -93,6 +93,7 @@ export const streamingControl = {
   connect,
   disconnect: (serverId: string): void => {
     invalidateStreamingSession(serverId);
+    cancelStreamingSync(serverId);
     if (getStreamingConfig().activeServerId === serverId) {
       connectionStatus = { connected: false };
       publishConfig();

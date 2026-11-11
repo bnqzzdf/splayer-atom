@@ -9,27 +9,14 @@ import type {
   TopArtist,
   TopTrack,
 } from "@shared/types/stats";
-import type { Track } from "@shared/types/player";
-import { controlAssetUrl, serverAssetUrl } from "./controlAssets";
+import { mapTrack, toServerTrack } from "./controlAssets";
 import { request } from "./controlClient";
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
-
-const toServerTrack = (track: Track): Track => ({
-  ...track,
-  cover: serverAssetUrl(track.cover),
-  coverOriginal: serverAssetUrl(track.coverOriginal),
-});
 
 const recordFavorite = (event: FavoriteEventInput): void => {
   void request("/stats/favorite", {
     method: "POST",
     body: JSON.stringify({ ...event, track: toServerTrack(event.track) }),
-  });
+  }).catch(() => {});
 };
 
 /** Web Control 的 Core Stats request client。播放计数由 Core native lifecycle 独立拥有。 */

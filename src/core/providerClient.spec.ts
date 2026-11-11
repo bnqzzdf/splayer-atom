@@ -33,8 +33,8 @@ describe("managed Provider Core Protocol client", () => {
       ok: true,
       data: { id: "1" },
     });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/providers/call");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14558/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/providers/call");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({
@@ -88,14 +88,14 @@ describe("managed Provider Core Protocol client", () => {
       ok: true,
     });
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/providers/sessions");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/providers/clear-session");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14558/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/providers/sessions");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/providers/clear-session");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ platform: "tidal" }),
     });
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/providers/set-cookie");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14558/api/providers/set-cookie");
   });
 
   it("keeps every Core-managed platform inside the managed Provider Core Domain", () => {

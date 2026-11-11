@@ -712,7 +712,9 @@ export const initPlayer = async (): Promise<void> => {
   console.log("[player] init");
   await useSettingsStore().syncSystem();
   // 插件列表来自同一 Core registry，在建立播放投影前开始加载。
-  void usePluginsStore().load();
+  void usePluginsStore()
+    .load()
+    .catch((error) => console.warn("[player] load plugins failed", error));
   const status = useStatusStore();
   const session = await queue.restoreQueue();
   if (session) {
@@ -754,6 +756,7 @@ export const initPlayer = async (): Promise<void> => {
 
   const currentStatus = await playerClient.getStatus();
   if (currentStatus.success && currentStatus.data) {
+    status.output = currentStatus.data.output;
     status.state =
       current && currentStatus.data.state === "idle" ? "stopped" : currentStatus.data.state;
     status.position = currentStatus.data.position;
@@ -779,6 +782,7 @@ export const initPlayer = async (): Promise<void> => {
 
 /** 清理事件订阅 */
 export const disposePlayer = (): void => {
+  initialized = false;
   disposeNextTrackPreload();
   if (unsubscribeCoreProjection) {
     unsubscribeCoreProjection();

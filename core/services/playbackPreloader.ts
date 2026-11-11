@@ -295,8 +295,17 @@ const stageProcessedSource = async (
   cancelProcessedStageNow();
   if (token !== preloadToken) return null;
   const prepared = await prepareProcessedSource(token, resolved);
-  if (token !== preloadToken) return null;
-  const result = await stageProcessedPlaybackNext(prepared.processedSource, generation);
+  if (token !== preloadToken) {
+    queueDirectCleanup(prepared.processedSource);
+    return null;
+  }
+  let result: Awaited<ReturnType<typeof stageProcessedPlaybackNext>>;
+  try {
+    result = await stageProcessedPlaybackNext(prepared.processedSource, generation);
+  } catch (error) {
+    queueDirectCleanup(prepared.processedSource);
+    throw error;
+  }
   if (token !== preloadToken && result.staged) {
     cancelProcessedStageNow();
     queueDirectCleanup(prepared.processedSource);
@@ -347,15 +356,22 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
       let processedMediaInfo: MediaInfo | undefined;
       let upnpMedia: PreparedUpnpMedia | undefined;
       const directPrepared = await prepareDirectSource(token, item.track, source);
-      if (token !== preloadToken) {
+      if (token !== preloadToken || buildPreloadKey(queueIndex, item) !== key) {
         if (directPrepared?.directSource) queueDirectCleanup(directPrepared.directSource);
         return;
       }
       if (directPrepared) {
         source = directPrepared.source;
         directSource = directPrepared.directSource;
-        const staged = await stageDirectSource(token, item.track, directSource);
-        if (token !== preloadToken) {
+        let staged: Awaited<ReturnType<typeof stageDirectSource>>;
+        try {
+          staged = await stageDirectSource(token, item.track, directSource);
+        } catch (error) {
+          await discardDirectInput(directSource);
+          throw error;
+        }
+        if (token !== preloadToken || buildPreloadKey(queueIndex, item) !== key) {
+          if (staged) cancelDirectStageNow();
           await discardDirectInput(directSource);
           return;
         }
@@ -393,6 +409,7 @@ export const schedulePlaybackPreload = (queueIndex: number, item: PlaybackQueueI
         }
         if (token !== preloadToken || buildPreloadKey(queueIndex, item) !== key) {
           cancelProcessedStageNow();
+          queueDirectCleanup(processedSource);
           return;
         }
       }

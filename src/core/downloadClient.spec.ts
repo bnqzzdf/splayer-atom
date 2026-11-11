@@ -64,8 +64,8 @@ describe("Download Core Protocol client", () => {
     await expect(downloadClient.start(request)).resolves.toEqual({ ok: true });
     await expect(downloadClient.setDir("/music")).resolves.toBe("/music");
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/download/start");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/download/dir");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/download/start");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/download/dir");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ dir: "/music" }),

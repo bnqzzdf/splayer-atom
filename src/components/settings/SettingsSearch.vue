@@ -55,9 +55,29 @@ const handleSelect = (r: SearchResult) => {
   query.value = "";
 };
 
-const handleBlur = () => {
-  setTimeout(() => (isFocused.value = false), 150);
+let blurTimer: ReturnType<typeof setTimeout> | undefined;
+
+const clearBlurTimer = () => {
+  if (blurTimer) {
+    clearTimeout(blurTimer);
+    blurTimer = undefined;
+  }
 };
+
+const handleFocus = () => {
+  clearBlurTimer();
+  isFocused.value = true;
+};
+
+const handleBlur = () => {
+  clearBlurTimer();
+  blurTimer = setTimeout(() => {
+    blurTimer = undefined;
+    isFocused.value = false;
+  }, 150);
+};
+
+onBeforeUnmount(clearBlurTimer);
 </script>
 
 <template>
@@ -66,7 +86,7 @@ const handleBlur = () => {
       v-model="query"
       :placeholder="t('settings.search')"
       clearable
-      @focus="isFocused = true"
+      @focus="handleFocus"
       @blur="handleBlur"
     >
       <template #prefix>

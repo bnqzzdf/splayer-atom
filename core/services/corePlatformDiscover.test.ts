@@ -60,7 +60,7 @@ test("流媒体接入的标签顺序按使用频率排，与共享层那份互�
   }
   assert.match(
     platformHomePageSource,
-    /ALL_PLATFORMS\.filter\(\(p\) => providerSessions\.sessions\[p\]\?\.authenticated\)/,
+    /ALL_PLATFORMS\.filter\(\s*\(p\) =>[\s\S]*?providerSessions\.sessions\[p\]\?\.authenticated/,
   );
 });
 
@@ -71,7 +71,7 @@ test("刷新后默认停在第一个标签页，而不是写死某个平台", ()
   // 第一项没登录时，落到首个已登录平台
   assert.match(
     platformHomePageSource,
-    /if \(list\.length && !list\.includes\(platform\.value\)\) platform\.value = list\[0\];/,
+    /if \(list\.length && !list\.includes\(platform\.value\)\) \{[\s\S]*?platform\.value = list\[0\]/,
   );
 });
 
@@ -345,7 +345,7 @@ test("网易榜单进「榜单」区，与 QM/KG 共用分组筛选与 rank 跳�
     platformHomePageSource,
     /const rankGroups = toplist \? ncmRankGroups\(toplist\) : \[\]/,
   );
-  assert.match(platformHomePageSource, /genres\.value = groupsToGenres\(rankGroups\)/);
+  assert.match(platformHomePageSource, /nextGenres = groupsToGenres\(rankGroups\)/);
   assert.match(platformHomePageSource, /\.\.\.normalizeNeteaseRanks\(rankGroups\)/);
   // 卡片按榜单类型跳转（collection 的 rank 分支）
   assert.match(platformHomeServiceSource, /export const ncmToplistToItem/);

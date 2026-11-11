@@ -1,16 +1,20 @@
+import type { Track } from "@shared/types/player";
 import { coreApiOrigin } from "@/core/controlClient";
 
 const CORE_IMAGE_CACHE = /^\/cache\/(covers|artists|backgrounds)(?:\/|$)/;
 const STREAMING_COVER_PATH = "/api/streaming/cover";
 
+// 旧队列可能由 localhost 页面写入；同一 Core 端口的缓存 URL 仍应映射到当前浏览器主机。
+const isSameCorePort = (url: URL): boolean => {
+  const current = new URL(coreApiOrigin);
+  return url.port === current.port || url.port === "14558";
+};
+
 /** 识别由 Core 图像缓存产生的 HTTP URL，并返回可复用路径。 */
 const coreCachePath = (value: string): string | null => {
   try {
     const url = new URL(value);
-    const current = new URL(coreApiOrigin);
-    if (!CORE_IMAGE_CACHE.test(url.pathname)) return null;
-    // 旧队列可能由 localhost 页面写入；同一 Core 端口的缓存 URL 仍应映射到当前浏览器主机。
-    if (url.port !== current.port && url.port !== "14558") return null;
+    if (!CORE_IMAGE_CACHE.test(url.pathname) || !isSameCorePort(url)) return null;
     return `${url.pathname}${url.search}`;
   } catch {
     return null;
@@ -24,9 +28,7 @@ const streamingCoverPath = (value: string): string | null => {
     if (url.protocol === "streaming-cover:" && url.hostname === "image") {
       return `${STREAMING_COVER_PATH}${url.search}`;
     }
-    if (url.pathname !== STREAMING_COVER_PATH) return null;
-    const current = new URL(coreApiOrigin);
-    if (url.port !== current.port && url.port !== "14558" && url.port !== "14559") return null;
+    if (url.pathname !== STREAMING_COVER_PATH || !isSameCorePort(url)) return null;
     return `${url.pathname}${url.search}`;
   } catch {
     return null;
@@ -61,3 +63,17 @@ export const serverAssetUrl = (value: string | undefined): string | undefined =>
   const cachePath = coreCachePath(value);
   return cachePath ? `cache://${cachePath.slice("/cache/".length)}` : value;
 };
+
+/** 将 Core canonical Track 投影为当前 Control 可展示的资源 URL。 */
+export const mapTrack = (track: Track): Track => ({
+  ...track,
+  cover: controlAssetUrl(track.cover),
+  coverOriginal: controlAssetUrl(track.coverOriginal),
+});
+
+/** 将 Web Control 展示用 Track 的资源 URL 还原为 Core canonical URL。 */
+export const toServerTrack = (track: Track): Track => ({
+  ...track,
+  cover: serverAssetUrl(track.cover),
+  coverOriginal: serverAssetUrl(track.coverOriginal),
+});

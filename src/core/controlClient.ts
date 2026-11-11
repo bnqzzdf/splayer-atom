@@ -12,7 +12,7 @@ const dev = import.meta.env?.DEV === true;
  */
 export const coreApiOrigin = location
   ? dev
-    ? `${location.protocol}//${host}:14559`
+    ? `${location.protocol}//${host}:14558`
     : location.origin
   : "";
 

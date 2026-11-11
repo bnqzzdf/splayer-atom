@@ -111,11 +111,12 @@ const scanLibrary = (): void => {
     try {
       await headlessClient.setScanDirs([dir]);
       await headlessClient.scanLibrary(false);
-      while ((await headlessClient.isScanning()).data) {
+      while (!disposed && (await headlessClient.isScanning()).data) {
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
+      if (disposed) return;
       const library = await headlessClient.tracks();
-      tracks.value = library.data;
+      if (!disposed) tracks.value = library.data;
     } finally {
       scanning.value = false;
     }
@@ -183,6 +184,7 @@ const toggleShuffle = (): void => {
   });
 };
 
+let disposed = false;
 let stopEvents: (() => void) | null = null;
 let statusTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -202,6 +204,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  disposed = true;
   stopEvents?.();
   if (statusTimer) clearInterval(statusTimer);
 });
@@ -227,11 +230,15 @@ onUnmounted(() => {
         <p>{{ currentArtist }}</p>
       </div>
       <div class="transport">
-        <button title="上一首" @click="headlessClient.prev()">⏮</button>
+        <button title="上一首" @click="void run(() => headlessClient.prev().then(() => undefined))">
+          ⏮
+        </button>
         <button class="primary" title="播放/暂停" @click="togglePlay">
           {{ status.state === "playing" ? "⏸" : "▶" }}
         </button>
-        <button title="下一首" @click="headlessClient.next()">⏭</button>
+        <button title="下一首" @click="void run(() => headlessClient.next().then(() => undefined))">
+          ⏭
+        </button>
       </div>
       <div class="timeline">
         <span>{{ formatTime(status.position) }}</span>
@@ -255,7 +262,7 @@ onUnmounted(() => {
                 : "不循环"
           }}
         </button>
-        <button @click="headlessClient.stop()">停止</button>
+        <button @click="void run(() => headlessClient.stop().then(() => undefined))">停止</button>
       </div>
     </section>
 
@@ -265,7 +272,7 @@ onUnmounted(() => {
         <strong>音频输出</strong>
       </div>
       <select v-model="selectedOutput" :disabled="busy" @change="selectOutput">
-        <option value="">系统默认</option>
+        <option value="">未选择输出设备</option>
         <option v-for="device in outputs" :key="device.id" :value="device.id">
           {{ device.name }}{{ device.id.startsWith("diretta:") ? " · Diretta" : "" }}
         </option>
@@ -320,7 +327,7 @@ onUnmounted(() => {
           </div>
           <button
             v-if="session.queue.length"
-            @click="headlessClient.clearQueue().then(refreshSession)"
+            @click="void run(() => headlessClient.clearQueue().then(refreshSession))"
           >
             清空
           </button>

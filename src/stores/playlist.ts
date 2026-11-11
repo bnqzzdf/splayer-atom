@@ -10,6 +10,7 @@ export const usePlaylistStore = defineStore("playlist", () => {
   /** 本地歌单列表 */
   const playlists = shallowRef<PlaylistSummary[]>([]);
   const initialized = ref(false);
+  let loadPromise: Promise<void> | null = null;
 
   /** 将旧版 IndexedDB 本地歌单一次性导入主进程 */
   const migrateLegacy = async (): Promise<void> => {
@@ -32,9 +33,17 @@ export const usePlaylistStore = defineStore("playlist", () => {
 
   /** 加载全部类型的歌单列表 */
   const load = async (): Promise<void> => {
-    await migrateLegacy();
-    playlists.value = await playlistClient.list();
-    initialized.value = true;
+    if (loadPromise) return loadPromise;
+    loadPromise = (async () => {
+      try {
+        await migrateLegacy();
+        playlists.value = await playlistClient.list();
+        initialized.value = true;
+      } finally {
+        loadPromise = null;
+      }
+    })();
+    return loadPromise;
   };
 
   /** 获取本地歌单完整数据 */

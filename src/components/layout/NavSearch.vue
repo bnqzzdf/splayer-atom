@@ -325,7 +325,7 @@ watch(activePlatform, () => {
     loadSuggest(trimmedQuery.value);
   } else {
     hotItems.value = [];
-    void loadHot();
+    if (dialogOpen.value) void loadHot();
   }
 });
 
@@ -338,10 +338,6 @@ watch(dialogOpen, (open) => {
     bodyHeight.value = null;
     activeIndex.value = -1;
   }
-});
-
-onMounted(() => {
-  loadHot();
 });
 </script>
 

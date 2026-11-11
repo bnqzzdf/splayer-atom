@@ -69,6 +69,8 @@ interface InFlight {
 let cacheDir = getSongCacheDir();
 /** 进行中的缓存写入任务，按 cacheKey 去重 */
 const inFlight = new Map<string, InFlight>();
+/** 当前持有并发槽位的任务数 */
+let activeCount = 0;
 /** 等待槽位的队列；只存 starter，槽位空出来时取队头执行 */
 const waiting: Array<() => void> = [];
 
@@ -102,7 +104,10 @@ const absPath = (filename: string): string => path.join(cacheDir, filename);
  * @returns
  */
 const acquireSlot = async (): Promise<void> => {
-  if (inFlight.size < MAX_CONCURRENT) return;
+  if (activeCount < MAX_CONCURRENT) {
+    activeCount += 1;
+    return;
+  }
   await new Promise<void>((resolve) => waiting.push(resolve));
 };
 
@@ -112,7 +117,11 @@ const acquireSlot = async (): Promise<void> => {
  */
 const releaseSlot = (): void => {
   const next = waiting.shift();
-  if (next) next();
+  if (next) {
+    next();
+    return;
+  }
+  activeCount = Math.max(0, activeCount - 1);
 };
 
 /**
@@ -212,6 +221,7 @@ const runDownload = async (
   const partPath = `${finalPath}.part`;
 
   try {
+    if (controller.signal.aborted) return null;
     await fsp.mkdir(cacheDir, { recursive: true });
     const response = await fetch(streamUrl, { signal: controller.signal });
     if (!response.ok || !response.body) {
@@ -235,6 +245,10 @@ const runDownload = async (
     const nodeStream = Readable.fromWeb(response.body as never);
     const writeStream = fs.createWriteStream(partPath);
     await pipeline(nodeStream, writeStream);
+    if (controller.signal.aborted) {
+      await fsp.unlink(partPath).catch(() => {});
+      return null;
+    }
 
     const stat = await fsp.stat(partPath);
     if (stat.size === 0) {
@@ -406,7 +420,7 @@ export const fetchAsync = (
     try {
       return await runDownload(cacheKey, source, streamUrl, controller);
     } finally {
-      inFlight.delete(cacheKey);
+      if (inFlight.get(cacheKey)?.controller === controller) inFlight.delete(cacheKey);
       releaseSlot();
     }
   })();
@@ -437,7 +451,7 @@ export const importFileAsync = (
     try {
       return await runImport(cacheKey, source, sourcePath, controller);
     } finally {
-      inFlight.delete(cacheKey);
+      if (inFlight.get(cacheKey)?.controller === controller) inFlight.delete(cacheKey);
       releaseSlot();
     }
   })();
@@ -470,8 +484,12 @@ export const invalidate = async (sourcePath: string): Promise<void> => {
 
 /** 清空全部 */
 export const clearAll = async (): Promise<void> => {
-  for (const entry of inFlight.values()) entry.controller.abort();
+  const pending = Array.from(inFlight.values(), (entry) => {
+    entry.controller.abort();
+    return entry.promise;
+  });
   inFlight.clear();
+  await Promise.allSettled(pending);
   dbClearAll();
   try {
     const entries = await fsp.readdir(cacheDir);

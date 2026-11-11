@@ -21,10 +21,15 @@ const topSongs = shallowRef<TopTrack[]>([]);
 const topAlbums = shallowRef<TopAlbum[]>([]);
 const topArtists = shallowRef<TopArtist[]>([]);
 const loading = ref(true);
+let disposed = false;
+
+onBeforeUnmount(() => {
+  disposed = true;
+});
 
 onMounted(async () => {
   try {
-    const [library, history, hourlyHistory, songs, albums, artists] = await Promise.all([
+    const [library, history, hourlyHistory, songs, albums, artists] = await Promise.allSettled([
       statsClient.getLibraryStats(),
       statsClient.getPlayHistoryDaily(90),
       statsClient.getPlayHistoryHourly(),
@@ -32,14 +37,15 @@ onMounted(async () => {
       statsClient.getTopAlbums(10),
       statsClient.getTopArtists(10),
     ]);
-    libraryStats.value = library;
-    daily.value = history;
-    hourly.value = hourlyHistory;
-    topSongs.value = songs;
-    topAlbums.value = albums;
-    topArtists.value = artists;
+    if (disposed) return;
+    if (library.status === "fulfilled") libraryStats.value = library.value;
+    if (history.status === "fulfilled") daily.value = history.value;
+    if (hourlyHistory.status === "fulfilled") hourly.value = hourlyHistory.value;
+    if (songs.status === "fulfilled") topSongs.value = songs.value;
+    if (albums.status === "fulfilled") topAlbums.value = albums.value;
+    if (artists.status === "fulfilled") topArtists.value = artists.value;
   } finally {
-    loading.value = false;
+    if (!disposed) loading.value = false;
   }
 });
 </script>

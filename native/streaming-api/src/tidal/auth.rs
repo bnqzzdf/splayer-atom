@@ -138,12 +138,18 @@ impl TidalClient {
             let mut lock = PENDING_PKCE.write().await;
             if let Some(map) = lock.as_mut() {
                 if !state.is_empty() {
-                    map.remove(state)
-                } else if !map.is_empty() {
-                    let first_key = map.keys().next().cloned().unwrap();
-                    map.remove(&first_key)
+                    let matched = map.remove(state);
+                    if let Some(ref entry) = matched {
+                        if map
+                            .get("__latest")
+                            .is_some_and(|latest| latest.code_verifier == entry.code_verifier)
+                        {
+                            map.remove("__latest");
+                        }
+                    }
+                    matched
                 } else {
-                    None
+                    map.remove("__latest")
                 }
             } else {
                 None

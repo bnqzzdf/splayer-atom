@@ -27,15 +27,12 @@ import { resolveSourceIdentity } from "./sourceIdentity";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
-const legacyBundleNode = args.delete("--bundle-node");
-const bundleRuntime = args.delete("--bundle-runtime") || legacyBundleNode;
+const bundleRuntime = args.delete("--bundle-runtime");
 const runtimeArg = [...args].find((arg) => arg.startsWith("--runtime="));
 if (runtimeArg) args.delete(runtimeArg);
 const runtimeFlavor = (runtimeArg?.slice("--runtime=".length) ?? "node") as CoreRuntimeFlavor;
 if (runtimeFlavor !== "node" && runtimeFlavor !== "bun")
   throw new Error(`[CoreArtifact] 未知 runtime: ${runtimeFlavor}`);
-if (legacyBundleNode && runtimeFlavor !== "node")
-  throw new Error("[CoreArtifact] --bundle-node 仅适用于 Node");
 if (args.size > 0) throw new Error(`[CoreArtifact] 未知参数: ${[...args].join(" ")}`);
 const release = readCoreReleaseMetadata();
 const buildDate = resolveCoreBuildDate();
@@ -216,9 +213,7 @@ try {
   const bundledNode = path.join(installRoot, "runtime", "bin", "node");
   const bundledNodeLicense = path.join(installRoot, "runtime", "LICENSE");
   if ((bundleRuntime && runtimeFlavor === "node") !== existsSync(bundledNode)) {
-    fail(
-      "runtime/bin/node 与 Node bundled flavor 不一致",
-    );
+    fail("runtime/bin/node 与 Node bundled flavor 不一致");
   }
   if ((bundleRuntime && runtimeFlavor === "node") !== existsSync(bundledNodeLicense)) {
     fail("runtime/ LICENSE 与 Node bundled flavor 不一致");
@@ -242,7 +237,10 @@ try {
         ? bundledNode
         : process.execPath;
   const versionSmoke = spawnSync(runtimeBinary, ["--version"], { encoding: "utf8" });
-  if (versionSmoke.status !== 0 || versionSmoke.stdout.trim().replace(/^v/, "") !== runtime.runtime?.version) {
+  if (
+    versionSmoke.status !== 0 ||
+    versionSmoke.stdout.trim().replace(/^v/, "") !== runtime.runtime?.version
+  ) {
     fail("安装包的运行时版本与 runtime.json 不一致");
   }
   if (runtime.protocolVersion !== CORE_PROTOCOL_VERSION) {
@@ -321,7 +319,10 @@ try {
     const ipcSmoke = spawnSync(runtimeBinary, ["scripts/atom/check-bun-plugin-ipc.ts"], {
       cwd: root,
       encoding: "utf8",
-      env: { ...process.env, ATOM_PLUGIN_HOST_ENTRY: path.join(installRoot, "app", "plugin-host.js") },
+      env: {
+        ...process.env,
+        ATOM_PLUGIN_HOST_ENTRY: path.join(installRoot, "app", "plugin-host.js"),
+      },
     });
     if (ipcSmoke.status !== 0 || ipcSmoke.signal) {
       fail(`Bun 插件 Host IPC 验收失败: ${ipcSmoke.stderr ?? ""}${ipcSmoke.stdout ?? ""}`);
@@ -430,7 +431,14 @@ try {
 
   console.log(`[CoreArtifact] PASS ${archiveFile}`);
   console.log(
-    JSON.stringify({ runtime: info.runtime, port, web: true, session: true, library: true, cache: true }),
+    JSON.stringify({
+      runtime: info.runtime,
+      port,
+      web: true,
+      session: true,
+      library: true,
+      cache: true,
+    }),
   );
 } finally {
   if (child && child.exitCode === null) child.kill("SIGKILL");

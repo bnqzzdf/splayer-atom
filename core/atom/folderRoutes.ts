@@ -90,8 +90,8 @@ const parseRange = (header: string | undefined, size: number): ByteRange | "inva
   if (!first && !second) return "invalid";
   if (!first) {
     const suffix = Number(second);
-    if (!Number.isInteger(suffix) || suffix <= 0) return "invalid";
-    return { start: Math.max(0, size - suffix), end: Math.max(0, size - 1) };
+    if (!Number.isInteger(suffix) || suffix <= 0 || size <= 0) return "invalid";
+    return { start: Math.max(0, size - suffix), end: size - 1 };
   }
   const start = Number(first);
   const end = second ? Number(second) : size - 1;

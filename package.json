@@ -46,7 +46,7 @@
     "start": "node out/core/index.js",
     "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
     "package:core": "tsx scripts/atom/build-core-system.ts",
-    "package:core:bundled": "tsx scripts/atom/build-core-system.ts --bundle-node",
+    "package:core:bundled": "tsx scripts/atom/build-core-system.ts --bundle-runtime",
     "package:core:bun": "tsx scripts/atom/build-core-system.ts --runtime=bun",
     "package:core:bun:bundled": "tsx scripts/atom/build-core-system.ts --runtime=bun --bundle-runtime",
     "bench:core:bun": "tsx scripts/atom/bench-core-runtime.ts",

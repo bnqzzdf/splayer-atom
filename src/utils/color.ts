@@ -285,9 +285,10 @@ const extractColorFromImageElement = (img: HTMLImageElement): string | null => {
     );
     data = ctx.getImageData(0, 0, COVER_SAMPLE_SIZE, COVER_SAMPLE_SIZE).data;
   } catch {
+    return null;
+  } finally {
     canvas.width = 0;
     canvas.height = 0;
-    return null;
   }
   // RGBA → ARGB int
   const pixels: number[] = [];
@@ -304,9 +305,6 @@ const extractColorFromImageElement = (img: HTMLImageElement): string | null => {
   const quantized = QuantizerCelebi.quantize(pixels, 128);
   const picked = pickRepresentativeCoverColor(quantized);
   if (!picked) return null;
-  // 释放 canvas GPU 资源
-  canvas.width = 0;
-  canvas.height = 0;
   return toCoverBaseColor(picked);
 };
 

@@ -595,6 +595,27 @@ fn apply_cue_sample_limit(
     *emitted_samples >= max_samples
 }
 
+fn apply_normalization_gain(
+    shared: &Shared,
+    loudness: &mut LoudnessAnalyzer,
+    has_replay_gain: bool,
+    player_samples: &mut [f32],
+) {
+    if !shared.is_normalization_enabled() || player_samples.is_empty() {
+        return;
+    }
+    let gain = if has_replay_gain {
+        shared.normalization_gain()
+    } else {
+        loudness.process(player_samples)
+    };
+    if (gain - 1.0).abs() > f32::EPSILON {
+        for sample in player_samples {
+            *sample *= gain;
+        }
+    }
+}
+
 /// 核心解码循环：每帧解码一次，使用复用缓冲分发到播放
 fn run_decoding_loop(
     data: &mut DecoderData,
@@ -642,18 +663,7 @@ fn run_decoding_loop(
                     apply_cue_sample_limit(&mut player_samples, &mut emitted_player_samples, max)
                 });
 
-                if shared.is_normalization_enabled() && !player_samples.is_empty() {
-                    let gain = if has_replay_gain {
-                        shared.normalization_gain()
-                    } else {
-                        loudness.process(&player_samples)
-                    };
-                    if (gain - 1.0).abs() > f32::EPSILON {
-                        for s in &mut player_samples {
-                            *s *= gain;
-                        }
-                    }
-                }
+                apply_normalization_gain(shared, &mut loudness, has_replay_gain, &mut player_samples);
 
                 shared.push(AudioChunk {
                     source_sample_count: player_samples.len() as u64,
@@ -673,6 +683,7 @@ fn run_decoding_loop(
                 if let Some(max) = max_player_samples {
                     apply_cue_sample_limit(&mut player_samples, &mut emitted_player_samples, max);
                 }
+                apply_normalization_gain(shared, &mut loudness, has_replay_gain, &mut player_samples);
                 if !player_samples.is_empty() {
                     shared.push(AudioChunk {
                         source_sample_count: player_samples.len() as u64,

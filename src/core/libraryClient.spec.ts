@@ -38,9 +38,9 @@ describe("Library Core Protocol client", () => {
     const result = await libraryClient.getTracks();
 
     expect(result.success).toBe(true);
-    expect(result.data?.[0]?.cover).toBe("http://localhost:14559/cache/covers/a.jpg");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/library/tracks");
+    expect(result.data?.[0]?.cover).toBe("http://localhost:14558/cache/covers/a.jpg");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14558/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/library/tracks");
   });
 
   it("projects Core cache URLs to the Web Control origin", async () => {
@@ -76,13 +76,13 @@ describe("Library Core Protocol client", () => {
     await expect(libraryClient.readTags("/music/a.flac")).resolves.toMatchObject({ success: true });
     await expect(libraryClient.writeTags([])).resolves.toMatchObject({ success: true });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/library/scan-dirs/add");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/library/scan-dirs/add");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ dir: "/music" }),
     });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/library/tags/read");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14559/api/library/tags/write");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/library/tags/read");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("http://localhost:14558/api/library/tags/write");
     expect(fetchMock.mock.calls).toHaveLength(4);
   });
 });

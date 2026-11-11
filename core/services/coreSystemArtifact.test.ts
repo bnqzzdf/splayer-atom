@@ -77,8 +77,8 @@ test("system-runtime staging is reference-Node and release-native only", () => {
     stageSource,
     /coreArtifactFileName\([\s\S]{0,120}?bundleRuntime,[\s\S]{0,40}?packageMetadata\.version,[\s\S]{0,60}?sourceIdentity\.commit,[\s\S]{0,60}?buildDate,[\s\S]{0,40}?buildTime,/,
   );
-  assert.match(stageSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
   assert.match(stageSource, /const bundleRuntime = args\.delete\("--bundle-runtime"\)/);
+  assert.doesNotMatch(stageSource, /--bundle-node/);
   assert.match(stageSource, /runtime === "bun"/);
   assert.match(stageSource, /cpSync\(process\.execPath, bundledNode\)/);
   assert.match(stageSource, /requireFile\(nodeLicense, "bundled Node license"\)/);
@@ -97,7 +97,8 @@ test("system-runtime staging is reference-Node and release-native only", () => {
 });
 
 test("formal Core system build always rebuilds before staging and checks the final tar", () => {
-  assert.match(buildSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
+  assert.match(buildSource, /const bundleRuntime = args\.delete\("--bundle-runtime"\)/);
+  assert.doesNotMatch(buildSource, /--bundle-node/);
   assert.match(buildSource, /ATOM_BUILD_DATE: buildDate/);
   assert.match(buildSource, /\.\.\.\(bundleRuntime \? \["--bundle-runtime"\] : \[\]\)/);
   const nativeBuild = buildSource.indexOf("build-core-native.ts");
@@ -130,9 +131,16 @@ test("system-runtime launcher and systemd unit execute the same Core entry", () 
 });
 
 test("final tar artifact smoke starts the extracted Core on an isolated port", () => {
-  assert.match(artifactCheckSource, /const legacyBundleNode = args\.delete\("--bundle-node"\)/);
-  assert.match(artifactCheckSource, /runtime\.nodeBundled !== \(bundleRuntime && runtimeFlavor === "node"\)/);
-  assert.match(artifactCheckSource, /runtime\.bunBundled !== \(bundleRuntime && runtimeFlavor === "bun"\)/);
+  assert.match(artifactCheckSource, /const bundleRuntime = args\.delete\("--bundle-runtime"\)/);
+  assert.doesNotMatch(artifactCheckSource, /--bundle-node/);
+  assert.match(
+    artifactCheckSource,
+    /runtime\.nodeBundled !== \(bundleRuntime && runtimeFlavor === "node"\)/,
+  );
+  assert.match(
+    artifactCheckSource,
+    /runtime\.bunBundled !== \(bundleRuntime && runtimeFlavor === "bun"\)/,
+  );
   assert.match(artifactCheckSource, /existsSync\(bundledNode\)/);
   assert.match(artifactCheckSource, /existsSync\(bundledNodeLicense\)/);
   assert.match(artifactCheckSource, /existsSync\(bundledBun\)/);
@@ -185,7 +193,10 @@ test("system and bundled runtime remain deployment variants of the same staged C
   // build-core-system 把时刻一次性下发，保证 stage 与 check 算出同一个文件名
   assert.match(buildSource, /ATOM_BUILD_TIME: buildTime/);
   // 单独运行/跨天复核时退回「取最新产物」，不再依赖秒级重建
-  assert.match(artifactCheckSource, /findLatestCoreArtifact\(root, bundleRuntime, direttaVariant, runtimeFlavor\)/);
+  assert.match(
+    artifactCheckSource,
+    /findLatestCoreArtifact\(root, bundleRuntime, direttaVariant, runtimeFlavor\)/,
+  );
 });
 
 test("Core runtime metadata keeps database and config schema versions", () => {

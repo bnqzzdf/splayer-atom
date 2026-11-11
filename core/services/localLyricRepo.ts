@@ -41,7 +41,13 @@ interface IndexCache {
 }
 
 let cache: IndexCache | null = null;
-let building: Promise<RepoIndex | null> | null = null;
+let building: {
+  generation: number;
+  dir: string;
+  mtimeMs: number;
+  promise: Promise<RepoIndex | null>;
+} | null = null;
+let buildGeneration = 0;
 
 /** 从 TTML 文本头部提取 AMLL 元信息 */
 const extractMeta = (
@@ -111,7 +117,10 @@ const buildIndex = async (dir: string): Promise<RepoIndex> => {
 /** 取当前生效索引；目录或 mtime 变化时懒重建 */
 const getIndex = async (): Promise<RepoIndex | null> => {
   const dir = store.get("localLyric.repoDir") || "";
-  if (!dir) return null;
+  if (!dir) {
+    cache = null;
+    return null;
+  }
   let mtimeMs: number;
   try {
     mtimeMs = (await stat(dir)).mtimeMs;
@@ -119,20 +128,25 @@ const getIndex = async (): Promise<RepoIndex | null> => {
     return null;
   }
   if (cache && cache.dir === dir && cache.mtimeMs === mtimeMs) return cache.index;
-  if (building) return building;
-  building = (async () => {
+  if (building && building.dir === dir && building.mtimeMs === mtimeMs) return building.promise;
+  const generation = ++buildGeneration;
+  const promise = (async (): Promise<RepoIndex | null> => {
     try {
       const index = await buildIndex(dir);
-      cache = { dir, mtimeMs, index };
+      // 仅在仍对应当前配置目录时写回缓存，防止扫描期间切换目录污染新目录缓存。
+      if ((store.get("localLyric.repoDir") || "") === dir) {
+        cache = { dir, mtimeMs, index };
+      }
       return index;
     } catch (err) {
       coreLog.warn("[localLyric] 索引构建失败：", err);
       return null;
     } finally {
-      building = null;
+      if (building?.generation === generation) building = null;
     }
   })();
-  return building;
+  building = { generation, dir, mtimeMs, promise };
+  return promise;
 };
 
 /** 读取文件，失败返回 null */

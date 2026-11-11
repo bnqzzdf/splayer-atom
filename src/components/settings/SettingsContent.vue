@@ -39,7 +39,22 @@ const sectionStartIndices = computed(() => {
   return indices;
 });
 
+let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+const clearHighlightTimers = () => {
+  if (scrollTimer) {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  }
+  if (highlightTimer) {
+    clearTimeout(highlightTimer);
+    highlightTimer = undefined;
+  }
+};
+
 const onCategorySelect = (id: string) => {
+  clearHighlightTimers();
   activeId.value = id;
   highlightKey.value = undefined;
   rememberCategory(id);
@@ -48,16 +63,19 @@ const onCategorySelect = (id: string) => {
 };
 
 const onSearchSelect = (categoryId: string, itemKey: string) => {
+  clearHighlightTimers();
   highlightKey.value = itemKey;
   if (activeId.value !== categoryId) {
     activeId.value = categoryId;
   }
   if (isMobile.value) mobileView.value = "content";
   nextTick(() => {
-    setTimeout(() => {
+    scrollTimer = setTimeout(() => {
+      scrollTimer = undefined;
       const el = document.getElementById(`setting-${itemKey}`);
       el?.scrollIntoView({ block: "center", behavior: "smooth" });
-      setTimeout(() => {
+      highlightTimer = setTimeout(() => {
+        highlightTimer = undefined;
         highlightKey.value = undefined;
       }, 2500);
     }, 100);
@@ -69,6 +87,8 @@ onMounted(() => {
     onSearchSelect(initialCategory.value, initialHighlight.value);
   }
 });
+
+onBeforeUnmount(clearHighlightTimers);
 </script>
 
 <template>

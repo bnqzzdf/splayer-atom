@@ -30,12 +30,12 @@ describe("shared player processing Core Protocol client", () => {
     await expect(playerClient.setVolume(0.75)).resolves.toEqual({ success: true });
     await expect(playerClient.setPitchSync(true)).resolves.toEqual({ success: true });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/volume");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/volume");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ volume: 0.75 }),
     });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/player/pitch-sync");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/player/pitch-sync");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ enabled: true }),
@@ -130,8 +130,8 @@ describe("shared player processing Core Protocol client", () => {
       success: true,
       data: "[00:00.00]lyric",
     });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/player/cover");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/player/read-lyric");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/player/cover");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/player/read-lyric");
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ path: "/music/a.lrc" }),
@@ -165,6 +165,6 @@ describe("shared player processing Core Protocol client", () => {
 
     const { playerClient } = await import("./playerClient");
     await expect(playerClient.getStatus()).resolves.toEqual({ success: true, data: status });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/status");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/status");
   });
 });

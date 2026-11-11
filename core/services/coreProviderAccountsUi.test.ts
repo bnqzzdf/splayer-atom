@@ -26,6 +26,7 @@ const loginPlatformRegistrySource = read(
 );
 const navUserSource = read(new URL("../../src/components/layout/NavUser.vue", import.meta.url));
 const qobuzApiSource = read(new URL("../apis/qobuz/index.ts", import.meta.url));
+const tidalApiSource = read(new URL("../apis/tidal/index.ts", import.meta.url));
 const sharedApisSource = read(new URL("../../shared/types/apis.ts", import.meta.url));
 
 test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
@@ -175,6 +176,27 @@ test("Qobuz 登出不把远端吊销放在关键路径上", () => {
     "auth 必须在 clearQobuzAuth() 之前取，否则远端吊销拿不到 token",
   );
   assert.match(qobuzApiSource, /const authLogout = async \(\): Promise<unknown> => \{/);
+});
+
+test("TIDAL 登出同样先清本地并在后台吊销，不等待队列锁或 30s 超时", () => {
+  const logoutBlock = tidalApiSource.slice(
+    tidalApiSource.indexOf("const authLogout"),
+    tidalApiSource.indexOf("const callTidalUnlocked"),
+  );
+  assert.ok(logoutBlock.includes("clearTidalAuth()"));
+  assert.doesNotMatch(tidalApiSource, /await callStreamingNative\(\s*"tidal",\s*"auth_logout"/);
+  assert.match(
+    logoutBlock,
+    /void callStreamingNative\("tidal", "auth_logout", auth, \{\}\)\.catch/,
+  );
+  assert.ok(
+    logoutBlock.indexOf("const auth = nativeAuth()") < logoutBlock.indexOf("clearTidalAuth()"),
+  );
+  const entryBlock = tidalApiSource.slice(tidalApiSource.indexOf("export const callTidal"));
+  assert.match(
+    entryBlock,
+    /if \(name === "auth_logout" \|\| name === "logout"\) return authLogout\(\);/,
+  );
 });
 
 test("断开连接按钮不等多余的会话刷新才复位", () => {

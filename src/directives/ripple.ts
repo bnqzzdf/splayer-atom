@@ -55,12 +55,16 @@ const setupRipple = (el: RippleElement) => {
     const remove = () => {
       if (removed) return;
       removed = true;
+      el.removeEventListener("pointerup", remove);
+      el.removeEventListener("pointerleave", remove);
+      el.removeEventListener("pointercancel", remove);
       ripple.style.opacity = "0";
       ripple.addEventListener("transitionend", () => ripple.remove(), { once: true });
       setTimeout(() => ripple.remove(), 1000);
     };
     el.addEventListener("pointerup", remove, { once: true });
     el.addEventListener("pointerleave", remove, { once: true });
+    el.addEventListener("pointercancel", remove, { once: true });
   };
 
   el.addEventListener("pointerdown", handler);

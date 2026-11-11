@@ -98,10 +98,11 @@ const onReachBottom = async (): Promise<void> => {
   const page = pagination.value;
   if (!page?.hasMore || !hasMoreSongs.value || loadingMore.value || !artist.value) return;
   const current = artist.value;
+  const signal = loadAbort?.signal;
   loadingMore.value = true;
   try {
     const { tracks, more } = await page.loadMore(current.tracks.length, 50);
-    if (loadAbort?.signal.aborted || artist.value?.id !== current.id) return;
+    if (signal?.aborted || artist.value?.id !== current.id) return;
     if (tracks.length === 0) {
       hasMoreSongs.value = false;
       return;
@@ -112,8 +113,12 @@ const onReachBottom = async (): Promise<void> => {
       trackCount: current.tracks.length + tracks.length,
     };
     hasMoreSongs.value = more;
+  } catch (err) {
+    if (!signal?.aborted) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
   } finally {
-    loadingMore.value = false;
+    if (!signal?.aborted) loadingMore.value = false;
   }
 };
 
@@ -375,7 +380,7 @@ const albumItems = computed<CoverItem[]>(() => {
     </div>
     <Transition name="fade" mode="out-in" :duration="150">
       <div
-        v-if="artist && artist.tracks.length > 0"
+        v-if="artist && (artist.tracks.length > 0 || (activeTab === 'albums' && artist.albums.length > 0))"
         :key="artist.id"
         class="flex-1 min-h-0 flex flex-col"
       >
@@ -429,7 +434,7 @@ const albumItems = computed<CoverItem[]>(() => {
         </div>
       </div>
       <!-- 空状态 -->
-      <div v-else-if="artist" key="empty" class="flex-1 flex items-center justify-center">
+      <div v-else key="empty" class="flex-1 flex items-center justify-center">
         <div class="text-center text-on-surface-variant/50">
           <IconLucideMusic class="size-12 mx-auto mb-3 opacity-30" />
           <div class="text-sm">{{ t("collection.empty") }}</div>

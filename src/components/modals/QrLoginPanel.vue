@@ -12,6 +12,8 @@ const state = ref<QrLoginState>("waiting");
 const nickname = ref("");
 const avatarUrl = ref("");
 const refreshing = ref(false);
+let unmounted = false;
+let polling = false;
 
 const tip = computed(() => {
   if (state.value === "expired") return t("login.qrTipExpired");
@@ -21,7 +23,7 @@ const tip = computed(() => {
 });
 
 const refresh = async (): Promise<void> => {
-  if (refreshing.value) return;
+  if (refreshing.value || unmounted) return;
   refreshing.value = true;
   pause();
   if (state.value !== "expired") qrUrl.value = "";
@@ -29,6 +31,7 @@ const refresh = async (): Promise<void> => {
   avatarUrl.value = "";
   try {
     const result = await props.adapter.create();
+    if (unmounted) return;
     key.value = result.key;
     if (result.content.startsWith("data:image/") || result.content.startsWith("blob:")) {
       qrUrl.value = result.content;
@@ -43,26 +46,32 @@ const refresh = async (): Promise<void> => {
       qrUrl.value = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
     }
     state.value = "waiting";
-    if (props.active) resume();
+    if (props.active && !unmounted) resume();
   } finally {
     refreshing.value = false;
   }
 };
 
 const poll = async (): Promise<void> => {
-  if (!key.value) return;
-  const result = await props.adapter.check(key.value);
-  state.value = result.state;
-  nickname.value = result.nickname ?? nickname.value;
-  avatarUrl.value = result.avatarUrl ?? avatarUrl.value;
-  if (result.state === "expired") {
-    pause();
-    await refresh();
-    return;
-  }
-  if (result.state === "success") {
-    pause();
-    emit("success");
+  if (!key.value || polling || !props.active || unmounted) return;
+  polling = true;
+  try {
+    const result = await props.adapter.check(key.value);
+    if (unmounted || !props.active) return;
+    state.value = result.state;
+    nickname.value = result.nickname ?? nickname.value;
+    avatarUrl.value = result.avatarUrl ?? avatarUrl.value;
+    if (result.state === "expired") {
+      pause();
+      await refresh();
+      return;
+    }
+    if (result.state === "success") {
+      pause();
+      emit("success");
+    }
+  } finally {
+    polling = false;
   }
 };
 
@@ -77,7 +86,10 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(pause);
+onBeforeUnmount(() => {
+  unmounted = true;
+  pause();
+});
 
 defineExpose({ pause, resume, refresh });
 </script>

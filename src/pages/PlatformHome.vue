@@ -22,6 +22,7 @@
 defineOptions({ name: "PlatformHome" });
 
 import { useProviderSessionsStore } from "@/stores/providerSessions";
+import { useCoreCapabilitiesStore } from "@/stores/coreCapabilities";
 import type { Track } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
 import StreamingLoginDialog from "@/components/modals/StreamingLoginDialog.vue";
@@ -83,6 +84,7 @@ import IconLucideChevronRight from "~icons/lucide/chevron-right";
 
 const { t, locale } = useI18n();
 const providerSessions = useProviderSessionsStore();
+const coreCapabilities = useCoreCapabilitiesStore();
 const router = useRouter();
 
 /** 分类（流派）导航项 */
@@ -151,7 +153,9 @@ const errorNeedsLogin = computed(() => error.value !== "" && isAuthError(error.v
 
 /** 已登录的平台才显示标签 */
 const loggedInPlatforms = computed<Platform[]>(() =>
-  ALL_PLATFORMS.filter((p) => providerSessions.sessions[p]?.authenticated),
+  ALL_PLATFORMS.filter(
+    (p) => coreCapabilities.supportsPlatform(p) && providerSessions.sessions[p]?.authenticated,
+  ),
 );
 
 const platformTabs = computed(() =>
@@ -595,17 +599,31 @@ const openSection = (section: HomeSection): void => {
       ...(more.genre ? { genre: more.genre } : {}),
       ...(more.path ? { path: more.path } : {}),
       ...(more.moduleType ? { type: more.moduleType } : {}),
+      ...(more.tab ? { tab: more.tab } : {}),
     },
   });
 };
 
 // ---------- 加载 ----------
 
+let loadSeq = 0;
+let homeReady = false;
+let unmounted = false;
+
+onBeforeUnmount(() => {
+  unmounted = true;
+  homeReady = false;
+  loadSeq++;
+});
+
 const load = async (): Promise<void> => {
+  const seq = ++loadSeq;
+  const targetPlatform = platform.value;
   if (!currentAuthed.value) {
     sections.value = [];
     genres.value = [];
     error.value = "";
+    loading.value = false;
     return;
   }
   loading.value = true;
@@ -614,21 +632,23 @@ const load = async (): Promise<void> => {
   // 避免页面先塌成「加载中」再重新铺开、滚动位置被打回顶部；换平台时由 switchPlatform 先清空
   try {
     const genreParam = activeGenre.value || undefined;
-    if (platform.value === "qobuz") {
+    let nextSections: HomeSection[];
+    let nextGenres: GenreItem[];
+    if (targetPlatform === "qobuz") {
       const [home, genreData] = await Promise.all([
         qobuzApi.discoverIndex(genreParam ? { genre_id: genreParam } : undefined),
         qobuzApi.genreList().catch(() => null),
       ]);
-      sections.value = normalizeQobuz(home);
-      genres.value = genreData ? normalizeGenres("qobuz", genreData) : [];
-    } else if (platform.value === "tidal") {
+      nextSections = normalizeQobuz(home);
+      nextGenres = genreData ? normalizeGenres("qobuz", genreData) : [];
+    } else if (targetPlatform === "tidal") {
       const [home, genreData] = await Promise.all([
         tidalApi.pagesHome(),
         tidalApi.genres().catch(() => []),
       ]);
-      sections.value = normalizeTidal(home);
-      genres.value = normalizeGenres("tidal", genreData);
-    } else if (platform.value === "qqmusic") {
+      nextSections = normalizeTidal(home);
+      nextGenres = normalizeGenres("tidal", genreData);
+    } else if (targetPlatform === "qqmusic") {
       // QM 的分类导航就是榜单分组，点击分组只过滤已拉取的目录，不再请求接口
       const [groups, hotPlaylists, newSongs, newAlbums] = await Promise.all([
         fetchQQMusicToplist(),
@@ -637,25 +657,25 @@ const load = async (): Promise<void> => {
         loadShelf("qm-new-songs"),
         loadShelf("qm-new-albums"),
       ]);
-      sections.value = [
+      nextSections = [
         ...presentShelves([newSongs, newAlbums]),
         ...(hotPlaylists.length ? [qmHotPlaylistSection(hotPlaylists)] : []),
         ...normalizeQQMusic(groups),
       ];
-      genres.value = groupsToGenres(groups);
-    } else if (platform.value === "kugou") {
+      nextGenres = groupsToGenres(groups);
+    } else if (targetPlatform === "kugou") {
       const [groups, hotPlaylists, newSongs, hotArtists] = await Promise.all([
         fetchKugouRankList(),
         fetchKugouHotPlaylists(1, 30).catch(() => [] as KGHotPlaylist[]),
         loadShelf("kg-new-songs"),
         loadShelf("kg-hot-artists"),
       ]);
-      sections.value = [
+      nextSections = [
         ...presentShelves([newSongs, hotArtists]),
         ...(hotPlaylists.length ? [kgHotPlaylistSection(hotPlaylists)] : []),
         ...normalizeKugou(groups),
       ];
-      genres.value = groupsToGenres(groups);
+      nextGenres = groupsToGenres(groups);
     } else {
       // 网易云：两个书架各是「一份地区一份列表」，榜单目录是另一条通路，
       // 三者任一拉不到都不该影响其余部分（书架在前、榜单在后，与 QM/KG 一致）
@@ -665,19 +685,23 @@ const load = async (): Promise<void> => {
         fetchNeteaseToplist().catch(() => null),
       ]);
       const rankGroups = toplist ? ncmRankGroups(toplist) : [];
-      sections.value = [
+      nextSections = [
         ...presentShelves([newAlbums, hotArtists]),
         ...normalizeNeteaseRanks(rankGroups),
       ];
-      genres.value = groupsToGenres(rankGroups);
+      nextGenres = groupsToGenres(rankGroups);
     }
-    if (!sections.value.length) error.value = t("platformHome.empty");
+    if (seq !== loadSeq || platform.value !== targetPlatform) return;
+    sections.value = nextSections;
+    genres.value = nextGenres;
+    if (!nextSections.length) error.value = t("platformHome.empty");
   } catch (err) {
+    if (seq !== loadSeq || platform.value !== targetPlatform) return;
     sections.value = [];
     genres.value = [];
     error.value = err instanceof Error ? err.message : t("platformHome.loadFailed");
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 };
 
@@ -685,6 +709,7 @@ const load = async (): Promise<void> => {
 const switchPlatform = async (next: Platform): Promise<void> => {
   platform.value = next;
   activeGenre.value = "";
+  shelfLoading.value = {};
   // 先清空上一个平台的内容与分类，避免新平台加载期间残留另一平台的分区与分类栏
   sections.value = [];
   genres.value = [];
@@ -695,6 +720,7 @@ const switchPlatform = async (next: Platform): Promise<void> => {
 const onLoginDialogClose = async (open: boolean): Promise<void> => {
   if (open) return;
   await providerSessions.refresh().catch(() => {});
+  if (unmounted) return;
   if (providerSessions.sessions[platform.value]?.authenticated) await load();
 };
 
@@ -714,28 +740,46 @@ const shelfTab = (key: string): string => activeTabs.value[key] ?? shelfDefaultT
  * 连点标签时只认最后一次的结果；期间换了平台，该分区已不在列表里，结果直接丢弃。
  */
 const selectShelfTab = async (section: HomeSection, value: string): Promise<void> => {
+  const targetPlatform = platform.value;
   activeTabs.value = { ...activeTabs.value, [section.key]: value };
   shelfLoading.value = { ...shelfLoading.value, [section.key]: true };
-  const next = await loadShelf(section.key);
-  if (shelfTab(section.key) !== value) return;
-  shelfLoading.value = { ...shelfLoading.value, [section.key]: false };
-  const index = sections.value.findIndex((item) => item.key === section.key);
-  if (index < 0) return;
-  // 该地区没取到时保留标签行、清空卡片，用户仍可切回别的地区
-  sections.value.splice(index, 1, next ?? withShelf({ ...sections.value[index], items: [] }));
+  try {
+    const next = await loadShelf(section.key);
+    if (platform.value !== targetPlatform || shelfTab(section.key) !== value) return;
+    const index = sections.value.findIndex((item) => item.key === section.key);
+    if (index < 0) return;
+    // 该地区没取到时保留标签行、清空卡片，用户仍可切回别的地区
+    sections.value.splice(index, 1, next ?? withShelf({ ...sections.value[index], items: [] }));
+  } finally {
+    if (platform.value === targetPlatform && shelfTab(section.key) === value) {
+      shelfLoading.value = { ...shelfLoading.value, [section.key]: false };
+    }
+  }
 };
 
 watch(
   () => loggedInPlatforms.value.join(","),
   (joined) => {
     const list = joined ? (joined.split(",") as Platform[]) : [];
-    if (list.length && !list.includes(platform.value)) platform.value = list[0];
+    if (list.length && !list.includes(platform.value)) {
+      if (homeReady) void switchPlatform(list[0]);
+      else platform.value = list[0];
+    } else if (!list.length && homeReady) {
+      loadSeq++;
+      loading.value = false;
+      sections.value = [];
+      genres.value = [];
+      error.value = "";
+    }
   },
   { immediate: true },
 );
 
 onMounted(async () => {
   await providerSessions.refresh().catch(() => {});
+  await nextTick();
+  if (unmounted) return;
+  homeReady = true;
   await load();
 });
 </script>

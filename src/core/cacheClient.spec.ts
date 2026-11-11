@@ -29,8 +29,8 @@ describe("Cache Core Protocol client", () => {
       dir: "/next-cache",
     });
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/cache/dir");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14559/api/cache/dir");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/cache/dir");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("http://localhost:14558/api/cache/dir");
     expect(fetchMock.mock.calls[2]?.[1]?.method).toBe("POST");
   });
 

@@ -16,7 +16,7 @@ const pluginsCategory: SettingCategory = {
           type: "custom",
           component: PluginImport,
           fullWidth: true,
-          keywords: ["settings.plugins.import", "settings.plugins.hint"],
+          keywords: ["settings.plugins.importFromUrl", "settings.plugins.hint"],
         },
       ],
     },

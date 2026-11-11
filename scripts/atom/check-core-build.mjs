@@ -15,9 +15,12 @@ const builtins = new Set(
 
 if (
   !existsSync(path.join(coreDir, "index.js")) ||
-  !existsSync(path.join(coreDir, "plugin-host.js"))
+  !existsSync(path.join(coreDir, "plugin-host.js")) ||
+  !existsSync(path.join(coreDir, "listenbrainz-child.js"))
 ) {
-  throw new Error("[CoreBuild] out/core 缺少 index.js 或 plugin-host.js，请先构建 Core");
+  throw new Error(
+    "[CoreBuild] out/core 缺少 index.js、plugin-host.js 或 listenbrainz-child.js，请先构建 Core",
+  );
 }
 
 const jsFiles = [];

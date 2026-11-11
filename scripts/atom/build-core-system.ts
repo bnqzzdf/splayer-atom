@@ -19,14 +19,13 @@ import {
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const args = new Set(process.argv.slice(2));
 const requireDiretta = args.delete("--require-diretta");
-const legacyBundleNode = args.delete("--bundle-node");
-const bundleRuntime = args.delete("--bundle-runtime") || legacyBundleNode;
+const bundleRuntime = args.delete("--bundle-runtime");
 const allowUnpublished = args.delete("--allow-unpublished");
 const runtimeArg = [...args].find((arg) => arg.startsWith("--runtime="));
 if (runtimeArg) args.delete(runtimeArg);
 const runtime = (runtimeArg?.slice("--runtime=".length) ?? "node") as CoreRuntimeFlavor;
-if (runtime !== "node" && runtime !== "bun") throw new Error(`[CoreBuild] 未知 runtime: ${runtime}`);
-if (legacyBundleNode && runtime !== "node") throw new Error("[CoreBuild] --bundle-node 仅适用于 Node");
+if (runtime !== "node" && runtime !== "bun")
+  throw new Error(`[CoreBuild] 未知 runtime: ${runtime}`);
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
 if (args.size > 0) throw new Error(`[CoreBuild] 未知参数: ${[...args].join(" ")}`);

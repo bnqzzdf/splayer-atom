@@ -44,7 +44,7 @@ describe("Core Control event client", () => {
 
     await vi.waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
     const ws = MockWebSocket.instances[0];
-    expect(ws?.url).toBe("ws://localhost:14559/ws");
+    expect(ws?.url).toBe("ws://localhost:14558/ws");
     const emit = (type: string, data: unknown): void => {
       ws?.onmessage?.({ data: JSON.stringify({ kind: "event", type, data }) });
     };

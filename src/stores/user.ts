@@ -235,6 +235,7 @@ export const useUserStore = defineStore(
     const hydrateLikedPlaylistFromCache = async (playlistId: string): Promise<void> => {
       try {
         const cached = await cacheDb.getItem<LikedPlaylistCache>(LIKED_PLAYLIST_CACHE_KEY);
+        if (currentLikedPlaylistId !== playlistId) return;
         if (cached && cached.playlistId === playlistId) likedPlaylistTracks.value = cached.tracks;
       } catch {
         console.error("[user] hydrate liked playlist from cache failed");
@@ -266,15 +267,19 @@ export const useUserStore = defineStore(
         await fetchPlaylist(playlistId, {
           signal: controller.signal,
           onBatch: (batch) => {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || currentLikedPlaylistId !== playlistId) return;
             accumulated.push(...batch);
             likedPlaylistTracks.value = [...accumulated];
           },
         });
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || currentLikedPlaylistId !== playlistId) return;
         likedPlaylistTracks.value = accumulated;
         applyLikedSongIds(accumulated.map((track) => track.id));
         persistLikedPlaylistCache(playlistId, accumulated);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.warn("[user] liked playlist load failed:", err);
+        }
       } finally {
         if (!controller.signal.aborted) likedPlaylistLoading.value = false;
       }
@@ -293,11 +298,12 @@ export const useUserStore = defineStore(
         currentLikedPlaylistId = playlistId;
         likedPlaylistTracks.value = [];
         await hydrateLikedPlaylistFromCache(playlistId);
-        refreshLikedPlaylist(playlistId);
+        if (currentLikedPlaylistId !== playlistId) return;
+        await refreshLikedPlaylist(playlistId);
         return;
       }
       if (force || !isLikedPlaylistFresh()) {
-        refreshLikedPlaylist(playlistId);
+        await refreshLikedPlaylist(playlistId);
       }
     };
 
@@ -305,6 +311,7 @@ export const useUserStore = defineStore(
     const hydrateCloudFromCache = async (userId: number): Promise<void> => {
       try {
         const cached = await cacheDb.getItem<CloudCache>(CLOUD_CACHE_KEY);
+        if (profile.value?.userId !== userId) return;
         if (!cached || cached.userId !== userId || cached.tracks.length === 0) return;
         cloudTracks.value = cached.tracks;
         cloudCount.value = cached.count;
@@ -369,6 +376,7 @@ export const useUserStore = defineStore(
       if (!userId) return;
       if (!force && cloudTracks.value.length > 0) return;
       if (cloudTracks.value.length === 0) await hydrateCloudFromCache(userId);
+      if (profile.value?.userId !== userId) return;
       await refreshCloud();
     };
 
@@ -392,6 +400,7 @@ export const useUserStore = defineStore(
           cacheDb.getItem<LikedSongIdsCache>(LIKED_SONG_IDS_CACHE_KEY),
           cacheDb.getItem<PlaylistsCache>(PLAYLISTS_CACHE_KEY),
         ]);
+        if (profile.value?.userId !== userId) return;
         if (cachedIds?.userId === userId) {
           likedSongIds.value = new Set(cachedIds.ids);
         }
@@ -409,9 +418,11 @@ export const useUserStore = defineStore(
      */
     const fetchAndApplyPlaylists = async (uid: number): Promise<void> => {
       const sub = await fetchSubcount();
+      if (profile.value?.userId !== uid) return;
       subcount.value = sub;
       const total = (sub.createdPlaylistCount || 0) + (sub.subPlaylistCount || 0) || 50;
       const list = await fetchUserPlaylists(uid, total);
+      if (profile.value?.userId !== uid) return;
       playlists.value = list;
       const payload: PlaylistsCache = {
         userId: uid,
@@ -429,6 +440,7 @@ export const useUserStore = defineStore(
       if (!uid) return;
       // 缓存即时上屏，不阻塞后续网络
       await hydrateContentFromCache(uid);
+      if (profile.value?.userId !== uid) return;
       const settled = await Promise.allSettled([
         fetchAndApplyPlaylists(uid),
         fetchLikelist(uid),
@@ -436,6 +448,7 @@ export const useUserStore = defineStore(
         fetchUserArtists(),
         fetchUserLevel(),
       ]);
+      if (profile.value?.userId !== uid) return;
       const [_plRes, likeRes, albumRes, artistRes, levelRes] = settled;
       if (likeRes.status === "fulfilled") {
         applyLikedSongIds(likeRes.value);
@@ -450,7 +463,7 @@ export const useUserStore = defineStore(
       }
       const playlistId = likedPlaylistId.value;
       if (playlistId && currentLikedPlaylistId === playlistId && !isLikedPlaylistFresh()) {
-        refreshLikedPlaylist(playlistId);
+        await refreshLikedPlaylist(playlistId);
       }
     };
 

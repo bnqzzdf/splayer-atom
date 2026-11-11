@@ -6,7 +6,6 @@
 
 import { getPlayer } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
-import { toMs } from "@main/utils/time";
 import type { ShuffleMode, RepeatMode, Track } from "@shared/types/player";
 
 /**
@@ -77,5 +76,5 @@ export const playerControl = {
   /** 通过 Core authoritative session 重建当前本地输出。 */
   reinitOutput: (): Promise<void> => playbackSession.reinitOutput(),
   /** 当前播放进度（毫秒） */
-  getPosition: (): number => toMs(getPlayer().getPosition()),
+  getPosition: (): number => playbackSession.getPlaybackStatus().position,
 };

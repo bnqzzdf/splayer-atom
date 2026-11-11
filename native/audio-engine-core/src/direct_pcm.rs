@@ -840,7 +840,7 @@ impl DirectPcmDecoder {
                 self.seek_packet_timeline = None;
                 self.active_seek_packet_timeline = None;
                 self.last_frame_packet_timestamp = None;
-                return Ok(position_secs);
+                bail!("Source Direct PCM seek 已超出音源末尾");
             }
             let raw = unsafe { frame.raw.as_ref() };
             let frame_timestamp = if raw.best_effort_timestamp != sys::AV_NOPTS_VALUE {
@@ -1022,6 +1022,7 @@ struct DirectPcmSlot {
     boundary: AtomicBool,
     boundary_duration_micros: AtomicU64,
     boundary_generation: AtomicU64,
+    boundary_exact_integer: AtomicBool,
     frame: UnsafeCell<DirectPcmFrame>,
 }
 
@@ -1035,6 +1036,7 @@ impl DirectPcmSlot {
             boundary: AtomicBool::new(false),
             boundary_duration_micros: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
+            boundary_exact_integer: AtomicBool::new(false),
             frame: UnsafeCell::new(DirectPcmFrame::new()?),
         })
     }
@@ -1069,6 +1071,7 @@ struct DirectPcmRing {
     duration_micros: AtomicU64,
     transition_count: AtomicU64,
     boundary_generation: AtomicU64,
+    exact_integer: AtomicBool,
     finished: AtomicBool,
     failed: AtomicBool,
     stopped: AtomicBool,
@@ -1084,6 +1087,7 @@ pub struct DirectPcmBlock {
 pub struct DirectPcmBoundary {
     pub duration_micros: u64,
     pub generation: u64,
+    pub exact_integer: bool,
 }
 
 pub struct DirectPcmLease {
@@ -1169,6 +1173,7 @@ impl DirectPcmRing {
             duration_micros: AtomicU64::new(0),
             transition_count: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
+            exact_integer: AtomicBool::new(false),
             finished: AtomicBool::new(false),
             failed: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
@@ -1215,6 +1220,7 @@ impl DirectPcmRing {
             .then(|| DirectPcmBoundary {
                 duration_micros: slot.boundary_duration_micros.load(Ordering::Relaxed),
                 generation: slot.boundary_generation.load(Ordering::Relaxed),
+                exact_integer: slot.boundary_exact_integer.load(Ordering::Relaxed),
             });
         if commit_direct_boundary {
             if let Some(boundary) = boundary {
@@ -1223,6 +1229,8 @@ impl DirectPcmRing {
                     .store(boundary.duration_micros, Ordering::Release);
                 self.boundary_generation
                     .store(boundary.generation, Ordering::Release);
+                self.exact_integer
+                    .store(boundary.exact_integer, Ordering::Release);
                 self.transition_count.fetch_add(1, Ordering::AcqRel);
             }
         }
@@ -1264,6 +1272,7 @@ impl DirectPcmRing {
         slot.boundary.store(false, Ordering::Relaxed);
         slot.boundary_duration_micros.store(0, Ordering::Relaxed);
         slot.boundary_generation.store(0, Ordering::Relaxed);
+        slot.boundary_exact_integer.store(false, Ordering::Relaxed);
         slot.state.store(SLOT_FREE, Ordering::Release);
     }
 
@@ -1282,6 +1291,7 @@ impl DirectPcmRing {
             slot.boundary.store(false, Ordering::Relaxed);
             slot.boundary_duration_micros.store(0, Ordering::Relaxed);
             slot.boundary_generation.store(0, Ordering::Relaxed);
+            slot.boundary_exact_integer.store(false, Ordering::Relaxed);
             unsafe { &mut *slot.frame.get() }.clear();
         }
     }
@@ -1494,6 +1504,7 @@ struct StagedPcmSource {
     decoder: DirectPcmDecoder,
     first_frame: DirectPcmFrame,
     format: DirectPcmFormat,
+    exact_integer: bool,
     duration_micros: u64,
     generation: u64,
     remaining_frames: Option<u64>,
@@ -1651,10 +1662,12 @@ fn prepare_staged_pcm_source(
             .checked_div(u64::from(format.sample_rate))
             .unwrap_or(0);
     }
+    let exact_integer = exact_integer_source(&decoder, format);
     Ok(StagedPcmSource {
         decoder,
         first_frame,
         format,
+        exact_integer,
         duration_micros,
         generation,
         remaining_frames,
@@ -1676,6 +1689,8 @@ fn install_staged_pcm_slot(
         .store(staged.duration_micros, Ordering::Relaxed);
     slot.boundary_generation
         .store(staged.generation, Ordering::Relaxed);
+    slot.boundary_exact_integer
+        .store(staged.exact_integer, Ordering::Relaxed);
     slot.boundary.store(true, Ordering::Relaxed);
     slot.state.store(SLOT_READY, Ordering::Release);
     Ok((staged.decoder, staged.format, staged.remaining_frames))
@@ -1744,6 +1759,8 @@ fn replace_pcm_ring(
     first_slot
         .sample_frames
         .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+    ring.exact_integer
+        .store(exact_integer_source(&decoder, new_format), Ordering::Release);
     first_slot.state.store(SLOT_READY, Ordering::Release);
     Ok((decoder, new_format))
 }
@@ -1828,7 +1845,6 @@ impl DirectPcmStageHandle {
 pub struct DirectPcmSource {
     ring: Arc<DirectPcmRing>,
     format: DirectPcmFormat,
-    exact_integer: Arc<AtomicBool>,
     control_tx: mpsc::Sender<DirectPcmCommand>,
     staging: Arc<DirectPcmStaging>,
     producer: Option<JoinHandle<()>>,
@@ -1899,7 +1915,8 @@ impl DirectPcmSource {
             (0.0, None)
         };
         let format = first_frame.format()?;
-        let exact_integer = Arc::new(AtomicBool::new(exact_integer_source(&decoder, format)));
+        ring.exact_integer
+            .store(exact_integer_source(&decoder, format), Ordering::Release);
         if format.memory_path.needs_repack() {
             let max_samples_per_channel = decoder
                 .frame_samples_hint()
@@ -1929,7 +1946,6 @@ impl DirectPcmSource {
         let staging = Arc::new(DirectPcmStaging::new());
         let producer_ring = Arc::clone(&ring);
         let producer_staging = Arc::clone(&staging);
-        let producer_exact_integer = Arc::clone(&exact_integer);
         let producer = thread::Builder::new()
             .name("direct-pcm-decode".into())
             .spawn(move || {
@@ -1997,10 +2013,6 @@ impl DirectPcmSource {
                             );
                             match result {
                                 Ok((new_decoder, new_format)) => {
-                                    producer_exact_integer.store(
-                                        exact_integer_source(&new_decoder, new_format),
-                                        Ordering::Release,
-                                    );
                                     decoder = new_decoder;
                                     active_format = new_format;
                                     remaining_frames = None;
@@ -2043,10 +2055,6 @@ impl DirectPcmSource {
                         }
                         match install_staged_pcm_slot(entry.1, slot) {
                             Ok((new_decoder, new_format, new_remaining)) => {
-                                producer_exact_integer.store(
-                                    exact_integer_source(&new_decoder, new_format),
-                                    Ordering::Release,
-                                );
                                 decoder = new_decoder;
                                 active_format = new_format;
                                 remaining_frames = new_remaining;
@@ -2080,10 +2088,6 @@ impl DirectPcmSource {
                         if let Some(entry) = producer_staging.take_current() {
                             match install_staged_pcm_slot(entry.1, slot) {
                                 Ok((new_decoder, new_format, new_remaining)) => {
-                                    producer_exact_integer.store(
-                                        exact_integer_source(&new_decoder, new_format),
-                                        Ordering::Release,
-                                    );
                                     decoder = new_decoder;
                                     active_format = new_format;
                                     remaining_frames = new_remaining;
@@ -2140,10 +2144,6 @@ impl DirectPcmSource {
                             if let Some(entry) = producer_staging.take_current() {
                                 match install_staged_pcm_slot(entry.1, slot) {
                                     Ok((new_decoder, new_format, new_remaining)) => {
-                                        producer_exact_integer.store(
-                                            exact_integer_source(&new_decoder, new_format),
-                                            Ordering::Release,
-                                        );
                                         decoder = new_decoder;
                                         active_format = new_format;
                                         remaining_frames = new_remaining;
@@ -2173,7 +2173,6 @@ impl DirectPcmSource {
             Self {
                 ring,
                 format,
-                exact_integer,
                 control_tx,
                 staging,
                 producer: Some(producer),
@@ -2187,7 +2186,7 @@ impl DirectPcmSource {
     }
 
     pub fn exact_integer_source(&self) -> bool {
-        self.exact_integer.load(Ordering::Acquire)
+        self.ring.exact_integer.load(Ordering::Acquire)
     }
 
     pub fn diretta_integer_source(&self) -> bool {
@@ -3331,6 +3330,7 @@ mod tests {
     #[test]
     fn rust_consumer_exposes_boundary_without_committing_diretta_transition() {
         let ring = Arc::new(DirectPcmRing::new().unwrap());
+        ring.exact_integer.store(true, Ordering::Release);
         let payload = [0x12_u8, 0x34];
         let slot = &ring.slots[0];
         slot.payload_ptr
@@ -3340,6 +3340,7 @@ mod tests {
         slot.boundary_duration_micros
             .store(2_500_000, Ordering::Relaxed);
         slot.boundary_generation.store(9, Ordering::Relaxed);
+        slot.boundary_exact_integer.store(false, Ordering::Relaxed);
         slot.boundary.store(true, Ordering::Relaxed);
         slot.state.store(SLOT_READY, Ordering::Release);
         let consumer = DirectPcmConsumer {
@@ -3355,10 +3356,12 @@ mod tests {
             Some(DirectPcmBoundary {
                 duration_micros: 2_500_000,
                 generation: 9,
+                exact_integer: false,
             })
         );
         assert_eq!(ring.transition_count.load(Ordering::Acquire), 0);
         assert_eq!(ring.boundary_generation.load(Ordering::Acquire), 0);
+        assert!(ring.exact_integer.load(Ordering::Acquire));
         drop(lease);
         assert!(!slot.boundary.load(Ordering::Acquire));
     }

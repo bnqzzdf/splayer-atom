@@ -81,7 +81,7 @@ export const buildAtomCompatRoutes = (): Hono => {
   api.get("/library/tracks", (c) => {
     try {
       const data = visibleTracks();
-      return c.json({ data, total: getTrackCount() });
+      return c.json({ data, total: data.length });
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 500);
     }

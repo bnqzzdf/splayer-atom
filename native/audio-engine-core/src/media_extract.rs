@@ -10,7 +10,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, ensure, Context, Result};
 
 use crate::cue::CueSheet;
-use crate::direct_pcm::{DirectPcmDecoder, DirectPcmFormat, DirectPcmFrame};
+use crate::direct_pcm::{
+    DirectPcmDecoder, DirectPcmFormat, DirectPcmFrame, DirectPcmSampleFormat,
+};
 use crate::dsd::{reverse_byte, DsfReader};
 use crate::sacd::dsdiff::DsdiffWriter;
 use crate::sacd::SacdTrackReader;
@@ -89,6 +91,13 @@ impl WavWriter {
     fn create(path: &Path, format: DirectPcmFormat) -> Result<Self> {
         ensure!(format.channels == 2, "UPnP CUE 仅支持双声道");
         ensure!(format.sample_rate > 0, "UPnP CUE sample rate 无效");
+        ensure!(
+            matches!(
+                format.sample_format,
+                DirectPcmSampleFormat::Signed16 | DirectPcmSampleFormat::Signed32
+            ),
+            "UPnP CUE WAV 仅支持整数 PCM"
+        );
         let output_storage_bits = wav_storage_bits(format.valid_bits)?;
         ensure!(
             matches!(format.storage_bits, 16 | 32),
@@ -241,7 +250,7 @@ impl WavWriter {
 #[cfg(test)]
 mod wav_writer_tests {
     use super::*;
-    use crate::direct_pcm::{DirectPcmMemoryPath, DirectPcmSampleFormat};
+    use crate::direct_pcm::DirectPcmMemoryPath;
 
     #[test]
     fn writes_32bit_samples_without_changing_values() {

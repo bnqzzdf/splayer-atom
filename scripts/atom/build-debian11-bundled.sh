@@ -45,12 +45,12 @@ for arg in "$@"; do
       DIRETTA_VARIANT=${arg#--diretta-variant=}
       DIRETTA_VARIANT_SET=true
       ;;
-    --bundle-runtime|--bundle-node)
+    --bundle-runtime)
       BUNDLE_RUNTIME=true
       ;;
     --help)
-      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4|zen4] [--bundle-runtime | --bundle-node]"
-      echo "默认生成 system-runtime；传 --bundle-runtime 或 --bundle-node 才内置 Node"
+      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4|zen4] [--bundle-runtime]"
+      echo "默认生成 system-runtime；传 --bundle-runtime 才内置 Node"
       echo "包含 Diretta 时还需设置 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK"
       exit 0
       ;;

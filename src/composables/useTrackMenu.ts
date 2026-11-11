@@ -256,19 +256,24 @@ export const useTrackMenu = (
       const rest = key.slice("plugin:".length);
       const sep = rest.indexOf(":");
       if (sep <= 0) return;
-      const res = await pluginClient.invokeMenu({
-        pluginId: rest.slice(0, sep),
-        menuId: rest.slice(sep + 1),
-        track: toRaw(current),
-      });
-      if (!res?.ok) {
-        if (res?.error) toast.error(res.error);
-        return;
+      try {
+        const res = await pluginClient.invokeMenu({
+          pluginId: rest.slice(0, sep),
+          menuId: rest.slice(sep + 1),
+          track: toRaw(current),
+        });
+        if (!res?.ok) {
+          if (res?.error) toast.error(res.error);
+          return;
+        }
+        // 复制 / 开链由渲染层代执行（沙箱内无剪贴板、无法开窗）
+        if (res.copyText) await copy(res.copyText);
+        if (res.openUrl) openExternal(res.openUrl);
+        if (res.toast) toast.success(res.toast);
+      } catch (error) {
+        console.error("[plugin] invokeMenu failed:", error);
+        toast.error(t("errors.UNKNOWN"));
       }
-      // 复制 / 开链由渲染层代执行（沙箱内无剪贴板、无法开窗）
-      if (res.copyText) await copy(res.copyText);
-      if (res.openUrl) openExternal(res.openUrl);
-      if (res.toast) toast.success(res.toast);
       return;
     }
     switch (key) {

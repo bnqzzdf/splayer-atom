@@ -27,6 +27,16 @@ test("local library likes are Core-owned and legacy imports merge without replac
     likes.setLibraryTrackLiked("a", false);
     assert.deepEqual(likes.getLibraryLikedTrackIds(), ["b"]);
     assert.throws(() => likes.setLibraryTrackLiked("missing", true), /LIBRARY_TRACK_NOT_FOUND/);
+
+    insert.run("c", "/music/sub/c.flac", "C");
+    likes.setLibraryTrackLiked("c", true);
+    assert.deepEqual(new Set(likes.getLibraryLikedTrackIds()), new Set(["b", "c"]));
+
+    database.deleteTracksByPaths(["/music/b.flac"]);
+    assert.deepEqual(likes.getLibraryLikedTrackIds(), ["c"]);
+
+    database.deleteTracksByDir("/music/sub");
+    assert.deepEqual(likes.getLibraryLikedTrackIds(), []);
   } finally {
     database.closeDatabase();
     if (previousDataDir === undefined) delete process.env.ATOM_DATA_DIR;

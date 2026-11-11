@@ -31,6 +31,8 @@ export default defineConfig({
   ],
   test: {
     environment: "happy-dom",
+    // Node 25+ 默认在 globalThis 挂载未启用时返回 undefined 的 Web Storage getter，导致 Vitest populateGlobal 跳过 happy-dom 的 localStorage。
+    execArgv: ["--no-experimental-webstorage"],
     include: ["src/**/*.spec.ts", "windows/**/*.spec.ts", "docs/**/*.spec.ts"],
     clearMocks: true,
     restoreMocks: true,

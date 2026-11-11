@@ -46,8 +46,14 @@ export const repairMissingCoverCache = (filename: string): Promise<boolean> => {
     });
     repairs.set(filename, pending);
   }
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     pending,
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), REPAIR_WAIT_MS)),
-  ]);
+    new Promise<boolean>((resolve) => {
+      timer = setTimeout(() => resolve(false), REPAIR_WAIT_MS);
+      timer.unref();
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 };

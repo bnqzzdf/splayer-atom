@@ -269,6 +269,10 @@ mod imp {
             self.source.monitor()
         }
 
+        pub fn exact_pcm(&self) -> bool {
+            self.source.exact_integer_source()
+        }
+
         pub fn stage_handle(&self) -> DirectPcmStageHandle {
             self.source.diretta_stage_handle()
         }

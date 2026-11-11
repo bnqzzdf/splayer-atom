@@ -27,10 +27,7 @@ const providerSessions = useProviderSessionsStore();
 const raw = ref("");
 const loading = ref(false);
 
-const platformName = computed(() => {
-  if (props.platform === "netease") return "NCM";
-  return getPlatformAccountAdapter(props.platform).displayName;
-});
+const platformName = computed(() => getPlatformAccountAdapter(props.platform).displayName);
 
 watch(
   () => props.open,
@@ -60,21 +57,22 @@ const submit = async (): Promise<void> => {
       return;
     }
 
+    const adapter = getPlatformAccountAdapter(props.platform);
     if (props.platform === "netease") {
       if (!(await user.fetchStatus())) {
+        await adapter.logout();
         toast.error(t("login.failed"));
         return;
       }
     } else {
-      const adapter = getPlatformAccountAdapter(props.platform);
       const profile = await adapter.fetchProfile();
       if (!profile) {
         await adapter.logout();
         toast.error(t("settings.platformLogin.toast.cookieInvalid"));
         return;
       }
-      await providerSessions.refresh();
     }
+    await providerSessions.refresh();
 
     toast.success(t("settings.platformLogin.toast.cookieSuccess", { name: platformName.value }));
     emit("success");

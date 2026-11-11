@@ -31,7 +31,7 @@ describe("shared playback session Core Protocol client", () => {
       data: { queue: [] },
     });
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "http://localhost:14559/api/session/queue/4?loadCurrent=0",
+      "http://localhost:14558/api/session/queue/4?loadCurrent=0",
     );
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE" });
   });
@@ -59,7 +59,7 @@ describe("shared playback session Core Protocol client", () => {
     ];
     await sessionClient.migrateLegacySessionQueue(items as never, null, 0, "list", "off");
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/session/migrate-legacy");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/session/migrate-legacy");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({

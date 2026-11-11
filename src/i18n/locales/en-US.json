@@ -181,6 +181,9 @@
     "pathPlaceholder": "Enter a directory path on the Core host"
   },
   "nav": {
+    "title": "Navigation",
+    "back": "Back",
+    "forward": "Forward",
     "home": "Home",
     "songs": "Songs",
     "liked": "Liked Songs",
@@ -1440,12 +1443,12 @@
       "cookiePlaceholder": "Please enter Cookie",
       "toast": {
         "loginSuccess": "{name} login successful: {user}",
-        "loginFailed": "{name} login failed, please try again",
         "logoutDone": "Disconnected from {name}",
         "logoutFailed": "Failed to disconnect from {name}, please try again",
         "cookieSuccess": "{name} Cookie set successfully",
         "cookieInvalid": "Invalid Cookie, please check and retry"
-      }
+      },
+      "cookieHint": "Paste the full Cookie header string from the platform web client"
     },
     "networkProxyProtocol": {
       "label": "Network Proxy",
@@ -1716,6 +1719,38 @@
       "button": "Clear All",
       "confirmTitle": "Clear all database caches?",
       "confirmDesc": "All database caches above will be cleared. This cannot be undone."
+    },
+    "pluginImport": {
+      "label": "Import Plugin",
+      "description": "Import extension scripts from URL"
+    },
+    "pluginList": {
+      "label": "Installed Plugins",
+      "description": "View installed plugins, check updates, enable, or uninstall"
+    },
+    "streamingServerList": {
+      "label": "Media Servers",
+      "description": "Add, edit, test, and connect Navidrome / Subsonic / Jellyfin / Emby servers"
+    },
+    "neteaseAccount": {
+      "label": "Netease Cloud Music Account",
+      "description": "Sign in to NCM via QR code or cookie"
+    },
+    "qqmusicAccount": {
+      "label": "QQ Music Account",
+      "description": "Sign in to QM via QR code or cookie"
+    },
+    "kugouAccount": {
+      "label": "Kugou Music Account",
+      "description": "Sign in to KG via QR code or cookie"
+    },
+    "qobuzAccount": {
+      "label": "Qobuz Account",
+      "description": "Connect or manage your Qobuz account session"
+    },
+    "tidalAccount": {
+      "label": "TIDAL Account",
+      "description": "Connect or manage your TIDAL account session"
     }
   },
   "collection": {
@@ -1748,7 +1783,7 @@
     "playlistNamePlaceholder": "Enter a playlist name",
     "create": "New {type}",
     "name": "{type} Name",
-    "description": "Description",
+    "description": "{type} Description",
     "delete": "Delete {type}",
     "deleteConfirm": "Delete {type} \"{title}\"? This cannot be undone",
     "addTo": "Add to {type}",

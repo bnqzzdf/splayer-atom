@@ -10,14 +10,14 @@
 import { createHash } from "node:crypto";
 import { modules } from "./modules";
 import {
-  clearQQMusicCookies,
+  clearQQMusicCookies as clearRequestCookies,
   getQQMusicCookies,
   getQQMusicUin,
-  mergeQQMusicCookies,
+  mergeQQMusicCookies as mergeRequestCookies,
 } from "./core/request";
 import type { QMParams } from "./core/types";
 
-export { clearQQMusicCookies, getQQMusicCookies, getQQMusicUin, mergeQQMusicCookies };
+export { getQQMusicCookies, getQQMusicUin };
 
 /** 2 分钟响应缓存 */
 const DEFAULT_TTL = 2 * 60 * 1000;
@@ -29,6 +29,16 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
+
+export const mergeQQMusicCookies = (cookies: Record<string, string>): void => {
+  mergeRequestCookies(cookies);
+  cache.clear();
+};
+
+export const clearQQMusicCookies = (): void => {
+  clearRequestCookies();
+  cache.clear();
+};
 
 /** 不缓存的实时接口 */
 const NON_CACHEABLE: ReadonlySet<string> = new Set([
@@ -65,13 +75,20 @@ const cacheSet = (key: string, value: unknown, ttl = DEFAULT_TTL): void => {
   cache.set(key, { value, expireAt: Date.now() + ttl });
 };
 
-export const clearQQMusicCache = (): void => {
-  cache.clear();
+const isUncacheableResult = (value: unknown): boolean => {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.code === "number" && v.code !== 200) return true;
+  if (Array.isArray(v.songs) && v.songs.length === 0) return true;
+  if (Array.isArray(v.albums) && v.albums.length === 0) return true;
+  if (Array.isArray(v.artists) && v.artists.length === 0) return true;
+  if (Array.isArray(v.playlists) && v.playlists.length === 0) return true;
+  return false;
 };
 
 /**
  * 调用任意 QM API
- * @param name  见 modules/index.ts 中的 key（search / song_info / lyric / match / hot_search / leaderboard / song_list / user_detail / song_url）
+ * @param name  见 modules/index.ts 中的 key
  * @param params 业务参数；不想命中缓存可传 `timestamp: Date.now()`
  */
 export const callQQMusic = async (name: string, params: QMParams = {}): Promise<any> => {
@@ -86,6 +103,6 @@ export const callQQMusic = async (name: string, params: QMParams = {}): Promise<
   if (hit !== undefined) return hit;
 
   const value = await fn(params);
-  cacheSet(key, value);
+  if (!isUncacheableResult(value)) cacheSet(key, value);
   return value;
 };

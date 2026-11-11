@@ -43,10 +43,10 @@ describe("Lyrics Core Protocol client", () => {
     });
 
     expect(fetchMock.mock.calls.slice(1).map((call) => call[0])).toEqual([
-      "http://localhost:14559/api/lyrics/match-by-id",
-      "http://localhost:14559/api/lyrics/match-by-query",
-      "http://localhost:14559/api/lyrics/ttml-overlay",
-      "http://localhost:14559/api/lyrics/local",
+      "http://localhost:14558/api/lyrics/match-by-id",
+      "http://localhost:14558/api/lyrics/match-by-query",
+      "http://localhost:14558/api/lyrics/ttml-overlay",
+      "http://localhost:14558/api/lyrics/local",
     ]);
   });
 

@@ -723,7 +723,7 @@ const loadMore = async (): Promise<void> => {
       toast.error(value instanceof Error ? value.message : String(value));
     }
   } finally {
-    loadingMore.value = false;
+    if (generation === browseGeneration) loadingMore.value = false;
   }
 };
 
@@ -793,7 +793,7 @@ const loadPrevious = async (): Promise<void> => {
       toast.error(value instanceof Error ? value.message : String(value));
     }
   } finally {
-    loadingMore.value = false;
+    if (generation === browseGeneration) loadingMore.value = false;
   }
 };
 
@@ -1372,9 +1372,13 @@ watch(viewerOpen, (open) => {
   if (!open) saveViewerState();
 });
 
+let lastActiveRouteState:
+  readonly [string, FolderBrowseSort, FolderBrowseOrder, string, string, string] | null = null;
+
 watch(
   () =>
     [
+      route.name === "folders",
       currentPath.value,
       currentSort.value,
       currentOrder.value,
@@ -1382,8 +1386,12 @@ watch(
       requestedFocusPath.value,
       requestedFocusId.value,
     ] as const,
-  (next, previous) => {
-    const [path, sort, order, containerPath, focusPath, focusId] = next;
+  ([active, path, sort, order, containerPath, focusPath, focusId]) => {
+    // KeepAlive 缓存期间切走路由会清空 query；停用状态忽略路由变化，回到目录页再按真实增量同步。
+    if (!active) return;
+    const next = [path, sort, order, containerPath, focusPath, focusId] as const;
+    const previous = lastActiveRouteState;
+    lastActiveRouteState = next;
     if (path && (routeFolderSort.value !== sort || routeFolderOrder.value !== order)) {
       void router.replace({
         name: "folders",
@@ -1453,11 +1461,11 @@ onMounted(() => {
     .catch(() => {});
   unsubscribeRevision = subscribeCoreControlEvent("libraryChanged", onLibraryRevision);
   unsubscribePins = subscribeCoreControlEvent("folderPinsChanged", () => {
-    void loadRoots();
+    void loadRoots().catch(() => {});
   });
   unsubscribeRoots = subscribeCoreControlEvent("libraryRootsChanged", (data) => {
-    void loadRoots();
-    if (!currentPath.value) return;
+    void loadRoots().catch(() => {});
+    if (route.name !== "folders" || !currentPath.value) return;
     if (!data.paths.some((root) => folderPathWithinRoot(currentPath.value, root))) {
       void router.replace({ name: "folders" });
       return;

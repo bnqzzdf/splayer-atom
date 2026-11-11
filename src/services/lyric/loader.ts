@@ -378,49 +378,53 @@ const refreshPreference = async (): Promise<void> => {
   const media = useMediaStore();
   const track = media.track;
   if (!track) return;
-  // 本地 TTML 歌词库最高优先
-  if (await tryLocalRepo(token, track)) return;
-  if (!isCurrentTrack(token, track)) return;
-  if (track.source === "streaming") {
-    await loadStreamingLyric(token, track, media.detail);
-    return;
-  }
-  // 在线歌曲（任一在线平台）
-  if (isPlatform(track.source)) {
-    await loadPlatformLyric(token, track);
-    return;
-  }
-  // 本地歌曲
-  const detail = media.detail;
-  const local = detail ? await readLocal(detail) : null;
-  if (!isCurrentTrack(token, track)) return;
-  const localFormat = local?.source.format ?? null;
-  const showingOnline = media.activeLyric?.source === "online";
-
-  await withPluginPrefer(token, track, async () => {
-    /** 按偏好获取歌词 */
-    const online = await resolveOnlineByPreference(track, {
-      hasLocal: !!local,
-      localFormat,
-      onCandidate: (result) =>
-        commitCandidate(
-          token,
-          track,
-          { source: result.source, input: result.input },
-          "competitive",
-        ),
-      shouldContinue: () => token === currentToken,
-    });
+  try {
+    // 本地 TTML 歌词库最高优先
+    if (await tryLocalRepo(token, track)) return;
     if (!isCurrentTrack(token, track)) return;
-    if (online) {
-      applyOnline(token, track, online, local);
+    if (track.source === "streaming") {
+      await loadStreamingLyric(token, track, media.detail);
       return;
     }
-    // 目标是本地
-    if (!showingOnline) return;
-    if (local) commitLocal(token, track, local, "preference");
-    else finishNormalSources(token, track);
-  });
+    // 在线歌曲（任一在线平台）
+    if (isPlatform(track.source)) {
+      await loadPlatformLyric(token, track);
+      return;
+    }
+    // 本地歌曲
+    const detail = media.detail;
+    const local = detail ? await readLocal(detail) : null;
+    if (!isCurrentTrack(token, track)) return;
+    const localFormat = local?.source.format ?? null;
+    const showingOnline = media.activeLyric?.source === "online";
+
+    await withPluginPrefer(token, track, async () => {
+      /** 按偏好获取歌词 */
+      const online = await resolveOnlineByPreference(track, {
+        hasLocal: !!local,
+        localFormat,
+        onCandidate: (result) =>
+          commitCandidate(
+            token,
+            track,
+            { source: result.source, input: result.input },
+            "competitive",
+          ),
+        shouldContinue: () => token === currentToken,
+      });
+      if (!isCurrentTrack(token, track)) return;
+      if (online) {
+        applyOnline(token, track, online, local);
+        return;
+      }
+      // 目标是本地
+      if (!showingOnline) return;
+      if (local) commitLocal(token, track, local, "preference");
+      else finishNormalSources(token, track);
+    });
+  } catch (err) {
+    console.warn("[lyricLoader] refreshPreference failed:", err);
+  }
 };
 
 /** 监听歌词偏好变化 */
@@ -437,7 +441,7 @@ export const watchLyricPreference = (): void => {
       settings.system.localLyric.repoDir,
     ],
     () => {
-      refreshPreference();
+      void refreshPreference();
     },
   );
 };

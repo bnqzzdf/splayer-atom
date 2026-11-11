@@ -88,8 +88,9 @@ test("Plugin status uses the unified CoreControlEvent envelope", () => {
 });
 
 test("Plugin projection is initialized during Web playback startup", () => {
-  const pluginLoadIndex = playerControlSource.indexOf("void usePluginsStore().load()");
+  const pluginLoadIndex = playerControlSource.indexOf("void usePluginsStore()");
   assert.ok(pluginLoadIndex >= 0);
+  assert.match(playerControlSource.slice(pluginLoadIndex, pluginLoadIndex + 60), /\.load\(\)/);
   assert.doesNotMatch(playerControlSource, /webRemote|isWebRemote|window\.api\.plugins/);
 });
 

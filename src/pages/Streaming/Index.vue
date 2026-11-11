@@ -107,13 +107,10 @@ const handleReconnect = async (): Promise<void> => {
   }
 };
 
-/** 刷新当前 tab 数据 */
-const refreshKey = ref(0);
+/** 刷新当前激活服务器媒体库 */
 const handleRefresh = (): void => {
-  refreshKey.value++;
+  void streaming.refreshLibrary(true);
 };
-
-provide("streamingRefreshKey", refreshKey);
 
 const moreMenuItems = computed<DropdownMenuItem[]>(() => [
   {

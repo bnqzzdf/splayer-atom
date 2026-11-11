@@ -115,7 +115,6 @@ const menuItemClass = computed(() =>
                 <template v-for="(child, childIndex) in item.children" :key="child.key">
                   <SDivider v-if="child.separator && childIndex > 0" class="mx-1.5 my-0.5" />
                   <DropdownMenuItem
-                    v-else
                     :disabled="child.disabled"
                     :class="menuItemClass"
                     @select="handleSelect(child)"

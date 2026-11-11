@@ -13,37 +13,43 @@ export const loadQobuzCollection = async (
 
   if (type === "album") {
     const result = await fetchAlbum(originalId);
-    if (result && !options.signal?.aborted) {
-      options.onUpdate({
-        id: result.album.id ?? originalId,
-        type,
-        source: "qobuz",
-        title: result.album.name || fallbackName,
-        cover: result.album.cover,
-        creator: result.album.artist,
-        tracks: result.tracks,
-        trackCount: result.album.trackCount ?? result.tracks.length,
-        description: result.description,
-      });
+    if (options.signal?.aborted) return;
+    if (!result) {
+      options.onUpdate(null);
+      return;
     }
+    options.onUpdate({
+      id: result.album.id ?? originalId,
+      type,
+      source: "qobuz",
+      title: result.album.name || fallbackName,
+      cover: result.album.cover,
+      creator: result.album.artist,
+      tracks: result.tracks,
+      trackCount: result.album.trackCount ?? result.tracks.length,
+      description: result.description,
+    });
     return;
   }
 
   if (type === "playlist") {
     const result = await fetchPlaylist(originalId);
-    if (result && !options.signal?.aborted) {
-      options.onUpdate({
-        id: result.playlist.id ?? originalId,
-        type,
-        source: "qobuz",
-        title: result.playlist.name || fallbackName,
-        cover: result.playlist.cover,
-        description: result.playlist.description,
-        creator: result.playlist.owner,
-        tracks: result.tracks,
-        trackCount: result.playlist.trackCount ?? result.tracks.length,
-      });
+    if (options.signal?.aborted) return;
+    if (!result) {
+      options.onUpdate(null);
+      return;
     }
+    options.onUpdate({
+      id: result.playlist.id ?? originalId,
+      type,
+      source: "qobuz",
+      title: result.playlist.name || fallbackName,
+      cover: result.playlist.cover,
+      description: result.playlist.description,
+      creator: result.playlist.owner,
+      tracks: result.tracks,
+      trackCount: result.playlist.trackCount ?? result.tracks.length,
+    });
     return;
   }
 

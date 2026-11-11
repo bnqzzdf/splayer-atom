@@ -315,25 +315,33 @@ export const getCueTracksByDirs = (dirs: string[]): Track[] => {
   return rows.map(rowToTrack);
 };
 
+const deleteTracksWhere = (whereClause: string, paramSets: readonly string[][]): void => {
+  const database = getDb();
+  const removeMemberships = database.prepare(
+    `DELETE FROM playlist_tracks
+     WHERE playlist_id IN (SELECT id FROM playlists WHERE type = 'local')
+       AND track_id IN (SELECT id FROM tracks WHERE ${whereClause})`,
+  );
+  const removeLikes = database.prepare(
+    `DELETE FROM library_likes WHERE track_id IN (SELECT id FROM tracks WHERE ${whereClause})`,
+  );
+  const removeTracks = database.prepare(`DELETE FROM tracks WHERE ${whereClause}`);
+  database.transaction(() => {
+    for (const args of paramSets) {
+      removeMemberships.run(...args);
+      removeLikes.run(...args);
+      removeTracks.run(...args);
+    }
+  })();
+};
+
 /** 批量删除曲目（按路径） */
 export const deleteTracksByPaths = (paths: string[]): void => {
   if (paths.length === 0) return;
-  const d = getDb();
-  const removeMemberships = d.prepare(
-    `DELETE FROM playlist_tracks
-     WHERE playlist_id IN (SELECT id FROM playlists WHERE type = 'local')
-       AND track_id IN (
-         SELECT id FROM tracks WHERE path = ? OR cue_audio_path = ? OR cue_path = ?
-       )`,
+  deleteTracksWhere(
+    "path = ? OR cue_audio_path = ? OR cue_path = ?",
+    paths.map((p) => [p, p, p]),
   );
-  const stmt = d.prepare("DELETE FROM tracks WHERE path = ? OR cue_audio_path = ? OR cue_path = ?");
-  const tx = d.transaction(() => {
-    for (const p of paths) {
-      removeMemberships.run(p, p, p);
-      stmt.run(p, p, p);
-    }
-  });
-  tx();
 };
 
 /** 模糊搜索曲目（title / artists / album） */
@@ -352,27 +360,10 @@ export const searchTracks = (query: string): Track[] => {
 export const deleteTracksByDir = (dir: string): void => {
   const prefix = dir.endsWith("/") || dir.endsWith("\\") ? dir : dir + path.sep;
   const pattern = prefix.replace(/[\\%_]/g, "\\$&") + "%";
-  const patterns = [pattern, pattern, pattern];
-  const database = getDb();
-  database.transaction(() => {
-    database
-      .prepare(
-        `DELETE FROM playlist_tracks
-         WHERE playlist_id IN (SELECT id FROM playlists WHERE type = 'local')
-           AND track_id IN (
-             SELECT id FROM tracks
-             WHERE path LIKE ? ESCAPE '\\'
-                OR cue_path LIKE ? ESCAPE '\\'
-                OR cue_audio_path LIKE ? ESCAPE '\\'
-           )`,
-      )
-      .run(...patterns);
-    database
-      .prepare(
-        "DELETE FROM tracks WHERE path LIKE ? ESCAPE '\\' OR cue_path LIKE ? ESCAPE '\\' OR cue_audio_path LIKE ? ESCAPE '\\'",
-      )
-      .run(...patterns);
-  })();
+  deleteTracksWhere(
+    "path LIKE ? ESCAPE '\\' OR cue_path LIKE ? ESCAPE '\\' OR cue_audio_path LIKE ? ESCAPE '\\'",
+    [[pattern, pattern, pattern]],
+  );
 };
 
 /** 专辑列表 */

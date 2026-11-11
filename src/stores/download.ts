@@ -27,6 +27,7 @@ export const useDownloadStore = defineStore("download", () => {
   const activeTasks = shallowRef<DownloadTask[]>([]);
   const historyTasks = shallowRef<DownloadTask[]>([]);
   const initialized = ref(false);
+  let initPromise: Promise<void> | null = null;
   const unsubscribers: Array<() => void> = [];
 
   /** 进行中任务数（侧边栏角标） */
@@ -55,32 +56,45 @@ export const useDownloadStore = defineStore("download", () => {
   };
 
   /** 拉取全量并订阅增量 */
-  const init = async (): Promise<void> => {
-    if (initialized.value) return;
-    initialized.value = true;
-    const tasks = await downloadClient.list();
-    activeTasks.value = tasks.filter((task) => isActive(task.status)).sort(compareActive);
-    historyTasks.value = tasks.filter((task) => !isActive(task.status)).sort(compareHistory);
-    unsubscribers.push(subscribeCoreControlEvent("downloadState", applyTask));
-    unsubscribers.push(subscribeCoreControlEvent("downloadProgress", applyProgress));
+  const init = (): Promise<void> => {
+    if (initialized.value) return Promise.resolve();
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      try {
+        const tasks = await downloadClient.list();
+        activeTasks.value = tasks.filter((task) => isActive(task.status)).sort(compareActive);
+        historyTasks.value = tasks.filter((task) => !isActive(task.status)).sort(compareHistory);
+        if (unsubscribers.length === 0) {
+          unsubscribers.push(subscribeCoreControlEvent("downloadState", applyTask));
+          unsubscribers.push(subscribeCoreControlEvent("downloadProgress", applyProgress));
+        }
+        initialized.value = true;
+      } finally {
+        initPromise = null;
+      }
+    })();
+    return initPromise;
   };
 
-  const cancel = (taskId: string): void => void downloadClient.cancel(taskId);
+  const cancel = (taskId: string): void => {
+    void downloadClient.cancel(taskId).catch(() => {});
+  };
 
   const remove = (taskId: string): void => {
     activeTasks.value = activeTasks.value.filter((item) => item.taskId !== taskId);
     historyTasks.value = historyTasks.value.filter((item) => item.taskId !== taskId);
-    void downloadClient.remove(taskId);
+    void downloadClient.remove(taskId).catch(() => {});
   };
 
   const clearFinished = (): void => {
     historyTasks.value = [];
-    void downloadClient.clearFinished();
+    void downloadClient.clearFinished().catch(() => {});
   };
 
   onScopeDispose(() => {
     for (const off of unsubscribers) off();
     unsubscribers.length = 0;
+    initialized.value = false;
   });
 
   return { activeTasks, historyTasks, activeCount, init, cancel, remove, clearFinished };

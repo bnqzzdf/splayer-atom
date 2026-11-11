@@ -26,8 +26,13 @@ export const useStreamingStore = defineStore("streaming", () => {
   const artists = shallowRef<Artist[]>([]);
   const playlists = shallowRef<Playlist[]>([]);
   let initialized = false;
+  let initPromise: Promise<void> | null = null;
   /** 防止服务器切换后旧请求覆盖当前列表 */
   let snapshotFetchSeq = 0;
+  let syncSeq = 0;
+  let activeSwitchSeq = 0;
+  let refreshInFlight: { serverId: string; promise: Promise<void> } | null = null;
+  const unsubscribers: Array<() => void> = [];
 
   const activeServer = computed<StreamingServerConfig | null>(
     () => servers.value.find((s) => s.id === activeServerId.value) ?? null,
@@ -48,6 +53,9 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 清空当前服务器的内存列表 */
   const clearMemoryLists = (): void => {
     snapshotFetchSeq += 1;
+    syncSeq += 1;
+    refreshInFlight = null;
+    loading.value = false;
     songs.value = [];
     albums.value = [];
     artists.value = [];
@@ -166,10 +174,15 @@ export const useStreamingStore = defineStore("streaming", () => {
    * @param id - 目标 server id；传 null 则仅清空激活态
    */
   const setActiveServer = async (id: string | null): Promise<void> => {
-    if (id !== activeServerId.value) {
+    const previousId = activeServerId.value;
+    if (id !== previousId) {
+      const seq = ++activeSwitchSeq;
       clearMemoryLists();
       const snapshot = await streamingClient.setActiveServer(id);
+      if (seq !== activeSwitchSeq) return;
       applyConfig(snapshot);
+      if (id && connectionStatus.value.connected) void refreshLibrary();
+      return;
     }
     if (!id || connectionStatus.value.connected) return;
     await connectToServer(id);
@@ -178,7 +191,7 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 断开当前激活服务器 */
   const disconnect = (): void => {
     const id = activeServerId.value;
-    if (id) void streamingClient.disconnect(id);
+    if (id) void streamingClient.disconnect(id).catch(() => {});
     connectionStatus.value = { connected: false };
   };
 
@@ -207,15 +220,25 @@ export const useStreamingStore = defineStore("streaming", () => {
   const refreshLibrary = async (force = false): Promise<void> => {
     const serverId = activeServerId.value;
     if (!serverId) return;
-    loading.value = true;
-    try {
-      await loadLibrarySnapshot(serverId);
-      const started = await streamingClient.sync(serverId, force);
-      if (!started && activeServerId.value === serverId) loading.value = false;
-    } catch (err) {
-      if (activeServerId.value === serverId) loading.value = false;
-      console.error("[streaming] refreshLibrary failed:", err);
+    if (!force && refreshInFlight?.serverId === serverId) {
+      return refreshInFlight.promise;
     }
+    const seq = ++syncSeq;
+    loading.value = true;
+    const task = (async () => {
+      try {
+        await loadLibrarySnapshot(serverId);
+        const started = await streamingClient.sync(serverId, force);
+        if (!started && seq === syncSeq && activeServerId.value === serverId) loading.value = false;
+      } catch (err) {
+        if (seq === syncSeq && activeServerId.value === serverId) loading.value = false;
+        console.error("[streaming] refreshLibrary failed:", err);
+      } finally {
+        if (seq === syncSeq) refreshInFlight = null;
+      }
+    })();
+    refreshInFlight = { serverId, promise: task };
+    return task;
   };
 
   /**
@@ -271,23 +294,48 @@ export const useStreamingStore = defineStore("streaming", () => {
   /** 初始化服务器配置和媒体库更新订阅 */
   const init = async (): Promise<void> => {
     if (initialized) return;
-    streamingClient.onLibraryUpdated(async (serverId) => {
-      if (serverId !== activeServerId.value) return;
-      await loadLibrarySnapshot(serverId);
-      if (serverId === activeServerId.value) loading.value = false;
-    });
-    streamingClient.onConfigUpdated((snapshot) => {
-      const changedActive = snapshot.activeServerId !== activeServerId.value;
-      if (changedActive) clearMemoryLists();
-      applyConfig(snapshot);
-    });
-    const result = await streamingClient.loadServers();
-    applyConfig(result);
-    if (activeServerId.value && !servers.value.find((s) => s.id === activeServerId.value)) {
-      activeServerId.value = null;
-    }
-    initialized = true;
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      try {
+        if (unsubscribers.length === 0) {
+          unsubscribers.push(
+            streamingClient.onLibraryUpdated(async (serverId) => {
+              if (serverId !== activeServerId.value) return;
+              await loadLibrarySnapshot(serverId);
+              if (serverId === activeServerId.value) loading.value = false;
+            }),
+            streamingClient.onConfigUpdated((snapshot) => {
+              const changedActive = snapshot.activeServerId !== activeServerId.value;
+              if (changedActive) clearMemoryLists();
+              applyConfig(snapshot);
+              if (
+                changedActive &&
+                snapshot.activeServerId &&
+                snapshot.connectionStatus.connected
+              ) {
+                void refreshLibrary();
+              }
+            }),
+          );
+        }
+        const result = await streamingClient.loadServers();
+        applyConfig(result);
+        if (activeServerId.value && !servers.value.find((s) => s.id === activeServerId.value)) {
+          activeServerId.value = null;
+        }
+        initialized = true;
+      } finally {
+        initPromise = null;
+      }
+    })();
+    return initPromise;
   };
+
+  onScopeDispose(() => {
+    for (const off of unsubscribers) off();
+    unsubscribers.length = 0;
+    initialized = false;
+  });
 
   return {
     servers,

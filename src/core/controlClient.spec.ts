@@ -26,10 +26,10 @@ describe("shared Core Protocol client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { coreApiOrigin, coreCommand } = await import("./controlClient");
-    expect(coreApiOrigin).toBe("http://localhost:14559");
+    expect(coreApiOrigin).toBe("http://localhost:14558");
     await expect(coreCommand("/seek", { positionMs: 1234 })).resolves.toEqual({ success: true });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14559/api/info");
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14559/api/seek");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:14558/api/info");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost:14558/api/seek");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ positionMs: 1234 }),

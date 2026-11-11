@@ -104,13 +104,30 @@ export const useThemeStore = defineStore(
       source.value = newSource;
     };
 
+    let imageColorSeq = 0;
+    let initialized = false;
+
     /** 重新提取背景图主色 */
     const refreshImageColor = async (src: string): Promise<void> => {
-      imageBackgroundColor.value = src ? await extractColorFromImageUrl(src) : null;
+      const seq = ++imageColorSeq;
+      if (!src) {
+        imageBackgroundColor.value = null;
+        return;
+      }
+      try {
+        const color = await extractColorFromImageUrl(src);
+        if (seq === imageColorSeq && imageBackground.src === src) {
+          imageBackgroundColor.value = color;
+        }
+      } catch {
+        if (seq === imageColorSeq) imageBackgroundColor.value = null;
+      }
     };
 
     /** 初始化 */
     const init = (): void => {
+      if (initialized) return;
+      initialized = true;
       if (typeof customColor.value !== "string" || !customColor.value.startsWith("#")) {
         customColor.value = DEFAULT_PRIMARY;
       }

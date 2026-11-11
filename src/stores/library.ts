@@ -266,8 +266,11 @@ export const useLibraryStore = defineStore("library", () => {
     if (!initialized.value || tracksStale || tracksLoadState.value === "error") {
       void refreshTracksProjection();
     }
+    let active = true;
     return () => {
-      trackConsumers--;
+      if (!active) return;
+      active = false;
+      trackConsumers = Math.max(0, trackConsumers - 1);
     };
   };
 

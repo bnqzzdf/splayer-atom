@@ -719,11 +719,14 @@ impl AudioPlayer {
 
             let mut player = self.inner.lock();
             if !player.is_load_token_current(token) {
+                drop(player);
+                drop(playback);
                 return Ok(());
             }
             if let Err(error) = seek_result {
                 player.enter_paused_for_recovery();
-                let _ = player.commit_direct_seeked(token, playback).into_napi()?;
+                drop(player);
+                drop(playback);
                 return Err(error).into_napi();
             }
             let committed = player.commit_direct_seeked(token, playback).into_napi()?;

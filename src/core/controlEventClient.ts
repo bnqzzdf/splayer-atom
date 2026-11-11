@@ -1,6 +1,6 @@
 import type { CoreControlEvent, CorePlayerProjectionEvent } from "@shared/types/coreEvents";
-import type { PlaybackSessionSnapshot, PlayerStatus, Track } from "@shared/types/player";
-import { controlAssetUrl } from "./controlAssets";
+import type { PlaybackSessionSnapshot, PlayerStatus } from "@shared/types/player";
+import { controlAssetUrl, mapTrack } from "./controlAssets";
 import { ensureCoreProtocolCompatible, request } from "./controlClient";
 
 export interface ControlEvent {
@@ -17,12 +17,6 @@ let disconnectTransport: (() => void) | null = null;
 const emit = (event: ControlEvent): void => {
   for (const listener of listeners) listener(event);
 };
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
 
 const mapSession = (session: PlaybackSessionSnapshot): PlaybackSessionSnapshot => ({
   ...session,
@@ -49,10 +43,12 @@ export const isCoreControlEvent = (event: ControlEvent): event is CoreControlEve
     (event.type === "providerSessions" ||
       event.type === "libraryScanProgress" ||
       event.type === "libraryChanged" ||
+      event.type === "libraryLikesChanged" ||
       event.type === "libraryRootsChanged" ||
       event.type === "folderPinsChanged" ||
       event.type === "downloadState" ||
       event.type === "downloadProgress" ||
+      event.type === "streamingConfigUpdated" ||
       event.type === "streamingLibraryUpdated" ||
       event.type === "lyricOffset" ||
       event.type === "pluginStatus"));
@@ -82,7 +78,7 @@ const projectCoreEvent = (event: CoreControlEvent): CoreControlEvent => {
 const host = window.location.hostname || "127.0.0.1";
 const dev = import.meta.env.DEV;
 const wsOrigin = dev
-  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14559`
+  ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${host}:14558`
   : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 
 const connectWeb = (): (() => void) => {

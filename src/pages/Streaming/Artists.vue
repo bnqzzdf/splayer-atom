@@ -10,14 +10,11 @@ const router = useRouter();
 const streaming = useStreamingStore();
 const { artists, loading, isConnected } = storeToRefs(streaming);
 
-const refreshKey = inject<{ value: number }>("streamingRefreshKey", { value: 0 });
-
 const refresh = (force = false): void => {
   if (!isConnected.value) return;
   streaming.refreshLibrary(force);
 };
 
-watch(refreshKey, () => refresh(true));
 watch(isConnected, (v) => v && refresh());
 onMounted(() => {
   if (isConnected.value && artists.value.length === 0) refresh();

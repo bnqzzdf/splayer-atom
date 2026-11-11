@@ -167,8 +167,6 @@ export const useStatusStore = defineStore(
       storage: localStorage,
       pick: [
         "heartMode",
-        "volume",
-        "position",
         "searchPlatform",
         "myPlaylistSource",
         "likedPageTab",
