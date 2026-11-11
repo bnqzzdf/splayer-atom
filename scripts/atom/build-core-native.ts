@@ -13,7 +13,6 @@ import {
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const audioCrateDir = path.join(root, "native", "audio-engine");
 const streamingCrateDir = path.join(root, "native", "streaming-api");
-const outputDir = path.join(root, "out", "native");
 const targetDir = path.join(root, "target", "core-audio");
 const napiBin = path.join(root, "node_modules", ".bin", "napi");
 
@@ -24,8 +23,17 @@ const cargoBinDir = path.join(
 const args = new Set(process.argv.slice(2));
 const isDev = args.delete("--dev");
 const requireDiretta = args.delete("--require-diretta");
+const outputDirArg = [...args].find((arg) => arg.startsWith("--output-dir="));
+if (outputDirArg) args.delete(outputDirArg);
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
+const outputDir = outputDirArg
+  ? path.resolve(root, outputDirArg.slice("--output-dir=".length))
+  : path.join(root, "out", "native");
+const nativeOutputRoot = path.join(root, "out", "native");
+if (outputDir !== nativeOutputRoot && !outputDir.startsWith(`${nativeOutputRoot}${path.sep}`)) {
+  throw new Error(`--output-dir 必须位于 out/native 下: ${outputDir}`);
+}
 if (args.size > 0) {
   throw new Error(`未知 Core native 构建参数: ${[...args].join(" ")}`);
 }
@@ -46,7 +54,13 @@ const direttaCpuVariant: DirettaCpuVariant | null = direttaSdkRoot
     : null
   : null;
 if (direttaSdkRoot && !direttaCpuVariant) {
-  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4");
+  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4|zen4|arm64");
+}
+if (process.arch === "x64" && direttaCpuVariant === "arm64") {
+  throw new Error("x86_64 Diretta Core 不能使用 arm64 variant");
+}
+if (process.arch === "arm64" && direttaCpuVariant && direttaCpuVariant !== "arm64") {
+  throw new Error("aarch64 Diretta Core 只能使用 arm64 variant");
 }
 const direttaSdkRelease = direttaSdkRoot ? readDirettaSdkRelease(direttaSdkRoot) : null;
 if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {
