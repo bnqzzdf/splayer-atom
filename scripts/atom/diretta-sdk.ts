@@ -3,7 +3,7 @@ import path from "node:path";
 
 export const DIRETTA_SDK_RELEASE = 148;
 // SDK 静态库按 CPU 指令集分别发布，变体高于目标 CPU 会触发 SIGILL。
-// SDK 148 只提供 v2/v3/v4/zen4，带 Diretta 的产物不能选择 v1。
+// SDK 148 的 x86-64 库只提供 v2/v3/v4/zen4，不能选择 v1；aarch64 使用单独的 arm64 库。
 export const DIRETTA_CPU_VARIANTS = ["v2", "v3", "v4", "zen4"] as const;
 export type DirettaX86CpuVariant = (typeof DIRETTA_CPU_VARIANTS)[number];
 export type DirettaCpuVariant = DirettaX86CpuVariant | "arm64";

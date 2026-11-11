@@ -4,9 +4,10 @@
 # 用法：
 #   ./install.sh                         # 自动检测 CPU 变体，安装到 /opt/splayer-atom-core
 #   ./install.sh --cpu v3                # 指定变体
-#   ./install.sh --cpu auto --prefix /audiosys
+#   ./install.sh --cpu auto --prefix /audiosys/splayer-atom-core
 #   ./install.sh --init systemd|openrc|none
 #   ./install.sh --user splayer-atom     # 默认 root（Diretta 需要）
+#   ./install.sh --force                 # 允许使用非空且非 Atom 的安装根（有覆盖风险）
 #   ./install.sh --uninstall             # 保留 data/
 #   ./install.sh --uninstall --purge     # 连 data/ 一起删除
 #   ./install.sh --rollback              # 恢复最近一次安装备份
@@ -23,6 +24,7 @@ INIT=auto
 SERVICE_USER=""
 ACTION=install
 PURGE=0
+FORCE=0
 
 die() { echo "[install] $*" >&2; exit 1; }
 info() { echo "[install] $*"; }
@@ -43,6 +45,7 @@ while [ $# -gt 0 ]; do
         --uninstall) ACTION=uninstall ;;
         --rollback) ACTION=rollback ;;
         --purge) PURGE=1 ;;
+        --force) FORCE=1 ;;
         -h|--help) usage; exit 0 ;;
         *) die "未知参数：$1（用 --help）" ;;
     esac
@@ -68,6 +71,21 @@ case "$(uname -m)" in
     *) die "本机架构不支持：$(uname -m)（仅 x86_64/aarch64）" ;;
 esac
 [ "$PKG_ARCH" = "$HOST_ARCH" ] || die "包架构 $PKG_ARCH 与本机 $HOST_ARCH 不一致，拒绝安装"
+
+looks_like_atom_install() {
+    [ -f "$PREFIX/bin/splayer-atom-core" ] \
+        || [ -f "$PREFIX/runtime.json" ] \
+        || [ -f "$PREFIX/PACKAGE_ARCH" ] \
+        || [ -f "$PREFIX/app/index.js" ]
+}
+if [ -d "$PREFIX" ] \
+   && [ -n "$(find "$PREFIX" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ] \
+   && ! looks_like_atom_install \
+   && [ "$FORCE" != 1 ]; then
+    die "目标目录非空且不像 Atom 安装根：$PREFIX
+为避免误删现有文件，请改用专用子目录（例如 --prefix /audiosys/splayer-atom-core），
+或确认目录内容后加 --force。安装未开始。"
+fi
 
 VARIANT_DIRS=$ROOT/variants
 manifest_variants=$(sed -n 's/^variants=//p' "$ROOT/variants/manifest.txt" | head -1)

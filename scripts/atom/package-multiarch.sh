@@ -58,6 +58,12 @@ case "$ARCH" in
     *) die "--arch 必须为 x86_64 或 aarch64" ;;
 esac
 [ -f "$BASE" ] || die "--base 产物不存在: $BASE"
+if [ -f "$BASE.sha256" ]; then
+    base_dir=$(dirname "$BASE")
+    base_name=$(basename "$BASE")
+    (cd "$base_dir" && sha256sum -c "$base_name.sha256") >/dev/null \
+        || die "base 产物 SHA256 校验失败: $BASE"
+fi
 [ -d "$NATIVE_ROOT" ] || die "--native-root 不存在: $NATIVE_ROOT"
 [ -f "$INSTALL_SCRIPT" ] || die "安装脚本不存在: $INSTALL_SCRIPT"
 command -v python3 >/dev/null 2>&1 || die "需要 python3"
@@ -113,6 +119,25 @@ for variant in $NATIVE_VARIANTS; do
     [ -f "$src/audio-engine.node" ] || die "缺少 $variant/audio-engine.node"
     [ -f "$src/streaming-api.node" ] || die "缺少 $variant/streaming-api.node"
     [ -f "$src/build.json" ] || die "缺少 $variant/build.json"
+    python3 - "$src/build.json" "$ARCH" "$variant" <<'PY' || die "$variant/build.json 与包架构/变体不一致"
+import json
+import sys
+
+path, arch, variant = sys.argv[1:]
+with open(path, encoding="utf-8") as handle:
+    build = json.load(handle)
+expect_arch = "arm64" if arch == "aarch64" else "x64"
+expect_diretta = variant != "v1"
+assert build["platform"] == "linux", path
+assert build["arch"] == expect_arch, (path, build["arch"], expect_arch)
+assert build["diretta"] is expect_diretta, (path, build["diretta"], expect_diretta)
+if expect_diretta:
+    assert build["direttaCpuVariant"] == variant, path
+    assert build["direttaSdkRelease"] == 148, path
+else:
+    assert build["direttaCpuVariant"] is None, path
+    assert build["direttaSdkRelease"] is None, path
+PY
     mkdir -p "$PKG_ROOT/variants/$variant/native"
     cp "$src/audio-engine.node" "$src/streaming-api.node" "$src/build.json" \
         "$PKG_ROOT/variants/$variant/native/"

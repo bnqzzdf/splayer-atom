@@ -27,9 +27,9 @@ rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 echo "[Arm64Native] build audio-engine (ALSA + Diretta arm64)"
-cargo build --release -p audio-engine --no-default-features --features core-audio,diretta
+cargo build --locked --release -p audio-engine --no-default-features --features core-audio,diretta
 echo "[Arm64Native] build streaming-api"
-cargo build --release -p streaming-api
+cargo build --locked --release -p streaming-api
 
 cp "$TARGET_DIR/release/libaudio_engine.so" "$OUT_DIR/audio-engine.node"
 cp "$TARGET_DIR/release/libstreaming_api.so" "$OUT_DIR/streaming-api.node"

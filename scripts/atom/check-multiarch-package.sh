@@ -68,7 +68,26 @@ assert runtime["capabilities"]["diretta"] is expect_diretta
 assert runtime["direttaCpuVariant"] == (None if not expect_diretta else variant)
 assert runtime["nodeBundled"] is True
 PY
-    ok "variant $variant ELF + runtime.json"
+    python3 - "$TOP/variants/$variant/native/build.json" "$ARCH" "$variant" <<'PY' || exit 1
+import json
+import sys
+
+path, arch, variant = sys.argv[1:]
+with open(path, encoding="utf-8") as handle:
+    build = json.load(handle)
+expect_arch = "arm64" if arch == "aarch64" else "x64"
+expect_diretta = variant != "v1"
+assert build["platform"] == "linux", path
+assert build["arch"] == expect_arch, (path, build["arch"], expect_arch)
+assert build["diretta"] is expect_diretta, (path, build["diretta"], expect_diretta)
+if expect_diretta:
+    assert build["direttaCpuVariant"] == variant, path
+    assert build["direttaSdkRelease"] == 148, path
+else:
+    assert build["direttaCpuVariant"] is None, path
+    assert build["direttaSdkRelease"] is None, path
+PY
+    ok "variant $variant ELF + runtime.json + build.json"
 done
 
 if [ -n "$(find "$TOP" -type l -print -quit)" ]; then

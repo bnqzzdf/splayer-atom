@@ -102,7 +102,7 @@ splayer-atom-core-<version>-<commit8>-<YYYYMMDD>-linux-aarch64-multi.tar.gz
 ./install.sh --cpu auto
 ./install.sh --cpu v4
 ./install.sh --cpu v1                  # ALSA-only
-./install.sh --prefix /audiosys --cpu auto
+./install.sh --prefix /audiosys/splayer-atom-core --cpu auto
 ./install.sh --init openrc --user splayer-atom
 ./install.sh --uninstall               # 保留 data/
 ./install.sh --uninstall --purge
@@ -114,6 +114,9 @@ splayer-atom-core-<version>-<commit8>-<YYYYMMDD>-linux-aarch64-multi.tar.gz
 - 安装器把选中的 `variants/<variant>/native` 放到 `native/`，把对应 `runtime.json` 放到根目录。
 - 升级会保留 `data/`，程序文件备份到 `.backup-<时间戳>`；OpenRC 与 systemd 都支持。
 - v1 没有 Diretta；需要 Diretta 时选 v2/v3/v4/zen4。
+- 目标目录非空且不像 Atom 安装根时，安装器会拒绝覆盖；优先用专用子目录
+  `/audiosys/splayer-atom-core`。只有确认 `/audiosys` 是专用根且可覆盖时，才使用
+  `--prefix /audiosys --force`。
 
 ## 闸门
 
@@ -157,4 +160,5 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 - arm64 编译中发现并修复 `direct_pcm.rs` 的 `c_char` 有符号性（`a5a25b14`），x86 不受影响。
 
 说明：安装目录默认 `/opt/splayer-atom-core`；测试使用独立前缀以免覆盖已有生产 Core。
-audiosys 环境可用 `--prefix /audiosys` 或 `--prefix /audiosys/splayer-atom-core`。
+audiosys 环境建议用 `--prefix /audiosys/splayer-atom-core`；直接覆盖 `/audiosys` 需显式 `--force`，
+安装器默认会拒绝非空且不像 Atom 安装根的目录。
