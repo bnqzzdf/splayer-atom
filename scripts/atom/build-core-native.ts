@@ -20,23 +20,23 @@ const cargoBinDir = path.join(
   process.env.CARGO_HOME?.trim() || path.join(os.homedir(), ".cargo"),
   "bin",
 );
-const args = new Set(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const args = new Set(rawArgs);
 const isDev = args.delete("--dev");
 const requireDiretta = args.delete("--require-diretta");
 let outputDirValue: string | null = null;
-for (const arg of [...args]) {
-  if (arg === "--output-dir") {
-    args.delete(arg);
-    const next = [...args][0];
-    if (!next || next.startsWith("--")) throw new Error("--output-dir 缺少路径");
-    outputDirValue = next;
-    args.delete(next);
-    break;
-  }
-  if (arg.startsWith("--output-dir=")) {
-    outputDirValue = arg.slice("--output-dir=".length);
-    args.delete(arg);
-    break;
+const outputDirIndex = rawArgs.indexOf("--output-dir");
+if (outputDirIndex >= 0) {
+  const value = rawArgs[outputDirIndex + 1];
+  if (!value || value.startsWith("--")) throw new Error("--output-dir 缺少路径");
+  outputDirValue = value;
+  args.delete("--output-dir");
+  args.delete(value);
+} else {
+  const outputDirArg = rawArgs.find((arg) => arg.startsWith("--output-dir="));
+  if (outputDirArg) {
+    outputDirValue = outputDirArg.slice("--output-dir=".length);
+    args.delete(outputDirArg);
   }
 }
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
