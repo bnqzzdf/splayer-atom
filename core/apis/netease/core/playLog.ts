@@ -1,4 +1,5 @@
 import type { TrackFee } from "@shared/types/player";
+import { cookieToJson } from "./cookie";
 
 interface PlaybackLogContext {
   app: {
@@ -30,17 +31,9 @@ interface PlaybackLogSource {
 }
 
 export const parseCookie = (cookie: unknown): Record<string, string> => {
-  if (cookie && typeof cookie === "object") return cookie as Record<string, string>;
+  if (cookie && typeof cookie === "object") return { ...(cookie as Record<string, string>) };
   if (typeof cookie !== "string") return {};
-  const obj: Record<string, string> = {};
-  for (const part of cookie.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx <= 0) continue;
-    const key = part.substring(0, idx).trim();
-    const val = part.substring(idx + 1).trim();
-    if (key) obj[key] = val;
-  }
-  return obj;
+  return cookieToJson(cookie);
 };
 
 export const createPlaybackLogContext = (

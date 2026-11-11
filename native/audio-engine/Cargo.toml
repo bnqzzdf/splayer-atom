@@ -12,7 +12,7 @@ core-audio = []
 diretta = ["audio-engine-core/diretta"]
 
 [dependencies]
-audio-engine-core = { path = "../audio-engine-core", default-features = false, features = ["napi"] }
+audio-engine-core = { path = "../audio-engine-core", default-features = false }
 napi = { version = "3.12.1", features = ["napi9", "serde-json", "tokio_rt"] }
 napi-derive = "3.6.3"
 ffmpeg_audio = { version = "0.3.1", default-features = false, features = [
@@ -26,10 +26,6 @@ tokio = { version = "1", features = ["rt"] }
 
 [build-dependencies]
 napi-build = "2.4.1"
-
-[dev-dependencies]
-base64 = "0.22.1"
-httpmock = "0.8.3"
 
 [lints]
 workspace = true

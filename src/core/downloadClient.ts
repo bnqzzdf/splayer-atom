@@ -4,27 +4,12 @@ import type {
   DownloadTask,
   EnqueueResult,
 } from "@shared/types/download";
-import type { Track } from "@shared/types/player";
-import { controlAssetUrl, serverAssetUrl } from "./controlAssets";
+import { mapTrack, serverAssetUrl, toServerTrack } from "./controlAssets";
 import { request } from "./controlClient";
-
-type CoreDownloadClient = Omit<DownloadApi, "pickDir">;
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
 
 const mapTask = (task: DownloadTask): DownloadTask => ({
   ...task,
   track: mapTrack(task.track),
-});
-
-const toServerTrack = (track: Track): Track => ({
-  ...track,
-  cover: serverAssetUrl(track.cover),
-  coverOriginal: serverAssetUrl(track.coverOriginal),
 });
 
 const toServerRequest = (value: DownloadRequest): DownloadRequest => ({
@@ -34,7 +19,7 @@ const toServerRequest = (value: DownloadRequest): DownloadRequest => ({
 });
 
 /** Web Control 的 Core Download request client。 */
-export const downloadClient: CoreDownloadClient = {
+export const downloadClient: DownloadApi = {
   start: (value) =>
     request<EnqueueResult>("/download/start", {
       method: "POST",

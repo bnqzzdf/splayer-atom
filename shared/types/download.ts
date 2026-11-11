@@ -100,7 +100,6 @@ export interface DownloadApi {
   remove: (taskId: string) => Promise<void>;
   clearFinished: () => Promise<void>;
   list: () => Promise<DownloadTask[]>;
-  pickDir: () => Promise<{ ok: boolean; dir: string; reason?: "canceled" }>;
   getDir: () => Promise<string>;
   setDir: (dir: string) => Promise<string>;
   resetDir: () => Promise<string>;

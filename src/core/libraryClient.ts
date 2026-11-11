@@ -2,7 +2,7 @@ import type { AlbumSummary, ArtistSummary, LibraryApi, ScanProgress } from "@sha
 import type { IpcResponse, Track } from "@shared/types/player";
 import type { TagEditRequest, TagWriteOutcome, TrackTags } from "@shared/types/tagEditor";
 import { request } from "@/core/controlClient";
-import { controlAssetUrl } from "@/core/controlAssets";
+import { controlAssetUrl, mapTrack } from "@/core/controlAssets";
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -18,13 +18,6 @@ const asIpc = async <T>(loader: () => Promise<T>): Promise<IpcResponse<T>> => {
 const json = (body: unknown): RequestInit => ({
   method: "POST",
   body: JSON.stringify(body),
-});
-
-/** 将 Core canonical Track 投影为当前 Control 可展示的资源 URL。 */
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
 });
 
 const mapAlbum = (album: AlbumSummary): AlbumSummary => ({

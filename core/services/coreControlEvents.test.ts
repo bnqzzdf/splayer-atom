@@ -9,7 +9,6 @@ const eventTypesSource = read(new URL("../../shared/types/coreEvents.ts", import
 const corePlayerEventsSource = read(new URL("./corePlayerEvents.ts", import.meta.url));
 const playbackSessionSource = read(new URL("./playbackSession.ts", import.meta.url));
 const playerLoadSource = read(new URL("./playerLoad.ts", import.meta.url));
-const deviceSource = read(new URL("./device.ts", import.meta.url));
 const playerControlSource = read(new URL("../../src/core/player/index.ts", import.meta.url));
 const wsBroadcastSource = read(new URL("../server/broadcast.ts", import.meta.url));
 
@@ -47,8 +46,6 @@ test("Player projections are published only by Core and consumed by Web Control"
   assert.match(playerLoadSource, /publishCoreControlEvent\(loadingEvent\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(\{ type: "session", data \}\)/);
   assert.match(playbackSessionSource, /publishCoreControlEvent\(event\)/);
-  assert.doesNotMatch(deviceSource, /defaultDevice|publishCoreControlEvent/);
-  assert.doesNotMatch(deviceSource, /requestReinit|REINIT_DELAY_MS|reinitOutput/);
   assert.match(corePlayerEventsSource, /publishCoreControlEvent\(\{\s*type: "position"/s);
   assert.match(wsBroadcastSource, /HIGH_FREQ_EVENTS = new Set\(\["position"\]\)/);
   assert.match(playerControlSource, /subscribeCorePlayerProjection\(handleEvent\)/);

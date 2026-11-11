@@ -6,9 +6,6 @@ const read = (url: URL): string => readFileSync(url, "utf8");
 const platformAccountSource = read(
   new URL("../../src/components/settings/custom/PlatformAccount.vue", import.meta.url),
 );
-const providerAccountsSource = read(
-  new URL("../../src/components/settings/custom/ProviderAccounts.vue", import.meta.url),
-);
 const streamingLoginSource = read(
   new URL("../../src/components/modals/StreamingLoginDialog.vue", import.meta.url),
 );
@@ -75,13 +72,6 @@ test("Qobuz and TIDAL settings use one Core-owned session projection", () => {
     storageLines.length,
     0,
     `渲染端不应直接访问 localStorage，命中：\n${storageLines.join("\n")}`,
-  );
-
-  assert.match(providerAccountsSource, /<PlatformAccount platform="qobuz" \/>/);
-  assert.match(providerAccountsSource, /<PlatformAccount platform="tidal" \/>/);
-  assert.doesNotMatch(
-    providerAccountsSource,
-    /auth_import|user_auth_token|access_token|refresh_token/,
   );
 });
 

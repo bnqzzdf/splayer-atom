@@ -11,19 +11,13 @@
  * - playlist: { id, name, image: {large,small}, tracks_count, owner: {name} }
  *
  * 时长：Qobuz duration 单位为秒，应用层 Track.duration 单位为毫秒，需 ×1000
- * 封面：直接用 image.large，可通过 deriveCoverUrl 派生不同尺寸
+ * 封面：直接用 image.large，可通过 withCoverSize 派生不同尺寸
  */
 
 import type { Album, Artist, AudioQuality, Playlist, Track } from "@shared/types/player";
 import type { CoverItem } from "@/types/artist";
 import { coverSizePair } from "../streamingSettings";
 import { coreApiOrigin } from "../../core/controlClient";
-
-// 注：Qobuz 封面 URL 派生逻辑（deriveCoverUrl）位于 core/apis/qobuz/core/cover.ts，
-// 前端无法跨进程边界 import，这里实现等价的本地版本 withCoverSize。
-
-// 注：Qobuz 封面 URL 派生逻辑（deriveCoverUrl）位于 core/apis/qobuz/core/cover.ts，
-// 前端无法跨进程边界 import，这里实现等价的本地版本 withCoverSize。
 
 /**
  * 将 Qobuz CDN 图片 URL 改写为经部署服务器代理的地址。

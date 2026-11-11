@@ -14,7 +14,6 @@ import { runtimeEnvironment } from "@main/atom/runtime/environment";
 import { writeFileSync as atomicWriteSync } from "atomically";
 import type {
   PlaybackEventKind,
-  PluginAction,
   PluginInfo,
   PluginManifest,
   PluginMenuItem,
@@ -191,45 +190,11 @@ class PluginRegistry extends EventEmitter {
   }
 
   listInfo(): PluginInfo[] {
-    return Array.from(this.runtimes.values()).map((rt) => ({
-      manifest: rt.manifest,
-      enabled: rt.enabled,
-      status: rt.status,
-      updateInfo: rt.updateInfo,
-      settingsValues:
-        (store.get(`plugins.perPlugin.${rt.manifest.id}` as never) as Record<string, unknown>) ??
-        {},
-    }));
+    return Array.from(this.runtimes.values()).map((rt) => this.infoOf(rt));
   }
 
   getRuntime(id: string): PluginRuntime | undefined {
     return this.runtimes.get(id);
-  }
-
-  /** 按动作选一个已就绪的插件（优先级 → 首个 ready） */
-  pickForAction(action: PluginAction, source?: string): PluginRuntime | undefined {
-    const priority = store.get(`plugins.priority.${action}` as never) as string[] | undefined;
-    const ordered = (priority ?? []).slice();
-    for (const rt of this.runtimes.values()) {
-      if (!ordered.includes(rt.manifest.id)) ordered.push(rt.manifest.id);
-    }
-    for (const id of ordered) {
-      const rt = this.runtimes.get(id);
-      if (!rt || !rt.enabled || rt.status.state !== "ready") continue;
-      const sources = rt.status.sources;
-      const sourceKeys = source ? [source] : Object.keys(sources);
-      for (const key of sourceKeys) {
-        const cap = sources[key];
-        if (cap && cap.actions.includes(action)) return rt;
-      }
-    }
-    return undefined;
-  }
-
-  /** 导入本地脚本文件 */
-  async install(filePath: string): Promise<PluginInfo> {
-    const raw = fs.readFileSync(filePath, "utf-8");
-    return this.installFromSource(raw);
   }
 
   /** 从脚本源码安装（供本地文件、URL 下载等入口复用） */
@@ -271,7 +236,7 @@ class PluginRegistry extends EventEmitter {
     };
     this.runtimes.set(manifest.id, rt);
     await this.start(rt).catch(() => {});
-    return { manifest, enabled: rt.enabled, status: rt.status, updateInfo: rt.updateInfo };
+    return this.infoOf(rt);
   }
 
   /** 取插件当前的更新地址（检查到新版后由 updateInfo 持有） */
@@ -381,14 +346,7 @@ class PluginRegistry extends EventEmitter {
     if (rt.enabled) await this.start(rt).catch(() => {});
     else this.setStatus(rt, { state: "disabled" });
 
-    return {
-      manifest: rt.manifest,
-      enabled: rt.enabled,
-      status: rt.status,
-      updateInfo: rt.updateInfo,
-      settingsValues:
-        (store.get(`plugins.perPlugin.${id}` as never) as Record<string, unknown>) ?? {},
-    };
+    return this.infoOf(rt);
   }
 
   async uninstall(id: string): Promise<void> {
@@ -416,9 +374,6 @@ class PluginRegistry extends EventEmitter {
   async setEnabled(id: string, enabled: boolean): Promise<void> {
     const rt = this.runtimes.get(id);
     if (!rt) return;
-    // 在翻转 enabled 标志前取样：禁用路径里 setStatus 观测不到这次"启用→禁用"的翻转
-    // （disabled/unloaded 状态本就非 ready，谓词两侧均为 false），需在此处补发
-    const before = this.hasEnabledControlPlugin();
     rt.enabled = enabled;
     const enabledMap = {
       ...(store.get("plugins.enabled") as Record<string, boolean>),
@@ -428,12 +383,10 @@ class PluginRegistry extends EventEmitter {
 
     if (enabled) {
       this.hostRestartAttempts = 0; // 手动启用：恢复 host 重启额度
-      // 启用路径的"无→有"翻转由 start() 内的 setStatus(ready) 负责发出，无需在此重复
       if (rt.status.state !== "ready") await this.start(rt).catch(() => {});
     } else {
       await this.stop(rt);
       this.setStatus(rt, { state: "disabled" });
-      this.notifyControlActivity(before);
     }
   }
 
@@ -476,7 +429,6 @@ class PluginRegistry extends EventEmitter {
           settings: rt.settings,
           menus: rt.menus,
         });
-        this.maybePrimeControl(rt);
       },
       onResult: (requestId, ok, data, error) => {
         const p = rt.pending.get(requestId);
@@ -530,7 +482,6 @@ class PluginRegistry extends EventEmitter {
         } else {
           this.setStatus(rt, { state: "ready", sources: {}, events, controls, settings, menus });
         }
-        this.maybePrimeControl(rt);
       },
       onFatal: (error) => {
         coreLog.error(`[plugin:${id}] fatal ${error.code}: ${error.message}`);
@@ -605,83 +556,8 @@ class PluginRegistry extends EventEmitter {
   }
 
   private setStatus(rt: PluginRuntime, status: PluginStatus): void {
-    const before = this.hasEnabledControlPlugin();
     rt.status = status;
-    this.emit("status", {
-      manifest: rt.manifest,
-      enabled: rt.enabled,
-      status,
-      updateInfo: rt.updateInfo,
-      settingsValues:
-        (store.get(`plugins.perPlugin.${rt.manifest.id}` as never) as Record<string, unknown>) ??
-        {},
-    } satisfies PluginInfo);
-    this.notifyControlActivity(before);
-  }
-
-  /**
-   * 控制类插件就绪后请求 bridge 定向补发快照
-   * @param rt - 插件运行时
-   */
-  private maybePrimeControl(rt: PluginRuntime): void {
-    if (
-      rt.manifest.type === "control" &&
-      rt.status.state === "ready" &&
-      pluginHost.isReady(rt.manifest.id)
-    ) {
-      this.emit("controlPluginReady", rt.manifest.id);
-    }
-  }
-
-  /** 控制类插件的"有/无"状态翻转时通知（驱动 bridge 惰性挂载/卸载） */
-  private notifyControlActivity(before: boolean): void {
-    const after = this.hasEnabledControlPlugin();
-    if (before !== after) this.emit("controlActivityChange", after);
-  }
-
-  /** 是否存在已启用且 ready 的控制类插件 */
-  hasEnabledControlPlugin(): boolean {
-    for (const rt of this.runtimes.values()) {
-      if (rt.enabled && rt.manifest.type === "control" && rt.status.state === "ready") return true;
-    }
-    return false;
-  }
-
-  /**
-   * 扇出高层播放事件给订阅了该事件的控制类插件
-   * @param event - 播放事件类型
-   * @param data - 事件载荷
-   */
-  broadcastPlaybackEvent(event: PlaybackEventKind, data: unknown): void {
-    for (const rt of this.runtimes.values()) {
-      if (
-        rt.enabled &&
-        rt.manifest.type === "control" &&
-        rt.status.state === "ready" &&
-        rt.events.includes(event)
-      ) {
-        pluginHost.sendEvent(rt.manifest.id, event, data);
-      }
-    }
-  }
-
-  /**
-   * 向单个控制类插件定向下发播放事件（用于新就绪插件的快照补发）
-   * @param id - 插件 ID
-   * @param event - 播放事件类型
-   * @param data - 事件载荷
-   */
-  sendPlaybackEventTo(id: string, event: PlaybackEventKind, data: unknown): void {
-    const rt = this.runtimes.get(id);
-    if (
-      rt &&
-      rt.enabled &&
-      rt.manifest.type === "control" &&
-      rt.status.state === "ready" &&
-      rt.events.includes(event)
-    ) {
-      pluginHost.sendEvent(id, event, data);
-    }
+    this.emit("status", this.infoOf(rt));
   }
 
   /**

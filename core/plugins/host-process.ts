@@ -12,7 +12,6 @@ import type { RuntimePluginHostChild } from "@main/atom/runtime/pluginHost";
 import { spawnRuntimePluginHost } from "@main/atom/runtime/pluginHost";
 import type {
   HostCallMethod,
-  PlaybackEventKind,
   PluginAction,
   PluginErrorPayload,
   PluginRegistration,
@@ -177,11 +176,6 @@ class PluginHost {
     error?: PluginErrorPayload,
   ): void {
     this.post({ kind: "hostResult", pluginId, callId, ok, data, error });
-  }
-
-  sendEvent(pluginId: string, event: PlaybackEventKind, data: unknown): void {
-    if (!this.isReady(pluginId)) return;
-    this.post({ kind: "event", pluginId, event, data });
   }
 
   sendSettingsUpdate(pluginId: string, settings: Record<string, unknown>): void {

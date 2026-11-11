@@ -1,44 +1,28 @@
 /**
  * TIDAL API 渲染端封装
  *
- * 用 Proxy 把所有接口代理到主进程：`tidalRaw("search", {query})` 实际等于
- * 通过 `providerClient` 调用 Core Provider Protocol。
+ * 通过 `providerClient` 调用 Core Provider Protocol 转发 TIDAL 请求。
  *
  * 调用约定：成功 → 返回 body；失败 → 抛 Error
  *
- * 参照 src/apis/qobuz.ts 的封装模式。TIDAL 后端模块注册表见
- * core/apis/tidal/modules/index.ts。
+ * 后端实现见 core/apis/tidal/index.ts。
  */
 
 import type { ApiCallResponse } from "@shared/types/apis";
 import { providerClient } from "@/core/providerClient";
 
 /**
- * 调用 TIDAL API，返回原始响应
- * @param name 接口名（对应 core/apis/tidal/modules/index.ts 中的 key）
- * @param params 接口参数
- * @returns 原始响应（含 status + body）
- */
-export const tidalRaw = async (
-  name: string,
-  params?: Record<string, unknown>,
-): Promise<{ status: number; body: unknown }> => {
-  const res: ApiCallResponse = await providerClient.call("tidal", name, params);
-  if (!res.ok) throw new Error(res.error);
-  return { status: res.status ?? 200, body: res.body ?? res.data };
-};
-
-/**
- * 调用 TIDAL API，只返回 body
- * @param name 接口名
+ * 调用 TIDAL API，返回 body
+ * @param name 接口名（对应 core/apis/tidal/index.ts 中导出的接口名）
  * @param params 接口参数
  */
 export const tidalCall = async <T = any>(
   name: string,
   params?: Record<string, unknown>,
 ): Promise<T> => {
-  const res = await tidalRaw(name, params);
-  return res.body as T;
+  const res: ApiCallResponse = await providerClient.call("tidal", name, params);
+  if (!res.ok) throw new Error(res.error);
+  return (res.body ?? res.data) as T;
 };
 
 // ============ 认证 ============
@@ -87,9 +71,6 @@ export const authTokenPoll = (deviceCode: string, clientId?: string, clientSecre
     client_secret: clientSecret,
   });
 
-/** 刷新 token */
-export const authTokenRefresh = () => tidalCall("auth_token_refresh");
-
 /** 登出 TIDAL */
 export const logout = () => tidalCall("auth_logout");
 
@@ -131,68 +112,6 @@ export const authAuthorize = (redirectBase?: string, clientId?: string) =>
  */
 export const authExchange = (code: string, state?: string) =>
   tidalCall("auth_exchange", { code, state });
-
-// ============ 搜索 ============
-
-/**
- * 搜索（tracks / albums / artists / playlists）
- * @param query 关键词
- * @param type 搜索类型（注意：TIDAL 大写，与 Qobuz 略不同）
- * @param limit 返回数量（最大 50）
- * @param offset 偏移量
- */
-export const search = <T = any>(
-  query: string,
-  type: "TRACKS" | "ALBUMS" | "ARTISTS" | "PLAYLISTS",
-  limit = 20,
-  offset = 0,
-) => tidalCall<T>("search", { query, type, limit, offset });
-
-// ============ 专辑 ============
-
-/** 专辑详情 */
-export const albumGet = (albumId: string) => tidalCall("album_get", { album_id: albumId });
-
-/** 专辑曲目列表 */
-export const albumGetTracks = (albumId: string, limit = 50, offset = 0) =>
-  tidalCall("album_getTracks", { album_id: albumId, limit, offset });
-
-// ============ 歌单 ============
-
-/** 歌单详情 */
-export const playlistGet = (playlistId: string) =>
-  tidalCall("playlist_get", { playlist_id: playlistId });
-
-// ============ 艺术家 ============
-
-/** 艺术家详情 */
-export const artistGet = (artistId: string) => tidalCall("artist_get", { artist_id: artistId });
-
-/** 艺术家专辑列表 */
-export const artistGetAlbums = (artistId: string, limit = 50, offset = 0) =>
-  tidalCall("artist_getAlbums", { artist_id: artistId, limit, offset });
-
-/** 艺术家热门曲目 */
-export const artistGetTopTracks = (artistId: string, limit = 50, offset = 0) =>
-  tidalCall("artist_getTopTracks", { artist_id: artistId, limit, offset });
-
-// ============ 曲目 / 流 URL ============
-
-/** 曲目详情 */
-export const trackGet = (trackId: string) => tidalCall("track_get", { track_id: trackId });
-
-/** 获取曲目流 URL（含 DASH manifest） */
-export const trackGetStreamUrl = (trackId: string, quality?: string) =>
-  tidalCall("track_getStreamUrl", { track_id: trackId, quality });
-
-// ============ 收藏 ============
-
-/** 用户收藏 */
-export const userGetFavorites = (
-  type: "tracks" | "albums" | "artists" | "playlists",
-  limit = 50,
-  offset = 0,
-) => tidalCall("user_getFavorites", { type, limit, offset });
 
 // ============ 首页（pages）与分类导航 ============
 

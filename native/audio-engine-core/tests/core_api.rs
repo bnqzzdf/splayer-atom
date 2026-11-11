@@ -78,7 +78,6 @@ fn player_states_are_copyable_and_comparable() {
     assert_ne!(state, PlayerState::Paused);
 }
 
-#[cfg(feature = "napi")]
 #[test]
 fn napi_feature_exposes_metadata_and_scanner_modules() {
     use std::collections::HashMap;
@@ -93,7 +92,6 @@ fn napi_feature_exposes_metadata_and_scanner_modules() {
     assert!(audio_engine_core::scanner::file_stat(std::path::Path::new("/no/such/file")).is_none());
 }
 
-#[cfg(feature = "napi")]
 #[test]
 fn napi_feature_exposes_tempo_processor() {
     use audio_engine_core::tempo::StretchProcessor;

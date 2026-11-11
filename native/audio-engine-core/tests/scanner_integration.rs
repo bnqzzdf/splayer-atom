@@ -1,5 +1,3 @@
-#![cfg(feature = "napi")]
-
 //! 集成测试：扫描器核心 API
 //!
 //! 这些测试验证 NAPI wrapper 跨 crate 使用扫描器时的公共接口。

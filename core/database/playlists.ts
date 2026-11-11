@@ -50,6 +50,13 @@ const SELECT_PLAYLIST = `
   LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
 `;
 
+const getPlaylistSummary = (id: string): PlaylistSummary | null => {
+  const row = getDb()
+    .prepare(`${SELECT_PLAYLIST} WHERE p.id = ? AND p.type = 'local' GROUP BY p.id`)
+    .get(id) as PlaylistRow | undefined;
+  return row ? toSummary(row) : null;
+};
+
 /** 获取全部歌单列表 */
 export const getPlaylists = (): PlaylistSummary[] => {
   const rows = getDb()
@@ -66,10 +73,8 @@ export const getPlaylists = (): PlaylistSummary[] => {
  * @returns 歌单及有序歌曲
  */
 export const getPlaylist = (id: string): PlaylistDetail | null => {
-  const row = getDb()
-    .prepare(`${SELECT_PLAYLIST} WHERE p.id = ? AND p.type = 'local' GROUP BY p.id`)
-    .get(id) as PlaylistRow | undefined;
-  if (!row) return null;
+  const summary = getPlaylistSummary(id);
+  if (!summary) return null;
   const trackIds = getDb()
     .prepare(
       `SELECT pt.track_id
@@ -82,7 +87,7 @@ export const getPlaylist = (id: string): PlaylistDetail | null => {
   const fetched = getTracksByIds(trackIds.map((item) => item.track_id));
   const byId = new Map(fetched.map((track) => [track.id, track]));
   return {
-    ...toSummary(row),
+    ...summary,
     tracks: trackIds.flatMap((item) => {
       const track = byId.get(item.track_id);
       return track ? [track] : [];
@@ -108,7 +113,7 @@ export const createPlaylist = (input: PlaylistCreateInput): PlaylistSummary => {
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(id, input.type, title, input.description?.trim() || null, now, now);
-  return getPlaylists().find((playlist) => playlist.id === id)!;
+  return getPlaylistSummary(id)!;
 };
 
 /**
@@ -118,7 +123,7 @@ export const createPlaylist = (input: PlaylistCreateInput): PlaylistSummary => {
  * @returns 更新后的歌单
  */
 export const updatePlaylist = (id: string, input: PlaylistUpdateInput): PlaylistSummary | null => {
-  const current = getPlaylists().find((playlist) => playlist.id === id);
+  const current = getPlaylistSummary(id);
   if (!current) return null;
   const title = input.title?.trim() ?? current.title;
   if (!title) throw new Error("歌单名称不能为空");
@@ -135,7 +140,7 @@ export const updatePlaylist = (id: string, input: PlaylistUpdateInput): Playlist
       Date.now(),
       id,
     );
-  return getPlaylists().find((playlist) => playlist.id === id) ?? null;
+  return getPlaylistSummary(id);
 };
 
 /**
@@ -156,7 +161,7 @@ export const deletePlaylist = (id: string): void => {
  * @returns 实际新增数量
  */
 export const addPlaylistTracks = (id: string, trackIds: string[]): number => {
-  const playlist = getPlaylists().find((item) => item.id === id);
+  const playlist = getPlaylistSummary(id);
   if (!playlist || playlist.type !== "local") return 0;
   const uniqueIds = [...new Set(trackIds)];
   if (uniqueIds.length === 0) return 0;
@@ -198,7 +203,7 @@ export const addPlaylistTracks = (id: string, trackIds: string[]): number => {
  * @param trackIds - 歌曲 ID
  */
 export const removePlaylistTracks = (id: string, trackIds: string[]): number => {
-  const playlist = getPlaylists().find((item) => item.id === id);
+  const playlist = getPlaylistSummary(id);
   if (!playlist || playlist.type !== "local") return 0;
   const ids = [...new Set(trackIds)];
   if (ids.length === 0) return 0;

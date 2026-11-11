@@ -1,20 +1,7 @@
 {
-  "update": {
-    "dialogTitle": "New Version Available",
-    "later": "Later",
-    "download": "Download",
-    "downloading": "Downloading",
-    "installNow": "Restart & Install",
-    "goDownload": "Go to Download",
-    "goStore": "Update in Store",
-    "upToDate": "You're on the latest version",
-    "readyToast": "Update ready — restart to install",
-    "failed": "Update failed, please try again later"
-  },
   "onboarding": {
     "next": "Next",
     "back": "Back",
-    "finish": "Finish",
     "footer": "You can adjust anything skipped here anytime in Settings",
     "welcome": {
       "title": "Welcome to SPlayer Atom",
@@ -70,13 +57,10 @@
     "configure": "Configure",
     "more": "More",
     "save": "Save",
-    "add": "Add",
     "edit": "Edit",
     "delete": "Delete",
     "enable": "Enable",
     "enabled": "Enabled",
-    "active": "Active",
-    "saveAndRelaunch": "Save & Relaunch",
     "reset": "Reset",
     "retry": "Retry",
     "prev": "Previous",
@@ -86,7 +70,6 @@
     "noData": "No data",
     "noMore": "No more ~",
     "refreshCache": "Refresh cache",
-    "success": "Success",
     "copied": "Copied",
     "copyFailed": "Copy failed",
     "playAll": "Play All",
@@ -98,8 +81,6 @@
   "comments": {
     "name": "Song Comments",
     "title": "Comments for \"{name}\"",
-    "hot": "Top Comments",
-    "new": "Latest Comments",
     "loading": "Loading comments...",
     "empty": "No comments yet",
     "noSource": "No comment source available",
@@ -192,8 +173,6 @@
     "favorites": "Favorites",
     "cloud": "My Cloud",
     "streaming": "Media Sources",
-    "stats": "Stats",
-    "devtools": "Developer Tools",
     "globalSettings": "Global Settings",
     "searchPlaceholder": "Search songs, artists or albums",
     "searchEmpty": "Start typing to search",
@@ -214,42 +193,6 @@
       "playlist": "Go to playlist [{id}]"
     },
     "platforms": "Streaming"
-  },
-  "recognition": {
-    "title": "Music Recognition",
-    "entry": "Recognize",
-    "description": "Identify the music currently playing",
-    "start": "Start Recognition",
-    "sourceLabel": "Audio source",
-    "hint": {
-      "system": "We will capture a short audio sample from your system to identify the music",
-      "microphone": "Move closer to the source and keep the room quiet for better results"
-    },
-    "source": {
-      "system": "System Audio",
-      "microphone": "Microphone"
-    },
-    "phase": {
-      "capturing": "Listening…",
-      "fingerprinting": "Generating fingerprint…",
-      "matching": "Matching library…"
-    },
-    "empty": "No song identified, move closer to the sound source and retry",
-    "retry": "Try Again",
-    "cancel": "Cancel",
-    "play": "Play",
-    "unavailable": "Music recognition is not supported on this device",
-    "searching": "Search this song",
-    "error": {
-      "unsupported": "System audio capture is not supported on this platform",
-      "no-device": "No audio input device found",
-      "permission-denied": "Microphone permission denied, please grant access in system settings",
-      "capture-failed": "Audio capture failed",
-      "silent-input": "No sound detected, please check audio output",
-      "network": "Matching service unavailable, please try again later",
-      "afp-unavailable": "Audio fingerprint library unavailable",
-      "unknown": "Recognition failed, please try again"
-    }
   },
   "home": {
     "greetingLine": "{greeting}, {name}",
@@ -356,18 +299,10 @@
     "qrTipScanned": "Scanned, please confirm in the app",
     "qrTipExpired": "QR code expired, refreshing",
     "qrTipDone": "Signed in",
-    "qrTipUnknown": "Unknown state, please retry",
-    "qrRefresh": "Refresh QR code",
-    "autoFetch": "Auto fetch",
-    "autoFetchTitle": "Before you continue",
-    "autoFetchTip": "This feature can't guarantee account safety — use it at your own discretion. If the official page goes blank or unresponsive, close it and try again.",
-    "autoFetchConfirm": "I understand",
     "manualCookie": "Manual cookie",
     "cookieHint": "Only the MUSIC_U field from your cookie is needed. e.g. MUSIC_U=xxxx;",
-    "cookiePlaceholder": "Paste cookie, must contain MUSIC_U=xxx;",
     "cookieInvalid": "Invalid cookie. MUSIC_U is required.",
     "cookieConfirm": "Sign in",
-    "success": "Signed in",
     "failed": "Sign-in failed, please try again",
     "unknownUser": "Unknown user",
     "managePlatforms": "Streaming accounts",
@@ -471,8 +406,7 @@
       "already": "Already in Personal FM",
       "failed": "Failed to start Personal FM, please try again later",
       "modeSettings": "Personal FM Mode",
-      "modeTooltip": "FM Mode & Scene",
-      "modeSettingsTip": "Select preferred recommendation mode and scene"
+      "modeTooltip": "FM Mode & Scene"
     },
     "lyricOffset": {
       "title": "Lyric Offset",
@@ -541,7 +475,6 @@
       "play": "Play",
       "playNext": "Play Next",
       "addToQueue": "Add to Queue",
-      "showInExplorer": "Open Location",
       "copyPath": "Copy File Path",
       "editTags": "Edit Metadata",
       "download": "Download to Core",
@@ -585,8 +518,6 @@
     "empty": "Playlist is empty",
     "unknownArtist": "Unknown Artist",
     "remaining": "{time} remaining",
-    "clearList": "Clear All",
-    "locateCurrent": "Now Playing",
     "clearConfirmTitle": "Clear Playlist",
     "clearConfirmContent": "Are you sure you want to clear the entire playlist? This cannot be undone."
   },
@@ -616,23 +547,7 @@
     "removeAction": "Remove from cloud",
     "removeTitle": "Remove from Cloud",
     "removeConfirmOne": "Remove \"{title}\" from your cloud? This cannot be undone.",
-    "removeConfirm": "Remove {count} songs from your cloud? This cannot be undone.",
-    "upload": {
-      "button": "Upload",
-      "title": "Upload to Cloud",
-      "selectFile": "Select files",
-      "emptyHint": "Click Select files to add songs",
-      "clearFinished": "Clear finished",
-      "instant": "Instant",
-      "done": "Done",
-      "reading": "Reading",
-      "retry": "Retry",
-      "remove": "Remove",
-      "capacityFull": "Not enough cloud space",
-      "riskTip": "Uploading may get your account flagged or restricted, so use it with care. After uploading, the cloud needs some time to match the song — refresh again later to check.",
-      "error": "Upload failed",
-      "errorWithCode": "Upload failed ({code})"
-    }
+    "removeConfirm": "Remove {count} songs from your cloud? This cannot be undone."
   },
   "history": {
     "title": "Play History",
@@ -643,7 +558,6 @@
   },
   "download": {
     "title": "Core Downloads",
-    "activeCount": "{count} in progress",
     "clearFinished": "Clear finished",
     "clearConfirmTitle": "Clear finished tasks",
     "clearConfirmContent": "This removes all completed and failed task records from the list. Downloaded files on disk are kept. Continue?",
@@ -657,10 +571,8 @@
     "qualityDefault": "Follow Default",
     "cancel": "Cancel",
     "retry": "Retry",
-    "openFolder": "Show in folder",
     "remove": "Remove",
     "tagWarning": "Failed to write tags; file saved",
-    "resolveFailed": "Cannot download to Core: {title}",
     "alreadyQueued": "Already in the Core download queue",
     "alreadyDownloaded": "Already downloaded to Core",
     "started": "Added to Core downloads: {title}",
@@ -718,12 +630,9 @@
     "scanAll": "Full Rescan",
     "scanIdleHint": "Run an incremental scan after adding or changing music directories.",
     "cancelScan": "Cancel Scan",
-    "scanning": "Scanning...",
     "scanProgress": "Scanning {scanned}/{total}",
     "scanDiscovering": "Finding files…",
     "scanFinalizing": "Updating the library…",
-    "folders": "Music Directories",
-    "foldersDescription": "Songs are automatically synced when added or removed",
     "removeFolder": "Remove Directory",
     "removeFolderConfirm": "Removing this directory will delete its songs from the library!",
     "nestedHint": "Folder is nested with an existing one; skipped"
@@ -746,14 +655,11 @@
       "about": "About"
     },
     "section": {
-      "platformLogin": "Platform Login",
-      "platformConfig": "Platform Config",
       "network": "Network & Proxy",
       "aboutApp": "About",
       "specialThanks": "Special Thanks",
       "developers": "Developers",
       "community": "Community",
-      "update": "Update",
       "language": "Language",
       "playControl": "Playback Control",
       "audioSource": "Audio Source",
@@ -772,11 +678,9 @@
       "font": "Fonts",
       "playerBar": "Player Bar",
       "nowPlaying": "Now Playing",
-      "media": "Media Controls",
       "device": "Output Device",
       "providerAccounts": "Provider Accounts",
       "listenbrainz": "ListenBrainz",
-      "systemConfig": "System",
       "pluginManage": "Import Plugins",
       "pluginsList": "Plugin Management",
       "streaming": "Media Source Config",
@@ -787,15 +691,10 @@
       "downloadTags": "What to Write",
       "cache": "Cache Management",
       "database": "Database Management",
-      "backupReset": "Backup & Reset",
       "preset": "OCD Settings",
       "envInfo": "Environment Info"
     },
     "about": {
-      "checkUpdate": "Check for Updates",
-      "checking": "Checking",
-      "newVersion": "Update Available",
-      "openLogs": "Open Logs",
       "officialSite": "Official Site",
       "showMore": "More Contributors",
       "collapse": "Collapse",
@@ -813,7 +712,6 @@
         "neteaseApi": "Enhanced and backup Netease Cloud Music API"
       }
     },
-    "storeVersion": "Store",
     "language": {
       "label": "Language",
       "description": "Switch the display language"
@@ -893,10 +791,8 @@
     "outputDevice": {
       "label": "Output Device",
       "description": "Select audio output device",
-      "default": "System Default",
       "required": "Output device required",
       "requiredHint": "Select an ALSA, Diretta, or UPnP output device before playing.",
-      "noneAvailable": "No available output device was detected",
       "noneInGroup": "No devices found",
       "refresh": "Refresh devices",
       "groups": {
@@ -974,25 +870,6 @@
       "label": "Auto-Detect Background Lyrics",
       "description": "Detect backing vocals from brackets. Disable this if lyrics are misdetected"
     },
-    "cjkTransform": {
-      "label": "Chinese Conversion",
-      "description": "Convert lyric text between Simplified and Traditional Chinese or Japanese Kanji",
-      "none": "Off",
-      "s2t": "Simplified → Traditional",
-      "t2s": "Traditional → Simplified",
-      "s2tw": "Simplified → Traditional (Taiwan)",
-      "tw2s": "Traditional (Taiwan) → Simplified",
-      "s2hk": "Simplified → Traditional (Hong Kong)",
-      "hk2s": "Traditional (Hong Kong) → Simplified",
-      "s2twp": "Simplified → Traditional (Taiwan)",
-      "tw2sp": "Traditional (Taiwan) → Simplified",
-      "t2tw": "Traditional → Traditional (Taiwan)",
-      "tw2t": "Traditional (Taiwan) → Traditional",
-      "t2hk": "Traditional → Traditional (Hong Kong)",
-      "hk2t": "Traditional (Hong Kong) → Traditional",
-      "jp2t": "Japanese Shinjitai → Traditional",
-      "t2jp": "Traditional → Japanese Shinjitai"
-    },
     "enableOnlineTTMLLyric": {
       "label": "Enable Online TTML Lyrics",
       "description": "Fetch lyrics from AMLL TTML DB. Supports word-level timing, translation, and romanization."
@@ -1023,7 +900,6 @@
       "regexHint": "JavaScript regex — compiled with the case-insensitive flag",
       "regexPlaceholder": "Enter regex pattern",
       "add": "Add",
-      "remove": "Remove",
       "empty": "No rules configured",
       "clear": "Clear current list",
       "duplicate": "Rule already exists",
@@ -1039,13 +915,7 @@
     },
     "confirm": {
       "highResourceTitle": "Resource-Intensive Feature",
-      "highResourceContent": "Enabling it may noticeably increase memory and CPU usage, and could cause stuttering on lower-end devices. Enable it anyway?",
-      "restartRequiredTitle": "Restart Required",
-      "restartRequiredContent": "This setting requires an app restart. Save and relaunch now?",
-      "testChannelTitle": "Switch to a Test Channel",
-      "testChannelContent": "Beta and Alpha channels receive test releases early. Alpha releases may be highly unstable. Switch anyway?",
-      "kugouLoginVersionTitle": "Switch KG Login Version",
-      "kugouLoginVersionContent": "After switching, the current credentials will not match the new version. You must log out and scan the QR code again, or VIP privileges and high-quality playback will stop working. Switch anyway?"
+      "highResourceContent": "Enabling it may noticeably increase memory and CPU usage, and could cause stuttering on lower-end devices. Enable it anyway?"
     },
     "useAMSpring": {
       "label": "Spring Animation Debug Switch",
@@ -1348,21 +1218,7 @@
       "label": "Font Settings",
       "description": "Configure fonts for Web Control and lyrics",
       "title": "Font Settings",
-      "loading": "Loading system fonts",
-      "placeholder": "Enter a font name",
-      "useSystem": "System default",
-      "useGlobal": "Follow global",
-      "useLyric": "Follow lyric",
-      "modeLabel": "Input method",
-      "modeHint": "All fields below use this method",
-      "modeSelect": "Manual pick",
       "modeCustom": "Custom font",
-      "resetRow": "Reset to default",
-      "fieldLabel": "{name} font",
-      "groups": {
-        "general": "General",
-        "appLyric": "Lyric Font"
-      },
       "fields": {
         "global": "global",
         "lyric": "lyrics",
@@ -1379,26 +1235,6 @@
     "listenbrainzNowPlaying": {
       "label": "Send Now Playing",
       "description": "Send the current track to ListenBrainz without placing it in the durable outbox"
-    },
-    "providerAccounts": {
-      "connectedAs": "Signed in as {name}",
-      "disconnect": "Sign out",
-      "disconnected": "Provider account signed out",
-      "verify": "Verify & Sign In",
-      "connectFailed": "Account verification failed: {error}",
-      "qobuz": {
-        "hint": "Enter your own user_auth_token. Core verifies it before saving.",
-        "placeholder": "Qobuz user_auth_token",
-        "connected": "Qobuz account verified"
-      },
-      "tidal": {
-        "hint": "Import your own access token. Refresh token and client id are optional.",
-        "accessToken": "TIDAL access token",
-        "refreshToken": "Refresh token (optional)",
-        "clientId": "Client ID (optional, for refresh)",
-        "connected": "Signed in: {id} · {country}",
-        "refreshable": "These credentials include a refresh token and client id for future refreshes."
-      }
     },
     "listenbrainz": {
       "connect": "Connect Token",
@@ -1430,11 +1266,9 @@
       "connect": "Connect Account",
       "connected": "Connected",
       "disconnect": "Disconnect",
-      "loginWeb": "Connect Account",
       "loginQr": "QR Login",
       "loginQrQQ": "QQ QR Login",
       "loginQrWX": "WeChat QR Login",
-      "qrTitle": "Scan to Log In",
       "manualCookie": "Cookie Login",
       "logout": "Log Out",
       "logoutTitle": "Log Out from {name}",
@@ -1477,12 +1311,6 @@
       "label": "Use Real IP",
       "description": "May be restricted overseas or in some regions; enable this to try to resolve it"
     },
-    "kugouLoginVersion": {
-      "label": "KG Login Version",
-      "description": "Re-login is required after switching",
-      "standard": "Standard",
-      "concept": "Concept"
-    },
     "neteaseScrobbleEnabled": {
       "label": "Enable scrobble",
       "description": "Automatically report listening records to NCM after a track has played long enough"
@@ -1518,8 +1346,6 @@
       "uninstallConfirm": "Are you sure you want to uninstall \"{name}\"? This action cannot be undone.",
       "uninstallSuccess": "Plugin uninstalled",
       "uninstallFailed": "Uninstall failed",
-      "by": "By",
-      "sources": "Sources",
       "pendingUpdate": "Update",
       "noChangelog": "No release notes",
       "openUpdateUrl": "Open update page",
@@ -1576,10 +1402,6 @@
         }
       }
     },
-    "pluginManager": {
-      "label": "Plugin Manager",
-      "description": "Import, enable, or uninstall extension scripts"
-    },
     "enableLocalTTMLOverride": {
       "label": "Enable Local TTML Library",
       "description": "Match .ttml in a chosen folder by song metadata; takes priority over online lyrics when found"
@@ -1601,10 +1423,8 @@
     },
     "cacheDir": {
       "label": "Cache Directory",
-      "open": "Open in file manager",
       "change": "Change",
       "reset": "Reset",
-      "hint": "Covers, artist avatars and backgrounds live under this folder. Switching wipes the old caches; the new location must be an empty folder.",
       "changedHint": "Cache directory switched",
       "notEmpty": "The selected folder isn't empty. Please pick an empty folder.",
       "switchConfirmTitle": "Switch cache directory?",
@@ -1766,15 +1586,13 @@
     "chooseFolder": "Choose containing folder",
     "unknownAlbum": "Unknown Album",
     "empty": "No songs",
-    "noDescription": "No description yet~",
     "introduction": "{type} Description",
     "viewIntroduction": "View full description",
     "album": "Album",
     "playlist": "Playlist",
     "radio": "Radio",
     "scope": {
-      "local": "Local",
-      "online": "Online"
+      "local": "Local"
     },
     "my": "My {type}s",
     "subscribed": "Subscribed {type}s",
@@ -1837,7 +1655,6 @@
   },
   "folder": {
     "label": "Folders",
-    "totalFolders": "{count} folders",
     "pinned": "Pinned folders",
     "roots": "Music locations",
     "pin": "Pin to Folder home",
@@ -1866,7 +1683,6 @@
     "scanStarted": "Folder scan started",
     "play": "Play",
     "shuffle": "Shuffle",
-    "shufflePlay": "Shuffle folder",
     "playNext": "Play next",
     "queue": "Add to queue",
     "addToPlaylist": "Add to playlist…",
@@ -1881,9 +1697,6 @@
     "actionFailed": "The action could not be completed. Try again.",
     "materialLoadFailed": "Unable to read this supplementary material",
     "textTruncated": "File is large; showing only the first {size}",
-    "pdf": "PDF document",
-    "textDocument": "Text material",
-    "image": "Image",
     "empty": "No browsable music content in this folder",
     "filterEmpty": "No matching items in this folder",
     "searchEmpty": "No matching folders or files"
@@ -1954,7 +1767,6 @@
   },
   "tagEditor": {
     "title": "Edit Metadata",
-    "replaceCover": "Replace Cover",
     "onlineMatch": "Auto Match Tags",
     "matchHint": "Don't want to fill tags manually?",
     "noMatches": "No matches found",

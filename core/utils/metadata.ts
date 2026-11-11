@@ -18,16 +18,6 @@ export const parseArtists = (raw: string): Artist[] => {
 };
 
 /**
- * 将 Artist 数组格式化为字符串
- * @param artists - Artist 数组
- * @param separator - 分隔符，默认 " / "
- * @returns 拼接后的字符串，空数组返回空字符串
- */
-export const formatArtists = (artists: Artist[], separator = " / "): string => {
-  return artists.map((artist) => artist.name).join(separator);
-};
-
-/**
  * 将专辑字符串转为 Album 对象
  * @param raw - 原始专辑名
  * @returns Album 对象，空字符串返回 undefined

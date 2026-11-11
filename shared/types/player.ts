@@ -306,16 +306,6 @@ export interface DirectStageResult {
 
 /** 播放器 API */
 export interface PlayerApi {
-  /** 加载音频（本地路径或网络地址）。可选下发权威 meta 用于 SMTC/托盘 */
-  load: (source: string, options?: LoadOptions) => Promise<IpcResponse<LoadResult>>;
-  /** 恢复播放 */
-  play: () => Promise<IpcResponse>;
-  /** 暂停播放 */
-  pause: () => Promise<IpcResponse>;
-  /** 停止播放 */
-  stop: () => Promise<IpcResponse>;
-  /** 跳转到指定位置（毫秒） */
-  seek: (positionMs: number) => Promise<IpcResponse>;
   /** 获取主进程权威播放会话 */
   getSession: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** fresh resolve 并热替换当前 canonical Track，保留 Core 捕获的进度/播放态 */
@@ -393,22 +383,14 @@ export interface PlayerApi {
   cancelSessionAutoClose: () => Promise<IpcResponse<PlaybackSessionSnapshot>>;
   /** 设置音量（0.0 ~ 1.0） */
   setVolume: (volume: number) => Promise<IpcResponse>;
-  /** 设置输出设备切换时暂停播放 */
-  setPauseOnDeviceSwitch: (enabled: boolean) => Promise<IpcResponse>;
-  /** 获取当前音量 */
-  getVolume: () => Promise<IpcResponse<number>>;
   /** 获取播放状态快照 */
   getStatus: () => Promise<IpcResponse<PlayerStatus>>;
   /** 设置渐入渐出时长（毫秒） */
   setFadeDuration: (ms: number) => Promise<IpcResponse>;
-  /** 获取渐入渐出时长（毫秒） */
-  getFadeDuration: () => Promise<IpcResponse<number>>;
   /** 获取原始高清封面（base64 data URL） */
   getCoverRaw: () => Promise<IpcResponse<string | null>>;
   /** 读取外部歌词文件内容 */
   readLyricFile: (filePath: string) => Promise<IpcResponse<string>>;
-  /** 重建音频输出设备 */
-  reinit: () => Promise<IpcResponse>;
   /** 设置音量均衡 */
   setNormalizationEnabled: (enabled: boolean) => Promise<IpcResponse>;
   /** 启用/禁用 10 频段均衡器 */
@@ -425,14 +407,6 @@ export interface PlayerApi {
   setPitchSync: (sync: boolean) => Promise<IpcResponse>;
   /** 获取所有音频输出设备 */
   getOutputDevices: () => Promise<IpcResponse<AudioDevice[]>>;
-  /** 异步扫描 Diretta Target */
-  scanDirettaDevices: () => Promise<IpcResponse<AudioDevice[]>>;
   /** 切换输出设备（null 表示取消选择） */
   setOutputDevice: (deviceId: string | null) => Promise<IpcResponse>;
-  /** 获取当前选择的输出设备 ID（null = 尚未选择） */
-  getSelectedDeviceName: () => Promise<IpcResponse<string | null>>;
-  /** 广播播放控制事件 */
-  dispatch: (type: string) => void;
-  /** 订阅播放事件 */
-  onEvent: (callback: (event: PlayerEvent) => void) => () => void;
 }

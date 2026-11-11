@@ -5,15 +5,8 @@ import type {
   PlaylistSummary,
   PlaylistUpdateInput,
 } from "@shared/types/playlist";
-import type { Track } from "@shared/types/player";
-import { controlAssetUrl, serverAssetUrl } from "./controlAssets";
+import { controlAssetUrl, mapTrack, serverAssetUrl } from "./controlAssets";
 import { request } from "./controlClient";
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
 
 const mapSummary = (playlist: PlaylistSummary): PlaylistSummary => ({
   ...playlist,

@@ -38,7 +38,6 @@ export interface PlatformAccountAdapter {
   userIdLabel: string;
   fetchProfile: () => Promise<PlatformProfile | null>;
   logout: () => Promise<void>;
-  openWebLogin?: () => Promise<boolean>;
   setCookie?: (cookie: string) => Promise<boolean>;
   qrLogin?: QrLoginAdapter;
   qrLoginOptions?: QrLoginOption[];

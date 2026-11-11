@@ -13,18 +13,12 @@ import type {
 } from "@shared/types/folderBrowser";
 import type { Track } from "@shared/types/player";
 import type { ScanProgress } from "@shared/types/library";
-import { controlAssetUrl } from "./controlAssets";
+import { mapTrack } from "./controlAssets";
 import { coreApiOrigin, request } from "./controlClient";
 
 const json = (body: unknown): RequestInit => ({
   method: "POST",
   body: JSON.stringify(body),
-});
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
 });
 
 const mapBrowse = (page: FolderBrowsePage): FolderBrowsePage => ({

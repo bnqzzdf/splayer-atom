@@ -6,6 +6,7 @@
 
 import { createOption } from "../core/option";
 import { CLIENT_LOG_DOMAIN } from "../core/config";
+import { toNcblSourceType } from "../core/playLog";
 import type { NeteaseModule } from "../core/types";
 
 const scrobble: NeteaseModule = async (query, request) => {
@@ -29,14 +30,7 @@ const scrobble: NeteaseModule = async (query, request) => {
 
   const resourceType = query.resourceType === "dj" ? "dj" : "song";
   const sourceType = typeof query.sourceType === "string" ? query.sourceType : "song";
-  const sourceName =
-    resourceType === "dj"
-      ? "djradio"
-      : sourceType === "song"
-        ? "track"
-        : sourceType === "radio"
-          ? "djradio"
-          : sourceType;
+  const sourceName = toNcblSourceType(resourceType, sourceType);
   const sourceId = String(query.sourceid || query.sourceId || resourceId);
   const categoryId = Number(query.categoryId);
   const sourceFields = {

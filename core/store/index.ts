@@ -98,18 +98,10 @@ const init = (): SystemConfig => {
 };
 
 /** 配置存储 */
-let data: SystemConfig = init();
+const data: SystemConfig = init();
 
 /** 配置存储 */
 export const store = {
-  /**
-   * 获取配置存储
-   * @returns 配置存储
-   */
-  get store(): SystemConfig {
-    return data;
-  },
-
   /**
    * 获取配置值
    * @param keyPath 配置键路径
@@ -128,19 +120,6 @@ export const store = {
   set(keyPath: ConfigPath | (string & {}), value: unknown): void {
     setByPath(data, keyPath, value);
     flush(data);
-  },
-
-  /** 清空配置 */
-  clear(): void {
-    data = structuredClone(defaultSystemConfig);
-    flush(data);
-  },
-
-  /** 用导入的配置替换当前配置 */
-  replaceAll(input: unknown): void {
-    const raw = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
-    data = deepMerge(defaultSystemConfig, raw);
-    flushImmediate(data);
   },
 
   /** 立即将设置写入磁盘 */

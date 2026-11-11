@@ -46,17 +46,6 @@ export const parseTime = (
 };
 
 /**
- * 解析方括号时间戳字符串 "[mm:ss.xxx]" 为毫秒数
- * @param tag 完整的时间戳字符串，如 "[01:23.456]"
- * @returns 毫秒数，解析失败返回 -1
- */
-export const parseBracketTag = (tag: string): number => {
-  const m = /^\[(\d+):(\d+)[.:](\d{1,3})\]$/.exec(tag);
-  if (!m) return -1;
-  return parseTime(m[1], m[2], m[3]);
-};
-
-/**
  * 解析 TTML 时间戳为毫秒数
  * 支持格式：
  * - 纯秒数："1.234s"

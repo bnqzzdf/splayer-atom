@@ -24,7 +24,6 @@ export const modules: Record<string, KGModule> = {
   album,
   artist,
   playlist,
-  song_list: playlist,
   rank_list: rankList,
   rank_detail: rankDetail,
   hot_playlists: playlistSquare,

@@ -8,17 +8,11 @@ import type {
   StreamingServerConfig,
   StreamingServerInput,
 } from "@shared/types/streaming";
-import { controlAssetUrl } from "./controlAssets";
+import { controlAssetUrl, mapTrack } from "./controlAssets";
 import { request } from "./controlClient";
 import { subscribeCoreControlEvent } from "./controlEventClient";
 
 const query = (values: Record<string, string>): string => new URLSearchParams(values).toString();
-
-const mapTrack = (track: Track): Track => ({
-  ...track,
-  cover: controlAssetUrl(track.cover),
-  coverOriginal: controlAssetUrl(track.coverOriginal),
-});
 
 const mapAlbum = (album: Album): Album => ({ ...album, cover: controlAssetUrl(album.cover) });
 const mapArtist = (artist: Artist): Artist => ({

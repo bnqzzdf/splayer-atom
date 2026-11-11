@@ -131,6 +131,4 @@ export interface LyricsApi {
   fetchTTMLOverlay: (track: Track, platform: "netease" | "qqmusic") => Promise<LyricTTMLResponse>;
   /** 在本地 TTML 歌词库中按元信息匹配，命中返回 TTML 原文 */
   matchLocalTTML: (track: Track) => Promise<LyricTTMLResponse>;
-  /** 弹出目录选择器，返回所选本地 TTML 歌词库目录 */
-  pickLyricRepoDir: () => Promise<string | null>;
 }

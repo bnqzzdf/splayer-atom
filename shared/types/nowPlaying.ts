@@ -15,17 +15,6 @@ export interface NowPlayingSnapshot {
   sendTimestamp: number;
 }
 
-/** 主进程 → 窗口：播放位置锚点 */
-export interface NowPlayingPositionSync {
-  position: number;
-  playing: boolean;
-  /** 完整播放状态，区分 stopped 与 paused */
-  state: PlayerState;
-  /** 播放速度倍率（0.5 ~ 2.0） */
-  speed: number;
-  sendTimestamp: number;
-}
-
 /** 主进程 → 渲染端 / 窗口：当前曲目歌词偏移变化（切歌或用户调整） */
 export interface NowPlayingLyricOffsetSync {
   /** 对应的 Track.id */

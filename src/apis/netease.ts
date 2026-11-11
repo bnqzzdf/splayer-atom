@@ -77,7 +77,7 @@ export const neteaseCall = async <T = any>(
 type NeteaseProxy = Record<string, <T = any>(params?: Record<string, unknown>) => Promise<T>>;
 
 /**
- * 任意方法调用：`netease.search(...)` / `netease.song_url_v1(...)`
+ * 任意方法调用：`netease.search(...)` / `netease.song_url(...)`
  */
 export const netease: NeteaseProxy = new Proxy({} as NeteaseProxy, {
   get:

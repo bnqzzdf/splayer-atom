@@ -145,18 +145,6 @@ export const eapiResDecrypt = (encryptedHex: string, aeapi = false): unknown => 
   }
 };
 
-/**
- * eapi 请求体解密
- * @param encryptedHex 加密后的文本
- * @returns 解密后的文本
- */
-export const eapiReqDecrypt = (encryptedHex: string): { url: string; data: unknown } | null => {
-  const text = aesDecrypt(encryptedHex, EAPI_KEY, "hex").toString("utf8");
-  const match = text.match(/(.*?)-36cd479b6b5-(.*?)-36cd479b6b5-(.*)/);
-  if (!match) return null;
-  return { url: match[1], data: JSON.parse(match[2]) };
-};
-
 // ---- xeapi（反爬加密）----
 
 /** xeapi 固定对称密钥（AES-256-ECB） */

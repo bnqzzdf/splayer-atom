@@ -167,23 +167,9 @@ export const SOLID_PALETTE_DARK: ThemePalette = {
 };
 
 /**
- * 从 HTMLImageElement 提取主色并应用
- * 缩放到 50×50 降低计算量，经 QuantizerCelebi 量化 + Score 评分
- * @param img 封面图片元素，无封面传 null
- */
-export const extractColorFromImage = (img: HTMLImageElement | null): void => {
-  const themeStore = useThemeStore();
-  if (!img || !useSettingsStore().player.followCoverColor) {
-    themeStore.coverColor = null;
-    return;
-  }
-  themeStore.coverColor = extractColorFromImageElement(img);
-};
-
-/**
  * 从图片 URL 提取主色并应用（不依赖 DOM 渲染）
  * 适用于启动时组件还未挂载的场景
- * http(s) URL 走主进程取字节构造 blob URL，避免跨域 canvas tainted
+ * http(s) URL 通过 fetch 获取字节构造 blob URL，依赖目标图片支持跨域访问
  * @param url 封面图片 URL，传 null 清除颜色
  */
 export const extractColorFromUrl = (url: string | null): void => {

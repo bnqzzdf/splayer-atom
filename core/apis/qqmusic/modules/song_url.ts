@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { WEB_UA, hash33 } from "../core/config";
 import { getQQMusicCookies, getQQMusicUin } from "../core/request";
 import { sessionToCookieHeader } from "../core/credential";
 import { coreLog } from "@main/utils/logger";
@@ -32,16 +33,6 @@ const getQualityCandidates = (preferredLevel: string): QualityCandidate[] => {
     return QQ_QUALITY_CANDIDATE_TEMPLATES.slice(targetIndex);
   }
   return QQ_QUALITY_CANDIDATE_TEMPLATES;
-};
-
-const WEB_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-/** QQ 系 CSRF token 算法 */
-const hash33 = (str: string, seed = 0): number => {
-  let h = seed;
-  for (const ch of str) h = (((h << 5) + h + ch.codePointAt(0)!) & 0xffffffff) >>> 0;
-  return h & 2147483647;
 };
 
 interface MidUrlInfo {

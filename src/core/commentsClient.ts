@@ -4,15 +4,8 @@ import type {
   MusicCommentQuery,
   MusicCommentResponse,
 } from "@shared/types/comment";
-import type { Track } from "@shared/types/player";
-import { serverAssetUrl } from "./controlAssets";
+import { toServerTrack } from "./controlAssets";
 import { request } from "./controlClient";
-
-const toServerTrack = (track: Track): Track => ({
-  ...track,
-  cover: serverAssetUrl(track.cover),
-  coverOriginal: serverAssetUrl(track.coverOriginal),
-});
 
 /** Web Control 的 Core Comments request client。 */
 export const commentsClient: CommentsApi = {

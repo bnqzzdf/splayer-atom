@@ -104,7 +104,7 @@ pub struct InnerPlayer {
 /// 一次加载只拥有一条播放链路；切换时整体取出并释放。
 enum PlaybackRuntime {
     Processed(ProcessedRuntime),
-    Direct(DirectPlayback),
+    Direct(Box<DirectPlayback>),
 }
 
 struct ProcessedRuntime {

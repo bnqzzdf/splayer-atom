@@ -5,26 +5,16 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { WEB_UA, hash33 } from "../core/config";
 import { qmRequest, mergeQQMusicCookies } from "../core/request";
 import {
   credentialToSession,
   getCredentialMusicId,
+  sessionToCookieHeader,
   type QQMusicCredential,
 } from "../core/credential";
 import { coreLog } from "@main/utils/logger";
 import type { QMModule, QMParams } from "../core/types";
-
-const WEB_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-/** QQ 系哈希算法（用于 ptqrtoken 及 g_tk 计算） */
-const hash33 = (str: string, seed = 0): number => {
-  let h = seed;
-  for (let i = 0; i < str.length; i++) {
-    h = (((h << 5) + h + str.charCodeAt(i)) & 0xffffffff) >>> 0;
-  }
-  return h & 2147483647;
-};
 
 /** 从 HTTP 响应中提取 Set-Cookie 并与已有 Cookies 合并 */
 const extractCookies = (
@@ -59,13 +49,6 @@ const extractCookies = (
   }
   return cookieMap;
 };
-
-/** 序列化 Cookie 对象为 Header 字符串 */
-const stringifyCookies = (cookies: Record<string, string>): string =>
-  Object.entries(cookies)
-    .filter(([_, v]) => !!v)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("; ");
 
 /**
  * 获取二维码 Key 及图片内容
@@ -254,7 +237,7 @@ export const login_qr_check: QMModule = async (params: QMParams) => {
     const checkSigRes = await fetch(jumpUrl, {
       headers: {
         Referer: "https://xui.ptlogin2.qq.com/",
-        Cookie: stringifyCookies(initialCookies),
+        Cookie: sessionToCookieHeader(initialCookies) ?? "",
         "User-Agent": WEB_UA,
       },
       redirect: "manual",
@@ -295,7 +278,7 @@ export const login_qr_check: QMModule = async (params: QMParams) => {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Referer: "https://xui.ptlogin2.qq.com/",
-        Cookie: stringifyCookies(sessionCookies),
+        Cookie: sessionToCookieHeader(sessionCookies) ?? "",
         "User-Agent": WEB_UA,
       },
       body: authBody.toString(),

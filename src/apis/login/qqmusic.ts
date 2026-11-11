@@ -6,6 +6,7 @@
  */
 
 import type { PlatformProfile } from "@shared/types/platform";
+import { qqmusicCall } from "@/apis/qqmusic";
 import { providerClient } from "@/core/providerClient";
 import type { QrLoginAdapter, QrLoginState } from "./platform";
 
@@ -29,26 +30,19 @@ interface QmQrCheckResponse {
   avatarUrl?: string;
 }
 
-/** 统一调用 Core provider 接口，失败时抛出可读错误。 */
-const callQm = async <T>(name: string, params: Record<string, unknown> = {}): Promise<T> => {
-  const res = await providerClient.call("qqmusic", name, params);
-  if (!res.ok) throw new Error(res.error);
-  return res.data as T;
-};
-
 /**
  * 创建 QM 扫码适配器
  * @param type 扫码类型，'qq' 或 'wx'
  */
 const createQmQrAdapter = (type: "qq" | "wx"): QrLoginAdapter => ({
   create: async () => {
-    const res = await callQm<QmQrKeyResponse>("login_qr_key", { type });
+    const res = await qqmusicCall<QmQrKeyResponse>("login_qr_key", { type });
     if (!res?.key || !res?.content) throw new Error("qm qr key missing");
     // QQ 返回 data:image/png 直出；微信同样返回 data:image/jpeg。
     return { key: res.key, content: res.content };
   },
   check: async (key: string) => {
-    const res = await callQm<QmQrCheckResponse>("login_qr_check", { key, type });
+    const res = await qqmusicCall<QmQrCheckResponse>("login_qr_check", { key, type });
     const state: QrLoginState =
       res.status === 0
         ? "expired"
@@ -73,7 +67,7 @@ export const qqmusicWxQrLoginAdapter: QrLoginAdapter = createQmQrAdapter("wx");
  */
 export const fetchQQMusicLoginStatus = async (): Promise<PlatformProfile | null> => {
   try {
-    const data = await callQm<QmUserDetailResponse>("user_detail");
+    const data = await qqmusicCall<QmUserDetailResponse>("user_detail");
     if (data?.code === 200 && data.loggedIn && data.profile) return data.profile;
     return null;
   } catch (err) {

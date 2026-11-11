@@ -28,8 +28,6 @@ import type { Query } from "./core/option";
 
 /** 会变更登录态的接口：响应里若带 set-cookie，才值得写回 SQLite */
 const SESSION_MUTATING: ReadonlySet<string> = new Set([
-  "login",
-  "login_cellphone",
   "login_qr_check",
   "login_refresh",
   "logout",
@@ -38,13 +36,7 @@ const SESSION_MUTATING: ReadonlySet<string> = new Set([
 
 /** 不采用缓存的实时接口 */
 const NON_CACHEABLE: ReadonlySet<string> = new Set([
-  "audio_match",
-  "captcha_sent",
-  "captcha_verify",
-  "login",
-  "login_cellphone",
   "login_qr_check",
-  "login_qr_create",
   "login_qr_key",
   "login_refresh",
   "login_status",
@@ -69,12 +61,6 @@ const NON_CACHEABLE: ReadonlySet<string> = new Set([
   "user_subcount",
   "user_cloud",
   "user_cloud_del",
-  "cloud_upload_check",
-  "cloud_nos_token",
-  "cloud_upload_info",
-  "cloud_pub",
-  "cloud_upload_check_v2",
-  "cloud_song_import",
   "album_sub",
   "album_sublist",
   "artist_sub",
@@ -84,9 +70,6 @@ const NON_CACHEABLE: ReadonlySet<string> = new Set([
   "fm_trash",
   "recommend_songs",
 ]);
-
-/** 无需初始化网易云匿名登录态的公开接口 */
-const SESSIONLESS: ReadonlySet<string> = new Set(["audio_match"]);
 
 /** 国内 IP 前缀池 */
 const CN_IP_PREFIXES = [
@@ -135,18 +118,7 @@ const persistSession = (cookies: Record<string, string>): void => {
   saveSessionCookies("netease", cookies);
 };
 
-/** "k1=v1; k2=v2; ..." 形式序列化 */
-const serialize = (cookies: Record<string, string>): string =>
-  Object.entries(cookies)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("; ");
-
 export const getNeteaseCookies = (): Record<string, string> => ({ ...loadSession() });
-
-export const setNeteaseCookies = (cookies: Record<string, string>): void => {
-  persistSession(cookies);
-  cacheClear();
-};
 
 export const mergeNeteaseCookies = (patch: Record<string, string>): void => {
   persistSession({ ...loadSession(), ...patch });
@@ -217,11 +189,8 @@ export const callNetease = async (
   if (!fn) throw new Error(`unknown netease api: ${name}`);
 
   const isSessionEndpoint =
-    name.startsWith("login") ||
-    name.startsWith("captcha") ||
-    name === "logout" ||
-    name === "register_anonimous";
-  if (!isSessionEndpoint && !SESSIONLESS.has(name) && params.cookie === undefined) {
+    name.startsWith("login") || name === "logout" || name === "register_anonimous";
+  if (!isSessionEndpoint && params.cookie === undefined) {
     await ensureNeteaseAnonymousSession();
   }
   const session = loadSession();
@@ -268,6 +237,3 @@ export const callNetease = async (
 
   return value;
 };
-
-/** 调试用：当前 cookie 序列化字符串 */
-export const currentCookieString = (): string => serialize(loadSession());

@@ -80,42 +80,6 @@ export const reloadCurrentTrack = async (forcePlay?: boolean): Promise<boolean> 
   return true;
 };
 
-/** 同一首歌因源失效连续重载的次数，换歌时归零 */
-let sourceRecoveryCount = 0;
-/** sourceRecoveryCount 对应的 track id */
-let sourceRecoveryTrackId: string | null = null;
-
-/**
- * 源失效恢复
- * 重载一次后仍失败则放弃跳曲
- */
-export const recoverFromSourceFailure = async (): Promise<void> => {
-  const track = useMediaStore().track;
-  if (!track) return;
-  // 本地文件源失效（文件被删/磁盘错误）没有重载意义，直接跳曲
-  if (track.source === "local") {
-    await nextTrack();
-    return;
-  }
-  if (sourceRecoveryTrackId !== track.id) {
-    sourceRecoveryTrackId = track.id;
-    sourceRecoveryCount = 0;
-  }
-  // 最多重载一次
-  if (sourceRecoveryCount >= 1) {
-    sourceRecoveryCount = 0;
-    await nextTrack();
-    return;
-  }
-  sourceRecoveryCount++;
-  // 重载失败（重新解析的 URL 仍失效 / 加载报错，且不会再有 sourceError 兜底）→ 立即跳曲
-  const ok = await reloadCurrentTrack(true);
-  if (!ok) {
-    sourceRecoveryCount = 0;
-    await nextTrack();
-  }
-};
-
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
   const status = useStatusStore();
@@ -468,10 +432,6 @@ export const dislikeFmTrack = async (): Promise<void> => {
 /**
  * 播放下一首
  */
-export const reloadCurrentQueueTrack = async (): Promise<void> => {
-  await reloadCurrentTrack(true);
-};
-
 export const nextTrack = async (): Promise<void> => {
   if (queue.queueLength.value === 0) return;
   applySessionResult(await sessionClient.nextSession(true));

@@ -50,15 +50,6 @@ export const QUALITY_LABELS: Record<QualityLevel, string> = {
   lq: "LQ",
 };
 
-/** 等级完整文案 */
-const QUALITY_FULL_LABELS: Record<QualityLevel, string> = {
-  "hi-res": "Hi-Res",
-  lossless: "Lossless",
-  hq: "High Quality",
-  sq: "Standard Quality",
-  lq: "Low Quality",
-};
-
 /**
  * 获取音频文件的具体展示级别
  */
@@ -148,14 +139,6 @@ export const getQualityLabel = (quality: AudioQuality | undefined): string => {
       return QUALITY_LABELS[display];
   }
 };
-
-/**
- * 取音质等级完整文案
- * @param quality - 音质信息；缺少信息时使用默认 Low Quality
- * @returns 完整文案
- */
-export const getQualityFullLabel = (quality: AudioQuality | undefined): string =>
-  QUALITY_FULL_LABELS[getQualityLevel(quality)];
 
 /** 是否为无损级别（DSD / SACD / MQA / HDCD / DTS / hi-res / lossless） */
 export const isLosslessQuality = (quality: AudioQuality | undefined): boolean => {

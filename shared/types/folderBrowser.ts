@@ -125,8 +125,6 @@ export interface FolderNavigationTarget {
   focusPath?: string;
 }
 
-export type FolderActionMode = "play" | "shuffle" | "play-next" | "queue";
-
 export interface FolderActionRequest {
   path: string;
   recursive?: boolean;

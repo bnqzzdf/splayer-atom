@@ -33,7 +33,6 @@ export default defineConfig({
     __APP_REPO_NAME__: JSON.stringify(pkg.productName),
     __APP_AUTHOR__: JSON.stringify(pkg.author.name),
     __APP_HOMEPAGE__: JSON.stringify(pkg.homepage),
-    __APP_AUTHOR_URL__: JSON.stringify(pkg.author.url),
     __COMMIT_HASH__: JSON.stringify(getGitCommit()),
     __COMMIT_DATE__: JSON.stringify(getGitDate()),
   },

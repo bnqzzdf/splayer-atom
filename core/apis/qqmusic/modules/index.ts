@@ -9,11 +9,9 @@ import leaderboard from "./leaderboard";
 import toplist from "./toplist";
 import playlistSquare from "./playlist_square";
 import lyric from "./lyric";
-import match from "./match";
 import search from "./search";
 import album from "./album";
 import artist from "./artist";
-import song_info from "./song_info";
 import song_list from "./song_list";
 import user_detail from "./user_detail";
 import song_url from "./song_url";
@@ -30,11 +28,9 @@ export const modules: Record<string, QMModule> = {
   new_songs: newSong,
   new_albums: newAlbum,
   lyric,
-  match,
   search,
   album,
   artist,
-  song_info,
   song_list,
   user_detail,
   song_url,

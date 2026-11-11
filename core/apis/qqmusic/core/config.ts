@@ -32,6 +32,19 @@ export const getCommonParams = (): Record<string, string | number> => ({
 /** Session 缓存时长（毫秒） */
 export const SESSION_TTL = 60 * 60 * 1000;
 
+/** 桌面浏览器 User-Agent（扫码登录与直链解析） */
+export const WEB_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+/** QQ 系哈希算法（用于 ptqrtoken 及 g_tk 计算） */
+export const hash33 = (str: string, seed = 0): number => {
+  let h = seed;
+  for (let i = 0; i < str.length; i++) {
+    h = (((h << 5) + h + str.charCodeAt(i)) & 0xffffffff) >>> 0;
+  }
+  return h & 2147483647;
+};
+
 /** 歌手数组格式化工具：`[{name:'A'},{name:'B'}]` → `A / B` */
 export const formatSingerName = (
   singers: Array<{ name?: string; title?: string }> | undefined,

@@ -105,7 +105,7 @@ impl InnerPlayer {
                 let (_, thread) = runtime.stop();
                 (Some(thread), None)
             }
-            Some(PlaybackRuntime::Direct(runtime)) => (None, Some(runtime)),
+            Some(PlaybackRuntime::Direct(runtime)) => (None, Some(*runtime)),
             None => (None, None),
         };
         self.cover_raw = None;
@@ -163,6 +163,7 @@ impl InnerPlayer {
         let Some(PlaybackRuntime::Direct(playback)) = self.runtime.take() else {
             anyhow::bail!("Direct seek 运行态已丢失");
         };
+        let playback = *playback;
         self.seek_base = playback.position();
         Ok(Some(DirectSeekTake { playback, token }))
     }
@@ -392,7 +393,7 @@ impl InnerPlayer {
         if should_play {
             playback.play()?;
         }
-        self.runtime = Some(PlaybackRuntime::Direct(playback));
+        self.runtime = Some(PlaybackRuntime::Direct(Box::new(playback)));
         if should_play {
             self.start_position_timer();
         }
@@ -415,7 +416,7 @@ impl InnerPlayer {
         self.pending_load_handle = None;
         self.output = None;
         self.stop_runtime();
-        self.runtime = Some(PlaybackRuntime::Direct(playback));
+        self.runtime = Some(PlaybackRuntime::Direct(Box::new(playback)));
         self.seek_base = 0.0;
         self.current_source = Some(source.to_owned());
         self.audio_duration = metadata.duration_secs;

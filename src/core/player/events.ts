@@ -7,7 +7,6 @@ import * as queue from "@/stores/queue";
 import * as playback from "@/services/playback";
 import * as autoClose from "@/services/autoClose";
 import * as abLoop from "@/services/abLoop";
-import * as cacheScheduler from "@/services/cacheScheduler";
 import * as lyricLoader from "@/services/lyric/loader";
 import * as coverLoader from "@/services/coverLoader";
 import { extractColorFromUrl } from "@/utils/color";
@@ -108,7 +107,6 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
       playback.setCurrentTime(0, { force: true });
       playback.setDuration(status.duration);
       playback.setPlaying(event.data.autoPlay);
-      cacheScheduler.cancel();
       abLoop.reset();
       void lyricLoader.loadForTrack(event.data.detail ?? null);
       extractColorFromUrl(projectedTrack.cover ?? projectedTrack.coverOriginal ?? null);
@@ -155,8 +153,6 @@ export const handleEvent = async (event: CorePlayerProjectionEvent): Promise<voi
       useMediaStore().updateLyricIndex(adjusted + status.lyricOffsetMs);
       // AB 循环：到达 B 点 seek 回 A
       abLoop.checkLoop(adjusted);
-      // 推进延时缓存调度
-      cacheScheduler.tick(adjusted);
       break;
     }
     case "error":

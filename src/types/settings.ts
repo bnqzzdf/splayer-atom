@@ -129,7 +129,6 @@ export interface LyricSettings {
   preferPluginLyric: boolean;
   /** 自动识别背景歌词 */
   detectBackgroundLyrics: boolean;
-  /** 中文繁简转换模式（基于 OpenCC） */
   /** 字号自适应窗口大小 */
   adaptiveFontSize: boolean;
   /** 歌词字号（px，自适应关闭时生效） */

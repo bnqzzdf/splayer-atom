@@ -6,6 +6,7 @@
  */
 
 import type { PlatformProfile } from "@shared/types/platform";
+import { kugouCall } from "@/apis/kugou";
 import { providerClient } from "@/core/providerClient";
 import type { QrLoginAdapter, QrLoginState } from "./platform";
 
@@ -28,22 +29,15 @@ interface KgQrCheckResponse {
   avatarUrl?: string;
 }
 
-/** 统一调用 Core provider 接口，失败时抛出可读错误。 */
-const callKg = async <T>(name: string, params: Record<string, unknown> = {}): Promise<T> => {
-  const res = await providerClient.call("kugou", name, params);
-  if (!res.ok) throw new Error(res.error);
-  return res.data as T;
-};
-
 /** KG 扫码登录适配器（后端 login_qr_key 返回的是待渲染的 URL 内容） */
 export const kugouQrLoginAdapter: QrLoginAdapter = {
   create: async () => {
-    const res = await callKg<KgQrKeyResponse>("login_qr_key");
+    const res = await kugouCall<KgQrKeyResponse>("login_qr_key");
     if (!res?.key || !res?.content) throw new Error("kg qr key missing");
     return { key: res.key, content: res.content };
   },
   check: async (key: string) => {
-    const res = await callKg<KgQrCheckResponse>("login_qr_check", { key });
+    const res = await kugouCall<KgQrCheckResponse>("login_qr_check", { key });
     // KG 状态语义：4 = 已确认（成功后端已落库 token/userid）。
     const state: QrLoginState =
       res.status === 0
@@ -63,7 +57,7 @@ export const kugouQrLoginAdapter: QrLoginAdapter = {
  */
 export const fetchKugouLoginStatus = async (): Promise<PlatformProfile | null> => {
   try {
-    const data = await callKg<KgUserDetailResponse>("user_detail");
+    const data = await kugouCall<KgUserDetailResponse>("user_detail");
     if (data?.code === 200 && data.loggedIn && data.profile) return data.profile;
     return null;
   } catch (err) {

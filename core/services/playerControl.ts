@@ -6,7 +6,6 @@
 
 import { getPlayer } from "@main/services/engine";
 import * as playbackSession from "@main/services/playbackSession";
-import type { ShuffleMode, RepeatMode, Track } from "@shared/types/player";
 
 /**
  * 跳转（毫秒）
@@ -24,18 +23,6 @@ export const playerControl = {
   stop: (): void => playbackSession.stop(),
   next: (): void => void playbackSession.next(),
   prev: (): void => void playbackSession.prev(),
-  setShuffle: (mode: ShuffleMode): void => void playbackSession.setShuffle(mode),
-  setRepeat: (mode: RepeatMode): void => void playbackSession.setRepeat(mode),
-  playTrack: (track: Track): void => void playbackSession.playTrack(track),
-  addToQueue: (tracks: Track[], position: "next" | "end"): void => {
-    const items = tracks.map((track) => ({ track }));
-    if (position === "end") {
-      playbackSession.appendQueue(items);
-      return;
-    }
-    const session = playbackSession.getPlaybackSession();
-    playbackSession.insertQueue(items, Math.min(session.index + 1, session.queue.length));
-  },
   seek,
   setVolume: (volume: number): void => {
     playbackSession.assertSampleProcessingAvailable();

@@ -3,7 +3,7 @@ import type { PlaybackContext, Track } from "@shared/types/player";
 import type { QualityLevel } from "@/utils/quality";
 import type { CollectionType } from "@/types/collection";
 import type { DropdownMenuItem } from "@/components/ui/SDropdownMenu.vue";
-import type { ControlAction } from "@/actions/model";
+import { createControlAction as action, type ControlAction } from "@/actions/model";
 import { controlActionsToMenuItems } from "@/actions/menu";
 import * as player from "@/core/player";
 import { useSettingsStore } from "@/stores/settings";
@@ -71,11 +71,6 @@ export const useTrackMenu = (
   const isCloudView = options.collectionType === "cloud";
   const showPlay = !options.hidePlayActions;
   const canRemove = options.canRemove !== false;
-
-  const action = (
-    value: Omit<ControlAction, "enabled" | "visible" | "danger"> &
-      Partial<Pick<ControlAction, "enabled" | "visible" | "danger">>,
-  ): ControlAction => ({ enabled: true, visible: true, danger: false, ...value });
 
   /** Track 业务动作模型；右键、长按、`...` 等 presentation 共用。 */
   const actions = computed<ControlAction[]>(() => {

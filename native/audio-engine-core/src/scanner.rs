@@ -780,54 +780,6 @@ pub fn scan_directories(
     });
 }
 
-/// 解析单个 CUE 文件并展开为完整分轨列表
-pub fn probe_cue_tracks(cue_path: &str, _cover_cache_dir: Option<&str>) -> Vec<ScannedTrack> {
-    let (mtime, ctime, file_size) = file_stat(Path::new(cue_path)).unwrap_or((0, 0, 0));
-    let Ok(cue) = crate::cue::CueSheet::parse_file(cue_path) else {
-        return Vec::new();
-    };
-
-    let mut tracks = Vec::new();
-    for t in cue.tracks {
-        let (sample_rate, channels, bit_rate, bits_per_sample, codec) = {
-            if let Some(meta) = probe_fast(&t.physical_path.to_string_lossy(), None) {
-                (
-                    meta.sample_rate,
-                    meta.channels,
-                    meta.bit_rate,
-                    meta.bits_per_sample,
-                    meta.codec,
-                )
-            } else {
-                (44_100, 2, 1_411_200, 16, "flac".to_string())
-            }
-        };
-
-        let duration = t.duration.unwrap_or(0.0);
-        tracks.push(ScannedTrack {
-            path: t.virtual_path,
-            title: t.title,
-            artist: t.artist.or_else(|| cue.global_performer.clone()),
-            album_artist: cue.global_performer.clone(),
-            album: t.album.or_else(|| cue.global_title.clone()),
-            year: None,
-            track: Some(t.track_num),
-            disc: None,
-            duration,
-            codec,
-            sample_rate,
-            bit_rate,
-            channels,
-            bits_per_sample,
-            cover: None,
-            file_size,
-            mtime,
-            ctime,
-        });
-    }
-    tracks
-}
-
 /// 解析单个 SACD ISO 镜像文件并展开为全部音轨列表
 pub fn probe_sacd_tracks(iso_path: &str) -> Vec<ScannedTrack> {
     let (mtime, ctime, file_size) = file_stat(Path::new(iso_path)).unwrap_or((0, 0, 0));

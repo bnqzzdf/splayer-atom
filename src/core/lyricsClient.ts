@@ -1,18 +1,9 @@
 import type { LyricsApi, LyricMatchResponse, LyricTTMLResponse } from "@shared/types/lyrics";
-import type { Track } from "@shared/types/player";
-import { serverAssetUrl } from "./controlAssets";
+import { toServerTrack } from "./controlAssets";
 import { request } from "./controlClient";
 
-type CoreLyricsClient = Omit<LyricsApi, "pickLyricRepoDir">;
-
-const toServerTrack = (track: Track): Track => ({
-  ...track,
-  cover: serverAssetUrl(track.cover),
-  coverOriginal: serverAssetUrl(track.coverOriginal),
-});
-
 /** Web Control 的 Core Lyrics request client。 */
-export const lyricsClient: CoreLyricsClient = {
+export const lyricsClient: LyricsApi = {
   matchById: (platform, id) =>
     request<LyricMatchResponse>("/lyrics/match-by-id", {
       method: "POST",

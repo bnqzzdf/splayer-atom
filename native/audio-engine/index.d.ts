@@ -4,12 +4,6 @@
 export declare class AudioPlayer {
   /** 创建新的播放器实例 */
   constructor()
-  /**
-   * 重新初始化音频输出设备（系统休眠唤醒、设备热插拔或输出流错误后调用）
-   *
-   * 恢复为全成全败：新输出创建失败时不启动解码、不提交状态，保留当前曲目与位置，
-   * 播放器进入暂停态并返回设备错误；在线音源不会因设备错误触发 URL 重取或 sourceError。
-   */
   /** 设置封面缓存目录（在 load 前调用一次即可） */
   setCoverCacheDir(dir: string): void
   /** 注册事件回调，Rust 侧会在状态变化、位置更新、播放结束时主动调用 */
@@ -232,15 +226,15 @@ export interface JsMusicMetadata {
 
 /** 播放器事件，推送给 JS 侧 */
 export interface JsPlayerEvent {
-  /** 事件类型："stateChanged" | "ended" | "directTrackBoundary" | "sourceError" | "position" | "outputStalled" | "outputFailed" */
+  /** 事件类型："stateChanged" | "ended" | "directTrackBoundary" | "processedTrackBoundary" | "sourceError" | "position" | "outputStalled" | "outputFailed" */
   type: string
   /** 状态（仅 stateChanged 时有值） */
   state?: string
   /** 位置（秒，仅 position 时有值） */
   position?: number
-  /** 时长（秒，仅 position/directTrackBoundary 时有值） */
+  /** 时长（秒，仅 position/directTrackBoundary/processedTrackBoundary 时有值） */
   duration?: number
-  /** renderer 提供的 Direct staged generation（仅 directTrackBoundary 时有值） */
+  /** 曲目切换边界代次（仅 directTrackBoundary/processedTrackBoundary 时有值） */
   generation?: number
 }
 

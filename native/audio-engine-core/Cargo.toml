@@ -20,8 +20,6 @@ diretta-sys = { path = "../diretta-sys", optional = true, features = ["sdk"] }
 # 错误处理
 anyhow = { workspace = true }
 thiserror = "2"
-serde = { version = "1", features = ["derive"] }
-once_cell = "1"
 
 # DSP
 signalsmith-stretch = "0.1.3"
@@ -52,12 +50,10 @@ alsa-sys = "0.4.0"
 
 [features]
 default = []
-napi = []
 diretta = ["dep:diretta-sys"]
 
 [dev-dependencies]
 base64 = "0.22.1"
-httpmock = "0.8.3"
 tempfile = "3"
 
 [lints]
