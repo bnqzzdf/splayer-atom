@@ -1,6 +1,6 @@
 # SPlayer Atom Operations Manual
 
-> Last updated: 2026-10-30
+> Last updated: 2026-11-11
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -421,14 +421,14 @@ Prerequisites:
 2. Core runs as root (`install-systemd.sh --diretta` or `install-openrc.sh --diretta`).
 3. SDK 148 and the CPU variant match the target.
 4. The Target is exclusively available and not held by another Host.
-5. The source is lossless integer PCM or native DSD.
+5. The source is lossless integer PCM, native DSD, or a decodable stereo lossy codec (such as MP3/AAC).
 
 Constraints:
 
 - no resampling, mixing, normalization, EQ, non-unity gain, fades, speed/pitch changes, DoP, or DSD-to-PCM;
 - the staged next track must match the current wire format;
 - PCM ↔ Native DSD cannot switch inside one runtime;
-- multichannel, Float32, and lossy sources are rejected;
+- multichannel and lossless Float32 sources are rejected; lossy codecs are converted to integer PCM on the decoder thread at their original sample rate and channel count without altering the lossless integer path or claiming bit-perfect fidelity;
 - rejection is expected behavior, not a missing fallback.
 
 Checks:

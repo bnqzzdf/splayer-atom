@@ -1,6 +1,6 @@
 # Diretta CPU variants (v2 / v3 / v4 / zen4)
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-11
 
 The playback engine `audio-engine.node` statically links the prebuilt libraries of the Diretta Host
 SDK. The SDK ships these libraries separately per `-march=x86-64-vN`; **a variant is not an
@@ -28,7 +28,7 @@ instructions are only reached when the audio path is actually entered; once they
 Core process is killed by the signal (OpenRC `supervise-daemon` will pull it back up, so it shows up as
 "API requests return 000 while the process still looks alive").
 
-## Which variants SDK 150 actually ships (measured)
+## Which variants actually ship (repo pins SDK 148; measurements below from SDK 150)
 
 `objdump -d` counting AVX-class instructions (`%ymm`/`%zmm`/`vpxor`/`vfmadd`/`vmovdqu`/`vpaddd`/`vperm`):
 
@@ -39,11 +39,11 @@ Core process is killed by the signal (OpenRC `supervise-daemon` will pull it bac
 | `libACQUA_x64-linux-15v3-nolog.a`       | 337,244 | 623                    |
 | `libDirettaHost_x64-linux-15v3-nolog.a` | 379,024 | 466                    |
 
-SDK 150 also ships `v4` and `zen4` (`lib*_x64-linux-15v4-nolog.a`, `lib*_x64-linux-15zen4-nolog.a`).
+SDK 148 and SDK 150 share the `lib*_x64-linux-15{v2,v3,v4,zen4}-nolog.a` naming (also shipping `v4` and `zen4`).
 
 ### **No v1**
 
-There is no `v1` archive under SDK 150's `lib/`, so **a v1 artifact with Diretta cannot exist**.
+There is no `v1` archive under SDK 148's `lib/` either, so **a v1 artifact with Diretta cannot exist**.
 If you need v1 (the pure x86-64 baseline), the only option is an **ALSA-only build without Diretta**.
 
 Whether the SDK is linked is not decided by `--require-diretta` but by **whether `DIRETTA_SDK_ROOT`
@@ -54,7 +54,7 @@ exists** (`scripts/atom/build-core-native.ts:35,43-50,90`): only when it exists 
   does not link the SDK;
 - if `DIRETTA_SDK_ROOT` is kept and you merely want to drop the variant, you **cannot just remove
   `DIRETTA_CPU_VARIANT`**: the script fails outright because
-  "a Diretta Core build requires `--diretta-variant=v2|v3|v4`"
+  "a Diretta Core build requires `--diretta-variant=v2|v3|v4|zen4`"
   (`scripts/atom/build-core-native.ts:48-50`).
 
 The only role of `--require-diretta` is to **error out when the SDK is missing**
@@ -82,10 +82,10 @@ Two equivalent forms:
 
 ```bash
 # via the CLI flag
-pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2 --bundle-node
+pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2 --bundle-runtime
 
 # or via the environment variable
-DIRETTA_CPU_VARIANT=v2 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-node
+DIRETTA_CPU_VARIANT=v2 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-runtime
 ```
 
 `build-core-native.ts` writes the variant into `out/native/build.json`, and both `stage-core-system.ts`

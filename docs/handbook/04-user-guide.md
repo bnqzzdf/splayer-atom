@@ -1,6 +1,6 @@
 # SPlayer Atom 使用手册
 
-> 最后更新：2026-10-26
+> 最后更新：2026-11-11
 >
 > 适用版本：`1.1.3`（文档基线提交 `5693b3fc`）
 >
@@ -325,7 +325,7 @@ Diretta 是严格 Source Direct：
 
 - 需要 Core 以 root 运行；
 - 需要构建时包含 Diretta SDK；
-- 只接受无损整数 PCM 或原生 DSD；
+- 严格保留无损整数 PCM 或原生 DSD（bit-perfect）；有损编码会在解码线程按原采样率/声道转为整数 PCM 播放（不声明 bit-perfect），无损浮点 PCM 仍被拒绝；
 - 同一次连接中下一首必须保持相同 wire-format；
 - 不支持重采样、音量、EQ、变速、变调、DoP、DSD 转 PCM；
 - 不支持的格式会直接报错，不会降级。
@@ -772,9 +772,9 @@ Top 榜排除 `streaming` 来源；summary/daily/hourly 包含所有来源。
 
 通常发生在 Diretta 或 Direct ALSA：
 
-- 源不是无损整数 PCM/DSD；
+- 源格式或采样率不受当前输出支持（例如 Diretta 不支持无损浮点 PCM，或设备不支持该采样率/DSD）；
 - 下一首与当前 wire-format 不一致；
-- 多声道/浮点源。
+- 多声道源。
 
 换一首歌、换输出，或改用 Processed（会失去严格性）。Diretta 不会自动降级。
 

@@ -1,6 +1,6 @@
 # SPlayer Atom Project Book
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-11
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -85,7 +85,7 @@ The following are outside the current scope unless an accepted product requireme
 
 - With all browsers closed, Core continues through the queue; reopening restores the projection.
 - Any Control change to queue/output/repeat is reflected in other Controls after events arrive.
-- The Diretta path explicitly rejects non-lossless integer PCM, cross-wire-format switches, DoP, and DSD2PCM; it never produces "plays but was processed" output.
+- The Diretta path explicitly rejects unsupported formats (such as lossless Float32 and multichannel), cross-wire-format switches, DoP, and DSD2PCM, and never produces "plays but was processed" lossless output; lossy codecs are only converted to integer PCM on the decoder thread and sent at their original rate and channels without claiming bit-perfect fidelity.
 - Upgrading while preserving `data/` restores library, settings, playlists, stats, download tasks, and login state; rollback never requires an old binary to read a newer schema.
 - Release artifacts pass automated smoke: native addon loading, HTTP/WS, Web root page, restart persistence, and SIGTERM exit.
 
@@ -131,7 +131,7 @@ Status definitions:
 | --- | --- | --- |
 | ALSA Processed | Implemented | Mono/stereo only; EQ/loudness/speed; no ALSA resampling |
 | ALSA Direct | Implemented | Preserves valid bits; integers never converted to float; native DSD |
-| Diretta Source Direct | Implemented; hardware acceptance pending | Root, SDK 148, matching CPU variant; lossless integer PCM/native DSD only; same wire format |
+| Diretta Source Direct | Implemented; hardware acceptance pending | Root, SDK 148, matching CPU variant; bit-perfect lossless integer PCM/native DSD; decoded lossy output (not bit-perfect); rejects lossless Float32/multichannel; same wire format |
 | UPnP Renderer | Implemented; hardware acceptance pending | Single Renderer; no gapless; 1-second polling; CUE/SACD requires temporary files |
 
 ### 6.4 Online and streaming
@@ -304,7 +304,7 @@ Atom provides no command or UI for deleting music files. All cleanup is limited 
 | Layer | Technology | Version/notes |
 | --- | --- | --- |
 | Web | Vue 3, Vue Router 5, Pinia 4, vue-i18n 11 | Vite 7, UnoCSS, Reka UI |
-| Core | Node.js, TypeScript, Hono, ws, better-sqlite3, zod | Node `>=22.19.0`, packaging reference `24.22.2` |
+| Core | Node.js, TypeScript, Hono, ws, better-sqlite3 | Node `>=22.19.0`, packaging reference `24.22.2` |
 | Native | Rust, N-API, ffmpeg_audio, ALSA, lofty | Four workspace crates; CI pins Rust 1.98.0 |
 | Database | SQLite WAL | `library.db`, schema 8 |
 | Tests | Node test runner, Vitest + happy-dom, cargo test | `pnpm test`, `pnpm test:native` |
@@ -349,7 +349,7 @@ Qobuz, TIDAL, ListenBrainz, and self-hosted server credential files are written 
 | bundled-runtime | `pnpm package:core:bundled` | Bundled `runtime/bin/node` | No system Node needed |
 | Debian 11 system | `pnpm package:core:debian11` | Host Node | glibc `>=2.30`, Node `>=22.19.0` |
 | Debian 11 bundled | `pnpm package:core:debian11 --bundle-runtime` | Bundled Node | glibc `>=2.30` |
-| Diretta variant | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` or build script | Depends on `--bundle-node` | root + SDK 148 + matching CPU variant |
+| Diretta variant | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` or build script | Depends on `--bundle-runtime` | root + SDK 148 + matching CPU variant |
 | Source package | `pnpm package:source` | N/A | Published commit and clean tree |
 
 Artifact names include version, 8-character commit, date, time, Diretta variant, and runtime form. The authoritative release identity is `runtime.json` inside the package, not the filename.

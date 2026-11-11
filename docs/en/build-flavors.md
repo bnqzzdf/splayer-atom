@@ -1,6 +1,6 @@
 # SPlayer Atom Build Flavors
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-11
 
 SPlayer Atom's Core artifacts combine three independent dimensions:
 
@@ -52,7 +52,7 @@ The SDK remains external and is not bundled.
 ## Debian 11 build
 
 The Debian 11 builder uses glibc 2.31 and produces a system-runtime package by default. Add
-`--bundle-runtime` (or `--bundle-node`) to include Node, with or without Diretta:
+`--bundle-runtime` to include Node, with or without Diretta:
 
 ```bash
 pnpm package:core:debian11 --without-diretta
@@ -81,7 +81,7 @@ in that run.
 | Bun (experimental) | `pnpm package:core:bun` | `pnpm package:core:bun:bundled` |
 
 All commands use `scripts/atom/build-core-system.ts` with `--runtime=node|bun` and
-`--bundle-runtime`. Legacy `--bundle-node` remains valid for Node bundled. Set
+`--bundle-runtime`. Set
 `ATOM_BUN_BIN` to provide a custom Bun executable. Every flavor is **built** using Node
 `24.22.2`, even when the packaged Core runs on Bun.
 

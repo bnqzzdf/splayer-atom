@@ -7,7 +7,7 @@ body:
         ---
         在此之前，我们默认你已经知道该如何提问。简而言之，**你要精确地描述问题并提供充足的信息**
 
-        此外，如果需要，你可以在右上角的齿轮图标中打开**开发者工具**为我们提供信息
+        此外，如果需要，你可以在浏览器中打开**开发者工具**（F12）为我们提供控制台或网络信息
 
   - type: checkboxes
     validations:
@@ -29,7 +29,7 @@ body:
       required: true
     attributes:
       label: "当前系统环境"
-      placeholder: "如：Windows 11"
+      placeholder: "如：Debian 12 / Ubuntu 24.04 / GentooPlayer"
 
   - type: input
     validations:

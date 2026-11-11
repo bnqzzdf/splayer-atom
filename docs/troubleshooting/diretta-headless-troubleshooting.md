@@ -1,6 +1,6 @@
 # Diretta Core 排障
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-11
 
 本页只描述当前正式 Atom Core 的 Diretta Source Direct 路径：Node Core 负责业务与音源 materialization，`audio-engine.node` 调用 `audio-engine-core` 的 strict Direct runtime，`diretta-sys` 是唯一 Diretta Host SDK FFI。旧 Pure Rust Axum Headless、普通 `f32` Diretta output backend 与旧 push FFI 均已退役。
 
@@ -39,7 +39,7 @@ Diretta discovery 成功只说明能够发现 Target，不证明 Host 进程具�
 
 `diretta-sys/src/bridge.cpp` 的 SDK pull callback 只借用 Direct ring 已准备好的 payload。实时回调中禁止 discovery、格式协商、日志、mutex、动态分配和可避免的 sample copy。SDK release callback 后 Direct ring 才允许复用 in-flight slot。
 
-Diretta Source Direct 下，PCM Direct 仅接受 strict integer PCM storage（S16/S32；24-bit source 可作为保留有效位的 S32 transport slot），float PCM 明确拒绝；ALSA Direct 路径则接受 Float32（`alsa/format.rs` 的 `pack_direct_pcm`、`alsa/direct_pcm.rs` 的零拷贝 transport）。DSF/DFF 只允许为 wire bit-order 做逐字节 bit reversal，并必须保持逻辑 DSD bit sequence 不变。
+Diretta Source Direct 下，无损 PCM Direct 仅接受 strict integer PCM storage（S16/S32；24-bit source 可作为保留有效位的 S32 transport slot），无损 float PCM 明确拒绝；有损编码允许在独立解码线程将解码产生的 float PCM 转为整数 S32 后送入 Diretta，但不改变无损整数路径且不声明原音源 bit-perfect。ALSA Direct 路径则接受 Float32（`alsa/format.rs` 的 `pack_direct_pcm`、`alsa/direct_pcm.rs` 的零拷贝 transport）。DSF/DFF 只允许为 wire bit-order 做逐字节 bit reversal，并必须保持逻辑 DSD bit sequence 不变。
 
 ## 验收
 

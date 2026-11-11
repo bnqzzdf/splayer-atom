@@ -1,6 +1,6 @@
 # SPlayer Atom hardware release checklist
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-11
 
 This document records the manual acceptance steps for a target audio host. Source builds, fixtures and
 fake ALSA/Diretta cannot replace functional verification on the actual output device; DAC-side
@@ -31,6 +31,12 @@ are no longer kept as "unknown capabilities":
   completed playback verification.
 - A mixed PCM and Native DSD format queue has completed overnight looping long-duration playback; no
   playback interruption or format-switch anomaly was observed across continuous format transitions.
+
+Diretta also allows playback of lossy codecs (such as MP3/AAC): decoded on a separate decoder
+thread, with lossy float PCM converted to integer PCM32 there when needed and delivered to Diretta
+at the original sample rate and channel count. This does not alter the bit-perfect path for lossless
+integer PCM; **lossy codecs must not claim bit-perfect source fidelity**. This describes the code
+capability and does not imply this change has been verified on a real Diretta Target yet.
 
 The ALSA HW dual-mode implementation has separate development-period real-hardware records, confirmed by
 the user on 2026-09-22:

@@ -115,7 +115,10 @@ const enTheme: DefaultTheme.Config = {
       text: "Development",
       items: [
         { text: "Roadmap", link: "/en/atom-roadmap" },
+        { text: "Development Environment", link: "/en/atom-development" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
+        { text: "Build Flavors", link: "/en/build-flavors" },
+        { text: "CPU Variants", link: "/en/cpu-variants" },
         { text: "Native Modules", link: "/en/native" },
         { text: "History Archive", link: "/en/history/README" },
         { text: "Plugin Development", link: "/en/plugins/" },
@@ -144,12 +147,28 @@ const enTheme: DefaultTheme.Config = {
       ],
     },
     {
-      text: "Build and Development",
+      text: "Deployment and Releases",
       items: [
         { text: "Core Deployment", link: "/en/core-deployment" },
         { text: "GentooPlayer / OpenRC", link: "/en/gentooplayer-openrc" },
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
+        { text: "Build Flavors", link: "/en/build-flavors" },
+        { text: "CPU Variants", link: "/en/cpu-variants" },
+        { text: "Hardware Release Checklist", link: "/en/hardware-release-checklist" },
+        { text: "Live Provider Acceptance", link: "/en/live-provider-acceptance" },
+        {
+          text: "Diretta Troubleshooting",
+          link: "/en/troubleshooting/diretta-headless-troubleshooting",
+        },
+      ],
+    },
+    {
+      text: "Development",
+      items: [
+        { text: "Roadmap", link: "/en/atom-roadmap" },
+        { text: "Development Environment", link: "/en/atom-development" },
         { text: "Native Modules", link: "/en/native" },
+        { text: "Qobuz / TIDAL Rust", link: "/en/streaming-rust-guide" },
         { text: "History Archive", link: "/en/history/README" },
         { text: "Contributing", link: "/en/contributing" },
         {

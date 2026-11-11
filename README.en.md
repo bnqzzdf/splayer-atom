@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-11
 
 [简体中文](./README.md) · **English**
 
@@ -75,7 +75,7 @@ The Bun flavor is **experimental**, pending long-running playback, plugin, deplo
 target-device acceptance. See [Node/Bun runtime comparison and limitations](./docs/history/bun-runtime-experiment.md)
 (Chinese only).
 
-Diretta builds need the Diretta Host SDK and a variant matching the target CPU (`v2` / `v3` / `v4` / `zen4`, see [CPU variants](./docs/cpu-variants.md), Chinese only):
+Diretta builds need the Diretta Host SDK and a variant matching the target CPU (`v2` / `v3` / `v4` / `zen4`, see [CPU variants](./docs/en/cpu-variants.md)):
 
 ```bash
 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
@@ -114,12 +114,12 @@ Layout:
 - [Delivery handbook: project / development / operations / user / API](./docs/en/handbook/README.md)
 - [User guide](./docs/en/guide.md)
 - [Core deployment and upgrades](./docs/en/core-deployment.md) · [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md)
-- [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/cpu-variants.md) (Chinese only)
+- [Build and packaging](./docs/en/build-and-packaging.md) · [Build flavors](./docs/en/build-flavors.md) · [CPU variants](./docs/en/cpu-variants.md)
 - [Development setup](./docs/en/atom-development.md) · [Roadmap](./docs/en/atom-roadmap.md) · [History archive](./docs/en/history/README.md)
 - [Node/Bun runtime comparison record](./docs/history/bun-runtime-experiment.md) (Chinese only)
 - [Native modules](./docs/en/native.md)
 - [Plugin development](./docs/en/plugins/) · [Plugin usage](./docs/en/plugins-usage.md) · [Type reference](./docs/en/types.md)
-- [Hardware release acceptance](./docs/hardware-release-checklist.md) (Chinese only)
+- [Hardware release acceptance](./docs/en/hardware-release-checklist.md)
 
 English docs live in [`docs/en/`](./docs/en/). Run `pnpm docs:dev` to preview the docs site locally.
 

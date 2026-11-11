@@ -1,6 +1,6 @@
 # SPlayer Atom 开发手册
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-11
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -45,7 +45,7 @@ sudo apt-get install --no-install-recommends -y \
 ### 2.2 安装依赖
 
 ```bash
-cd /home/kele/splayer-atom-core
+cd /path/to/splayer-atom
 pnpm install
 ```
 
@@ -70,22 +70,9 @@ pnpm dev
 2. 启动 Node Core；
 3. 启动 Vite Web 开发服务器。
 
-### 3.2 开发端口注意
+### 3.2 开发端口
 
-当前代码存在一个**默认端口不一致**：
-
-- Core 默认端口 `14558`；
-- Vite 代理默认指向 `14558`；
-- Web 开发态客户端硬编码访问 `14559`（`src/core/controlClient.ts`、`src/core/controlEventClient.ts`）；
-- `scripts/dev.ts` 没有设置 `ATOM_SERVER_PORT`。
-
-因此按仓库默认值直接 `pnpm dev` 时，前端可能连不上 Core。开发时可显式指定：
-
-```bash
-ATOM_SERVER_PORT=14559 pnpm dev
-```
-
-或在不改代码的前提下统一代理与客户端端口。若修改该行为，应同时更新 `scripts/dev.ts`、`vite.config.ts`、`src/core/controlClient.ts`、`src/core/controlEventClient.ts` 与测试。
+Node Core、Vite 开发代理与 Web 开发态客户端统一使用默认端口 **`14558`**（可用 `ATOM_SERVER_PORT` 覆盖 Core 端口）。
 
 ### 3.3 第一次构建
 
@@ -357,7 +344,7 @@ Core 设置与浏览器本地设置分离：
 ### 7.4 Core 连接与事件
 
 - `src/core/controlClient.ts`：
-  - 生产 `location.origin`，开发 `hostname:14559`；
+  - 生产 `location.origin`，开发 `hostname:14558`；
   - 请求前校验 `/api/info.protocol`；
   - 非 2xx 读取 JSON `error`。
 - `src/core/controlEventClient.ts`：
@@ -652,7 +639,6 @@ curl -s http://127.0.0.1:14558/api/cache/stats
 
 | 陷阱 | 事实 | 处理 |
 | --- | --- | --- |
-| 开发端口不一致 | 前端 dev 固定 14559，Core 默认 14558 | `ATOM_SERVER_PORT=14559 pnpm dev` |
 | `PATCH /session/queue/tracks` 不可达 | 被 `/:index` 路由遮蔽 | 改用逐项更新或替换队列 |
 | 设置 `defaultValue` 不生效 | `SettingsItem.vue` 不读取分类默认值 | 以 store/shared defaults 为准 |
 | capability 被当成鉴权 | 服务端不按 capability 拒绝路由 | 只用于 UI 隐藏 |

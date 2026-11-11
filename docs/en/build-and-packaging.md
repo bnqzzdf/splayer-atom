@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-11
 
 This covers Linux x86-64 Core + Web Control builds. **Node is the default release baseline**;
 Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
@@ -24,7 +24,7 @@ pending playback and release acceptance. See [Build Flavors](./build-flavors.md)
 - `mise.toml` pins Node `24.22.2` / Bun `1.4.4`; `mise install` can provision both
 - Rust stable
 - ALSA headers, Clang, pkg-config
-- `libarchive-tools`: needed only by the CI dependency install line (`.github/workflows/dev.yml:54`); no repository script uses it (packaging and extraction both use GNU `tar`), so local builds can omit it
+- `libarchive-tools`: needed only by the CI dependency install line (`.github/workflows/dev.yml:54-58`); no repository script uses it (packaging and extraction both use GNU `tar`), so local builds can omit it
 
 ## Full build
 
@@ -56,8 +56,7 @@ pnpm package:core:bun:bundled  # bundled-runtime
 ```
 
 All four commands share `scripts/atom/build-core-system.ts`. Use `--runtime=node|bun` and
-`--bundle-runtime` directly, or `ATOM_BUN_BIN` to select Bun. Legacy `--bundle-node`
-remains an alias for Node bundled.
+`--bundle-runtime` directly, or `ATOM_BUN_BIN` to select Bun.
 
 Artifacts:
 
@@ -105,7 +104,7 @@ identity is treated as unpublished.
 For local experiments that explicitly do not need a release identity:
 
 ```bash
-pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublished
+pnpm exec tsx scripts/atom/build-core-system.ts --bundle-runtime --allow-unpublished
 ```
 
 It **only skips the check**; it never turns the identity into a published one, and such an artifact
@@ -161,7 +160,7 @@ on the remote, so a tag always points at a commit that is findable in the shared
 ## Release identity
 
 `runtime.json` records only Atom's own identity and the runtime contract. The field list follows
-`scripts/atom/stage-core-system.ts:227-262`:
+`scripts/atom/stage-core-system.ts:270-307`:
 
 - `productName`
 - `atomVersion`
@@ -204,7 +203,7 @@ package without Diretta, requiring Node `>=22.19.0` on the target machine:
 pnpm package:core:debian11 --without-diretta
 ```
 
-Add `--bundle-runtime` (or the compatibility alias `--bundle-node`) to include Node:
+Add `--bundle-runtime` to include Node:
 
 ```bash
 pnpm package:core:debian11 --without-diretta --bundle-runtime
@@ -249,10 +248,11 @@ chain. The checks include:
 ## CI
 
 `.github/workflows/dev.yml` builds Core/Web on `ubuntu-24.04` Linux x86-64 with Node `24.22.2`
-and Rust stable. The workflow runs `pnpm typecheck`, `pnpm test`, `pnpm build`, and
+and Rust `1.98.0`. The workflow runs `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+`cargo clippy --workspace --all-targets`, `pnpm test:native`, `pnpm build`, and
 `pnpm package:core` in order, then uploads
 `out/splayer-atom-core-*-system-linux-x64.tar.gz` with `actions/upload-artifact`
-(`.github/workflows/dev.yml:62-78`). The Debian 11 container is a separate packaging environment.
+(`.github/workflows/dev.yml:66-91`). The Debian 11 container is a separate packaging environment.
 Record the actual build environment, source commit, and artifact hash for a release.
 
 ## Release gates

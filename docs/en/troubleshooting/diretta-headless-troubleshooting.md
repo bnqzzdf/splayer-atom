@@ -1,6 +1,6 @@
 # Diretta Core troubleshooting
 
-> Last updated: 2026-09-28
+> Last updated: 2026-11-11
 
 This page only describes the Diretta Source Direct path of the current production Atom Core: Node Core owns business logic and source materialization, `audio-engine.node` calls the strict Direct runtime of `audio-engine-core`, and `diretta-sys` is the only Diretta Host SDK FFI. The old Pure Rust Axum Headless, the regular `f32` Diretta output backend, and the old push FFI are all retired.
 
@@ -39,7 +39,7 @@ If discovery/connection is ambiguous:
 
 The SDK pull callback in `diretta-sys/src/bridge.cpp` only borrows the payload already prepared in the Direct ring. In the realtime callback, discovery, format negotiation, logging, mutexes, dynamic allocation, and avoidable sample copies are forbidden. Only after the SDK release callback may the Direct ring reuse an in-flight slot.
 
-Under Diretta Source Direct, PCM Direct only accepts strict integer PCM storage (S16/S32; a 24-bit source may use an S32 transport slot that preserves the effective bits), while float PCM is explicitly rejected; the ALSA Direct path, by contrast, accepts Float32 (the zero-copy transport of `pack_direct_pcm` in `alsa/format.rs` and `alsa/direct_pcm.rs`). DSF/DFF may only perform byte-by-byte bit reversal for wire bit-order, and must keep the logical DSD bit sequence unchanged.
+Under Diretta Source Direct, lossless PCM Direct only accepts strict integer PCM storage (S16/S32; a 24-bit source may use an S32 transport slot that preserves the effective bits), while lossless float PCM is explicitly rejected; lossy codecs may convert decoder-thread float PCM to integer S32 for Diretta without altering the lossless integer path or claiming bit-perfect source fidelity. The ALSA Direct path, by contrast, accepts Float32 (the zero-copy transport of `pack_direct_pcm` in `alsa/format.rs` and `alsa/direct_pcm.rs`). DSF/DFF may only perform byte-by-byte bit reversal for wire bit-order, and must keep the logical DSD bit sequence unchanged.
 
 ## Acceptance
 

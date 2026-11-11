@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-06
 
 **简体中文** · [English](./README.en.md)
 

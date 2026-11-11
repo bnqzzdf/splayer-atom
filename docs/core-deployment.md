@@ -1,6 +1,6 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-11
 
 本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
 
@@ -36,7 +36,7 @@
 
 ### Diretta SDK 与 glibc 下限
 
-Diretta SDK 150 附带的预编译 `ACQUA` 库是在 glibc >= 2.38 上编译的：它们引用 C23 的整数解析函数
+Diretta SDK 148 附带的预编译 `ACQUA` 库是在 glibc >= 2.38 上编译的：它们引用 C23 的整数解析函数
 `__isoc23_strtol` / `__isoc23_strtoll`，而 libc 从 glibc 2.38 起才提供这两个符号。在 Debian 11 上
 链接它们，此前会得到一个加载失败并报 `undefined symbol: __isoc23_strtol` 的 `audio-engine.node`。
 
@@ -86,8 +86,8 @@ cd /opt/splayer-atom-core
 `pnpm package:core:bundled`（Node bundled）、
 `pnpm package:core:bun`（Bun system）、
 `pnpm package:core:bun:bundled`（Bun bundled）。
-这些命令全部调用同一个 `build-core-system.ts`；现有 `--bundle-node` 仍兼容，
-新参数为 `--runtime=node|bun` 与 `--bundle-runtime`。Bun Flavor 的验证条件及限制见
+这些命令全部调用同一个 `build-core-system.ts`；支持
+`--runtime=node|bun` 与 `--bundle-runtime` 参数。Bun Flavor 的验证条件及限制见
 [Runtime Flavor 对照](./history/bun-runtime-experiment.md)。
 
 ### 普通 ALSA Core 的 systemd

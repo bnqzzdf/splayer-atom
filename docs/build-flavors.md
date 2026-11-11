@@ -1,6 +1,6 @@
 # SPlayer Atom 构建面（Build Flavors）
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-11
 
 SPlayer Atom 的 Core 构建由三条**独立维度**组合：
 
@@ -46,7 +46,7 @@ SDK 始终是外部的，不随包捆绑。
 
 ## Debian 11 构建
 
-Debian 11 构建机使用 glibc 2.31。默认生成 system-runtime；带或不带 Diretta 都可添加 `--bundle-runtime`（或 `--bundle-node`）内置 Node：
+Debian 11 构建机使用 glibc 2.31。默认生成 system-runtime；带或不带 Diretta 都可添加 `--bundle-runtime` 内置 Node：
 
 ```bash
 pnpm package:core:debian11 --without-diretta
@@ -73,8 +73,7 @@ SDK 文件不会被打包。验收通过后，归档重命名为
 | Node（默认） | `pnpm package:core`     | `pnpm package:core:bundled`     |
 | Bun（实验）  | `pnpm package:core:bun` | `pnpm package:core:bun:bundled` |
 
-打包统一走 `scripts/atom/build-core-system.ts`，支持 `--runtime=node|bun`
-与 `--bundle-runtime`；旧参数 `--bundle-node` 仍用于 Node bundled。
+打包统一走 `scripts/atom/build-core-system.ts`，支持 `--runtime=node|bun` 与 `--bundle-runtime`。
 需要指定 Bun 路径时设置 `ATOM_BUN_BIN`。构建进程必须使用 Node `24.22.2`，
 但 Bun 包实际运行的是 Bun 而不是 Node。
 

@@ -1,6 +1,6 @@
 # SPlayer Atom Development Manual
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-11
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -45,7 +45,7 @@ sudo apt-get install --no-install-recommends -y \
 ### 2.2 Install dependencies
 
 ```bash
-cd /home/kele/splayer-atom-core
+cd /path/to/splayer-atom
 pnpm install
 ```
 
@@ -70,22 +70,9 @@ This command:
 2. starts Node Core;
 3. starts the Vite Web dev server.
 
-### 3.2 Development port caveat
+### 3.2 Development port
 
-The current code has a **default port mismatch**:
-
-- Core listens on `14558`;
-- the Vite proxy defaults to `14558`;
-- the Web dev client hardcodes `14559` (`src/core/controlClient.ts`, `src/core/controlEventClient.ts`);
-- `scripts/dev.ts` does not set `ATOM_SERVER_PORT`.
-
-With repository defaults, `pnpm dev` may leave the frontend unable to reach Core. Use:
-
-```bash
-ATOM_SERVER_PORT=14559 pnpm dev
-```
-
-or unify the proxy and client ports without changing behavior. If you change this, update `scripts/dev.ts`, `vite.config.ts`, `src/core/controlClient.ts`, `src/core/controlEventClient.ts`, and the tests together.
+Node Core, the Vite dev proxy, and the Web dev client all default to **`14558`** (set `ATOM_SERVER_PORT` to override the Core port).
 
 ### 3.3 First build
 
@@ -355,7 +342,7 @@ Migration backups:
 ### 7.4 Core connection and events
 
 - `src/core/controlClient.ts`:
-  - production uses `location.origin`; development uses `hostname:14559`;
+  - production uses `location.origin`; development uses `hostname:14558`;
   - validates `/api/info.protocol` before requests;
   - reads JSON `error` on non-2xx.
 - `src/core/controlEventClient.ts`:
@@ -650,7 +637,6 @@ These are read-only GETs. Do not use `POST /api/output/select` or playback comma
 
 | Pitfall | Fact | Handling |
 | --- | --- | --- |
-| Development port mismatch | Web dev hardcodes 14559; Core defaults to 14558 | `ATOM_SERVER_PORT=14559 pnpm dev` |
 | `PATCH /session/queue/tracks` unreachable | Shadowed by `/:index` | Update items individually or replace the queue |
 | Setting `defaultValue` has no effect | `SettingsItem.vue` does not read category defaults | Use store/shared defaults |
 | Capability treated as authorization | Server does not reject routes by capability | UI hints only |

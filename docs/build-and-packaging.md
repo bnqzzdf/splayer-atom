@@ -1,6 +1,6 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-11
 
 本文描述 Linux x86-64 Core + Web Control 的构建。**Node 是默认正式基线**；
 Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
@@ -24,7 +24,7 @@ Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实
 - `mise.toml` 固定 Node `24.22.2` / Bun `1.4.4`，可使用 `mise install` 准备工具链
 - Rust stable
 - ALSA headers、Clang、pkg-config
-- `libarchive-tools`：仅 CI 的依赖安装行需要（`.github/workflows/dev.yml:54`）；仓库脚本没有使用它（打包与解包都用 GNU `tar`），本地构建可以省略
+- `libarchive-tools`：仅 CI 的依赖安装行需要（`.github/workflows/dev.yml:54-58`）；仓库脚本没有使用它（打包与解包都用 GNU `tar`），本地构建可以省略
 
 ## 完整构建
 
@@ -57,7 +57,6 @@ pnpm package:core:bun:bundled  # bundled-runtime
 
 四种命令统一调用 `scripts/atom/build-core-system.ts`；可使用
 `--runtime=node|bun`、`--bundle-runtime`，或设置 `ATOM_BUN_BIN` 指定 Bun。
-旧参数 `--bundle-node` 仍保留为 Node bundled 的别名。
 
 输出：
 
@@ -93,7 +92,7 @@ published=true
 只在本地做试验、明确不需要发布身份时，可以显式跳过检查：
 
 ```bash
-pnpm exec tsx scripts/atom/build-core-system.ts --bundle-node --allow-unpublished
+pnpm exec tsx scripts/atom/build-core-system.ts --bundle-runtime --allow-unpublished
 ```
 
 它**只跳过检查**，不会把身份改成已发布——这样的产物不能作为发布交付。
@@ -128,7 +127,7 @@ pnpm release:tag --dry-run  # 只做检查，不落标签
 
 ## runtime.json
 
-发布身份只记录 Atom 自身与运行契约。字段清单以 `scripts/atom/stage-core-system.ts:227-262` 为准：
+发布身份只记录 Atom 自身与运行契约。字段清单以 `scripts/atom/stage-core-system.ts:270-307` 为准：
 
 - `productName`
 - `atomVersion`
@@ -168,7 +167,7 @@ Debian 11 构建在容器内使用 glibc 2.31。默认生成不含 Diretta 的 s
 pnpm package:core:debian11 --without-diretta
 ```
 
-需要内置 Node 时，显式添加 `--bundle-runtime`（`--bundle-node` 是兼容别名）：
+需要内置 Node 时，显式添加 `--bundle-runtime`：
 
 ```bash
 pnpm package:core:debian11 --without-diretta --bundle-runtime
@@ -202,9 +201,10 @@ Diretta SDK 148 的 ACQUA 库在旧 glibc 上所需的整数解析符号由本�
 ## CI
 
 `.github/workflows/dev.yml` 在 `ubuntu-24.04` Linux x86-64 环境中使用 Node `24.22.2`
-与 Rust stable 构建 Core/Web。该 workflow 依次执行 `pnpm typecheck`、`pnpm test`、
-`pnpm build`、`pnpm package:core`，并用 `actions/upload-artifact` 上传
-`out/splayer-atom-core-*-system-linux-x64.tar.gz`（`.github/workflows/dev.yml:62-78`）。
+与 Rust `1.98.0` 构建 Core/Web。该 workflow 依次执行 `pnpm typecheck`、`pnpm lint`、`pnpm test`、
+`cargo clippy --workspace --all-targets`、`pnpm test:native`、`pnpm build`、`pnpm package:core`，
+并用 `actions/upload-artifact` 上传 `out/splayer-atom-core-*-system-linux-x64.tar.gz`
+（`.github/workflows/dev.yml:66-91`）。
 Debian 11 容器是单独的打包环境；发布时应记录实际使用的构建环境、源码提交与产物 hash。
 
 ## 发布前门禁

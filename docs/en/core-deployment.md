@@ -1,6 +1,6 @@
 # SPlayer Atom Core Deployment and Upgrade
 
-> Last updated: 2026-11-04
+> Last updated: 2026-11-11
 
 This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
 
@@ -38,7 +38,7 @@ Measured requirements of the shipped native components:
 
 ### Diretta SDK and the glibc floor
 
-Diretta SDK 150 ships prebuilt `ACQUA` libraries compiled against glibc >= 2.38: they
+Diretta SDK 148 ships prebuilt `ACQUA` libraries compiled against glibc >= 2.38: they
 reference the C23 integer parsers `__isoc23_strtol` / `__isoc23_strtoll`, which libc only
 provides from glibc 2.38 onward. Linking them on Debian 11 previously produced an
 `audio-engine.node` that failed to load with `undefined symbol: __isoc23_strtol`.
@@ -88,7 +88,7 @@ cd /opt/splayer-atom-core
 ./bin/splayer-atom-core
 ```
 
-The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-node` for bundled-runtime; both archives extract to the same installation layout (no wrapper directory).
+The launcher uses `ATOM_NODE_BIN` when explicitly provided, then `runtime/bin/node` when a bundled runtime is present, and otherwise the system `node` executable. The technical build commands are `build-core-system.ts` for system-runtime and `build-core-system.ts --bundle-runtime` for bundled-runtime; both archives extract to the same installation layout (no wrapper directory).
 
 ### systemd for ordinary ALSA Core
 

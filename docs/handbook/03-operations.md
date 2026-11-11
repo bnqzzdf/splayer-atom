@@ -1,6 +1,6 @@
 # SPlayer Atom 运维手册
 
-> 最后更新：2026-10-30
+> 最后更新：2026-11-11
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -426,14 +426,14 @@ curl -s http://127.0.0.1:14558/api/output/devices
 2. Core 以 root 运行（`install-systemd.sh --diretta` 或 `install-openrc.sh --diretta`）。
 3. SDK 148、CPU 变体与目标机匹配。
 4. Target 独占可用，未被其他 Host 占用。
-5. 源为 lossless integer PCM 或原生 DSD。
+5. 源为 lossless integer PCM、原生 DSD，或可解码的立体声有损编码（如 MP3/AAC）。
 
 约束：
 
 - 不做重采样、混音、归一化、EQ、非单位增益、淡入淡出、变速、变调、DoP、DSD 转 PCM。
 - staged 下一首必须与当前 connection 的 wire-format 一致。
 - PCM ↔ Native DSD 不能在同一 runtime 直接切换。
-- 多声道、Float32、有损编码会被拒绝。
+- 多声道与无损 Float32 会被拒绝；有损编码会在解码线程按原采样率/声道转为整数 PCM 播放（不改变无损整数路径，且不声明原音源 bit-perfect）。
 - 拒绝是预期行为，不是“缺少回退”。
 
 检查：

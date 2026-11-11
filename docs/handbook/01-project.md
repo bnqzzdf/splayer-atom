@@ -1,6 +1,6 @@
 # SPlayer Atom 项目书
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-11
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -85,7 +85,7 @@ SPlayer Atom 的答案是把“播放权威”从 UI 中剥离出来：Core 是�
 
 - 浏览器全部关闭后，Core 仍按队列继续播放，重新打开可恢复投影。
 - 任一 Control 修改队列/输出/循环模式，其他 Control 在事件到达后一致。
-- Diretta 路径对非无损整数 PCM、跨 wire-format 切换、DoP/DSD2PCM 明确报错，不产生“能播但被处理过”的结果。
+- Diretta 路径对不支持的格式（如无损 Float32、多声道）、跨 wire-format 切换、DoP/DSD2PCM 明确报错，不产生“能播但被处理过”的无损输出；有损编码仅在解码线程转为整数 PCM 后按原采样率与声道送出，不声明 bit-perfect。
 - 升级保留 `data/` 后可恢复曲库、设置、歌单、统计、下载任务与登录状态；回滚不要求旧二进制读取新 schema。
 - 发布产物可通过自动 smoke：native addon 加载、HTTP/WS、Web 根页、重启持久化、SIGTERM 退出。
 
@@ -131,7 +131,7 @@ SPlayer Atom 的答案是把“播放权威”从 UI 中剥离出来：Core 是�
 | --- | --- | --- |
 | ALSA Processed | 已实现 | 仅 mono/stereo；可 EQ/响度/变速；不做 ALSA resample |
 | ALSA Direct | 已实现 | 保留有效位；整数不转 float；DSD 原生 |
-| Diretta Source Direct | 已实现，硬件验收待完成 | 需 root、SDK 148、对应 CPU 变体；仅无损整数 PCM/原生 DSD；同 wire-format |
+| Diretta Source Direct | 已实现，硬件验收待完成 | 需 root、SDK 148、对应 CPU 变体；无损整数 PCM/原生 DSD bit-perfect；有损解码送出（非 bit-perfect）；拒绝无损 Float32/多声道；同 wire-format |
 | UPnP Renderer | 已实现，硬件验收待完成 | 单 Renderer；无 gapless；1 秒轮询；CUE/SACD 需生成临时文件 |
 
 ### 6.4 在线与流媒体
@@ -304,7 +304,7 @@ Atom 不提供删除音乐文件的命令或 UI。所有清理只针对 Atom 自
 | 层 | 技术 | 版本/说明 |
 | --- | --- | --- |
 | Web | Vue 3、Vue Router 5、Pinia 4、vue-i18n 11 | Vite 7、UnoCSS、Reka UI |
-| Core | Node.js、TypeScript、Hono、ws、better-sqlite3、zod | Node `>=22.19.0`，打包参考 `24.22.2` |
+| Core | Node.js、TypeScript、Hono、ws、better-sqlite3 | Node `>=22.19.0`，打包参考 `24.22.2` |
 | 原生 | Rust、N-API、ffmpeg_audio、ALSA、lofty | workspace 四个 crate；CI 固定 Rust 1.98.0 |
 | 数据库 | SQLite WAL | `library.db`，schema 8 |
 | 测试 | Node test runner、Vitest + happy-dom、cargo test | `pnpm test`、`pnpm test:native` |
@@ -349,7 +349,7 @@ Qobuz、TIDAL、ListenBrainz、自建流媒体服务器的凭据文件写后 `06
 | bundled-runtime | `pnpm package:core:bundled` | 包内 `runtime/bin/node` | 无需系统 Node |
 | Debian 11 system | `pnpm package:core:debian11` | 宿主机 Node | glibc `>=2.30`，Node `>=22.19.0` |
 | Debian 11 bundled | `pnpm package:core:debian11 --bundle-runtime` | 包内 Node | glibc `>=2.30` |
-| Diretta 变体 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` 或构建脚本 | 视 `--bundle-node` | root + SDK 148 + CPU 变体匹配 |
+| Diretta 变体 | `DIRETTA_SDK_ROOT=... pnpm package:core:diretta` 或构建脚本 | 视 `--bundle-runtime` | root + SDK 148 + CPU 变体匹配 |
 | 源码包 | `pnpm package:source` | 不适用 | 需已发布提交与干净工作树 |
 
 产物名包含版本、8 位提交、日期、时间、Diretta 变体与 runtime 形态。权威发布身份在包内 `runtime.json`，不在文件名。

@@ -1,5 +1,7 @@
 # SACD DST 直通 DFF 方案
 
+> 最后更新：2026-11-11
+
 > 状态：实施中。目标是把 UPnP 播放 SACD DST 轨时的“离线 DST→DSF”改为“直接封装 DST 压缩 DFF”，
 > 本地 ALSA/Diretta 路径保持解码，不做 DST 直通。
 

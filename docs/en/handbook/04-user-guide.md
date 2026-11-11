@@ -1,6 +1,6 @@
 # SPlayer Atom User Guide
 
-> Last updated: 2026-10-26
+> Last updated: 2026-11-11
 >
 > Applies to version `1.1.3` (documentation baseline `5693b3fc`)
 >
@@ -325,7 +325,7 @@ Diretta is strict Source Direct:
 
 - Core must run as root;
 - the build must include the Diretta SDK;
-- only lossless integer PCM or native DSD is accepted;
+- lossless integer PCM and native DSD are sent strictly bit-perfect; lossy codecs are converted to integer PCM on the decoder thread at their original rate and channels (without claiming bit-perfect fidelity), while lossless float PCM is still rejected;
 - the next track must keep the same wire format within one connection;
 - no resampling, volume, EQ, speed, pitch, DoP, or DSD-to-PCM;
 - unsupported formats fail explicitly; there is no fallback.
@@ -772,9 +772,9 @@ Open the output selector in the player bar and choose an ALSA/Diretta/UPnP devic
 
 Usually Diretta or Direct ALSA:
 
-- the source is not lossless integer PCM/DSD;
+- the source format or sample rate is unsupported by the current output (for example lossless float PCM on Diretta, or an unsupported rate/DSD tier);
 - the next track's wire format differs from the current one;
-- multichannel/float source.
+- multichannel source.
 
 Change track, change output, or use Processed (which loses strictness). Diretta never downgrades automatically.
 

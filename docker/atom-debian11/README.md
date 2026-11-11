@@ -37,7 +37,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK_148 \
   pnpm package:core:debian11 --with-diretta --diretta-variant=v3
 ```
 
-两种 Diretta 模式都可加 `--bundle-runtime`（兼容别名 `--bundle-node`）。system-runtime 需要目标机提供 Node `>=22.19.0`。
+两种 Diretta 模式都可加 `--bundle-runtime`。system-runtime 需要目标机提供 Node `>=22.19.0`。
 
 验收通过后，归档会重命名为以下格式，只保留带 Debian 11 后缀的文件：
 

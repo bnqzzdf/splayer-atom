@@ -1,6 +1,6 @@
 # Diretta CPU 变体（v2 / v3 / v4 / zen4）
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-11
 
 播放引擎 `audio-engine.node` 静态链接 Diretta Host SDK 的预编译库。SDK 按
 `-march=x86-64-vN` 分别发布这些库，**变体不是优化等级，而是「能不能在这台机器上跑」**。
@@ -25,7 +25,7 @@ Core 本身能启动、能加载 addon，是因为只有真正走进音频路径
 一旦碰到，整个 Core 进程被信号打死（OpenRC `supervise-daemon` 会把它拉起来，
 所以表现成「接口请求返回 000、进程看起来还活着」）。
 
-## SDK 150 实际发布哪些变体（实测）
+## 实际发布哪些变体（当前固定 SDK 148；下表为 SDK 150 实测数据）
 
 `objdump -d` 统计 AVX 类指令（`%ymm`/`%zmm`/`vpxor`/`vfmadd`/`vmovdqu`/`vpaddd`/`vperm`）：
 
@@ -36,11 +36,11 @@ Core 本身能启动、能加载 addon，是因为只有真正走进音频路径
 | `libACQUA_x64-linux-15v3-nolog.a`       | 337,244 | 623        |
 | `libDirettaHost_x64-linux-15v3-nolog.a` | 379,024 | 466        |
 
-SDK 150 还发布了 `v4` 与 `zen4`（`lib*_x64-linux-15v4-nolog.a`、`lib*_x64-linux-15zen4-nolog.a`）。
+SDK 148 与 SDK 150 同用 `lib*_x64-linux-15{v2,v3,v4,zen4}-nolog.a` 归档命名（还发布了 `v4` 与 `zen4`）。
 
 ### **没有 v1**
 
-SDK 150 的 `lib/` 下不存在任何 `v1` 归档，所以**带 Diretta 的 v1 产物不可能存在**。
+SDK 148 的 `lib/` 下同样不存在任何 `v1` 归档，所以**带 Diretta 的 v1 产物不可能存在**。
 需要 v1（纯 x86-64 基线）只能做**不带 Diretta 的 ALSA-only 构建**。
 
 是否链接 SDK 不由 `--require-diretta` 决定，而由 **`DIRETTA_SDK_ROOT` 是否存在**决定
@@ -49,7 +49,7 @@ SDK release。因此
 
 - **不设置** `DIRETTA_SDK_ROOT` → 不带 Diretta 的 ALSA-only 构建（`pnpm package:core`），不链接 SDK；
 - 保留了 `DIRETTA_SDK_ROOT`、只是想拿掉变体时**不能只摘 `DIRETTA_CPU_VARIANT`**：脚本会因
-  「Diretta Core 构建要求指定 `--diretta-variant=v2|v3|v4`」直接失败
+  「Diretta Core 构建要求指定 `--diretta-variant=v2|v3|v4|zen4`」直接失败
   （`scripts/atom/build-core-native.ts:48-50`）。
 
 `--require-diretta` 的唯一作用是**缺 SDK 时报错**（`scripts/atom/build-core-native.ts:36-38`），
@@ -75,10 +75,10 @@ SDK release。因此
 
 ```bash
 # 通过 CLI 参数
-pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2 --bundle-node
+pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --diretta-variant=v2 --bundle-runtime
 
 # 或通过环境变量
-DIRETTA_CPU_VARIANT=v2 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-node
+DIRETTA_CPU_VARIANT=v2 pnpm exec tsx scripts/atom/build-core-system.ts --require-diretta --bundle-runtime
 ```
 
 `build-core-native.ts` 会把变体写进 `out/native/build.json`，`stage-core-system.ts`
