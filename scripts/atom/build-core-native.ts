@@ -23,12 +23,26 @@ const cargoBinDir = path.join(
 const args = new Set(process.argv.slice(2));
 const isDev = args.delete("--dev");
 const requireDiretta = args.delete("--require-diretta");
-const outputDirArg = [...args].find((arg) => arg.startsWith("--output-dir="));
-if (outputDirArg) args.delete(outputDirArg);
+let outputDirValue: string | null = null;
+for (const arg of [...args]) {
+  if (arg === "--output-dir") {
+    args.delete(arg);
+    const next = [...args][0];
+    if (!next || next.startsWith("--")) throw new Error("--output-dir 缺少路径");
+    outputDirValue = next;
+    args.delete(next);
+    break;
+  }
+  if (arg.startsWith("--output-dir=")) {
+    outputDirValue = arg.slice("--output-dir=".length);
+    args.delete(arg);
+    break;
+  }
+}
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
-const outputDir = outputDirArg
-  ? path.resolve(root, outputDirArg.slice("--output-dir=".length))
+const outputDir = outputDirValue
+  ? path.resolve(root, outputDirValue)
   : path.join(root, "out", "native");
 const nativeOutputRoot = path.join(root, "out", "native");
 if (outputDir !== nativeOutputRoot && !outputDir.startsWith(`${nativeOutputRoot}${path.sep}`)) {
