@@ -2506,9 +2506,14 @@ mod tests {
             let integers = diretta_frame.payload_bytes().unwrap();
             assert_eq!(original.len(), integers.len());
             if normal_format.sample_format == DirectPcmSampleFormat::Float32 {
-                for (float, integer) in original.chunks_exact(4).zip(integers.chunks_exact(4)) {
-                    let sample = f32::from_le_bytes(float.try_into().unwrap());
-                    let converted = i32::from_le_bytes(integer.try_into().unwrap());
+                for (float, integer) in original
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(integers.as_chunks::<4>().0.iter())
+                {
+                    let sample = f32::from_le_bytes(*float);
+                    let converted = i32::from_le_bytes(*integer);
                     assert_eq!(converted, lossy_float_to_s32(sample));
                 }
             } else {

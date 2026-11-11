@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { writeExactHttpInput } from "@main/atom/exactInput";
 import { parseSacdPlaybackSource } from "@main/atom/sacdInput";
 import { getEngine } from "@main/services/engine";
+import { store } from "@main/store";
 import type { AudioQuality, PlaybackQueueItem } from "@shared/types/player";
 
 export interface UpnpMediaResource {
@@ -318,6 +319,7 @@ export const prepareUpnpPlaybackMedia = async (
   let durationMs = track.duration;
   let deleteOnRelease = false;
   let ownedPath: string | null = null;
+  let generated: UpnpGeneratedInput | null = null;
   const cueNum = upnpCueTrackNumber(item);
   const sacd = parseSacdPlaybackSource(resolved.source, track.track);
 
@@ -327,7 +329,7 @@ export const prepareUpnpPlaybackMedia = async (
       if (!isUpnpDsdCueTrack(item) && !isUpnpIntegerLosslessCueTrack(item)) {
         throw new Error("UPnP CUE requires integer lossless PCM or native DSD source");
       }
-      const generated = isUpnpDsdCueTrack(item)
+      generated = isUpnpDsdCueTrack(item)
         ? await extractUpnpCueDsf(track.cuePath, cueNum)
         : await extractUpnpCueWav(track.cuePath, cueNum);
       filePath = generated.filePath;
@@ -336,7 +338,10 @@ export const prepareUpnpPlaybackMedia = async (
       ownedPath = filePath;
     } else if (/\.iso(?:$|\|Track\d+\|)/i.test(resolved.source)) {
       if (!sacd) throw new Error("UPnP SACD track identity is unavailable");
-      const generated = await extractUpnpSacdDsf(sacd.isoPath, sacd.trackNum);
+      generated =
+        store.get("player.sacdUpnpFormat") === "dsf"
+          ? await extractUpnpSacdDsf(sacd.isoPath, sacd.trackNum)
+          : await extractUpnpSacdDff(sacd.isoPath, sacd.trackNum);
       filePath = generated.filePath;
       durationMs = generated.durationMs;
       deleteOnRelease = true;
@@ -351,7 +356,9 @@ export const prepareUpnpPlaybackMedia = async (
         : resolved.source;
     }
 
-    const quality = (await probeUpnpMediaQuality(filePath)) ?? track.quality;
+    const quality = generated?.skipProbe
+      ? track.quality
+      : ((await probeUpnpMediaQuality(filePath)) ?? track.quality);
     return {
       filePath,
       durationMs,
@@ -408,6 +415,8 @@ export const materializeUpnpInput = async (source: string): Promise<string> => {
 export interface UpnpGeneratedInput {
   filePath: string;
   durationMs: number;
+  /** 生成的 DST-DFF 不能交给只识别 DSD chunk 的 DffReader 探测。 */
+  skipProbe?: boolean;
 }
 
 /** CUE 使用现有 strict integer reader 离线生成 WAV；不经过 AudioPlayer/DSP。 */
@@ -449,6 +458,25 @@ export const extractUpnpSacdDsf = async (
   try {
     const result = await getEngine().extractSacdDsf(isoPath, trackNum, filePath);
     return { filePath, durationMs: Math.max(0, result.durationMs) };
+  } catch (error) {
+    await fsp.rm(filePath, { force: true }).catch(() => {});
+    throw error;
+  }
+};
+
+/** SACD 使用 raw frame reader 直接封装 DST 压缩 DFF，不在 Core 侧解码 DST。 */
+export const extractUpnpSacdDff = async (
+  isoPath: string,
+  trackNum: number,
+): Promise<UpnpGeneratedInput> => {
+  const filePath = path.join(generatedTempRoot(), `${crypto.randomUUID()}.dff`);
+  try {
+    const result = await getEngine().extractSacdDff(isoPath, trackNum, filePath);
+    return {
+      filePath,
+      durationMs: Math.max(0, result.durationMs),
+      skipProbe: true,
+    };
   } catch (error) {
     await fsp.rm(filePath, { force: true }).catch(() => {});
     throw error;

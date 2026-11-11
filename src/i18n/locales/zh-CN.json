@@ -909,6 +909,12 @@
       "direct": "精确直通",
       "processed": "PCM 处理"
     },
+    "sacdUpnpFormat": {
+      "label": "SACD UPnP 输出",
+      "description": "DFF 直接传输 DST 压缩数据，需要 Renderer 支持；DSF 兼容性更好但 Core 需要先解码。",
+      "dff": "DFF（DST 直通）",
+      "dsf": "DSF（兼容转码）"
+    },
     "pauseOnDeviceSwitch": {
       "label": "切换时暂停播放",
       "description": "切换输出设备时暂停播放，例如蓝牙设备的断联"

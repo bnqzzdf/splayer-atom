@@ -109,6 +109,7 @@ test(
 
 test("inferUpnpMime keeps real container MIME and recovers cache MIME from codec", () => {
   assert.equal(inferUpnpMime("/music/track.dsdiff", "unknown"), "audio/x-dff");
+  assert.equal(inferUpnpMime("/music/track.dff", "sacd_dst"), "audio/x-dff");
   assert.equal(inferUpnpMime("/cache/abcd.bin", "flac"), "audio/flac");
   assert.equal(inferUpnpMime("/tmp/input.audio", "dsd_dsf"), "audio/x-dsf");
   assert.equal(inferUpnpMime("/tmp/fragment.mp4", "flac"), "audio/mp4");

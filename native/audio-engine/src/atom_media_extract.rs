@@ -159,3 +159,29 @@ pub async fn extract_sacd_dsf(
         duration_ms: result.duration_ms as f64,
     })
 }
+
+/// Atom UPnP 使用的离线 SACD stereo track -> DST 压缩 DFF 提取；不执行 DST 解码。
+#[napi]
+pub async fn extract_sacd_dff(
+    iso_path: String,
+    track_num: u32,
+    output_path: String,
+) -> Result<JsDsdExtractResult> {
+    let track_num = u16::try_from(track_num).map_err(napi_error)?;
+    let result = tokio::task::spawn_blocking(move || {
+        audio_engine_core::media_extract::extract_sacd_track_to_dsdiff(
+            &PathBuf::from(iso_path),
+            track_num,
+            &PathBuf::from(output_path),
+        )
+    })
+    .await
+    .map_err(napi_error)?
+    .map_err(napi_error)?;
+    Ok(JsDsdExtractResult {
+        sample_rate: result.sample_rate,
+        channels: result.channels,
+        bits_per_channel: result.bits_per_channel as f64,
+        duration_ms: result.duration_ms as f64,
+    })
+}

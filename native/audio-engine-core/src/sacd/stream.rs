@@ -1,6 +1,7 @@
 //! SACD 双声道音轨读取器；输出逐字节 L/R 交错、MSB-first 的原始 DSD。
 
 use anyhow::{ensure, Context, Result};
+use std::collections::VecDeque;
 use std::path::Path;
 
 use super::dst::{DstDecoder, BYTES_PER_FRAME_CHANNEL};
@@ -19,7 +20,7 @@ pub struct SacdTrackReader {
     pub channels: u16,
     pub dsd_rate: DsdRate,
     pub total_frames: u32,
-    /// 已完整解包的音频帧数，不是已读取的扇区数。
+    /// 已完整组装的音频帧数，不是已读取的扇区数。
     pub current_frame: u32,
     pub duration_seconds: f64,
 
@@ -31,6 +32,8 @@ pub struct SacdTrackReader {
     dst_packets_remaining: u8,
     residual_buf: Vec<u8>,
     residual_pos: usize,
+    raw_mode: bool,
+    raw_frames: VecDeque<Vec<u8>>,
     failed: bool,
 }
 
@@ -45,6 +48,20 @@ impl SacdTrackReader {
         iso_path: P,
         track_num: u16,
         area_type: AreaType,
+    ) -> Result<Self> {
+        Self::open_track_in_area_mode(iso_path, track_num, area_type, false)
+    }
+
+    /// 打开轨道并输出未解码的 SACD 帧；DST 帧保持压缩字节，供 DSDIFF 直通封装。
+    pub fn open_track_raw<P: AsRef<Path>>(iso_path: P, track_num: u16) -> Result<Self> {
+        Self::open_track_in_area_mode(iso_path, track_num, AreaType::Stereo, true)
+    }
+
+    fn open_track_in_area_mode<P: AsRef<Path>>(
+        iso_path: P,
+        track_num: u16,
+        area_type: AreaType,
+        raw_mode: bool,
     ) -> Result<Self> {
         ensure!(
             area_type == AreaType::Stereo,
@@ -91,7 +108,7 @@ impl SacdTrackReader {
             total_frames: track.duration_frame,
             current_frame: 0,
             duration_seconds: track.duration,
-            dst_decoder: track.is_dst.then(|| DstDecoder::new(2)),
+            dst_decoder: (!raw_mode && track.is_dst).then(|| DstDecoder::new(2)),
             current_sector: track.start_lsn,
             end_sector,
             track,
@@ -100,6 +117,8 @@ impl SacdTrackReader {
             dst_packets_remaining: 0,
             residual_buf: Vec::with_capacity(FRAME_BYTES * 7),
             residual_pos: 0,
+            raw_mode,
+            raw_frames: VecDeque::new(),
             failed: false,
         })
     }
@@ -107,6 +126,7 @@ impl SacdTrackReader {
     /// 返回 L0/R0/L1/R1 字节顺序，字节内最早的 DSD bit 位于最高位。
     /// 任意大小的输出缓冲可拆分交错字节对；调用方必须连续消费返回的字节流。
     pub fn read_interleaved_dsd(&mut self, out_buf: &mut [u8]) -> Result<usize> {
+        ensure!(!self.raw_mode, "raw frame reader 不能读取解码后的 DSD");
         ensure!(!self.failed, "SACD 读取已失败，请重新打开轨道");
         let result = self.read_inner(out_buf);
         if result.is_err() {
@@ -152,11 +172,63 @@ impl SacdTrackReader {
         Ok(written)
     }
 
+    /// 返回下一帧未解码的 SACD 音频帧；DST 帧保留 SACD 原始压缩字节。
+    pub fn next_raw_frame(&mut self) -> Result<Option<Vec<u8>>> {
+        ensure!(self.raw_mode, "当前 reader 不是 raw frame 模式");
+        ensure!(!self.failed, "SACD 读取已失败，请重新打开轨道");
+        let result = self.next_raw_frame_inner();
+        if result.is_err() {
+            self.failed = true;
+            self.raw_frames.clear();
+            self.frame_buf.clear();
+        }
+        result
+    }
+
+    fn next_raw_frame_inner(&mut self) -> Result<Option<Vec<u8>>> {
+        loop {
+            if let Some(frame) = self.raw_frames.pop_front() {
+                return Ok(Some(frame));
+            }
+            if self.current_frame == self.total_frames {
+                return Ok(None);
+            }
+            if self.current_sector == self.end_sector {
+                self.finish_frame()?;
+                ensure!(
+                    self.current_frame == self.total_frames,
+                    "SACD 轨道提前结束，音频帧缺失"
+                );
+            } else {
+                let mut sector = [0u8; SACD_SECTOR_SIZE];
+                self.iso_reader
+                    .read_sectors(self.current_sector, 1, &mut sector)?;
+                self.current_sector += 1;
+                self.read_sector(&sector)?;
+            }
+        }
+    }
+
     fn finish_frame(&mut self) -> Result<()> {
         ensure!(
             self.frame_started && !self.frame_buf.is_empty(),
             "SACD 缺少完整音频帧"
         );
+        if self.raw_mode {
+            if self.track.is_dst {
+                ensure!(self.dst_packets_remaining == 0, "SACD DST 音频帧截断");
+            } else {
+                ensure!(
+                    self.frame_buf.len() == FRAME_BYTES,
+                    "SACD DSD 音频帧长度错误"
+                );
+            }
+            let frame = std::mem::replace(&mut self.frame_buf, Vec::with_capacity(MAX_DST_BYTES));
+            self.raw_frames.push_back(frame);
+            self.current_frame += 1;
+            self.frame_started = false;
+            return Ok(());
+        }
         if let Some(decoder) = &mut self.dst_decoder {
             ensure!(self.dst_packets_remaining == 0, "SACD DST 音频帧截断");
             let mut planar = [0u8; FRAME_BYTES];
@@ -272,6 +344,7 @@ impl SacdTrackReader {
 
     /// 精确定位到轨内 75fps frame；只在 seek 时从轨道起点重建 decoder 状态。
     pub fn seek_frame(&mut self, target: u32) -> Result<()> {
+        ensure!(!self.raw_mode, "raw frame reader 不支持 seek");
         ensure!(!self.failed, "SACD 读取已失败，请重新打开轨道");
         let target = target.min(self.total_frames);
         self.current_sector = self.track.start_lsn;

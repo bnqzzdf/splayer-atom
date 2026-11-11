@@ -12,6 +12,7 @@ use anyhow::{bail, ensure, Context, Result};
 use crate::cue::CueSheet;
 use crate::direct_pcm::{DirectPcmDecoder, DirectPcmFormat, DirectPcmFrame};
 use crate::dsd::{reverse_byte, DsfReader};
+use crate::sacd::dsdiff::DsdiffWriter;
 use crate::sacd::SacdTrackReader;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -896,6 +897,60 @@ pub fn extract_sacd_track_to_dsf(
             writer.write(&buffer[..read])?;
         }
         writer.finish()?;
+        let duration_ms = bits_per_channel
+            .checked_mul(1000)
+            .and_then(|value| value.checked_add(u64::from(sample_rate) / 2))
+            .context("SACD duration 溢出")?
+            / u64::from(sample_rate);
+        Ok(DsdExtractResult {
+            sample_rate,
+            channels: 2,
+            bits_per_channel,
+            duration_ms,
+        })
+    })();
+    match result {
+        Ok(value) => {
+            publish_output(&part, output_path)?;
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&part);
+            Err(error)
+        }
+    }
+}
+
+/// 复用现有 stereo SACD reader，把完整轨道写成 DST 压缩 DFF；不执行 DST 解码。
+pub fn extract_sacd_track_to_dsdiff(
+    iso_path: &Path,
+    track_num: u16,
+    output_path: &Path,
+) -> Result<DsdExtractResult> {
+    let mut reader = SacdTrackReader::open_track_raw(iso_path, track_num)?;
+    ensure!(reader.channels == 2, "UPnP SACD 仅支持双声道");
+    let sample_rate = reader.sample_rate;
+    ensure!(
+        sample_rate % 75 == 0,
+        "SACD sample rate 不能映射 75fps 轨道边界"
+    );
+    let bits_per_channel = u64::from(reader.total_frames)
+        .checked_mul(u64::from(sample_rate) / 75)
+        .context("SACD expected bit count 溢出")?;
+    let part = prepare_output(output_path)?;
+    let result = (|| -> Result<DsdExtractResult> {
+        let mut writer =
+            DsdiffWriter::create(&part, sample_rate, reader.channels, reader.track.is_dst)?;
+        let mut frame_count = 0_u32;
+        while let Some(frame) = reader.next_raw_frame()? {
+            writer.write_frame(&frame)?;
+            frame_count += 1;
+        }
+        ensure!(
+            frame_count == reader.total_frames,
+            "SACD DSDIFF 帧数与轨道声明不一致"
+        );
+        writer.finish(frame_count)?;
         let duration_ms = bits_per_channel
             .checked_mul(1000)
             .and_then(|value| value.checked_add(u64::from(sample_rate) / 2))

@@ -366,3 +366,61 @@ fn virtual_dsf_stream_is_byte_equivalent_and_ffmpeg_seekable() {
     let mut direct_block = vec![0; direct.max_output_len()];
     assert!(direct.read_block(&mut direct_block).unwrap().unwrap() > 0);
 }
+
+#[test]
+fn raw_dst_frame_is_returned_without_decoding() {
+    let expected = pattern(0x5a);
+    let mut raw_dst = Vec::with_capacity(expected.len() + 1);
+    raw_dst.push(0);
+    raw_dst.extend_from_slice(&expected);
+    let audio = sectors(&raw_dst, 0, true);
+    let (_dir, path) = fixture(&audio, 1, 0, true, true, 2);
+
+    let mut reader = SacdTrackReader::open_track_raw(&path, 1).unwrap();
+    assert_eq!(reader.next_raw_frame().unwrap().unwrap(), raw_dst);
+    assert!(reader.next_raw_frame().unwrap().is_none());
+}
+
+#[test]
+fn sacd_dsdiff_keeps_dst_frames_and_writes_valid_chunks() {
+    let expected = pattern(0x5a);
+    let mut raw_dst = Vec::with_capacity(expected.len() + 1);
+    raw_dst.push(0);
+    raw_dst.extend_from_slice(&expected);
+    let audio = sectors(&raw_dst, 0, true);
+    let (dir, path) = fixture(&audio, 1, 0, true, true, 2);
+    let output = dir.path().join("track.dff");
+
+    let result =
+        audio_engine_core::media_extract::extract_sacd_track_to_dsdiff(&path, 1, &output).unwrap();
+    assert_eq!(result.sample_rate, 2_822_400);
+    assert_eq!(result.channels, 2);
+    assert_eq!(result.bits_per_channel, 2_822_400 / 75);
+    assert_eq!(result.duration_ms, 13);
+
+    let bytes = std::fs::read(&output).unwrap();
+    assert_eq!(&bytes[..4], b"FRM8");
+    assert_eq!(&bytes[12..16], b"DSD ");
+    let form_size = u64::from_be_bytes(bytes[4..12].try_into().unwrap());
+    assert_eq!(form_size + 12, bytes.len() as u64);
+    assert!(bytes.windows(4).any(|window| window == b"CMPR"));
+    assert!(bytes.windows(4).any(|window| window == b"DST "));
+    assert!(bytes.windows(4).any(|window| window == b"DSTF"));
+    assert!(bytes
+        .windows(raw_dst.len())
+        .any(|window| window == raw_dst.as_slice()));
+
+    let frte = bytes
+        .windows(4)
+        .position(|window| window == b"FRTE")
+        .expect("FRTE chunk");
+    assert_eq!(&bytes[frte + 4..frte + 12], &6_u64.to_be_bytes());
+    assert_eq!(
+        u32::from_be_bytes(bytes[frte + 12..frte + 16].try_into().unwrap()),
+        1
+    );
+    assert_eq!(
+        u16::from_be_bytes(bytes[frte + 16..frte + 18].try_into().unwrap()),
+        75
+    );
+}
