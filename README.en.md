@@ -124,7 +124,7 @@ Layout:
 - [Node/Bun runtime comparison record](./docs/history/bun-runtime-experiment.md) (Chinese only)
 - [Native modules](./docs/en/native.md)
 - [Plugin development](./docs/en/plugins/) · [Plugin usage](./docs/en/plugins-usage.md) · [Type reference](./docs/en/types.md)
-- [User manual (PDF, v1.3.0)](https://github.com/bnqzzdf/splayer-atom/releases/download/v1.3.0/SPlayer-Atom-User-Manual-v1.3.0.pdf)
+- [User manual (PDF, v1.3.1)](https://github.com/bnqzzdf/splayer-atom/releases/download/v1.3.1/SPlayer-Atom-User-Manual-v1.3.1.pdf)
 - [Hardware release acceptance](./docs/en/hardware-release-checklist.md)
 
 English docs live in [`docs/en/`](./docs/en/). Run `pnpm docs:dev` to preview the docs site locally.

@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-12
 
-本目录生成 `SPlayer-Atom-使用手册-v1.3.0.pdf`：A4、29 页、18 张 Web Control 截图。
+本目录生成 `SPlayer-Atom-使用手册-v1.3.1.pdf`：A4、31 页、19 张 Web Control / AudioSys 截图。
 
 ## 构建
 
