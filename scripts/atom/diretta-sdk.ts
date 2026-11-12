@@ -3,21 +3,22 @@ import path from "node:path";
 
 export const DIRETTA_SDK_RELEASE = 148;
 // SDK 静态库按 CPU 指令集分别发布，变体高于目标 CPU 会触发 SIGILL。
-// SDK 148 只提供 v2/v3/v4/zen4，带 Diretta 的产物不能选择 v1。
+// SDK 148 的 x86-64 库只提供 v2/v3/v4/zen4，不能选择 v1；aarch64 使用单独的 arm64 库。
 export const DIRETTA_CPU_VARIANTS = ["v2", "v3", "v4", "zen4"] as const;
-export type DirettaCpuVariant = (typeof DIRETTA_CPU_VARIANTS)[number];
+export type DirettaX86CpuVariant = (typeof DIRETTA_CPU_VARIANTS)[number];
+export type DirettaCpuVariant = DirettaX86CpuVariant | "arm64";
 
 /**
- * 解析 Diretta x86-64 CPU variant。
+ * 解析 Diretta CPU variant；arm64 只用于 aarch64 构建。
  * @param value - 命令行或环境变量中的 variant
  * @returns 受支持的 variant
  */
 export const parseDirettaCpuVariant = (value: string): DirettaCpuVariant => {
-  if ((DIRETTA_CPU_VARIANTS as readonly string[]).includes(value)) {
+  if (value === "arm64" || (DIRETTA_CPU_VARIANTS as readonly string[]).includes(value)) {
     return value as DirettaCpuVariant;
   }
   throw new Error(
-    `不支持的 Diretta CPU variant: ${value}，可选值为 ${DIRETTA_CPU_VARIANTS.join(", ")}`,
+    `不支持的 Diretta CPU variant: ${value}，可选值为 ${DIRETTA_CPU_VARIANTS.join(", ")}, arm64`,
   );
 };
 

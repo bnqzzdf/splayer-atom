@@ -13,7 +13,6 @@ import {
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const audioCrateDir = path.join(root, "native", "audio-engine");
 const streamingCrateDir = path.join(root, "native", "streaming-api");
-const outputDir = path.join(root, "out", "native");
 const targetDir = path.join(root, "target", "core-audio");
 const napiBin = path.join(root, "node_modules", ".bin", "napi");
 
@@ -21,11 +20,34 @@ const cargoBinDir = path.join(
   process.env.CARGO_HOME?.trim() || path.join(os.homedir(), ".cargo"),
   "bin",
 );
-const args = new Set(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const args = new Set(rawArgs);
 const isDev = args.delete("--dev");
 const requireDiretta = args.delete("--require-diretta");
+let outputDirValue: string | null = null;
+const outputDirIndex = rawArgs.indexOf("--output-dir");
+if (outputDirIndex >= 0) {
+  const value = rawArgs[outputDirIndex + 1];
+  if (!value || value.startsWith("--")) throw new Error("--output-dir 缺少路径");
+  outputDirValue = value;
+  args.delete("--output-dir");
+  args.delete(value);
+} else {
+  const outputDirArg = rawArgs.find((arg) => arg.startsWith("--output-dir="));
+  if (outputDirArg) {
+    outputDirValue = outputDirArg.slice("--output-dir=".length);
+    args.delete(outputDirArg);
+  }
+}
 const direttaVariantArg = [...args].find((arg) => arg.startsWith("--diretta-variant="));
 if (direttaVariantArg) args.delete(direttaVariantArg);
+const outputDir = outputDirValue
+  ? path.resolve(root, outputDirValue)
+  : path.join(root, "out", "native");
+const nativeOutputRoot = path.join(root, "out", "native");
+if (outputDir !== nativeOutputRoot && !outputDir.startsWith(`${nativeOutputRoot}${path.sep}`)) {
+  throw new Error(`--output-dir 必须位于 out/native 下: ${outputDir}`);
+}
 if (args.size > 0) {
   throw new Error(`未知 Core native 构建参数: ${[...args].join(" ")}`);
 }
@@ -46,7 +68,13 @@ const direttaCpuVariant: DirettaCpuVariant | null = direttaSdkRoot
     : null
   : null;
 if (direttaSdkRoot && !direttaCpuVariant) {
-  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4|zen4");
+  throw new Error("Diretta Core 构建要求指定 --diretta-variant=v2|v3|v4|zen4|arm64");
+}
+if (process.arch === "x64" && direttaCpuVariant === "arm64") {
+  throw new Error("x86_64 Diretta Core 不能使用 arm64 variant");
+}
+if (process.arch === "arm64" && direttaCpuVariant && direttaCpuVariant !== "arm64") {
+  throw new Error("aarch64 Diretta Core 只能使用 arm64 variant");
 }
 const direttaSdkRelease = direttaSdkRoot ? readDirettaSdkRelease(direttaSdkRoot) : null;
 if (direttaSdkRelease !== null && direttaSdkRelease !== DIRETTA_SDK_RELEASE) {

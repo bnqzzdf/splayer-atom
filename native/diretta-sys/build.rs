@@ -28,10 +28,12 @@ fn main() {
     }
     let cpu_variant = env::var("DIRETTA_CPU_VARIANT")
         .ok()
-        .filter(|value| matches!(value.as_str(), "v2" | "v3" | "v4" | "zen4"))
-        .unwrap_or_else(|| {
-            panic!("DIRETTA_CPU_VARIANT must be set to v2, v3, v4, or zen4");
-        });
+        .filter(|value| matches!(value.as_str(), "v2" | "v3" | "v4" | "zen4" | "arm64"));
+    if target_arch != "aarch64"
+        && !matches!(cpu_variant.as_deref(), Some("v2" | "v3" | "v4" | "zen4"))
+    {
+        panic!("DIRETTA_CPU_VARIANT must be set to v2, v3, v4, or zen4 for x86_64");
+    }
 
     let mut bridge = cc::Build::new();
     bridge
@@ -75,9 +77,12 @@ fn main() {
             "ACQUA_aarch64-linux-15-nolog".to_owned(),
         )
     } else {
+        let variant = cpu_variant
+            .as_deref()
+            .expect("x86_64 Diretta build variant was validated");
         (
-            format!("DirettaHost_x64-linux-15{}-nolog", cpu_variant),
-            format!("ACQUA_x64-linux-15{}-nolog", cpu_variant),
+            format!("DirettaHost_x64-linux-15{variant}-nolog"),
+            format!("ACQUA_x64-linux-15{variant}-nolog"),
         )
     };
 
