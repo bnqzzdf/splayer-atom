@@ -247,6 +247,14 @@ cpSync(
   path.join(outputDir, "service", "install-openrc.sh"),
 );
 chmodSync(path.join(outputDir, "service", "install-openrc.sh"), 0o755);
+// AudioSys/Buildroot：/opt 是内存盘，控制脚本、菜单卡片与 CONFIG 开机钩子都要进包。
+for (const name of ["splayeratomctl.sh", "splayeratom-menu.sh", "install-audiosys.sh"]) {
+  cpSync(
+    path.join(root, "scripts", "atom", "core-system", name),
+    path.join(outputDir, "service", name),
+  );
+  chmodSync(path.join(outputDir, "service", name), 0o755);
+}
 mkdirSync(path.join(outputDir, "docs"), { recursive: true });
 cpSync(
   path.join(root, "docs", "core-deployment.md"),

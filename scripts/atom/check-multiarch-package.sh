@@ -39,7 +39,13 @@ ok "包名/架构/变体列表：$ARCH / $VARIANT_LINE"
 [ -f "$TOP/install.sh" ] || die "缺少 install.sh"
 sh -n "$TOP/install.sh" || die "install.sh 语法错误"
 [ -x "$TOP/install.sh" ] || die "install.sh 不可执行"
-ok "install.sh 语法与权限"
+grep -q "audiosys" "$TOP/install.sh" || die "install.sh 缺少 audiosys 支持"
+for helper in splayeratomctl.sh splayeratom-menu.sh install-audiosys.sh; do
+    [ -f "$TOP/service/$helper" ] || die "缺少 AudioSys helper: service/$helper"
+    [ -x "$TOP/service/$helper" ] || die "AudioSys helper 不可执行: service/$helper"
+    sh -n "$TOP/service/$helper" || die "AudioSys helper 语法错误: service/$helper"
+done
+ok "install.sh 与 AudioSys helper 语法/权限"
 
 [ -f "$TOP/runtime/bin/node" ] || die "缺少 bundled Node"
 file "$TOP/runtime/bin/node" | grep -q "$EXPECT_NODE" || die "bundled Node 架构不符"

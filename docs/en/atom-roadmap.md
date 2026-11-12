@@ -14,15 +14,16 @@ providers/Web, folder browsing, and builds/releases. Historical work is no longe
 presented as an active to-do list.
 
 `1.3.0` was released on 2026-11-12 with SACD DST passthrough DFF (UPnP) and
-x86/arm64 multi-architecture packages. See [SACD DST-DFF](../history/sacd-dst-dff.md)
-(Chinese only) and [multi-architecture build and installation](./multiarch-build.md) for scope and
-acceptance boundaries.
+x86/arm64 multi-architecture packages; `1.3.1` adds AudioSys installation and a web-menu card.
+See [SACD DST-DFF](../history/sacd-dst-dff.md) (Chinese only),
+[multi-architecture build and installation](./multiarch-build.md), and the
+[AudioSys menu plan](../history/audiosys-menu-1.3.1.md) (Chinese only) for scope and acceptance boundaries.
 
 A maintainer-confirmed completion status is distinct from independently reviewable
 acceptance evidence. Some newly checked hardware, real-account, browser, endurance
 and final-release acceptance items have no matching new report in the repository.
 This documentation update does not rerun tests or use an old artifact's measurements
-as evidence for `1.3.0`. Original test results and their applicable commits, devices
+as evidence for `1.3.1`. Original test results and their applicable commits, devices
 and artifacts remain documented in the [history archive](./history/README.md).
 
 ## Subsequent development tasks
@@ -35,8 +36,8 @@ automatically reopening completed historical plans.
 
 ## Version and release
 
-- The current source product version is `1.3.0`.
-- Git tag `v1.3.0` has been pushed to GitHub, and GitHub Releases publishes
+- The current source product version is `1.3.1`.
+- Git tag `v1.3.1` has been pushed to GitHub, and GitHub Releases publishes
   x86-64 and aarch64 multi-architecture packages.
 - Release assets: `linux-x86_64-multi` (v1/v2/v3/v4/zen4) and
   `linux-aarch64-multi` (arm64).

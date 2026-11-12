@@ -5,8 +5,8 @@
 GentooPlayer（下称 GP）是 Core 的主要落地形态之一，但它是**纯 OpenRC** 系统：没有 systemd，
 `service/install-systemd.sh` 与本文档站里的 systemd 步骤在 GP 上都不适用。本页给出在 GP 上
 开发、部署、升级与日常服务管理的完整做法，内容以真机实测为准（基线：GentooPlayerX86 v373 x86-64，
-OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。当前发布为 `1.3.0`；本页服务管理步骤适用于
-1.3.0 包内的 `install.sh`（默认安装根 `/opt/splayer-atom-core`），实测基线仍保留为 1.1.3。
+OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。当前发布为 `1.3.1`；本页服务管理步骤适用于
+1.3.1 包内的 `install.sh`（默认安装根 `/opt/splayer-atom-core`），实测基线仍保留为 1.1.3。
 
 与 systemd 相同的部分（产物布局、`data/` 是权威持久状态、目录级回滚原则）见
 [Core 部署与升级](./core-deployment.md)；本页只讲差异与 OpenRC 侧的做法。

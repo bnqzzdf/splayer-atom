@@ -32,8 +32,9 @@ sudo ./install.sh --cpu auto
 ```
 
 安装器默认安装到 `/opt/splayer-atom-core`，自动按 CPU 选择变体，保留已有 `data/`，
-并支持 systemd / OpenRC。OpenRC 目标机（如 GentooPlayer）同样使用 `./install.sh --init auto`；
-audiosys 环境建议使用 `--prefix /audiosys/splayer-atom-core`。
+并支持 systemd / OpenRC。OpenRC 目标机（如 GentooPlayer）同样使用 `./install.sh --init auto`。
+AudioSys/Buildroot 会自动识别并安装到 `/audiosys/splayer-atom-core`，同时写入 CONFIG 开机钩子与
+「01. 播放设置 → SPlayer Atom 设置」网页菜单卡片；也可显式执行 `./install.sh --init audiosys`。
 
 然后用浏览器打开 `http://<主机 IP>:14558`。
 

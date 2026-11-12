@@ -5,7 +5,8 @@
 #   ./install.sh                         # 自动检测 CPU 变体，安装到 /opt/splayer-atom-core
 #   ./install.sh --cpu v3                # 指定变体
 #   ./install.sh --cpu auto --prefix /audiosys/splayer-atom-core
-#   ./install.sh --init systemd|openrc|none
+#   ./install.sh --init systemd|openrc|audiosys|none
+#   ./install.sh                            # AudioSys 自动安装到 /audiosys/splayer-atom-core
 #   ./install.sh --user splayer-atom     # 默认 root（Diretta 需要）
 #   ./install.sh --force                 # 允许使用非空且非 Atom 的安装根（有覆盖风险）
 #   ./install.sh --uninstall             # 保留 data/
@@ -25,6 +26,7 @@ SERVICE_USER=""
 ACTION=install
 PURGE=0
 FORCE=0
+AUDIOSYS=0
 
 die() { echo "[install] $*" >&2; exit 1; }
 info() { echo "[install] $*"; }
@@ -56,6 +58,15 @@ done
 [ -n "$PREFIX" ] || die "--prefix 不能为空"
 case "$PREFIX" in /*) ;; *) die "--prefix 必须是绝对路径" ;; esac
 
+# AudioSys/Buildroot：/opt 是内存盘，持久安装根必须是 /audiosys。
+if [ -d /audiosys ] && [ -f /dpdk/diretta.sh ]; then
+    AUDIOSYS=1
+    if [ "$PREFIX" = "$DEFAULT_PREFIX" ]; then
+        PREFIX=/audiosys/splayer-atom-core
+        info "检测到 AudioSys，安装根改为 $PREFIX"
+    fi
+fi
+
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 [ -f "$ROOT/PACKAGE_ARCH" ] || die "包不完整：缺少 PACKAGE_ARCH（请在解包目录运行 install.sh）"
 [ -f "$ROOT/variants/manifest.txt" ] || die "包不完整：缺少 variants/manifest.txt"
@@ -76,7 +87,8 @@ looks_like_atom_install() {
     [ -f "$PREFIX/bin/splayer-atom-core" ] \
         || [ -f "$PREFIX/runtime.json" ] \
         || [ -f "$PREFIX/PACKAGE_ARCH" ] \
-        || [ -f "$PREFIX/app/index.js" ]
+        || [ -f "$PREFIX/app/index.js" ] \
+        || [ -d "$PREFIX/data" ]
 }
 if [ -d "$PREFIX" ] \
    && [ -n "$(find "$PREFIX" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ] \
@@ -142,7 +154,9 @@ if [ "$CPU" = v1 ]; then
 fi
 
 detect_init() {
-    if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    if [ -d /audiosys ] && [ -f /dpdk/diretta.sh ]; then
+        echo audiosys
+    elif [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
         echo systemd
     elif [ -d /run/openrc ] || { command -v rc-service >/dev/null 2>&1 && [ -x /sbin/openrc-run ]; }; then
         echo openrc
@@ -151,7 +165,13 @@ detect_init() {
     fi
 }
 [ "$INIT" = auto ] && INIT=$(detect_init)
-case "$INIT" in systemd|openrc|none) ;; *) die "无效 --init：$INIT（auto/systemd/openrc/none）" ;; esac
+case "$INIT" in systemd|openrc|audiosys|none) ;; *) die "无效 --init：$INIT（auto/systemd/openrc/audiosys/none）" ;; esac
+if [ "$INIT" = audiosys ] && [ "$AUDIOSYS" != 1 ]; then
+    die "--init audiosys 只能在 AudioSys（/audiosys + /dpdk/diretta.sh）上使用"
+fi
+if [ "$INIT" = audiosys ]; then
+    case "$PREFIX" in /audiosys/*) ;; *) warn "AudioSys 的 /opt 是内存盘；建议安装到 /audiosys 下" ;; esac
+fi
 
 SERVICE_MODE=root
 if [ -n "$SERVICE_USER" ]; then
@@ -164,6 +184,8 @@ stop_service() {
         systemctl stop splayer-atom-core >/dev/null 2>&1 || true
     elif [ "$INIT" = openrc ] && command -v rc-service >/dev/null 2>&1; then
         rc-service splayer-atom-core stop >/dev/null 2>&1 || true
+    elif [ "$INIT" = audiosys ] && [ -x "$PREFIX/service/splayeratomctl.sh" ]; then
+        "$PREFIX/service/splayeratomctl.sh" -Action stop >/dev/null 2>&1 || true
     fi
 }
 
@@ -173,6 +195,8 @@ start_service() {
         systemctl daemon-reload
         systemctl enable splayer-atom-core >/dev/null 2>&1 || true
         systemctl restart splayer-atom-core
+    elif [ "$INIT" = audiosys ]; then
+        "$PREFIX/service/splayeratomctl.sh" -Action start
     else
         rc-update add splayer-atom-core default >/dev/null 2>&1 || true
         rc-service splayer-atom-core restart
@@ -188,6 +212,10 @@ install_service() {
         else
             ./install-systemd.sh --diretta
         fi
+    elif [ "$INIT" = audiosys ]; then
+        [ -x ./splayeratomctl.sh ] || die "AudioSys 包缺少 service/splayeratomctl.sh"
+        [ -x ./install-audiosys.sh ] || die "AudioSys 包缺少 service/install-audiosys.sh"
+        ./install-audiosys.sh install
     else
         if [ "$SERVICE_MODE" = user ]; then
             ./install-openrc.sh --user "$SERVICE_USER"
@@ -207,6 +235,14 @@ uninstall() {
     elif [ "$INIT" = openrc ]; then
         rc-update del splayer-atom-core default >/dev/null 2>&1 || true
         rm -f /etc/init.d/splayer-atom-core /etc/conf.d/splayer-atom-core
+    elif [ "$INIT" = audiosys ]; then
+        if [ -x "$PREFIX/service/splayeratomctl.sh" ]; then
+            "$PREFIX/service/splayeratomctl.sh" -Action stop >/dev/null 2>&1 || true
+        fi
+        if [ -x "$PREFIX/service/install-audiosys.sh" ]; then
+            "$PREFIX/service/install-audiosys.sh" uninstall >/dev/null 2>&1 || true
+        fi
+        rm -f /usr/local/bin/splayeratomctl
     fi
     if [ "$PURGE" = 1 ]; then
         rm -rf "$PREFIX"

@@ -22,6 +22,25 @@ const stageSource = readFileSync(
   new URL("../../scripts/atom/stage-core-system.ts", import.meta.url),
   "utf8",
 );
+const multiarchInstallerSource = readFileSync(
+  new URL("../../scripts/atom/core-system/install-multiarch.sh", import.meta.url),
+  "utf8",
+);
+const audiosysCtlUrl = new URL(
+  "../../scripts/atom/core-system/splayeratomctl.sh",
+  import.meta.url,
+);
+const audiosysMenuUrl = new URL(
+  "../../scripts/atom/core-system/splayeratom-menu.sh",
+  import.meta.url,
+);
+const audiosysInstallUrl = new URL(
+  "../../scripts/atom/core-system/install-audiosys.sh",
+  import.meta.url,
+);
+const audiosysCtlSource = readFileSync(audiosysCtlUrl, "utf8");
+const audiosysMenuSource = readFileSync(audiosysMenuUrl, "utf8");
+const audiosysInstallSource = readFileSync(audiosysInstallUrl, "utf8");
 // 根 locale 的部署文档是中文；英文原文在 docs/en/ 下。
 // 安全规则两份都要有，所以两条都断言。
 const deploymentSource = readFileSync(
@@ -179,6 +198,42 @@ test("Core system artifact stages the OpenRC service script and installer", () =
     stageSource,
     /chmodSync\(path\.join\(outputDir, "service", "install-openrc\.sh"\), 0o755\)/,
   );
+});
+
+test("AudioSys package stages a start/stop menu card and a CONFIG boot hook", () => {
+  for (const url of [audiosysCtlUrl, audiosysMenuUrl, audiosysInstallUrl]) {
+    const syntax = spawnSync("sh", ["-n", url.pathname], { encoding: "utf8" });
+    assert.equal(syntax.status, 0, `${url.pathname}: ${syntax.stderr}`);
+  }
+  assert.match(multiarchInstallerSource, /SERVICE_MODE=root/);
+  assert.match(multiarchInstallerSource, /--init systemd\|openrc\|audiosys\|none/);
+  assert.match(multiarchInstallerSource, /\/dpdk\/diretta\.sh/);
+  assert.match(multiarchInstallerSource, /PREFIX=\/audiosys\/splayer-atom-core/);
+  assert.match(multiarchInstallerSource, /splayeratomctl\.sh.*-Action start/);
+  assert.match(multiarchInstallerSource, /install-audiosys\.sh install/);
+  assert.match(multiarchInstallerSource, /install-audiosys\.sh".*uninstall/);
+
+  assert.match(audiosysCtlSource, /-Action status\|start\|stop\|restart\|update/);
+  assert.match(audiosysCtlSource, /bin\/splayer-atom-core/);
+  assert.match(audiosysCtlSource, /ATOM_SERVER_PORT/);
+  assert.match(audiosysCtlSource, /--prefix "\$ATOM_DIR" --cpu auto --init audiosys/);
+
+  assert.match(audiosysMenuSource, /zz_splayeratom_ctl\.json/);
+  assert.match(audiosysMenuSource, /01\. 播放设置/);
+  assert.match(audiosysMenuSource, /SPlayer Atom 设置/);
+  assert.match(audiosysMenuSource, /file_upload/);
+  assert.match(audiosysMenuSource, /\.asd-cardseq/);
+
+  assert.match(audiosysInstallSource, /# >>> splayeratom \(added by install-audiosys\.sh\) >>>/);
+  assert.match(audiosysInstallSource, /\.bak-splayeratom-/);
+  assert.match(audiosysInstallSource, /sh -n "\$tmp"/);
+  assert.match(audiosysInstallSource, /mount -o remount,rw/);
+  assert.match(audiosysInstallSource, /splayeratom-menu\.sh/);
+  assert.match(audiosysInstallSource, /-Action start/);
+
+  for (const name of ["splayeratomctl.sh", "splayeratom-menu.sh", "install-audiosys.sh"]) {
+    assert.match(stageSource, new RegExp(`"${name.replaceAll(".", "\\.")}"`));
+  }
 });
 
 test("Core deployment guide keeps rollback data independent from migrated data", () => {
