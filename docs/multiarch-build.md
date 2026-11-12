@@ -118,6 +118,20 @@ splayer-atom-core-<version>-<commit8>-<YYYYMMDD>-linux-aarch64-multi.tar.gz
   `/audiosys/splayer-atom-core`。只有确认 `/audiosys` 是专用根且可覆盖时，才使用
   `--prefix /audiosys --force`。
 
+### AudioSys / Buildroot
+
+安装器检测到 `/audiosys` 与 `/dpdk/diretta.sh` 时自动选择 AudioSys 模式：
+
+- 未显式 `--prefix` 时安装到 `/audiosys/splayer-atom-core`（`/opt` 是内存盘，不能作为持久根）；
+- `./install.sh --init audiosys` 可显式指定；
+- 写入 CONFIG 分区 `networkfs.sh` 的幂等钩子，每次开机重建 `/usr/local/bin/splayeratomctl` 与菜单卡片；
+- 菜单卡片为 `runners/zz_splayeratom_ctl.json`，分组「01. 播放设置」，名称 `NN. SPlayer Atom 设置`；
+- 卡片动作：`status` / `start` / `stop` / `restart` / `update`；`start/stop` 同时决定开机自启；
+- `update` 接受 `splayer-atom-core-*.tar.gz`，保留 `data/` 与登录状态；
+- `--uninstall` 移除钩子、卡片与软链，保留 `data/`；`--purge` 连 `data/` 一起删除。
+
+钩子写入前会备份 `networkfs.sh.bak-splayeratom-<时间戳>`，剥离旧段后先 `sh -n` 再覆盖；写入失败不会破坏原文件。
+
 ## 闸门
 
 ```bash
@@ -135,14 +149,14 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 - x86 五变体：`.133` Debian 11 builder 容器，Node 24.22.2，Diretta SDK 148。
 - arm64：`.230` aarch64 原生构建，Rust 1.99.0，Diretta SDK 148 aarch64 库。
-- 源码身份：`1.3.0` / `ed95ee9b` / `sourceDirty=false`。
+- 源码身份：`1.3.1` / `7606f82c` / `sourceDirty=false`。
 
 产物：
 
 | 包 | 大小 | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `32110e5c2c87a4f7e31e19eb57965ed5699d1a467cab8e2ef05e48a25ef0ffba` |
-| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `16f6763692ae895d10933d4961f7ef81b2d8527625831749555c1d7fe6afb5fc` |
+| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `92da60b836e1fa1937a54003fca4a1a1986dc4b6628c6a8cc42ec86731fc8b07` |
+| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `755fe891781c0137640fada841d05f0df2320bd0a534bd001414301aa59d1071` |
 
 包闸门：
 
@@ -153,13 +167,15 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 安装/启动验证：
 
-- `.137` x86 包 `--cpu v4`：安装到测试前缀，Core `/api/info` 返回 `version=1.3.0`、
-  `commit=ed95ee9b`、`arch=x64`、`node=24.22.2`、`direttaSdkRelease=148`、
-  `capabilities.diretta=true`；native 加载成功。
-- `.137` x86 包 `--cpu v1`：`direttaSdkRelease=null`、`capabilities.diretta=false`；native 加载成功。
-- `.230` arm 包 `--cpu arm64`：`version=1.3.0`、`commit=ed95ee9b`、`arch=arm64`、`node=24.22.2`、
-  `direttaSdkRelease=148`、`capabilities.diretta=true`；native 加载成功。
-- arm64 编译中发现并修复 `direct_pcm.rs` 的 `c_char` 有符号性（`a5a25b14`），x86 不受影响。
+- `.170` AudioSys x86 包 `--init audiosys`：自动安装到 `/audiosys/splayer-atom-core`，
+  `/api/info` 返回 `version=1.3.1`、`commit=7606f82c`、`arch=x64`；菜单出现
+  `14. SPlayer Atom 设置`（分组 `01. 播放设置`），`status/start/stop/restart/update`
+  与 CONFIG 钩子重建均通过；`data/` 保留。
+- `.137` OpenRC x86 包 `--init openrc`：从 1.3.0 升级到 1.3.1，服务启动，
+  `/api/info` 返回 `version=1.3.1`、`commit=7606f82c`，原数据保留。
+- `.230` arm64 包 `--cpu arm64 --init none`：临时前缀启动成功，`/api/info` 返回
+  `version=1.3.1`、`commit=7606f82c`、`arch=arm64`、`direttaSdkRelease=148`。
+- x86 v1/v2/v3/v4/zen4 与 arm64 包闸门全部 PASS；v1 为 ALSA-only。
 
 ## 审计结论（本轮）
 

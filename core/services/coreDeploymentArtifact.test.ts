@@ -208,6 +208,7 @@ test("AudioSys package stages a start/stop menu card and a CONFIG boot hook", ()
   assert.match(multiarchInstallerSource, /SERVICE_MODE=root/);
   assert.match(multiarchInstallerSource, /--init systemd\|openrc\|audiosys\|none/);
   assert.match(multiarchInstallerSource, /\/dpdk\/diretta\.sh/);
+  assert.match(multiarchInstallerSource, /\[ -d "\$PREFIX\/data" \]/);
   assert.match(multiarchInstallerSource, /PREFIX=\/audiosys\/splayer-atom-core/);
   assert.match(multiarchInstallerSource, /splayeratomctl\.sh.*-Action start/);
   assert.match(multiarchInstallerSource, /install-audiosys\.sh install/);

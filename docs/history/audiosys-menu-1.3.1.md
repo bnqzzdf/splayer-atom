@@ -1,8 +1,10 @@
 # AudioSys 菜单集成方案（SPlayer Atom 1.3.1）
 
+> 最后更新：2026-11-12
+
 > 日期：2026-11-12
 >
-> 状态：可行性分析与实施方案；待实现、真机验证与发布。
+> 状态：已实现，并在 `.170` AudioSys 真机完成安装、菜单、启停、升级与开机钩子验证；待冻结发布。
 
 ## 背景
 
@@ -66,7 +68,16 @@ AudioSys（Buildroot）根文件系统是内存盘，只有 `/audiosys`（p3）�
 - 更新包可能来自旧版本：新 `install.sh` 必须支持 `--init audiosys`；更新失败时保留旧程序与 `data/`。
 - 端口冲突：默认 14558；如被占用，由 `splayeratom.conf` 的 `ATOM_SERVER_PORT` 覆盖（实现时提供）。
 
-## 验收
+## 验收结果（2026-11-12，`.170`）
+
+- 安装：`install.sh --init audiosys` 自动选择 `/audiosys/splayer-atom-core`，`/api/info` 返回 `1.3.1 / 7606f82c`。
+- 菜单：`14. SPlayer Atom 设置`，分组 `01. 播放设置`；卡片 JSON 由 `splayeratom-menu.sh` 生成。
+- 控制：`status/start/stop/restart/update` 均通过；升级保留 `data/`。
+- 开机钩子：从 CONFIG p2 取出 splayeratom 段执行，卡片重建；延迟 35 秒后 Core 启动。
+- 卸载：移除卡片、软链与钩子，保留 `data/`；重新安装可复用 `data/`。
+- 包闸门：x86 v1/v2/v3/v4/zen4、arm64 全部 PASS；`.137` OpenRC 与 `.230` arm64 冒烟通过。
+
+## 验收清单
 
 1. `.170` 执行新包 `install.sh --init audiosys`；
 2. 菜单出现 `NN. SPlayer Atom 设置`，位于「01. 播放设置」；

@@ -125,6 +125,24 @@ Package layout:
   `/audiosys/splayer-atom-core`. Use `--prefix /audiosys --force` only after confirming that
   `/audiosys` is a dedicated root and may be overwritten.
 
+### AudioSys / Buildroot
+
+When `/audiosys` and `/dpdk/diretta.sh` are present, the installer selects AudioSys mode automatically:
+
+- without an explicit `--prefix`, it installs to `/audiosys/splayer-atom-core` (`/opt` is RAM-backed);
+- `./install.sh --init audiosys` selects the mode explicitly;
+- it writes an idempotent CONFIG `networkfs.sh` hook that recreates `/usr/local/bin/splayeratomctl`
+  and the web-menu card on every boot;
+- the card is `runners/zz_splayeratom_ctl.json`, group "01. Playback Settings", name
+  `NN. SPlayer Atom Settings`;
+- card actions: `status` / `start` / `stop` / `restart` / `update`; start/stop also toggles boot enable;
+- `update` accepts `splayer-atom-core-*.tar.gz` and preserves `data/` and login state;
+- `--uninstall` removes the hook, card, and link but keeps `data/`; `--purge` removes `data/` too.
+
+Before replacing `networkfs.sh`, the installer backs it up as
+`networkfs.sh.bak-splayeratom-<timestamp>`, strips the old section, and runs `sh -n`; a failed
+check leaves the original file untouched.
+
 ## Gates
 
 ```bash
@@ -143,14 +161,14 @@ Build environment:
 
 - x86 five variants: `.133` Debian 11 builder container, Node 24.22.2, Diretta SDK 148.
 - arm64: `.230` native aarch64 build, Rust 1.99.0, Diretta SDK 148 aarch64 libraries.
-- Source identity: `1.3.0` / `ed95ee9b` / `sourceDirty=false`.
+- Source identity: `1.3.1` / `7606f82c` / `sourceDirty=false`.
 
 Artifacts:
 
 | Package | Size | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `32110e5c2c87a4f7e31e19eb57965ed5699d1a467cab8e2ef05e48a25ef0ffba` |
-| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `16f6763692ae895d10933d4961f7ef81b2d8527625831749555c1d7fe6afb5fc` |
+| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `92da60b836e1fa1937a54003fca4a1a1986dc4b6628c6a8cc42ec86731fc8b07` |
+| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `755fe891781c0137640fada841d05f0df2320bd0a534bd001414301aa59d1071` |
 
 Package gates:
 
@@ -161,15 +179,15 @@ Package gates:
 
 Install/start verification:
 
-- `.137` x86 package `--cpu v4`: installed to a test prefix; Core `/api/info` returned
-  `version=1.3.0`, `commit=ed95ee9b`, `arch=x64`, `node=24.22.2`, `direttaSdkRelease=148`,
-  `capabilities.diretta=true`; native addons loaded.
-- `.137` x86 package `--cpu v1`: `direttaSdkRelease=null`, `capabilities.diretta=false`; native
-  addons loaded.
-- `.230` arm package `--cpu arm64`: `version=1.3.0`, `commit=ed95ee9b`, `arch=arm64`,
-  `node=24.22.2`, `direttaSdkRelease=148`, `capabilities.diretta=true`; native addons loaded.
-- The arm64 build found and fixed the `c_char` signedness in `direct_pcm.rs` (`a5a25b14`); x86 is
-  unaffected.
+- `.170` AudioSys x86 package `--init audiosys`: installed to `/audiosys/splayer-atom-core`;
+  `/api/info` returned `version=1.3.1`, `commit=7606f82c`, `arch=x64`; the menu card
+  `14. SPlayer Atom Settings` appeared under `01. Playback Settings`; `status/start/stop/restart/update`
+  and CONFIG hook recreation passed; `data/` was preserved.
+- `.137` OpenRC x86 package `--init openrc`: upgraded from 1.3.0 to 1.3.1, service started,
+  `/api/info` returned `version=1.3.1`, `commit=7606f82c`, and existing data was preserved.
+- `.230` arm64 package `--cpu arm64 --init none`: started from a temporary prefix; `/api/info`
+  returned `version=1.3.1`, `commit=7606f82c`, `arch=arm64`, `direttaSdkRelease=148`.
+- Package gates passed for x86 v1/v2/v3/v4/zen4 and arm64; v1 is ALSA-only.
 
 ## Audit conclusions (this round)
 
