@@ -149,14 +149,14 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 - x86 五变体：`.133` Debian 11 builder 容器，Node 24.22.2，Diretta SDK 148。
 - arm64：`.230` aarch64 原生构建，Rust 1.99.0，Diretta SDK 148 aarch64 库。
-- 源码身份：`1.3.1` / `7606f82c` / `sourceDirty=false`。
+- 源码身份：`1.3.2` / `81601faf` / `sourceDirty=false`。
 
 产物：
 
 | 包 | 大小 | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `92da60b836e1fa1937a54003fca4a1a1986dc4b6628c6a8cc42ec86731fc8b07` |
-| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `755fe891781c0137640fada841d05f0df2320bd0a534bd001414301aa59d1071` |
+| `splayer-atom-core-1.3.2-81601faf-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `c89690c4f6bed83d06a7f9c5955c09cc512ca8ed951dc1fd4f4748ae5f86d1e9` |
+| `splayer-atom-core-1.3.2-81601faf-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `200586ece7a3620e994dbaa66644cc38602c60193524758ce881a3fac58591ed` |
 
 包闸门：
 
@@ -167,14 +167,13 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 安装/启动验证：
 
-- `.170` AudioSys x86 包 `--init audiosys`：自动安装到 `/audiosys/splayer-atom-core`，
-  `/api/info` 返回 `version=1.3.1`、`commit=7606f82c`、`arch=x64`；菜单出现
-  `14. SPlayer Atom 设置`（分组 `01. 播放设置`），`status/start/stop/restart/update`
-  与 CONFIG 钩子重建均通过；`data/` 保留。
-- `.137` OpenRC x86 包 `--init openrc`：从 1.3.0 升级到 1.3.1，服务启动，
-  `/api/info` 返回 `version=1.3.1`、`commit=7606f82c`，原数据保留。
-- `.230` arm64 包 `--cpu arm64 --init none`：临时前缀启动成功，`/api/info` 返回
-  `version=1.3.1`、`commit=7606f82c`、`arch=arm64`、`direttaSdkRelease=148`。
+- `.137` OpenRC x86 包：升级到 1.3.2，`/api/info` 返回 `version=1.3.2`、`commit=81601faf`；
+  启动后台修复 50 首 WAV GBK 标签，DB 中 U+FFFD WAV 计数从 50 降至 0，原数据保留。
+- `.102` Euphony x86 包：升级到 1.3.2，`data/` 保留，DB 无 U+FFFD WAV。
+- `.227` OpenRC x86 包：升级到 1.3.2，临时端口修复 3 首 WAV，服务保持停止（14558 由 TinySPlayer 使用）。
+- `.104` Innuos x86 包：升级到 1.3.2，服务保持停止；仅剩 1 条指向不存在路径的旧索引，不是标签编码问题。
+- `.170` AudioSys x86 包：升级到 1.3.2，菜单 `14. SPlayer Atom 设置`、CONFIG 钩子与 `data/` 保留。
+- `.230` arm64 包：临时前缀启动成功，`/api/info` 返回 `version=1.3.2`、`commit=81601faf`、`arch=arm64`、`direttaSdkRelease=148`。
 - x86 v1/v2/v3/v4/zen4 与 arm64 包闸门全部 PASS；v1 为 ALSA-only。
 
 ## 审计结论（本轮）

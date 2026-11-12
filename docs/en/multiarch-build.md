@@ -161,14 +161,14 @@ Build environment:
 
 - x86 five variants: `.133` Debian 11 builder container, Node 24.22.2, Diretta SDK 148.
 - arm64: `.230` native aarch64 build, Rust 1.99.0, Diretta SDK 148 aarch64 libraries.
-- Source identity: `1.3.1` / `7606f82c` / `sourceDirty=false`.
+- Source identity: `1.3.2` / `81601faf` / `sourceDirty=false`.
 
 Artifacts:
 
 | Package | Size | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `92da60b836e1fa1937a54003fca4a1a1986dc4b6628c6a8cc42ec86731fc8b07` |
-| `splayer-atom-core-1.3.1-7606f82c-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `755fe891781c0137640fada841d05f0df2320bd0a534bd001414301aa59d1071` |
+| `splayer-atom-core-1.3.2-81601faf-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `c89690c4f6bed83d06a7f9c5955c09cc512ca8ed951dc1fd4f4748ae5f86d1e9` |
+| `splayer-atom-core-1.3.2-81601faf-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `200586ece7a3620e994dbaa66644cc38602c60193524758ce881a3fac58591ed` |
 
 Package gates:
 
@@ -179,14 +179,18 @@ Package gates:
 
 Install/start verification:
 
-- `.170` AudioSys x86 package `--init audiosys`: installed to `/audiosys/splayer-atom-core`;
-  `/api/info` returned `version=1.3.1`, `commit=7606f82c`, `arch=x64`; the menu card
-  `14. SPlayer Atom Settings` appeared under `01. Playback Settings`; `status/start/stop/restart/update`
-  and CONFIG hook recreation passed; `data/` was preserved.
-- `.137` OpenRC x86 package `--init openrc`: upgraded from 1.3.0 to 1.3.1, service started,
-  `/api/info` returned `version=1.3.1`, `commit=7606f82c`, and existing data was preserved.
-- `.230` arm64 package `--cpu arm64 --init none`: started from a temporary prefix; `/api/info`
-  returned `version=1.3.1`, `commit=7606f82c`, `arch=arm64`, `direttaSdkRelease=148`.
+- `.137` OpenRC x86 package: upgraded to 1.3.2; `/api/info` returned `version=1.3.2`,
+  `commit=81601faf`; startup repaired 50 WAV GBK tags, reducing the U+FFFD WAV count from 50 to 0
+  while preserving existing data.
+- `.102` Euphony x86 package: upgraded to 1.3.2; `data/` preserved; no U+FFFD WAV remained.
+- `.227` OpenRC x86 package: upgraded to 1.3.2; 3 WAVs repaired on a temporary port; service kept
+  stopped because TinySPlayer uses 14558.
+- `.104` Innuos x86 package: upgraded to 1.3.2; service kept stopped. One stale index points to a
+  missing path and is unrelated to tag encoding.
+- `.170` AudioSys x86 package: upgraded to 1.3.2; the `14. SPlayer Atom Settings` card, CONFIG hook,
+  and `data/` were preserved.
+- `.230` arm64 package: started from a temporary prefix; `/api/info` returned `version=1.3.2`,
+  `commit=81601faf`, `arch=arm64`, `direttaSdkRelease=148`.
 - Package gates passed for x86 v1/v2/v3/v4/zen4 and arm64; v1 is ALSA-only.
 
 ## Audit conclusions (this round)
