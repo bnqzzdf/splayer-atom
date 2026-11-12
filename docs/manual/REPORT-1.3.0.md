@@ -2,7 +2,7 @@
 
 > 日期：2026-11-12
 >
-> 状态：构建、闸门与真机校验完成；待上传到 GitHub Release `v1.3.0`。
+> 状态：构建、闸门、真机校验与 Release 上传完成。
 
 ## 交付物
 
@@ -14,7 +14,7 @@
 | 页数 | 29 |
 | 配图 | 18 张 |
 | 适用版本 | SPlayer Atom 1.3.0（`ed95ee9b`） |
-| 发布目标 | GitHub Release `v1.3.0`，资产名 `SPlayer-Atom-使用手册-v1.3.0.pdf` |
+| 发布结果 | GitHub Release `v1.3.0`，资产名 `SPlayer-Atom-User-Manual-v1.3.0.pdf` |
 
 ## 版式与结构
 
