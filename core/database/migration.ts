@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 
 /** 当前数据库 schema 版本。Core 升级 preflight 复用此值，禁止维护第二份版本常量。 */
-export const DATABASE_SCHEMA_VERSION = 9;
+export const DATABASE_SCHEMA_VERSION = 10;
 
 type TableInfoRow = { name: string };
 
@@ -152,6 +152,30 @@ export const migrate = (d: Database.Database): void => {
         `);
       }
       v = 9;
+    }
+
+    // v9 → v10: 旧 WAV 扫描把 RIFF INFO 的 GBK 字节按 UTF-8 解码，标签入库后出现
+    // U+FFFD 乱码。作废这些文件指纹，让下一轮增量扫描用新的 WAV 标签读取路径重读。
+    if (v < 10) {
+      if (
+        hasColumn(d, "tracks", "path") &&
+        hasColumn(d, "tracks", "title") &&
+        hasColumn(d, "tracks", "album") &&
+        hasColumn(d, "tracks", "artists")
+      ) {
+        d.exec(`
+          UPDATE tracks
+          SET file_mtime = NULL
+          WHERE cue_path IS NULL
+            AND lower(path) LIKE '%.wav'
+            AND (
+              instr(title, char(65533)) > 0
+              OR instr(album, char(65533)) > 0
+              OR instr(artists, char(65533)) > 0
+            )
+        `);
+      }
+      v = 10;
     }
 
     // 版本无关部分：补 lyric_match_cache.extra 列。

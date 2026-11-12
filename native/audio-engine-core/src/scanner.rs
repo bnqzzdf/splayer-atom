@@ -209,7 +209,7 @@ fn probe_fast_with_directory_cover(
             .and_then(|file| AudioReader::new(file).ok());
         let dsd_tags = dsd_reader.as_ref().map(|reader| {
             let raw_metadata = reader.metadata();
-            metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), path)
+            metadata::extract_tags_for_path(&raw_metadata, path)
         });
         let dsd_cover = cover_cache_dir
             .and_then(|dir| {
@@ -308,8 +308,7 @@ fn probe_fast_with_directory_cover(
     }
 
     let raw_metadata = reader.metadata();
-    let tags =
-        metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), path);
+    let tags = metadata::extract_tags_for_path(&raw_metadata, path);
 
     let cover = cover_cache_dir.and_then(|dir| {
         metadata::extract_cover_thumbnail_with_fallback(

@@ -65,8 +65,7 @@ pub fn prepare_media(
     let source_channels = u16::try_from(stream_info.channels).context("源音频声道数超出范围")?;
     let codec = info.codec_name.clone().unwrap_or_default();
     let raw_metadata = reader.metadata();
-    let tags =
-        metadata::repair_legacy_gbk_tags_for_path(metadata::extract_tags(&raw_metadata), source);
+    let tags = metadata::extract_tags_for_path(&raw_metadata, source);
     let cover =
         cover_cache_dir.and_then(|dir| metadata::extract_cover_thumbnail(&reader, source, dir));
     let cover_raw = metadata::read_attached_pic(&reader);

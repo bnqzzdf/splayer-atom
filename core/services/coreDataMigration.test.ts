@@ -297,6 +297,54 @@ test("disc metadata migration adds the nullable disc column without forcing a re
   }
 });
 
+
+test("WAV GBK tag migration invalidates only corrupted WAV fingerprints once", () => {
+  const database = new Database(":memory:");
+  try {
+    database.exec(`
+      CREATE TABLE tracks(
+        path TEXT,
+        cue_path TEXT,
+        file_mtime INTEGER,
+        title TEXT,
+        album TEXT,
+        artists TEXT
+      );
+      CREATE TABLE lyric_match_cache(fingerprint TEXT, extra TEXT);
+      INSERT INTO tracks(path, cue_path, file_mtime, title, album, artists) VALUES
+        ('/music/bad.wav', NULL, 101, '��ѩ', '���Ļ��Ǽٵ�', '[{"name":"孟庭苇"}]'),
+        ('/music/good.wav', NULL, 102, '春雪', '真的还是假的', '[{"name":"孟庭苇"}]'),
+        ('/music/bad.flac', NULL, 103, '��ѩ', '���Ļ��Ǽٵ�', '[{"name":"孟庭苇"}]'),
+        ('/music/cue.wav', '/music/cue.cue', 104, '��ѩ', '���Ļ��Ǽٵ�', '[]');
+    `);
+    database.pragma("user_version = 9");
+
+    migrate(database);
+
+    const rows = database
+      .prepare("SELECT path, file_mtime AS mtime FROM tracks ORDER BY path")
+      .all() as { path: string; mtime: number | null }[];
+    const byPath = new Map(rows.map((row) => [row.path, row.mtime]));
+    assert.equal(byPath.get("/music/bad.wav"), null);
+    assert.equal(byPath.get("/music/good.wav"), 102);
+    assert.equal(byPath.get("/music/bad.flac"), 103);
+    assert.equal(byPath.get("/music/cue.wav"), 104);
+    assert.equal(database.pragma("user_version", { simple: true }), DATABASE_SCHEMA_VERSION);
+
+    database.prepare("UPDATE tracks SET file_mtime = 201 WHERE path = '/music/bad.wav'").run();
+    migrate(database);
+    assert.equal(
+      database
+        .prepare("SELECT file_mtime FROM tracks WHERE path = '/music/bad.wav'")
+        .pluck()
+        .get(),
+      201,
+    );
+  } finally {
+    database.close();
+  }
+});
+
 test("SQLite migration failure rolls back schema changes and user_version", () => {
   const database = new Database(":memory:");
   try {

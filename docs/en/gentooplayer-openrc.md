@@ -7,8 +7,8 @@ system: there is no systemd, so `service/install-systemd.sh` and the systemd-bas
 documentation site do not apply on GP. This page covers development, deployment, upgrade and
 day-to-day service management on GP. Everything here is backed by measurements on a real machine
 (baseline: GentooPlayerX86 v373 x86-64, OpenRC `0.63.3`, `splayer-atom-core` 1.1.3).
-The current release is `1.3.1`; the service-management steps apply to the `install.sh` shipped in
-the 1.3.1 package (default prefix `/opt/splayer-atom-core`), while the measured baseline remains 1.1.3.
+The current release is `1.3.2`; the service-management steps apply to the `install.sh` shipped in
+the 1.3.2 package (default prefix `/opt/splayer-atom-core`), while the measured baseline remains 1.1.3.
 
 The parts that are identical to systemd (artifact layout, `data/` as the authoritative persistent
 state, the directory-level rollback rule) live in

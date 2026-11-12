@@ -8,7 +8,7 @@
 
 This directory consolidates information scattered across the README, `docs/`, and the source into five formal deliverables. They address different audiences but share one set of code facts: product version, Core Protocol version, database schema, config schema, and port conventions all refer to the baseline above.
 
-**Baseline note:** The five handbook chapters remain a snapshot of `5693b3fc`, not a complete description of the current `1.3.1` release. Newer changes include the Bun runtime flavor, AM player layout, SACD DST-DFF passthrough, and multi-architecture packages. Use the [user guide](../guide.md), [build flavors](../build-flavors.md), [multi-architecture build](../multiarch-build.md), and [roadmap](../atom-roadmap.md) for current behavior and pending acceptance; see the [history archive](../history/README.md) for phase-specific records.
+**Baseline note:** The five handbook chapters remain a snapshot of `5693b3fc`, not a complete description of the current `1.3.2` release. Newer changes include the Bun runtime flavor, AM player layout, SACD DST-DFF passthrough, and multi-architecture packages. Use the [user guide](../guide.md), [build flavors](../build-flavors.md), [multi-architecture build](../multiarch-build.md), and [roadmap](../atom-roadmap.md) for current behavior and pending acceptance; see the [history archive](../history/README.md) for phase-specific records.
 
 ## Documents
 
@@ -59,3 +59,4 @@ If this directory conflicts with a topic document, the reproducible evidence in 
 | 2026-11-05 | `56b41611` / `1.1.3` | Clarified the handbook snapshot and current guides; original acceptance evidence unchanged |
 | 2026-11-12 | `v1.3.0` | Current release adds SACD DST-DFF and multi-architecture packages; the five chapters remain a `5693b3fc` snapshot |
 | 2026-11-12 | `v1.3.1` | Added the AudioSys installer adapter and web-menu card; the five chapters are unchanged |
+| 2026-11-12 | `v1.3.2` | Fixed WAV Chinese tag corruption; the five chapters are unchanged |

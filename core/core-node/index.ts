@@ -73,6 +73,9 @@ const start = async (): Promise<void> => {
   void streamingControl
     .restoreActiveConnection()
     .catch((error) => coreLog.warn("恢复流媒体服务器连接失败", error));
+  void import("@main/services/tagEncodingRepair")
+    .then(({ repairCorruptedWavTags }) => repairCorruptedWavTags())
+    .catch((error) => coreLog.warn("WAV 标签编码修复失败", error));
 
   const shutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) return;

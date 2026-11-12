@@ -12,13 +12,14 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 [已完成事项](./history/atom-completed.md)，不再把历史工作放在当前待办清单中。
 
 2026-11-12 发布 `1.3.0`，新增 SACD DST 直通 DFF（UPnP）与 x86/arm64 多架构包；
-`1.3.1` 增加 AudioSys 安装适配与网页菜单卡片。实现与验收边界见
+`1.3.1` 增加 AudioSys 安装适配与网页菜单卡片；`1.3.2` 修复 WAV 中文标签乱码。实现与验收边界见
 [SACD DST-DFF 方案](./history/sacd-dst-dff.md)、[多架构构建与安装](./multiarch-build.md)
-与 [AudioSys 菜单方案](./history/audiosys-menu-1.3.1.md)。
+与 [AudioSys 菜单方案](./history/audiosys-menu-1.3.1.md)、
+[WAV 标签乱码修复](./history/wav-gbk-tags-1.3.2.md)。
 
 需要区分「维护者确认完成」与「仓库内存在可独立复核的验收证据」：部分最新勾选的真实硬件、
 账号、浏览器、长时间运行及最终发布验收，当前没有与之对应的新报告。
-本次只同步项目状态，不重新执行测试，也不以旧产物实测代替 `1.3.1` 的验收证据。
+本次只同步项目状态，不重新执行测试，也不以旧产物实测代替 `1.3.2` 的验收证据。
 原始测试结论及适用提交、设备、产物范围仍以[历史归档](./history/README.md)为准。
 
 ## 后续开发任务
@@ -30,8 +31,8 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 
 ## 版本与发布
 
-- 当前源码产品版本为 `1.3.1`。
-- `v1.3.1` 已推送至 GitHub，并在 GitHub Releases 发布 x86-64 与 aarch64 多架构包。
+- 当前源码产品版本为 `1.3.2`。
+- `v1.3.2` 已推送至 GitHub，并在 GitHub Releases 发布 x86-64 与 aarch64 多架构包。
 - 发布资产：`linux-x86_64-multi`（v1/v2/v3/v4/zen4）与 `linux-aarch64-multi`（arm64）。
 - Node/Bun Runtime Flavor、已有构建记录和限定范围基准见
   [构建形态](./build-flavors.md)及[运行时对照](./history/bun-runtime-experiment.md)。
