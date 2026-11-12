@@ -4,7 +4,7 @@
 
 > 日期：2026-11-12
 >
-> 状态：已实现，并在 `.170` AudioSys 真机完成安装、菜单、启停、升级与开机钩子验证；待冻结发布。
+> 状态：已实现并在 `.170` AudioSys 真机完成验证；`v1.3.1` 已发布。
 
 ## 背景
 
@@ -76,6 +76,9 @@ AudioSys（Buildroot）根文件系统是内存盘，只有 `/audiosys`（p3）�
 - 开机钩子：从 CONFIG p2 取出 splayeratom 段执行，卡片重建；延迟 35 秒后 Core 启动。
 - 卸载：移除卡片、软链与钩子，保留 `data/`；重新安装可复用 `data/`。
 - 包闸门：x86 v1/v2/v3/v4/zen4、arm64 全部 PASS；`.137` OpenRC 与 `.230` arm64 冒烟通过。
+- 发布：https://github.com/bnqzzdf/splayer-atom/releases/tag/v1.3.1
+  - x86_64：`92da60b836e1fa1937a54003fca4a1a1986dc4b6628c6a8cc42ec86731fc8b07`
+  - aarch64：`755fe891781c0137640fada841d05f0df2320bd0a534bd001414301aa59d1071`
 
 ## 验收清单
 
