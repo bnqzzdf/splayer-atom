@@ -1,8 +1,8 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 
-This covers Linux x86-64 Core + Web Control builds. **Node is the default release baseline**;
+This covers Linux x86-64/aarch64 Core + Web Control builds. **Node is the default release baseline**;
 Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
 pending playback and release acceptance. See [Build Flavors](./build-flavors.md).
 
@@ -17,7 +17,7 @@ pending playback and release acceptance. See [Build Flavors](./build-flavors.md)
 
 ## Environment
 
-- Linux x86-64
+- Linux x86-64 or aarch64 (see [multi-architecture build](./multiarch-build.md))
 - **Runtime requirement**: Node system packages require host Node `>=22.19.0`; Bun system packages require host Bun (project-tested `1.4.4`); bundled packages carry the selected runtime
 - **Build requirement**: packaging **any** flavor requires the build-process Node to be **exactly `24.22.2`**; Bun flavors additionally require Bun (pinned to `1.4.4`)
 - pnpm `>=10`

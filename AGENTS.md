@@ -2,7 +2,7 @@
 
 ## Scope and authority
 
-- Product: Linux x86-64 Node Core with Web Control as the only UI, connected through Core HTTP/WS.
+- Product: Linux x86-64/aarch64 Node Core with Web Control as the only UI, connected through Core HTTP/WS.
   Scope is one user on a trusted LAN with one active output; extensions require accepted requirements.
 - This file defines lasting constraints. [Roadmap](docs/atom-roadmap.md) owns priorities and
   acceptance status; [development guide](docs/atom-development.md) owns workflows and conventions.

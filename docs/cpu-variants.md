@@ -1,9 +1,11 @@
 # Diretta CPU 变体（v2 / v3 / v4 / zen4）
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 
 播放引擎 `audio-engine.node` 静态链接 Diretta Host SDK 的预编译库。SDK 按
 `-march=x86-64-vN` 分别发布这些库，**变体不是优化等级，而是「能不能在这台机器上跑」**。
+aarch64 使用 SDK 148 的 `aarch64-linux-15-nolog` 库，对应 `arm64` 变体；五变体与 arm64 的
+完整构建、打包和安装见[多架构构建与安装](./multiarch-build.md)。
 
 ## 为什么必须可选
 
@@ -65,6 +67,7 @@ SDK release。因此
 | v4   | AVX-512（x86-64-v4）                      | Skylake-X、Ice Lake 服务器          | ✅      |
 | zen4 | AMD Zen 4 优化版                          | Ryzen 7000 / EPYC 9004              | ✅      |
 | v1   | 纯基线                                    | 2009 年前的机器                     | ❌ 见上 |
+| arm64 | AArch64                                   | ARM64 音乐主机                      | ✅      |
 
 > 选变体的原则：**取目标机器支持的最高代次**。v2 产物在 v3/v4 机器上照样能跑
 > （只是用不到 AVX 优化），反过来不行。

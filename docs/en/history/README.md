@@ -1,6 +1,6 @@
 # Historical documentation
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-12
 
 > Organized: 2026-11-05
 
@@ -21,6 +21,7 @@ For current requirements and practices, see [AGENTS.md](https://github.com/bnqzz
 - [ALSA output](./alsa-output-plan.md), [UPnP output](./upnp-output-plan.md), and [Direct CUE gapless playback](./direct-cue-gapless-plan.md) plans.
 - [2026-09-22 ALSA acceptance](./alsa-acceptance-2026-09-22.md) and [2026-09-23 installed-artifact retest](./alsa-acceptance-2026-09-23.md).
 - [2026-09-23 local native fixes](./alsa-gap-fixes-2026-09-23.md) and [runtime smoke](./alsa-runtime-smoke-2026-09-23.md).
+- [SACD DST passthrough DFF](../../history/sacd-dst-dff.md) (Chinese only): UPnP acceptance record; rebuilt and included in 1.3.0.
 
 ## Builds and experiments
 

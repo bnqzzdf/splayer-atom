@@ -1,10 +1,10 @@
 # SPlayer Atom Roadmap
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-12
 
 ## Current status
 
-SPlayer Atom targets Linux x86-64 with a Core and Web Control product architecture.
+SPlayer Atom targets Linux x86-64 / aarch64 with a Core and Web Control product architecture.
 Node is the default runtime; Bun remains an optional experimental flavor.
 
 As of 2026-11-05, the maintainer marked **all 40 development, fix and acceptance items
@@ -13,11 +13,16 @@ as complete** in the latest Chinese roadmap. Those items have been moved to
 providers/Web, folder browsing, and builds/releases. Historical work is no longer
 presented as an active to-do list.
 
+`1.3.0` was released on 2026-11-12 with SACD DST passthrough DFF (UPnP) and
+x86/arm64 multi-architecture packages. See [SACD DST-DFF](../history/sacd-dst-dff.md)
+(Chinese only) and [multi-architecture build and installation](./multiarch-build.md) for scope and
+acceptance boundaries.
+
 A maintainer-confirmed completion status is distinct from independently reviewable
 acceptance evidence. Some newly checked hardware, real-account, browser, endurance
 and final-release acceptance items have no matching new report in the repository.
 This documentation update does not rerun tests or use an old artifact's measurements
-as evidence for v1.2.0. Original test results and their applicable commits, devices
+as evidence for `1.3.0`. Original test results and their applicable commits, devices
 and artifacts remain documented in the [history archive](./history/README.md).
 
 ## Subsequent development tasks
@@ -30,11 +35,11 @@ automatically reopening completed historical plans.
 
 ## Version and release
 
-- The current source product version is `1.2.0`.
-- The `dev` branch includes commit `5b8773c3`, and Git tag `v1.2.0`
-  has been pushed to GitHub.
-- A Git tag is not a GitHub Release. Whether a Release and downloadable
-  artifacts exist depends on the actual GitHub release record.
+- The current source product version is `1.3.0`.
+- Git tag `v1.3.0` has been pushed to GitHub, and GitHub Releases publishes
+  x86-64 and aarch64 multi-architecture packages.
+- Release assets: `linux-x86_64-multi` (v1/v2/v3/v4/zen4) and
+  `linux-aarch64-multi` (arm64).
 - See [build flavors](./build-flavors.md) and the
   [runtime comparison](../history/bun-runtime-experiment.md) (Chinese only)
   for Node/Bun variants, past builds and scoped benchmarks.
@@ -55,5 +60,6 @@ from this roadmap. Follow `AGENTS.md` for lasting constraints and the
 | [History archive](./history/README.md) | Past plans, device checks and scoped results |
 | [Development guide](./atom-development.md) | Environment, checks and development conventions |
 | [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md) | Core/Web artifacts and Node/Bun flavors |
+| [Multi-architecture build and installation](./multiarch-build.md) | x86 v1/v2/v3/v4/zen4 + arm64 packages and installer |
 | [Core deployment](./core-deployment.md) | systemd, install, upgrade and rollback |
 | [Hardware checklist](./hardware-release-checklist.md), [provider acceptance](./live-provider-acceptance.md) | Acceptance criteria and existing historical evidence |

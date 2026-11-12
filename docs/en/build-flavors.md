@@ -1,13 +1,16 @@
 # SPlayer Atom Build Flavors
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 
 SPlayer Atom's Core artifacts combine three independent dimensions:
 
 - **Runtime flavor**: `node` (default release baseline) or `bun` (experimental).
 - **Deployment**: `system-runtime` (use a host runtime) or `bundled-runtime` (ship the runtime).
 - **Audio capability / CPU**: without Diretta, or SDK 148 with an explicit `v2` / `v3` /
-  `v4` / `zen4` CPU variant.
+  `v4` / `zen4` CPU variant (aarch64 uses `arm64`).
+
+See [multi-architecture build and installation](./multiarch-build.md) for the release matrix, gates,
+and installer.
 
 Node and Bun share the Core JS, Web, native addons, protocol and data schema, along with the
 build, staging, artifact smoke and `bin/splayer-atom-core` launcher. They are not two Core
@@ -16,7 +19,7 @@ implementations. `mise.toml` pins build-time Node `24.22.2` and optional Bun `1.
 
 ## Core native flavor
 
-The Linux x86-64 Core build produces two project-owned native addons:
+The Linux x86-64 / aarch64 Core build produces two project-owned native addons:
 
 - `audio-engine.node`
 - `streaming-api.node`
@@ -42,8 +45,8 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
     --require-diretta --diretta-variant=v2
 ```
 
-`--diretta-variant` selects the x86-64 Host SDK library flavor (`v2`, `v3`, `v4`, or `zen4`). The
-flavor decides whether the artifact can run on the target CPU at all, not just how fast. The selected
+`--diretta-variant` selects the Host SDK library flavor: `v2`, `v3`, `v4`, or `zen4` on x86-64, and
+`arm64` on aarch64. The flavor decides whether the artifact can run on the target CPU at all, not just how fast. The selected
 variant is passed to the native Cargo build and recorded in the artifact metadata. A Diretta build
 must specify it explicitly; it is not silently defaulted to `v2`.
 

@@ -58,6 +58,7 @@ const zhTheme: DefaultTheme.Config = {
         { text: "构建与打包", link: "/build-and-packaging" },
         { text: "Build Flavors", link: "/build-flavors" },
         { text: "CPU 变体", link: "/cpu-variants" },
+        { text: "多架构构建与安装", link: "/multiarch-build" },
         { text: "硬件发布验收", link: "/hardware-release-checklist" },
         { text: "在线服务验收", link: "/live-provider-acceptance" },
         { text: "Diretta 排障", link: "/troubleshooting/diretta-headless-troubleshooting" },
@@ -154,6 +155,7 @@ const enTheme: DefaultTheme.Config = {
         { text: "Build and Packaging", link: "/en/build-and-packaging" },
         { text: "Build Flavors", link: "/en/build-flavors" },
         { text: "CPU Variants", link: "/en/cpu-variants" },
+        { text: "Multi-architecture Build", link: "/en/multiarch-build" },
         { text: "Hardware Release Checklist", link: "/en/hardware-release-checklist" },
         { text: "Live Provider Acceptance", link: "/en/live-provider-acceptance" },
         {

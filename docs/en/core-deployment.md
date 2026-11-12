@@ -1,8 +1,8 @@
 # SPlayer Atom Core Deployment and Upgrade
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 
-This document describes the Linux x86-64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
+This document describes the Linux x86-64/aarch64 system-runtime and bundled-runtime deployment models for the current Core technical artifacts.
 
 The steps below target **systemd**. **OpenRC** targets such as GentooPlayer have no systemd, so the
 `service/install-systemd.sh` shipped inside the artifact cannot be used there; the artifact layout,
@@ -15,7 +15,8 @@ start/stop commands differ. See [GentooPlayer (OpenRC) Service Management](./gen
 - Release/reference validation uses Node `24.22.2`.
 - The system-runtime and bundled-runtime variants execute the same Core JS/native/protocol contract.
 - Bundled-runtime carries the exact release reference Node `24.22.2` at `runtime/bin/node`; system-runtime requires a host Node `>=22.19.0`.
-- The current production artifact is Linux x86-64 only. Hardware support still depends on the release acceptance matrix.
+- Current production artifacts cover Linux x86-64 and aarch64; x86 ships v1/v2/v3/v4/zen4 variants and aarch64 ships arm64.
+  See [multi-architecture build and installation](./multiarch-build.md). Hardware support still depends on the release acceptance matrix.
 - Core HTTP/WS only accepts same-origin browser requests (cross-site `Origin` is rejected), and `Host` is limited to IPs, `localhost`, dotless hostnames and `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`;
   when serving through a reverse proxy or your own domain, allow it explicitly with a comma-separated `ATOM_ALLOWED_HOSTS` (for example `music.example.com`).
 - The plugin host child process runs under the Node permission model (`--permission`) and cannot spawn processes, load native addons or write files.

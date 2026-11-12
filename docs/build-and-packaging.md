@@ -1,8 +1,8 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 
-本文描述 Linux x86-64 Core + Web Control 的构建。**Node 是默认正式基线**；
+本文描述 Linux x86-64/aarch64 Core + Web Control 的构建。**Node 是默认正式基线**；
 Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
 运行时与部署方式的组合见[构建面](./build-flavors.md)。多架构/多 CPU 变体
 （x86 v1/v2/v3/v4/zen4 + arm64）见[多架构构建与安装](./multiarch-build.md)。
@@ -18,7 +18,7 @@ Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实
 
 ## 环境
 
-- Linux x86-64
+- Linux x86-64 或 aarch64（多架构矩阵见 [多架构构建与安装](./multiarch-build.md)）
 - **运行时要求**：Node system 包需要系统 Node `>=22.19.0`；Bun system 包需要系统 Bun（项目使用 `1.4.4`）；bundled 包自带所选运行时
 - **构建要求**：打包任一 Flavor 时构建进程的 Node **必须恰好为 `24.22.2`**；构建 Bun Flavor 还需 Bun（项目固定 `1.4.4`）
 - pnpm `>=10`

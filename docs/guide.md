@@ -1,8 +1,8 @@
 # 使用指南
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-12
 
-SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 Core 和浏览器中的 Web Control 组成。Node 是默认正式运行时，Bun 是实验性 Flavor。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
+SPlayer Atom 基于 SPlayer-Next 修改，由 Linux x86-64 / aarch64 Core 和浏览器中的 Web Control 组成。Node 是默认正式运行时，Bun 是实验性 Flavor。部署 Core 后，在浏览器访问 Core 提供的页面即可使用。
 
 ## 曲库
 

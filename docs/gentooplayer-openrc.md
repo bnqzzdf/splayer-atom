@@ -1,11 +1,12 @@
 # GentooPlayer（OpenRC）服务管理
 
-> 最后更新：2026-10-20
+> 最后更新：2026-11-12
 
 GentooPlayer（下称 GP）是 Core 的主要落地形态之一，但它是**纯 OpenRC** 系统：没有 systemd，
 `service/install-systemd.sh` 与本文档站里的 systemd 步骤在 GP 上都不适用。本页给出在 GP 上
 开发、部署、升级与日常服务管理的完整做法，内容以真机实测为准（基线：GentooPlayerX86 v373 x86-64，
-OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。
+OpenRC `0.63.3`，`splayer-atom-core` 1.1.3）。当前发布为 `1.3.0`；本页服务管理步骤适用于
+1.3.0 包内的 `install.sh`（默认安装根 `/opt/splayer-atom-core`），实测基线仍保留为 1.1.3。
 
 与 systemd 相同的部分（产物布局、`data/` 是权威持久状态、目录级回滚原则）见
 [Core 部署与升级](./core-deployment.md)；本页只讲差异与 OpenRC 侧的做法。
@@ -151,22 +152,29 @@ rc-service -e splayer-atom-core
 产物、安装布局、`data/` 的语义与 systemd 部署完全相同（见
 [Core 部署与升级](./core-deployment.md)），差别只在服务注册这一步。
 
-1. 解包产物到安装根（归档顶层就是安装根，没有外层目录）：
+1. 用多架构发布包安装（`install.sh` 会检测 CPU 变体、安装到 `/opt/splayer-atom-core` 并注册 OpenRC 服务）：
+
+```sh
+tar -xzf splayer-atom-core-<版本>-<提交>-linux-x86_64-multi.tar.gz -C /tmp
+sudo /tmp/<解包目录>/install.sh --init openrc --user splayer-atom --cpu auto
+```
+
+单架构产物仍可手动解包到安装根（归档顶层就是安装根，没有外层目录）：
 
 ```sh
 sudo mkdir -p /opt/splayer-atom-core
 sudo tar -xzf splayer-atom-core-<版本>-<提交>-bundled-linux-x64.tar.gz -C /opt/splayer-atom-core
 ```
 
-2. 先验证启动器，再装服务：
+2. 安装器已启动服务，验证状态与接口：
 
 ```sh
-cd /opt/splayer-atom-core
-./bin/splayer-atom-core        # 应打印启动日志并监听 14558，Ctrl-C 退出
+rc-service splayer-atom-core status
+curl -s http://127.0.0.1:14558/api/info
 ```
 
-3. 安装 OpenRC 服务脚本。产物内自带这一对（**不要用 `service/install-systemd.sh`**，GP 上没有
-   systemctl）：
+3. 安装器已注册 OpenRC 服务；如需单独重装，使用产物内脚本（**不要用
+   `service/install-systemd.sh`**，GP 上没有 systemctl）：
 
 ```sh
 sudo ./service/install-openrc.sh --user splayer-atom   # 普通 ALSA Core

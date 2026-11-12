@@ -1,12 +1,12 @@
 # Contributing
 
-> Last updated: 2026-10-03
+> Last updated: 2026-11-12
 
 Contributions to SPlayer Atom are welcome.
 
 ## Environment
 
-- Linux x86-64
+- Linux x86-64 / aarch64
 - Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable

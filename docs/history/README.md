@@ -1,6 +1,6 @@
 # 历史文档归档
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-12
 
 > 整理日期：2026-11-05
 
@@ -21,6 +21,7 @@
 - [ALSA 输出方案](./alsa-output-plan.md)、[UPnP 输出方案](./upnp-output-plan.md)、[Direct CUE 无缝方案](./direct-cue-gapless-plan.md)。
 - [2026-09-22 ALSA 验收](./alsa-acceptance-2026-09-22.md)与[2026-09-23 修复包复测](./alsa-acceptance-2026-09-23.md)。
 - [2026-09-23 本地模块修复复测](./alsa-gap-fixes-2026-09-23.md)与[运行态 smoke](./alsa-runtime-smoke-2026-09-23.md)。
+- [SACD DST 直通 DFF](./sacd-dst-dff.md)：UPnP 直通验收；1.3.0 重新构建并包含该功能。
 
 ## 构建和实验
 

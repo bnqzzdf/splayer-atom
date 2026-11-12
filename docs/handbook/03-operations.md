@@ -1,6 +1,6 @@
 # SPlayer Atom 运维手册
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -38,7 +38,7 @@ SPlayer Atom 在目标机上表现为：
 
 | 实体 | 满足判据 | 检查方式 |
 | --- | --- | --- |
-| Linux x86-64 | `uname -m` 为 `x86_64` | `uname -m` |
+| Linux x86-64 / aarch64 | `uname -m` 为 `x86_64` 或 `aarch64` | `uname -m` |
 | glibc | Debian 11 包要求 `>=2.30` | `ldd --version` |
 | Node（system 包） | `>=22.19.0` | `node --version` |
 | 服务账户 | 已存在，能读写 `data/` 与缓存目录 | `id <user>`、`sudo -u <user> test -w ...` |
@@ -92,7 +92,7 @@ id splayer-atom                # 服务账户
 
 检查清单：
 
-- [ ] 目标机是 Linux x86-64。
+- [ ] 目标机是 Linux x86-64 或 aarch64。
 - [ ] system 包有 Node `>=22.19.0`；否则改用 bundled 包。
 - [ ] Debian 11 目标使用 `package:core:debian11` 产物。
 - [ ] 服务账户已创建，且对安装根、`data/`、缓存目录有写权限。
@@ -102,6 +102,10 @@ id splayer-atom                # 服务账户
 - [ ] 备份磁盘有足够空间。
 
 ## 4. 安装
+
+发布包为多架构包（`*-linux-x86_64-multi.tar.gz` 或 `*-linux-aarch64-multi.tar.gz`），
+用包内 `install.sh` 安装到 `/opt/splayer-atom-core`，详见[多架构构建与安装](../multiarch-build.md)。
+下面 4.1 起的手动解包步骤适用于单架构产物。
 
 ### 4.1 解包
 

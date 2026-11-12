@@ -1,12 +1,14 @@
 # SPlayer Atom 构建面（Build Flavors）
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 
 SPlayer Atom 的 Core 构建由三条**独立维度**组合：
 
 - **Runtime Flavor**：`node`（默认正式基线）或 `bun`（实验性）。
 - **部署方式**：`system-runtime`（系统提供选定运行时）或 `bundled-runtime`（打包运行时）。
-- **音频能力 / CPU**：不带 Diretta，或带 SDK 148 并指定 `v2` / `v3` / `v4` / `zen4`。
+- **音频能力 / CPU**：不带 Diretta，或带 SDK 148 并指定 `v2` / `v3` / `v4` / `zen4`（aarch64 为 `arm64`）。
+
+多架构发布包的构建矩阵、闸门与安装见[多架构构建与安装](./multiarch-build.md)。
 
 Node/Bun 使用同一份 Core JS、Web、native addons、协议和数据 schema，以及同一套构建、
 staging、artifact smoke 与 `bin/splayer-atom-core` 启动入口；不是维护两个 Core 版本。
@@ -14,7 +16,7 @@ staging、artifact smoke 与 `bin/splayer-atom-core` 启动入口；不是维护
 
 ## Core native 构建面
 
-Linux x86-64 Core 构建产出两个自研 native addon：
+Linux x86-64 / aarch64 Core 构建产出两个自研 native addon：
 
 - `audio-engine.node`
 - `streaming-api.node`
@@ -40,7 +42,7 @@ DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK \
     --require-diretta --diretta-variant=v2
 ```
 
-`--diretta-variant` 选择 x86-64 Host SDK 库变体（`v2`、`v3`、`v4` 或 `zen4`）。变体决定产物究竟能不能在目标 CPU 上运行，而不只是快慢。选定的变体会传给 native Cargo 构建，并记录在产物元数据中。Diretta 构建必须显式指定它，不会静默默认为 `v2`。
+`--diretta-variant` 选择 Host SDK 库变体：x86-64 为 `v2`、`v3`、`v4` 或 `zen4`，aarch64 为 `arm64`。变体决定产物究竟能不能在目标 CPU 上运行，而不只是快慢。选定的变体会传给 native Cargo 构建，并记录在产物元数据中。Diretta 构建必须显式指定它，不会静默默认为 `v2`。
 
 SDK 始终是外部的，不随包捆绑。
 

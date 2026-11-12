@@ -1,6 +1,6 @@
 # SPlayer Atom Development Manual
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -28,7 +28,7 @@ Two rules matter most:
 
 | Component | Version/notes |
 | --- | --- |
-| Linux x86-64 | Native modules compile only on Linux |
+| Linux x86-64 / aarch64 | Native modules compile only on Linux; see [multi-architecture build](../multiarch-build.md) for aarch64 |
 | Node.js | `>=22.19.0` for development; packaging requires **24.22.2** |
 | pnpm | `>=10`; repository pins `11.5.2` |
 | Rust | stable; CI pins `1.98.0` |
@@ -531,6 +531,14 @@ Artifact name:
 ```text
 splayer-atom-core-<version>-<8-char commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-<system|bundled>-linux-x64.tar.gz
 ```
+
+Multi-architecture release packages use separate names:
+
+```text
+splayer-atom-core-<version>-<8-char commit>-<YYYYMMDD>-linux-<x86_64|aarch64>-multi.tar.gz
+```
+
+See [multi-architecture build and installation](../multiarch-build.md) for their build, gates, and install.
 
 `runtime.json` is the authoritative release identity and runtime contract; `native/build.json` is the native build identity.
 

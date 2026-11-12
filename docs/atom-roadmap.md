@@ -1,19 +1,23 @@
 # SPlayer Atom 路线图
 
-> 最后更新：2026-11-05
+> 最后更新：2026-11-12
 
 ## 当前状态
 
-SPlayer Atom 面向 Linux x86-64，以 Core 和 Web Control 为产品形态；
+SPlayer Atom 面向 Linux x86-64 / aarch64，以 Core 和 Web Control 为产品形态；
 Node 是默认运行时，Bun 为可选实验 Flavor。
 
 截至 2026-11-05，维护者在最新中文版路线图中将 **40 项开发、修复和验收事项全部勾选为完成**。
 已将这些条目按 ALSA／Diretta／UPnP、Provider／Web、文件夹浏览和构建／发布分类迁入
 [已完成事项](./history/atom-completed.md)，不再把历史工作放在当前待办清单中。
 
+2026-11-12 发布 `1.3.0`，新增 SACD DST 直通 DFF（UPnP）与 x86/arm64 多架构包；
+实现与验收边界见 [SACD DST-DFF 方案](./history/sacd-dst-dff.md) 与
+[多架构构建与安装](./multiarch-build.md)。
+
 需要区分「维护者确认完成」与「仓库内存在可独立复核的验收证据」：部分最新勾选的真实硬件、
 账号、浏览器、长时间运行及最终发布验收，当前没有与之对应的新报告。
-本次只同步项目状态，不重新执行测试，也不以旧产物实测代替 v1.2.0 的验收证据。
+本次只同步项目状态，不重新执行测试，也不以旧产物实测代替 `1.3.0` 的验收证据。
 原始测试结论及适用提交、设备、产物范围仍以[历史归档](./history/README.md)为准。
 
 ## 后续开发任务
@@ -25,10 +29,9 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 
 ## 版本与发布
 
-- 当前源码产品版本为 `1.2.0`。
-- `dev` 已包含提交 `5b8773c3`，Git 标签 `v1.2.0` 已推送至 GitHub。
-- Git 标签不等于 GitHub Release；是否建立 Release 以及需要展示的产物，
-  应以实际 GitHub 发布记录为准。
+- 当前源码产品版本为 `1.3.0`。
+- `v1.3.0` 已推送至 GitHub，并在 GitHub Releases 发布 x86-64 与 aarch64 多架构包。
+- 发布资产：`linux-x86_64-multi`（v1/v2/v3/v4/zen4）与 `linux-aarch64-multi`（arm64）。
 - Node/Bun Runtime Flavor、已有构建记录和限定范围基准见
   [构建形态](./build-flavors.md)及[运行时对照](./history/bun-runtime-experiment.md)。
 
@@ -46,5 +49,6 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 | [历史归档](./history/README.md) | 旧方案、实测记录与阶段性结果 |
 | [开发指南](./atom-development.md) | 环境、校验与开发约定 |
 | [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md) | Core/Web 产物与 Node/Bun Flavor |
+| [多架构构建与安装](./multiarch-build.md) | x86 v1/v2/v3/v4/zen4 + arm64 包与安装器 |
 | [Core 部署](./core-deployment.md) | systemd、安装、升级和回滚说明 |
 | [硬件清单](./hardware-release-checklist.md)、[Provider 验收](./live-provider-acceptance.md) | 验收标准与现存历史记录 |

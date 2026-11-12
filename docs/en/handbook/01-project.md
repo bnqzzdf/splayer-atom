@@ -1,6 +1,6 @@
 # SPlayer Atom Project Book
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-SPlayer Atom is a music player for Linux x86-64 hosts. It centralizes music-domain state, playback control, source resolution, caching, and persistence in a long-running **Node Core** process, while the browser provides only the **Web Control** interface. Any computer, tablet, or phone on the LAN can open the same address and control playback. Closing the page does not interrupt playback in the Core, and every device sees the same queue, position, login state, and output selection.
+SPlayer Atom is a music player for Linux x86-64 / aarch64 hosts. It centralizes music-domain state, playback control, source resolution, caching, and persistence in a long-running **Node Core** process, while the browser provides only the **Web Control** interface. Any computer, tablet, or phone on the LAN can open the same address and control playback. Closing the page does not interrupt playback in the Core, and every device sees the same queue, position, login state, and output selection.
 
 The project is based on [SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next) and reuses its music data model and much of its interface capability, but changes the runtime shape from a desktop application to a background service plus browser control. The audio path is implemented in Rust native modules and supports two ALSA paths (Direct and Processed), strict Source Direct through Diretta, and a Core-owned UPnP Renderer output.
 
@@ -32,7 +32,7 @@ SPlayer Atom's answer is to separate playback authority from the UI: Core is the
 
 ### 3.1 One-sentence positioning
 
-A persistent music Core for Linux x86-64 music hosts, with the browser as the only interface.
+A persistent music Core for Linux x86-64 / aarch64 music hosts, with the browser as the only interface.
 
 ### 3.2 Scope
 
@@ -41,7 +41,7 @@ A persistent music Core for Linux x86-64 music hosts, with the browser as the on
 | Users | One user on a trusted LAN | No accounts, no tenant isolation |
 | Control clients | Any number of browser tabs/devices | Shared Core state, no control preemption |
 | Active output | One output at a time | ALSA, Diretta, or UPnP |
-| Platform | Linux x86-64 | Native modules fail to compile elsewhere |
+| Platform | Linux x86-64 / aarch64 | Native modules fail to compile elsewhere |
 | Network | LAN / protected internal network | Core has no auth and no TLS; do not expose it directly to the internet |
 | Media files | User-owned; Atom reads but never deletes | Deletion is limited to Atom's own cache, temp files, and incomplete downloads |
 
@@ -51,7 +51,7 @@ The following are outside the current scope unless an accepted product requireme
 
 - Multi-user, role-based access, family accounts.
 - Direct public-internet access, built-in TLS, OAuth login to Core.
-- Official Windows / macOS / ARM artifacts.
+- Official Windows / macOS artifacts.
 - A native mobile app; mobile devices use the browser.
 - A plugin marketplace, signing, or centralized distribution.
 - Cloud sync of playback queues or migration between Cores.

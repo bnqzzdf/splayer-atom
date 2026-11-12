@@ -1,10 +1,12 @@
 # Diretta CPU variants (v2 / v3 / v4 / zen4)
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 
 The playback engine `audio-engine.node` statically links the prebuilt libraries of the Diretta Host
 SDK. The SDK ships these libraries separately per `-march=x86-64-vN`; **a variant is not an
 optimization level, it is "can it run on this machine"**.
+aarch64 uses the SDK 148 `aarch64-linux-15-nolog` libraries as the `arm64` variant; see
+[multi-architecture build and installation](./multiarch-build.md) for the full matrix.
 
 ## Why it must be optional
 
@@ -71,6 +73,7 @@ without Diretta must ensure `DIRETTA_SDK_ROOT` is unset.
 | v4      | AVX-512 (x86-64-v4)                      | Skylake-X, Ice Lake servers                 | ✅           |
 | zen4    | AMD Zen 4 optimized                      | Ryzen 7000 / EPYC 9004                      | ✅           |
 | v1      | Pure baseline                            | Machines from before 2009                   | ❌ see above |
+| arm64   | AArch64                                   | ARM64 music hosts                            | ✅           |
 
 > The principle for choosing a variant: **take the highest generation the target machine supports**.
 > A v2 artifact still runs on a v3/v4 machine (it just cannot use the AVX optimizations), but not the

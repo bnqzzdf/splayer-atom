@@ -1,12 +1,12 @@
 # 贡献指南
 
-> 最后更新：2026-09-28
+> 最后更新：2026-11-12
 
 欢迎为 SPlayer Atom 贡献代码。
 
 ## 环境
 
-- Linux x86-64
+- Linux x86-64 / aarch64
 - Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable

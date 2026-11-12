@@ -1,8 +1,8 @@
 # SPlayer Atom Core 部署与升级
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 
-本文描述当前 Core 技术产物在 Linux x86-64 上的 system-runtime 与 bundled-runtime 两种部署形态。
+本文描述当前 Core 技术产物在 Linux x86-64 / aarch64 上的 system-runtime 与 bundled-runtime 部署形态。
 
 以下步骤以 **systemd** 为目标 init 系统。GentooPlayer 等 **OpenRC** 目标机没有 systemd，
 产物内的 `service/install-systemd.sh` 在那里不可用；产物布局、`data/` 语义与回滚原则完全相同，
@@ -14,7 +14,8 @@
 - 可选 `--runtime=bun` Flavor 使用 Bun 运行 Core 与插件 Host；Bun 不要求目标机安装 Node。
 - system-runtime 与 bundled-runtime 变体执行同一套 Core JS / 原生 / 协议约定。
 - bundled-runtime 在 `runtime/bin/node` 或 `runtime/bin/bun` 内携带所选运行时；system-runtime 要求宿主机提供对应运行时。
-- 当前生产产物仅支持 Linux x86-64。硬件支持范围仍取决于发布验收矩阵。
+- 当前生产产物支持 Linux x86-64 与 aarch64；x86 提供 v1/v2/v3/v4/zen4 变体，aarch64 提供 arm64。
+  多架构安装见 [多架构构建与安装](./multiarch-build.md)；硬件支持范围仍取决于发布验收矩阵。
 - Core HTTP/WS 只接受同源浏览器请求（拒绝跨站 `Origin`），`Host` 仅放行 IP、`localhost`、无点主机名与 `.local` / `.lan` / `.home.arpa` / `.internal` / `.localdomain`；
   经反向代理或自有域名访问时，用逗号分隔的 `ATOM_ALLOWED_HOSTS`（如 `music.example.com`）显式放行。
 - Node 插件 Host 保留 `--permission` 限制；Bun 插件 Host 通过独立 Bun 进程执行，未提供等价权限限制。两者的 VM Context 均**不是恶意插件安全沙箱**，只能运行可信来源插件。

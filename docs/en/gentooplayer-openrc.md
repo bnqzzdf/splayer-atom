@@ -1,12 +1,14 @@
 # GentooPlayer (OpenRC) Service Management
 
-> Last updated: 2026-10-20
+> Last updated: 2026-11-12
 
 GentooPlayer (GP) is one of the primary deployment targets for Core, and it is a **pure OpenRC**
 system: there is no systemd, so `service/install-systemd.sh` and the systemd-based steps in this
 documentation site do not apply on GP. This page covers development, deployment, upgrade and
 day-to-day service management on GP. Everything here is backed by measurements on a real machine
 (baseline: GentooPlayerX86 v373 x86-64, OpenRC `0.63.3`, `splayer-atom-core` 1.1.3).
+The current release is `1.3.0`; the service-management steps apply to the `install.sh` shipped in
+the 1.3.0 package (default prefix `/opt/splayer-atom-core`), while the measured baseline remains 1.1.3.
 
 The parts that are identical to systemd (artifact layout, `data/` as the authoritative persistent
 state, the directory-level rollback rule) live in
@@ -170,23 +172,31 @@ The artifact, the installation layout and the meaning of `data/` are identical t
 deployment (see [Core Deployment and Upgrade](./core-deployment.md)); only service registration
 differs.
 
-1. Unpack the artifact into the installation root (the archive top level _is_ the installation
-   root; there is no outer directory):
+1. Install from the multi-architecture release package (`install.sh` detects the CPU variant,
+   installs to `/opt/splayer-atom-core`, and registers the OpenRC service):
+
+```sh
+tar -xzf splayer-atom-core-<version>-<commit>-linux-x86_64-multi.tar.gz -C /tmp
+sudo /tmp/<extracted-dir>/install.sh --init openrc --user splayer-atom --cpu auto
+```
+
+A single-architecture artifact can still be unpacked manually into the installation root (the
+archive top level _is_ the installation root; there is no outer directory):
 
 ```sh
 sudo mkdir -p /opt/splayer-atom-core
 sudo tar -xzf splayer-atom-core-<version>-<commit>-bundled-linux-x64.tar.gz -C /opt/splayer-atom-core
 ```
 
-2. Verify the launcher before installing the service:
+2. The installer has already started the service; verify its status and API:
 
 ```sh
-cd /opt/splayer-atom-core
-./bin/splayer-atom-core        # should log startup and listen on 14558; Ctrl-C to exit
+rc-service splayer-atom-core status
+curl -s http://127.0.0.1:14558/api/info
 ```
 
-3. Install the OpenRC service script. The artifact ships this pair (**do not use
-   `service/install-systemd.sh`** — GP has no systemctl):
+3. The installer already registered the OpenRC service. To reinstall it separately, use the
+   artifact's script (**do not use `service/install-systemd.sh`** — GP has no systemctl):
 
 ```sh
 sudo ./service/install-openrc.sh --user splayer-atom   # plain ALSA Core

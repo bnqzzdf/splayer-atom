@@ -1,6 +1,6 @@
 # SPlayer Atom 开发环境
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-12
 
 项目约束位于仓库的 `AGENTS.md`；当前优先级与验收状态位于[路线图](./atom-roadmap.md)。本指南涵盖
 开发工作流与约定。
@@ -10,7 +10,7 @@
 - Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
-- Linux x86-64
+- Linux x86-64 / aarch64
 - `libasound2-dev`、`pkg-config`、`clang`（`libarchive-tools` 只有 CI 的依赖安装行需要，本地构建可省略）
 
 正式构建与 bundled-runtime 产物使用 reference Node `24.22.2`。运行时支持范围与发布参考版本定义在
@@ -111,7 +111,7 @@ pnpm package:core:debian11 --without-diretta --bundle-runtime
 Debian 11 构建器还接受 `--with-diretta --diretta-variant=v2|v3|v4|zen4`，SDK 148 通过
 `DIRETTA_SDK_ROOT` 指定；见[构建面](./build-flavors.md#debian-11-构建)。
 
-验收最终的 Linux x86-64 `tar.gz`，包括运行时元数据、native addon 加载、Web 根页、HTTP/WS 端点、
+验收最终的多架构包（见[多架构构建与安装](./multiarch-build.md)），包括运行时元数据、native addon 加载、Web 根页、HTTP/WS 端点、
 plugin-host IPC、启动与终止。真实的 ALSA/Diretta/PCM/Native-DSD/UPnP 与长跑行为需要单独的硬件验收；
 软件检查不能替代它。
 

@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 
 [简体中文](./README.md) · **English**
 
@@ -15,37 +15,40 @@ It runs as a background service and is controlled from a browser on any computer
 - **Audio output**
   - ALSA, with EQ, loudness, and playback speed
   - Diretta: sample rate, bit depth, and channels are sent unchanged and DSD is sent natively, with no processing; formats the target doesn't support fail with an explicit error
-  - UPnP renderers
+  - UPnP renderers: SACD DST tracks pass through as DST-compressed DFF by default; fall back to DSF when the renderer does not support DST
 - **Also**: Classic / Fullscreen Cover player layouts, gapless playback, plugins (compatible with LX Music `user_api` scripts), ListenBrainz scrobbling, downloads, listening stats
 
 
-## Installation
+## Download and installation
 
-There are no prebuilt packages yet. Build one first as described in [Building from source](#building-from-source) (`out/splayer-atom-core-*-linux-x64.tar.gz`).
+Prebuilt packages are published on [GitHub Releases](https://github.com/bnqzzdf/splayer-atom/releases),
+split by architecture:
 
-The archive extracts directly into the install directory. On a systemd host:
+- `linux-x86_64-multi`: `v1/v2/v3/v4/zen4`; `v1` is ALSA-only, the others include Diretta.
+- `linux-aarch64-multi`: `arm64`, with Diretta.
 
 ```bash
-sudo mkdir -p /opt/splayer-atom-core
-sudo tar -xzf splayer-atom-core-*-linux-x64.tar.gz -C /opt/splayer-atom-core
-cd /opt/splayer-atom-core
-
-# splayer-atom is a service account you create beforehand; for Diretta use --diretta (runs as root)
-sudo ./service/install-systemd.sh --user splayer-atom
-sudo systemctl enable --now splayer-atom-core
+tar -xzf splayer-atom-core-*-linux-x86_64-multi.tar.gz
+cd splayer-atom-core-*-linux-x86_64-multi
+sudo ./install.sh --cpu auto
 ```
+
+The installer defaults to `/opt/splayer-atom-core`, selects a CPU variant automatically, preserves
+existing `data/`, and supports systemd / OpenRC. On OpenRC hosts (such as GentooPlayer) use the same
+`./install.sh --init auto`. For audiosys, prefer `--prefix /audiosys/splayer-atom-core`.
 
 Then open `http://<host IP>:14558` in a browser.
 
-- On OpenRC systems (such as GentooPlayer), use `service/install-openrc.sh`. See [GentooPlayer (OpenRC) service management](./docs/en/gentooplayer-openrc.md).
 - If you access Atom through a domain name or reverse proxy, allow that host with `ATOM_ALLOWED_HOSTS`.
 - The library, settings, and login credentials live in `data/` under the install directory. Keep it when upgrading. See [Core deployment and upgrades](./docs/en/core-deployment.md) for upgrade and rollback steps.
+- See [multi-architecture build and installation](./docs/multiarch-build.md) for variants, package layout and installer options.
+- If you must build from source, see [Building from source](#building-from-source) below.
 
 ## Building from source
 
 Requirements:
 
-- Linux x86-64
+- Linux x86-64 or aarch64
 - Node.js 24.22.2 (required by packaging; running a Node Core needs `>=22.19.0`)
 - Bun 1.4.4 (only required when building or running the Bun flavor)
 - pnpm `>=10`

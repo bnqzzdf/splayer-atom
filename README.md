@@ -1,6 +1,6 @@
 # SPlayer Atom
 
-> 最后更新：2026-11-06
+> 最后更新：2026-11-12
 
 **简体中文** · [English](./README.en.md)
 
@@ -15,36 +15,38 @@ SPlayer Atom 是运行在 Linux 主机上的音乐播放器，基于 [SPlayer-Ne
 - **音频输出**
   - ALSA：可使用均衡器、响度、变速
   - Diretta：采样率、位深、声道原样输出，DSD 原生传输，不做任何处理；目标设备不支持的格式会直接报错
-  - UPnP 渲染器
+  - UPnP 渲染器：SACD DST 轨默认直通 DST 压缩 DFF；Renderer 不支持时可切换 DSF 兼容转码
 - **其他**：经典 / 全屏封面播放页、无缝播放、插件（兼容 LX Music `user_api` 脚本）、ListenBrainz 听歌记录、下载、播放统计
 
-## 安装
+## 下载与安装
 
-目前没有预编译包，需要先按下文[从源码构建](#从源码构建)打出安装包（`out/splayer-atom-core-*-linux-x64.tar.gz`）。
+预编译包从 [GitHub Releases](https://github.com/bnqzzdf/splayer-atom/releases) 获取，按架构分两个包：
 
-安装包解压后就是安装目录。以 systemd 系统为例：
+- `linux-x86_64-multi`：包含 `v1/v2/v3/v4/zen4`；`v1` 为 ALSA-only，其余带 Diretta。
+- `linux-aarch64-multi`：包含 `arm64`，带 Diretta。
 
 ```bash
-sudo mkdir -p /opt/splayer-atom-core
-sudo tar -xzf splayer-atom-core-*-linux-x64.tar.gz -C /opt/splayer-atom-core
-cd /opt/splayer-atom-core
-
-# splayer-atom 为事先创建的服务账户；使用 Diretta 时改为 --diretta（以 root 运行）
-sudo ./service/install-systemd.sh --user splayer-atom
-sudo systemctl enable --now splayer-atom-core
+tar -xzf splayer-atom-core-*-linux-x86_64-multi.tar.gz
+cd splayer-atom-core-*-linux-x86_64-multi
+sudo ./install.sh --cpu auto
 ```
+
+安装器默认安装到 `/opt/splayer-atom-core`，自动按 CPU 选择变体，保留已有 `data/`，
+并支持 systemd / OpenRC。OpenRC 目标机（如 GentooPlayer）同样使用 `./install.sh --init auto`；
+audiosys 环境建议使用 `--prefix /audiosys/splayer-atom-core`。
 
 然后用浏览器打开 `http://<主机 IP>:14558`。
 
-- OpenRC 系统（如 GentooPlayer）改用 `service/install-openrc.sh`，见 [GentooPlayer（OpenRC）服务管理](./docs/gentooplayer-openrc.md)。
 - 通过域名或反向代理访问时，需要用 `ATOM_ALLOWED_HOSTS` 放行对应域名。
 - 曲库、设置和登录凭据都在安装目录下的 `data/` 里，升级时要保留。升级与回滚步骤见 [Core 部署与升级](./docs/core-deployment.md)。
+- 多架构构建、包结构和安装参数见 [多架构构建与安装](./docs/multiarch-build.md)。
+- 如果只能从源码构建，见下文[从源码构建](#从源码构建)。
 
 ## 从源码构建
 
 需要：
 
-- Linux x86-64
+- Linux x86-64 或 aarch64
 - Node.js 24.22.2（打包脚本会校验版本；Node Core 日常运行 `>=22.19.0`）
 - Bun 1.4.4（仅构建或运行 Bun Flavor 时需要）
 - pnpm `>=10`

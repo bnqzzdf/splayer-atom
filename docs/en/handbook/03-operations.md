@@ -1,6 +1,6 @@
 # SPlayer Atom Operations Manual
 
-> Last updated: 2026-11-11
+> Last updated: 2026-11-12
 >
 > Code baseline: `dev` branch commit `5693b3fc`, product version `1.1.3`
 >
@@ -38,7 +38,7 @@ Operational boundaries:
 
 | Entity | Satisfied when | Check |
 | --- | --- | --- |
-| Linux x86-64 | `uname -m` is `x86_64` | `uname -m` |
+| Linux x86-64 / aarch64 | `uname -m` is `x86_64` or `aarch64` | `uname -m` |
 | glibc | Debian 11 package needs `>=2.30` | `ldd --version` |
 | Node (system package) | `>=22.19.0` | `node --version` |
 | Service account | Exists and can write `data/` and cache | `id <user>`, `sudo -u <user> test -w ...` |
@@ -92,7 +92,7 @@ id splayer-atom                # service account
 
 Checklist:
 
-- [ ] Target is Linux x86-64.
+- [ ] Target is Linux x86-64 or aarch64.
 - [ ] system package has Node `>=22.19.0`; otherwise use bundled.
 - [ ] Debian 11 targets use a `package:core:debian11` artifact.
 - [ ] Service account exists and can write the install root, `data/`, and cache.
@@ -102,6 +102,11 @@ Checklist:
 - [ ] Backup disk has enough space.
 
 ## 4. Installation
+
+Release packages are multi-architecture (`*-linux-x86_64-multi.tar.gz` or
+`*-linux-aarch64-multi.tar.gz`). Install them with the bundled `install.sh`, which writes to
+`/opt/splayer-atom-core`; see [multi-architecture build and installation](../multiarch-build.md).
+The manual extraction steps from 4.1 onward apply to single-architecture artifacts.
 
 ### 4.1 Extract
 

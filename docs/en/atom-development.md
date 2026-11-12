@@ -1,6 +1,6 @@
 # SPlayer Atom Development Setup
 
-> Last updated: 2026-11-06
+> Last updated: 2026-11-12
 
 Project constraints live in the repository's `AGENTS.md`; current priorities and acceptance status
 live in the [roadmap](./atom-roadmap.md). This guide covers development workflows and conventions.
@@ -10,7 +10,7 @@ live in the [roadmap](./atom-roadmap.md). This guide covers development workflow
 - Node `>=22.19.0`
 - pnpm `>=10`
 - Rust stable
-- Linux x86-64
+- Linux x86-64 / aarch64
 - `libasound2-dev`, `pkg-config`, `clang` (`libarchive-tools` is only needed by the CI dependency install line; local builds can omit it)
 
 Formal builds and bundled-runtime artifacts use reference Node `24.22.2`. The runtime support
@@ -119,7 +119,7 @@ pnpm package:core:debian11 --without-diretta --bundle-runtime
 The Debian 11 builder also accepts `--with-diretta --diretta-variant=v2|v3|v4|zen4` with SDK 148 set
 through `DIRETTA_SDK_ROOT`; see [Build Flavors](./build-flavors.md#debian-11-build).
 
-Validate the final Linux x86-64 `tar.gz`, including runtime metadata, native addon loading, Web root,
+Validate the final multi-architecture packages (see [multi-architecture build](./multiarch-build.md)), including runtime metadata, native addon loading, Web root,
 HTTP/WS endpoints, plugin-host IPC, startup, and termination. Real ALSA/Diretta/PCM/Native-DSD/UPnP
 and long-run behavior require separate hardware acceptance; software checks do not replace it.
 

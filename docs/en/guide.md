@@ -1,8 +1,8 @@
 # User Guide
 
-> Last updated: 2026-11-05
+> Last updated: 2026-11-12
 
-SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 Core plus a browser-based Web Control. Node is the default release runtime, while Bun is an experimental flavor. After deploying Core, open the Web page served by Core.
+SPlayer Atom is adapted from SPlayer-Next and consists of one Linux x86-64 / aarch64 Core plus a browser-based Web Control. Node is the default release runtime, while Bun is an experimental flavor. After deploying Core, open the Web page served by Core.
 
 ## Library
 

@@ -1,6 +1,6 @@
 # SPlayer Atom 开发手册
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 >
 > 代码基线：`dev` 分支提交 `5693b3fc`，产品版本 `1.1.3`
 >
@@ -28,7 +28,7 @@ SPlayer Atom 是“一个 Core、多种客户端”的结构：
 
 | 组件 | 版本/说明 |
 | --- | --- |
-| Linux x86-64 | 原生模块只在 Linux 编译 |
+| Linux x86-64 / aarch64 | 原生模块只在 Linux 编译；aarch64 构建见[多架构构建](../multiarch-build.md) |
 | Node.js | 日常开发 `>=22.19.0`；打包必须 **24.22.2** |
 | pnpm | `>=10`，仓库锁定 `11.5.2` |
 | Rust | stable；CI 固定 `1.98.0` |
@@ -533,6 +533,14 @@ out/
 ```text
 splayer-atom-core-<version>-<8位commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]-<system|bundled>-linux-x64.tar.gz
 ```
+
+多架构发布包按架构另行命名：
+
+```text
+splayer-atom-core-<version>-<8位commit>-<YYYYMMDD>-linux-<x86_64|aarch64>-multi.tar.gz
+```
+
+多架构包的构建、闸门与安装见[多架构构建与安装](../multiarch-build.md)。
 
 `runtime.json` 是发布身份与运行契约的权威记录；`native/build.json` 是原生构建身份。
 
