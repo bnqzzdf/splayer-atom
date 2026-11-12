@@ -119,6 +119,7 @@ cargo test --workspace
 - [Node/Bun 运行时对照记录](./docs/history/bun-runtime-experiment.md)
 - [原生模块](./docs/native.md)
 - [插件开发](./docs/plugins/) · [插件使用](./docs/plugins-usage.md) · [类型参考](./docs/types.md)
+- [使用手册（PDF，v1.3.0）](https://github.com/bnqzzdf/splayer-atom/releases/download/v1.3.0/SPlayer-Atom-%E4%BD%BF%E7%94%A8%E6%89%8B%E5%86%8C-v1.3.0.pdf)
 - [硬件发布验收](./docs/hardware-release-checklist.md)
 
 英文文档在 [`docs/en/`](./docs/en/)。`pnpm docs:dev` 可在本地预览文档站。
