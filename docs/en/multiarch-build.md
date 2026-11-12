@@ -137,19 +137,20 @@ better-sqlite3 prebuild, each `runtime.json`'s `arch/diretta/direttaCpuVariant`,
 SHA256SUMS, `install.sh` syntax and permissions, and the absence of symlinks. The x86 package
 additionally checks that v1 has `diretta=false`; the arm package allows arm64 only.
 
-## Acceptance record (2026-11-11)
+## Acceptance record (2026-11-12)
 
 Build environment:
 
 - x86 five variants: `.133` Debian 11 builder container, Node 24.22.2, Diretta SDK 148.
 - arm64: `.230` native aarch64 build, Rust 1.99.0, Diretta SDK 148 aarch64 libraries.
+- Source identity: `1.3.0` / `ed95ee9b` / `sourceDirty=false`.
 
 Artifacts:
 
 | Package | Size | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-x86_64-multi.tar.gz` | 90 MB | `f49e9be5ae88da82d1bfc660c0f9f0f47593de9bc019381883e2a54f3201e3e6` |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-aarch64-multi.tar.gz` | 55 MB | `33e6b648b88391925341948fc723a0a9c05146ee3c4a22119d8e1ecd88d324d5` |
+| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `32110e5c2c87a4f7e31e19eb57965ed5699d1a467cab8e2ef05e48a25ef0ffba` |
+| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `16f6763692ae895d10933d4961f7ef81b2d8527625831749555c1d7fe6afb5fc` |
 
 Package gates:
 
@@ -160,19 +161,20 @@ Package gates:
 
 Install/start verification:
 
-- `.137` x86 package `--cpu v4`: installed to a test prefix; Core `/api/info` returned `arch=x64`,
-  `node=24.22.2`, `direttaSdkRelease=148`, `capabilities.diretta=true`; native addons loaded.
+- `.137` x86 package `--cpu v4`: installed to a test prefix; Core `/api/info` returned
+  `version=1.3.0`, `commit=ed95ee9b`, `arch=x64`, `node=24.22.2`, `direttaSdkRelease=148`,
+  `capabilities.diretta=true`; native addons loaded.
 - `.137` x86 package `--cpu v1`: `direttaSdkRelease=null`, `capabilities.diretta=false`; native
   addons loaded.
-- `.230` arm package `--cpu arm64`: `arch=arm64`, `node=24.22.2`, `direttaSdkRelease=148`,
-  `capabilities.diretta=true`; native addons loaded.
+- `.230` arm package `--cpu arm64`: `version=1.3.0`, `commit=ed95ee9b`, `arch=arm64`,
+  `node=24.22.2`, `direttaSdkRelease=148`, `capabilities.diretta=true`; native addons loaded.
 - The arm64 build found and fixed the `c_char` signedness in `direct_pcm.rs` (`a5a25b14`); x86 is
   unaffected.
 
 ## Audit conclusions (this round)
 
-- Static/dynamic gates: `pnpm typecheck`, `pnpm lint`, `pnpm test`, final `cargo test --workspace`,
-  and clippy 1.98.0 all passed.
+- Static/dynamic gates: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `cargo test --workspace`,
+  and clippy 1.99.x all passed.
 - Fixed: arm64 `c_char` signedness; `--output-dir` argument ordering; base artifact SHA256
   verification; native `build.json` consistency with package architecture/variants; arm64 build
   `--locked`; the installer now refuses a non-empty directory that does not look like an Atom

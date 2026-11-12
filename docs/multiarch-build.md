@@ -1,6 +1,6 @@
 # 多架构 / 多 CPU 变体构建与安装
 
-> 最后更新：2026-11-11
+> 最后更新：2026-11-12
 
 本文描述 x86-64（v1/v2/v3/v4/zen4）与 aarch64（arm64）的 Core 构建、两个发布包和统一安装器。
 安装目录默认 `/opt/splayer-atom-core`；`--prefix` 可覆盖（例如 audiosys 环境的 `/audiosys`）。
@@ -129,19 +129,20 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 `runtime.json` 的 `arch/diretta/direttaCpuVariant`、包内 SHA256SUMS、install.sh 语法与权限、
 禁止符号链接。x86 包额外检查 v1 的 `diretta=false`；arm 包只允许 arm64。
 
-## 验收记录（2026-11-11）
+## 验收记录（2026-11-12）
 
 构建环境：
 
 - x86 五变体：`.133` Debian 11 builder 容器，Node 24.22.2，Diretta SDK 148。
 - arm64：`.230` aarch64 原生构建，Rust 1.99.0，Diretta SDK 148 aarch64 库。
+- 源码身份：`1.3.0` / `ed95ee9b` / `sourceDirty=false`。
 
 产物：
 
 | 包 | 大小 | SHA256 |
 | --- | --- | --- |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-x86_64-multi.tar.gz` | 90 MB | `f49e9be5ae88da82d1bfc660c0f9f0f47593de9bc019381883e2a54f3201e3e6` |
-| `splayer-atom-core-1.2.0-e587aa55-20261111-linux-aarch64-multi.tar.gz` | 55 MB | `33e6b648b88391925341948fc723a0a9c05146ee3c4a22119d8e1ecd88d324d5` |
+| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-x86_64-multi.tar.gz` | 90 MB | `32110e5c2c87a4f7e31e19eb57965ed5699d1a467cab8e2ef05e48a25ef0ffba` |
+| `splayer-atom-core-1.3.0-ed95ee9b-20261112-linux-aarch64-multi.tar.gz` | 55 MB | `16f6763692ae895d10933d4961f7ef81b2d8527625831749555c1d7fe6afb5fc` |
 
 包闸门：
 
@@ -152,17 +153,18 @@ sh scripts/atom/check-multiarch-package.sh out/...-linux-aarch64-multi.tar.gz
 
 安装/启动验证：
 
-- `.137` x86 包 `--cpu v4`：安装到测试前缀，Core `/api/info` 返回 `arch=x64`、
-  `node=24.22.2`、`direttaSdkRelease=148`、`capabilities.diretta=true`；native 加载成功。
-- `.137` x86 包 `--cpu v1`：`direttaSdkRelease=null`、`capabilities.diretta=false`；native 加载成功。
-- `.230` arm 包 `--cpu arm64`：`arch=arm64`、`node=24.22.2`、`direttaSdkRelease=148`、
+- `.137` x86 包 `--cpu v4`：安装到测试前缀，Core `/api/info` 返回 `version=1.3.0`、
+  `commit=ed95ee9b`、`arch=x64`、`node=24.22.2`、`direttaSdkRelease=148`、
   `capabilities.diretta=true`；native 加载成功。
+- `.137` x86 包 `--cpu v1`：`direttaSdkRelease=null`、`capabilities.diretta=false`；native 加载成功。
+- `.230` arm 包 `--cpu arm64`：`version=1.3.0`、`commit=ed95ee9b`、`arch=arm64`、`node=24.22.2`、
+  `direttaSdkRelease=148`、`capabilities.diretta=true`；native 加载成功。
 - arm64 编译中发现并修复 `direct_pcm.rs` 的 `c_char` 有符号性（`a5a25b14`），x86 不受影响。
 
 ## 审计结论（本轮）
 
-- 静态/动态闸门：`pnpm typecheck`、`pnpm lint`、`pnpm test`、最终 `cargo test --workspace`
-  与 clippy 1.98.0 均通过。
+- 静态/动态闸门：`pnpm typecheck`、`pnpm lint`、`pnpm test`、`cargo test --workspace`
+  与 clippy 1.99.x 均通过。
 - 已修复：arm64 `c_char` 有符号性；`--output-dir` 参数顺序；base 产物 SHA256 校验；
   native `build.json` 与包架构/变体一致性校验；arm64 构建 `--locked`；
   安装器对“非空且不像 Atom 安装根”的目录拒绝覆盖（需 `--force`）。
