@@ -1101,7 +1101,7 @@ def chapter_15():
         ("统计和播放历史不一致", "统计来自 Core，历史来自当前浏览器 IndexedDB；口径与范围不同，不是同一份数据。"),
     ]
     for i, (q, a) in enumerate(qa, 1):
-        s.append(h2(f"14.{i} {q}"))
+        s.append(h2(f"15.{i} {q}"))
         s.append(p(a))
     s.append(callout(
         "排障时先判断是哪一层：浏览器/WebSocket、Core HTTP、输出设备、在线平台或文件系统。"
