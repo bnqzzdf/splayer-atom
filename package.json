@@ -1,7 +1,7 @@
 {
   "name": "splayer-atom",
   "productName": "SPlayer Atom",
-  "version": "1.3.2",
+  "version": "2026.11.14",
   "description": "Linux x86-64/aarch64 Web + Core music player adapted from SPlayer-Next",
   "type": "module",
   "packageManager": "pnpm@11.5.2",
@@ -51,6 +51,7 @@
     "package:core:bun:bundled": "tsx scripts/atom/build-core-system.ts --runtime=bun --bundle-runtime",
     "bench:core:bun": "tsx scripts/atom/bench-core-runtime.ts",
     "package:source": "tsx scripts/atom/package-source.ts",
+    "release:bump": "tsx scripts/atom/bump-version.ts",
     "release:tag": "tsx scripts/atom/tag-release.ts",
     "check:hardware-release": "tsx scripts/atom/check-hardware-release.ts",
     "docs:stamp": "tsx scripts/atom/sync-doc-timestamps.ts",

@@ -25,7 +25,7 @@ export const runtimeEnvironment = {
     return envText("ATOM_APP_NAME") ?? "SPlayer Atom";
   },
   get appVersion(): string {
-    return envText("ATOM_APP_VERSION") ?? "1.0.0";
+    return envText("ATOM_APP_VERSION") ?? "2026.11.14";
   },
   get isPackaged(): boolean {
     return process.env.ATOM_APP_PACKAGED === "1";

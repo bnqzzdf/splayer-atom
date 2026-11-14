@@ -1,6 +1,6 @@
 # SPlayer Atom 路线图
 
-> 最后更新：2026-11-12
+> 最后更新：2026-11-14
 
 ## 当前状态
 
@@ -31,8 +31,8 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 
 ## 版本与发布
 
-- 当前源码产品版本为 `1.3.2`。
-- `v1.3.2` 已推送至 GitHub，并在 GitHub Releases 发布 x86-64 与 aarch64 多架构包。
+- 当前源码产品版本为 `2026.11.14`（切换为 `YYYY.M.D` 日期版本，同日多次发版递增 `-1`/`-2`）。
+- 最近已发布版本为 `v1.3.2`（GitHub Releases 含 x86-64 与 aarch64 多架构包）；`2026.11.14` 尚未打标发布。
 - 发布资产：`linux-x86_64-multi`（v1/v2/v3/v4/zen4）与 `linux-aarch64-multi`（arm64）。
 - Node/Bun Runtime Flavor、已有构建记录和限定范围基准见
   [构建形态](./build-flavors.md)及[运行时对照](./history/bun-runtime-experiment.md)。
@@ -45,12 +45,12 @@ Node 是默认运行时，Bun 为可选实验 Flavor。
 
 ## 相关文档
 
-| 文档 | 用途 |
-| --- | --- |
-| [已完成事项](./history/atom-completed.md) | 40 项结项状态、对应实施和历史验收范围 |
-| [历史归档](./history/README.md) | 旧方案、实测记录与阶段性结果 |
-| [开发指南](./atom-development.md) | 环境、校验与开发约定 |
-| [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md) | Core/Web 产物与 Node/Bun Flavor |
-| [多架构构建与安装](./multiarch-build.md) | x86 v1/v2/v3/v4/zen4 + arm64 包与安装器 |
-| [Core 部署](./core-deployment.md) | systemd、安装、升级和回滚说明 |
-| [硬件清单](./hardware-release-checklist.md)、[Provider 验收](./live-provider-acceptance.md) | 验收标准与现存历史记录 |
+| 文档                                                                                        | 用途                                    |
+| ------------------------------------------------------------------------------------------- | --------------------------------------- |
+| [已完成事项](./history/atom-completed.md)                                                   | 40 项结项状态、对应实施和历史验收范围   |
+| [历史归档](./history/README.md)                                                             | 旧方案、实测记录与阶段性结果            |
+| [开发指南](./atom-development.md)                                                           | 环境、校验与开发约定                    |
+| [构建与打包](./build-and-packaging.md)、[构建形态](./build-flavors.md)                      | Core/Web 产物与 Node/Bun Flavor         |
+| [多架构构建与安装](./multiarch-build.md)                                                    | x86 v1/v2/v3/v4/zen4 + arm64 包与安装器 |
+| [Core 部署](./core-deployment.md)                                                           | systemd、安装、升级和回滚说明           |
+| [硬件清单](./hardware-release-checklist.md)、[Provider 验收](./live-provider-acceptance.md) | 验收标准与现存历史记录                  |

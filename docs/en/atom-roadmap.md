@@ -1,6 +1,6 @@
 # SPlayer Atom Roadmap
 
-> Last updated: 2026-11-12
+> Last updated: 2026-11-14
 
 ## Current status
 
@@ -37,9 +37,8 @@ automatically reopening completed historical plans.
 
 ## Version and release
 
-- The current source product version is `1.3.2`.
-- Git tag `v1.3.2` has been pushed to GitHub, and GitHub Releases publishes
-  x86-64 and aarch64 multi-architecture packages.
+- The current source product version is `2026.11.14` (migrated to `YYYY.M.D` date-based versioning, incrementing `-1`/`-2` for same-day releases).
+- The latest published release is `v1.3.2` (with x86-64 and aarch64 multi-architecture packages on GitHub Releases); `2026.11.14` has not been tagged yet.
 - Release assets: `linux-x86_64-multi` (v1/v2/v3/v4/zen4) and
   `linux-aarch64-multi` (arm64).
 - See [build flavors](./build-flavors.md) and the
@@ -56,12 +55,12 @@ from this roadmap. Follow `AGENTS.md` for lasting constraints and the
 
 ## Related documents
 
-| Document | Purpose |
-| --- | --- |
-| [Completed Work](./history/atom-completed.md) | Closeout status for all 40 items, implementation and historical acceptance boundaries |
-| [History archive](./history/README.md) | Past plans, device checks and scoped results |
-| [Development guide](./atom-development.md) | Environment, checks and development conventions |
-| [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md) | Core/Web artifacts and Node/Bun flavors |
-| [Multi-architecture build and installation](./multiarch-build.md) | x86 v1/v2/v3/v4/zen4 + arm64 packages and installer |
-| [Core deployment](./core-deployment.md) | systemd, install, upgrade and rollback |
-| [Hardware checklist](./hardware-release-checklist.md), [provider acceptance](./live-provider-acceptance.md) | Acceptance criteria and existing historical evidence |
+| Document                                                                                                    | Purpose                                                                               |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [Completed Work](./history/atom-completed.md)                                                               | Closeout status for all 40 items, implementation and historical acceptance boundaries |
+| [History archive](./history/README.md)                                                                      | Past plans, device checks and scoped results                                          |
+| [Development guide](./atom-development.md)                                                                  | Environment, checks and development conventions                                       |
+| [Build and packaging](./build-and-packaging.md), [build flavors](./build-flavors.md)                        | Core/Web artifacts and Node/Bun flavors                                               |
+| [Multi-architecture build and installation](./multiarch-build.md)                                           | x86 v1/v2/v3/v4/zen4 + arm64 packages and installer                                   |
+| [Core deployment](./core-deployment.md)                                                                     | systemd, install, upgrade and rollback                                                |
+| [Hardware checklist](./hardware-release-checklist.md), [provider acceptance](./live-provider-acceptance.md) | Acceptance criteria and existing historical evidence                                  |

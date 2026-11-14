@@ -1,6 +1,6 @@
 # SPlayer Atom 构建与打包
 
-> 最后更新：2026-11-12
+> 最后更新：2026-11-14
 
 本文描述 Linux x86-64/aarch64 Core + Web Control 的构建。**Node 是默认正式基线**；
 Bun 是共用构建与验收流程的**实验性 Runtime Flavor**，尚待真实播放/发布验收。
@@ -70,7 +70,7 @@ out/splayer-atom-core-<version>-<commit>-<YYYYMMDD>-<HHMMSS>[-diretta-<variant>]
 Bun 的包内运行时为 `runtime/bin/bun`；具体限制及非正式发布状态见
 [Node/Bun 运行时对照](./history/bun-runtime-experiment.md)。
 
-版本号来自 `package.json`，日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`。需要**内容**可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。
+版本号来自 `package.json`（采用 `YYYY.M.D` 日期版本，同日多次发版自动递增为 `YYYY.M.D-1`、`YYYY.M.D-2`），日期与时刻为打包当时的 `YYYYMMDD-HHMMSS`。需要**内容**可重复构建时可以通过 `ATOM_BUILD_DATE=YYYYMMDD` 固定日期；需要连文件名也复现时再设置 `ATOM_BUILD_TIME=HHMMSS`。`runtime.json` 只记录可读的 `buildDate`（日期），因此仅固定 `ATOM_BUILD_DATE` 即可复现出相同字节的产物。
 
 `<commit>` 是 8 位短提交号（取自 `git rev-parse HEAD`，或源码交付包内 `SOURCE_COMMIT` 的 `commit=`），与 `runtime.json.atomCommit` 以及 Web Control「关于软件」页显示的提交号完全一致——**拿到一个 tar 就能知道它出自哪次提交，不必解包读 `runtime.json`**。
 
@@ -114,9 +114,12 @@ pnpm package:source
 
 ## 发布标签
 
-标签只表达「哪一版」，提交由标签自身指向：
+版本号使用 `YYYY.M.D` 日期格式（同日多次发版自动递增 `-1`、`-2`），标签只表达「哪一版」，提交由标签自身指向：
 
 ```bash
+pnpm release:bump            # 按当天日期更新 package.json（同日递增 -1/-2）
+pnpm release:bump --commit   # 更新并提交 package.json
+pnpm release:bump --dry-run  # 仅预览目标版本，不改文件
 pnpm release:tag            # 打本地标签并打印推送命令
 pnpm release:tag --push     # 打标签并推送
 pnpm release:tag --dry-run  # 只做检查，不落标签
@@ -216,6 +219,7 @@ pnpm test
 pnpm lint
 pnpm build
 pnpm package:core
+pnpm release:bump --dry-run
 pnpm release:tag --dry-run
 pnpm docs:build
 pnpm docs:stamp:check

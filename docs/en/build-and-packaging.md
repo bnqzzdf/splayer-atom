@@ -1,6 +1,6 @@
 # SPlayer Atom Build and Packaging
 
-> Last updated: 2026-11-12
+> Last updated: 2026-11-14
 
 This covers Linux x86-64/aarch64 Core + Web Control builds. **Node is the default release baseline**;
 Bun is an **experimental runtime flavor** using the same build and artifact verification pipeline,
@@ -69,7 +69,7 @@ These are Node filenames; Bun adds `-bun` immediately before `-system` or `-bund
 Bundled Bun uses `runtime/bin/bun`. See the [runtime comparison](../history/bun-runtime-experiment.md)
 (Chinese only) for limitations and why Bun is not yet a formal release artifact.
 
-The version comes from `package.json` and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
+The version comes from `package.json` (using `YYYY.M.D` date-based versioning, auto-incrementing to `YYYY.M.D-1` and `YYYY.M.D-2` for same-day releases) and the date and time are the packaging date/time in `YYYYMMDD-HHMMSS` format.
 Set `ATOM_BUILD_DATE=YYYYMMDD` when a reproducible build **content** is required; set `ATOM_BUILD_TIME=HHMMSS`
 as well when the artifact **name** must also be reproducible. `runtime.json` only records the human-readable
 `buildDate` (date), so fixing `ATOM_BUILD_DATE` alone already reproduces byte-identical content.
@@ -141,9 +141,12 @@ publication independently.
 
 ## Release tags
 
-A tag states _which release_, and the commit is what the tag points at:
+Versions follow `YYYY.M.D` date-based format (auto-incrementing `-1`, `-2` for same-day releases). A tag states _which release_, and the commit is what the tag points at:
 
 ```bash
+pnpm release:bump            # update package.json to today's YYYY.M.D (increments -1/-2 same day)
+pnpm release:bump --commit   # update and commit package.json
+pnpm release:bump --dry-run  # preview next version without modifying files
 pnpm release:tag            # create the local tag and print the push command
 pnpm release:tag --push     # create and push it
 pnpm release:tag --dry-run  # check only
@@ -263,6 +266,7 @@ pnpm test
 pnpm lint
 pnpm build
 pnpm package:core
+pnpm release:bump --dry-run
 pnpm release:tag --dry-run
 pnpm docs:build
 pnpm docs:stamp:check

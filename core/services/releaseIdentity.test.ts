@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  formatDateVersion,
+  parseBumpDateInput,
+  resolveNextDateVersion,
+} from "../../scripts/atom/bump-version";
+import { isDateVersion } from "../../scripts/atom/core-artifact-name";
 
 const read = (relative: string): string =>
   readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
@@ -34,7 +40,7 @@ const serverSource = read("core/server/index.ts");
 test("SPlayer Atom owns a Node Core and Web Control product identity", () => {
   assert.equal(packageJson.name, "splayer-atom");
   assert.equal(packageJson.productName, "SPlayer Atom");
-  assert.equal(packageJson.version, "1.3.2");
+  assert.ok(isDateVersion(packageJson.version ?? ""), `非法日期版本: ${packageJson.version}`);
   assert.match(packageJson.description ?? "", /Web \+ Core music player adapted from SPlayer-Next/);
   assert.equal(packageJson.repository?.url, "https://github.com/bnqzzdf/splayer-atom");
   assert.equal(packageJson.bugs?.url, "https://github.com/bnqzzdf/splayer-atom/issues");
@@ -136,4 +142,32 @@ test("Web branding exposes Atom and contains no Electron bootstrap", () => {
   assert.match(aboutSettingsSource, /<ProductBrand size="about" \/>/);
   assert.match(productBrandSource, />SPlayer<\/span>/);
   assert.match(productBrandSource, /ATOM/);
+});
+
+test("日期版本格式校验与同日递增脚本遵循 YYYY.M.D / YYYY.M.D-N 契约", () => {
+  assert.equal(isDateVersion("2026.11.14"), true);
+  assert.equal(isDateVersion("2026.11.14-1"), true);
+  assert.equal(isDateVersion("2026.11.14-12"), true);
+  assert.equal(isDateVersion("2026.5.9"), true);
+  assert.equal(isDateVersion("1.3.2"), false);
+  assert.equal(isDateVersion("2026.05.09"), false);
+  assert.equal(isDateVersion("2026.11.14-0"), false);
+  assert.equal(isDateVersion("2026.13.1"), false);
+  assert.equal(isDateVersion("2026.11.32"), false);
+
+  assert.equal(formatDateVersion(new Date(2026, 4, 9)), "2026.5.9");
+  assert.equal(parseBumpDateInput("2026-11-14"), "2026.11.14");
+  assert.equal(parseBumpDateInput("20260509"), "2026.5.9");
+  assert.throws(() => parseBumpDateInput("2026-02-30"));
+
+  assert.equal(resolveNextDateVersion("2026.11.14", ["1.3.2"]), "2026.11.14");
+  assert.equal(resolveNextDateVersion("2026.11.14", ["2026.11.14"]), "2026.11.14-1");
+  assert.equal(
+    resolveNextDateVersion("2026.11.14", ["v2026.11.14", "v2026.11.14-1"]),
+    "2026.11.14-2",
+  );
+  assert.equal(resolveNextDateVersion("2026.11.15", ["2026.11.14-2"]), "2026.11.15");
+
+  const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
+  assert.equal(pkg.scripts?.["release:bump"], "tsx scripts/atom/bump-version.ts");
 });

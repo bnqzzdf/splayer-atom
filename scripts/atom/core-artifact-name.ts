@@ -11,12 +11,22 @@ type PackageReleaseMetadata = {
   version?: string;
 };
 
+export const DATE_VERSION_PATTERN =
+  /^\d{4}\.(?:[1-9]|1[0-2])\.(?:[1-9]|[12]\d|3[01])(?:-[1-9]\d*)?$/;
+
+export const isDateVersion = (value: string): boolean => DATE_VERSION_PATTERN.test(value);
+
 export const readCoreReleaseMetadata = (): { productName: string; version: string } => {
   const metadata = JSON.parse(
     readFileSync(path.join(root, "package.json"), "utf8"),
   ) as PackageReleaseMetadata;
   if (metadata.productName !== "SPlayer Atom" || !metadata.version) {
     throw new Error("package.json 缺少 SPlayer Atom 产品名称或版本号");
+  }
+  if (!isDateVersion(metadata.version)) {
+    throw new Error(
+      `package.json 版本号必须使用 YYYY.M.D 或 YYYY.M.D-N 日期格式，当前为 ${metadata.version}`,
+    );
   }
   return { productName: metadata.productName, version: metadata.version };
 };
