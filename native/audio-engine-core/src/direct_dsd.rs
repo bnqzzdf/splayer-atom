@@ -11,6 +11,8 @@ use std::time::Duration;
 
 use anyhow::{bail, ensure, Context, Result};
 
+use crate::direct_storage::DirectStorage;
+
 trait DirectDsdIo: Read + Seek + Send {}
 impl<T: Read + Seek + Send> DirectDsdIo for T {}
 
@@ -716,7 +718,7 @@ struct DirectDsdSlot {
     boundary: AtomicBool,
     boundary_duration_micros: AtomicU64,
     boundary_generation: AtomicU64,
-    buffer: UnsafeCell<Box<[u8]>>,
+    buffer: UnsafeCell<DirectStorage<Box<[u8]>>>,
 }
 
 impl DirectDsdSlot {
@@ -729,8 +731,20 @@ impl DirectDsdSlot {
             boundary: AtomicBool::new(false),
             boundary_duration_micros: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
-            buffer: UnsafeCell::new(vec![0_u8; capacity].into_boxed_slice()),
+            buffer: UnsafeCell::new(DirectStorage::new(vec![0_u8; capacity].into_boxed_slice())),
         }
+    }
+}
+
+impl DirectStorage<Box<[u8]>> {
+    fn writable_buffer(&mut self, capacity: usize) -> &mut Box<[u8]> {
+        let buffer = self
+            .writable(|| Ok::<_, std::convert::Infallible>(vec![0_u8; capacity].into_boxed_slice()))
+            .unwrap();
+        if buffer.len() < capacity {
+            *buffer = vec![0_u8; capacity].into_boxed_slice();
+        }
+        buffer
     }
 }
 
@@ -940,9 +954,13 @@ impl DirectDsdRing {
         ))
     }
 
-    fn next_block(&self) -> Option<DirectDsdBlock> {
+    fn next_block(&self, token: Option<&mut *const c_void>) -> Option<DirectDsdBlock> {
         self.release_in_flight();
-        self.acquire_block(true).map(|(_, block, _, _)| block)
+        let (index, block, _, _) = self.acquire_block(true)?;
+        if let Some(token) = token {
+            *token = unsafe { &*self.slots[index].buffer.get() }.retain();
+        }
+        Some(block)
     }
 
     fn release_in_flight(&self) {
@@ -994,10 +1012,7 @@ impl DirectDsdRing {
 
     fn ensure_capacity(&self, capacity: usize) {
         for slot in &self.slots {
-            let buffer = unsafe { &mut *slot.buffer.get() };
-            if buffer.len() < capacity {
-                *buffer = vec![0_u8; capacity].into_boxed_slice();
-            }
+            unsafe { &mut *slot.buffer.get() }.writable_buffer(capacity);
         }
     }
 }
@@ -1267,11 +1282,6 @@ fn install_staged_dsd_slot(
     wire_bit_order: DirectDsdBitOrder,
     wire_group_bytes: usize,
 ) -> Result<(DirectDsdReader, DirectDsdFormat)> {
-    let required = staged.reader.max_output_len();
-    let buffer = unsafe { &mut *slot.buffer.get() };
-    if buffer.len() < required {
-        *buffer = vec![0_u8; required].into_boxed_slice();
-    }
     fill_claimed_slot(&mut staged.reader, slot, wire_bit_order, wire_group_bytes)?
         .context("Native DSD staged 音源没有可播放 payload")?;
     slot.boundary_duration_micros
@@ -1874,7 +1884,7 @@ fn fill_claimed_slot(
     wire_bit_order: DirectDsdBitOrder,
     wire_group_bytes: usize,
 ) -> Result<Option<()>> {
-    let buffer = unsafe { &mut *slot.buffer.get() };
+    let buffer = unsafe { &mut *slot.buffer.get() }.writable_buffer(reader.max_output_len());
     let source_bit_order = reader.format().bit_order;
     let Some(len) = reader.read_block_grouped(buffer, wire_group_bytes)? else {
         return Ok(None);
@@ -1908,7 +1918,24 @@ pub unsafe extern "C" fn direct_dsd_next_block(
         return false;
     }
     let ring = unsafe { &*context.cast::<DirectDsdRing>() };
-    let Some(block) = ring.next_block() else {
+    let Some(block) = ring.next_block(None) else {
+        return false;
+    };
+    unsafe {
+        *data = block.data;
+        *len = block.len;
+    }
+    true
+}
+
+pub(crate) unsafe extern "C" fn diretta_dsd_next_block(
+    context: *mut c_void,
+    data: *mut *const u8,
+    len: *mut usize,
+    token: *mut *const c_void,
+) -> bool {
+    let ring = unsafe { &*context.cast::<DirectDsdRing>() };
+    let Some(block) = ring.next_block(Some(unsafe { &mut *token })) else {
         return false;
     };
     unsafe {
@@ -2190,7 +2217,7 @@ mod tests {
         assert_eq!(source.format().bit_order, DirectDsdBitOrder::LsbFirst);
         assert!(!source.failed());
         assert!(!source.finished());
-        let first_buffer = unsafe { &*source.ring.slots[0].buffer.get() };
+        let first_buffer = unsafe { &*source.ring.slots[0].buffer.get() }.data();
         let expected_ptr = first_buffer.as_ptr();
         let mut data = ptr::null();
         let mut len = 0_usize;
@@ -2199,6 +2226,36 @@ mod tests {
         assert_eq!(data, expected_ptr);
         assert_eq!(unsafe { std::slice::from_raw_parts(data, len) }, expected);
         unsafe { direct_dsd_release_block(source.callback_context()) };
+    }
+
+    #[test]
+    fn diretta_dsd_retained_payload_survives_seek() {
+        let (bytes, expected) = dsf_fixture(64);
+        let fixture = TempDsdFile::new("dsf", &bytes);
+        let mut source = DirectDsdSource::open_local(&fixture.path).unwrap();
+        let context = source.callback_context();
+        let (mut old_data, mut old_len, mut old_token) = (ptr::null(), 0, ptr::null());
+        assert!(unsafe {
+            diretta_dsd_next_block(context, &mut old_data, &mut old_len, &mut old_token)
+        });
+        unsafe { direct_dsd_release_block(context) };
+
+        source.seek_while_paused(32.0 / 2_822_400.0).unwrap();
+        let (mut data, mut len, mut token) = (ptr::null(), 0, ptr::null());
+        assert!(unsafe { diretta_dsd_next_block(context, &mut data, &mut len, &mut token) });
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(data, len) },
+            &expected[8..]
+        );
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(old_data, old_len) },
+            expected
+        );
+        unsafe {
+            crate::direct_storage::change_diretta_block_ref(old_token, false);
+            crate::direct_storage::change_diretta_block_ref(token, false);
+            direct_dsd_release_block(context);
+        }
     }
 
     #[test]
@@ -2421,14 +2478,14 @@ mod tests {
     #[test]
     fn strict_dsd_ring_underrun_returns_no_block_instead_of_inserting_data() {
         let ring = DirectDsdRing::new(64);
-        assert!(ring.next_block().is_none());
+        assert!(ring.next_block(None).is_none());
     }
 
     #[test]
     fn rust_dsd_consumer_lease_keeps_slot_in_flight_until_drop() {
         let ring = Arc::new(DirectDsdRing::new(8));
         let slot = &ring.slots[0];
-        let buffer = unsafe { &mut *slot.buffer.get() };
+        let buffer = unsafe { &mut *slot.buffer.get() }.writable_buffer(0);
         buffer[..4].copy_from_slice(&[1, 2, 3, 4]);
         slot.payload_ptr
             .store(buffer.as_mut_ptr(), Ordering::Relaxed);
@@ -2455,7 +2512,7 @@ mod tests {
     fn rust_dsd_consumer_exposes_boundary_without_committing_diretta_state() {
         let ring = Arc::new(DirectDsdRing::new(8));
         let slot = &ring.slots[0];
-        let buffer = unsafe { &mut *slot.buffer.get() };
+        let buffer = unsafe { &mut *slot.buffer.get() }.writable_buffer(0);
         buffer[..2].copy_from_slice(&[0x12, 0x34]);
         slot.payload_ptr
             .store(buffer.as_mut_ptr(), Ordering::Relaxed);

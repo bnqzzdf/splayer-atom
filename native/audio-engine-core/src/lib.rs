@@ -14,6 +14,7 @@ pub mod decoder;
 pub mod direct_dsd;
 pub mod direct_pcm;
 pub mod direct_runtime;
+mod direct_storage;
 pub mod diretta;
 pub mod dsd;
 pub mod equalizer;

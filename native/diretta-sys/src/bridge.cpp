@@ -1,22 +1,34 @@
 #include <Diretta/Find>
 #include <Diretta/Format>
 #include <Diretta/Sync>
+
+#if __has_include(<acqua/UDPV6.hpp>)
+#include <acqua/Clock.hpp>
+#include <acqua/UDPV6.hpp>
+#define ATOM_DIRETTA_PACKET_REFERENCES
+#else
 #include <ACQUA/Clock>
+#endif
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
+#include <utility>
 
 namespace {
 
 constexpr std::size_t kTextCapacity = 256;
 thread_local std::string g_last_error;
 
-using AtomDirettaNextBlock = bool (*)(void*, const std::uint8_t**, std::size_t*);
+using AtomDirettaNextBlock = bool (*)(void*, const std::uint8_t**, std::size_t*, const void**);
 using AtomDirettaReleaseBlock = void (*)(void*);
+using AtomDirettaChangeBlockRef = void (*)(const void*, bool);
 
 void set_error(std::string message) {
   g_last_error = std::move(message);
@@ -34,42 +46,172 @@ void copy_text(char (&dst)[N], const std::string& value) {
   dst[count] = '\0';
 }
 
-class DirectSync final : public DIRETTA::Sync {
- public:
-  DirectSync(
-    void* source_context,
-    AtomDirettaNextBlock next_block,
-    AtomDirettaReleaseBlock release_block)
-      : source_context_(source_context),
-        next_block_(next_block),
-        release_block_(release_block) {}
+struct SourceBlock {
+  const std::uint8_t* data = nullptr;
+  std::size_t size = 0;
+  const void* token = nullptr;
 
-  void releaseSourceBlock() {
-    if (release_block_ != nullptr && source_context_ != nullptr) {
-      release_block_(source_context_);
-    }
+  bool contains(const void* p, std::size_t len) const {
+    auto offset = reinterpret_cast<std::uintptr_t>(p) - reinterpret_cast<std::uintptr_t>(data);
+    return token != nullptr && offset < size && len <= size - offset;
+  }
+};
+
+class DirectSource {
+ public:
+  DirectSource(
+    void* context,
+    AtomDirettaNextBlock next,
+    AtomDirettaReleaseBlock release,
+    AtomDirettaChangeBlockRef change_ref)
+      : context_(context), next_(next), release_(release), change_ref_(change_ref) {}
+
+  ~DirectSource() {
+    drop(previous_);
+    drop(current_);
   }
 
- protected:
-  bool getNewStream(diretta_stream& stream) override {
-    const std::uint8_t* data = nullptr;
-    std::size_t size = 0;
-    if (next_block_ == nullptr || source_context_ == nullptr ||
-        !next_block_(source_context_, &data, &size) || data == nullptr || size == 0) {
-      return false;
+  void play() { playing_.store(true); }
+
+  void pause() {
+    playing_.store(false);
+    // SDK stop 仅设暂停标志，重置解码状态前还需等取块回调退出。
+    while (pulling_.load()) {
+      std::this_thread::yield();
     }
-    stream.Data.P = const_cast<std::uint8_t*>(data);
-    stream.Size = size;
-    return true;
+    release_(context_);
+  }
+
+  bool pull(diretta_stream& stream) {
+    pulling_.store(true);
+    if (!playing_.load()) {
+      pulling_.store(false);
+      stream.Data.P = nullptr;
+      stream.Size = 0;
+      return true;
+    }
+
+    // 跨块组包会借用上一个块。再请求第三块前，Blue 已经把前两段复制到包里。
+    drop(previous_);
+    previous_ = std::exchange(current_, {});
+    const bool available = next_(context_, &current_.data, &current_.size, &current_.token);
+    stream.Data.P = const_cast<std::uint8_t*>(current_.data);
+    stream.Size = current_.size;
+    pulling_.store(false);
+    return available;
+  }
+
+  const void* retain(const void* data, std::size_t size) const {
+    const void* token = current_.contains(data, size) ? current_.token
+      : previous_.contains(data, size) ? previous_.token : nullptr;
+    if (token != nullptr) change_ref_(token, true);
+    return token;
+  }
+
+  void release(const void* token) const {
+    if (token != nullptr) change_ref_(token, false);
   }
 
  private:
-  void* source_context_;
-  AtomDirettaNextBlock next_block_;
-  AtomDirettaReleaseBlock release_block_;
+  void drop(SourceBlock& block) { release(std::exchange(block, {}).token); }
+
+  void* context_;
+  AtomDirettaNextBlock next_;
+  AtomDirettaReleaseBlock release_;
+  AtomDirettaChangeBlockRef change_ref_;
+  std::atomic_bool playing_{false};
+  std::atomic_bool pulling_{false};
+  SourceBlock previous_;
+  SourceBlock current_;
+};
+
+#ifdef ATOM_DIRETTA_PACKET_REFERENCES
+class DirectPacketBuffer final : public ACQUA::UDPV6EBuffer {
+ public:
+  DirectPacketBuffer(std::uint8_t* data, std::int32_t size, const DirectSource& source)
+      : UDPV6EBuffer(data, size), source_(source) {}
+
+  ~DirectPacketBuffer() override { release_payload(); }
+
+  bool alloc(std::int32_t size, std::int32_t offset) override {
+    release_payload();
+    return UDPV6EBuffer::alloc(size, offset);
+  }
+
+  void calculate() override {
+    UDPV6EBuffer::calculate();
+    if (m_iovCnt == 0 || m_iovCnt > std::size(m_iov) || tokens_[0] != nullptr) return;
+    // 重传也会更新包头。只有新装入的 iovec 才需要取得引用。
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < m_iovCnt && count < tokens_.size(); ++i) {
+      if (const void* token = source_.retain(m_iov[i].base, m_iov[i].len)) {
+        tokens_[count++] = token;
+      }
+    }
+  }
+
+ private:
+  void release_payload() {
+    for (auto& token : tokens_) source_.release(std::exchange(token, nullptr));
+  }
+
+  const DirectSource& source_;
+  std::array<const void*, 2> tokens_{};
+};
+
+class DirectSocket final : public ACQUA::UDPV6 {
+ public:
+  explicit DirectSocket(const DirectSource& source) : source_(source) {}
+
+  ACQUA::EthernetBuffer* alloc(std::uint8_t* data, std::int32_t size, bool) override {
+    return new DirectPacketBuffer(data, size, source_);
+  }
+
+ private:
+  const DirectSource& source_;
+};
+#endif
+
+class DirectSync final : public DIRETTA::Sync {
+ public:
+#ifdef ATOM_DIRETTA_PACKET_REFERENCES
+  DirectSync(DirectSource& source, DirectSocket& udp, DirectSocket& raw)
+      : Sync(udp, &raw), source_(source) {
+    setZeroCopy(true);
+  }
+#else
+  explicit DirectSync(DirectSource& source) : source_(source) {
+    disableUntrackedZeroCopy(*this);
+  }
+
+ private:
+  static void disableUntrackedZeroCopy(auto& sync) {
+    if constexpr (requires { sync.setZeroCopy(false); }) {
+      sync.setZeroCopy(false);
+    }
+  }
+#endif
+
+ protected:
+  bool getNewStream(diretta_stream& stream) override { return source_.pull(stream); }
+
+ private:
+  DirectSource& source_;
 };
 
 struct DirettaConnection {
+  DirettaConnection(
+    void* source_context,
+    AtomDirettaNextBlock next_block,
+    AtomDirettaReleaseBlock release_block,
+    AtomDirettaChangeBlockRef change_ref)
+      : source(source_context, next_block, release_block, change_ref) {}
+
+  DirectSource source;
+#ifdef ATOM_DIRETTA_PACKET_REFERENCES
+  DirectSocket udp{source};
+  DirectSocket raw{source};
+#endif
   std::unique_ptr<DIRETTA::Find> find;
   std::unique_ptr<DirectSync> sync;
   DIRETTA::FormatConfigure format;
@@ -81,18 +223,19 @@ struct DirettaConnection {
   void shutdown() noexcept {
     if (!sync) return;
     try {
+      sync->stop();
+      source.pause();
       if (sync->is_connect()) {
-        sync->stop();
-        sync->releaseSourceBlock();
         sync->disconnect_flgset();
         sync->disconnect(true);
         sync->disconnectWait();
-      } else {
-        sync->releaseSourceBlock();
       }
-      sync->close();
     } catch (...) {
       // SDK cleanup must never cross the C ABI/destructor boundary.
+    }
+    try {
+      sync->close();
+    } catch (...) {
     }
   }
 };
@@ -129,10 +272,12 @@ void* open_direct_with_format(
   void* source_context,
   AtomDirettaNextBlock next_block,
   AtomDirettaReleaseBlock release_block,
+  AtomDirettaChangeBlockRef change_ref,
   const char* format_name,
   bool* used_alternate_format) {
   try {
-    auto connection = std::make_unique<DirettaConnection>();
+    auto connection = std::make_unique<DirettaConnection>(
+      source_context, next_block, release_block, change_ref);
 
     DIRETTA::Find::Setting setting;
     setting.Loopback = false;
@@ -162,7 +307,19 @@ void* open_direct_with_format(
       mtu = 1500;
     }
 
-    connection->sync = std::make_unique<DirectSync>(source_context, next_block, release_block);
+#ifdef ATOM_DIRETTA_PACKET_REFERENCES
+    ACQUA::IPAddress bind_address;
+    connection->udp.setRecvTargetSize(0x1000);
+    if (!connection->udp.open() || !connection->udp.bind(bind_address)) {
+      set_error("failed to open Diretta stream socket");
+      return nullptr;
+    }
+    connection->raw.raw_open();
+    connection->sync = std::make_unique<DirectSync>(
+      connection->source, connection->udp, connection->raw);
+#else
+    connection->sync = std::make_unique<DirectSync>(connection->source);
+#endif
     // 保留发送线程优先级，使用 SDK 默认等待策略，避免忙等持续占核。
     const auto thread_mode = DIRETTA::Sync::CRITICAL;
     const auto ifno = static_cast<std::uint16_t>(target.get_ifno());
@@ -290,14 +447,15 @@ void* atom_diretta_open_direct(
   std::uint8_t storage_bits,
   void* source_context,
   AtomDirettaNextBlock next_block,
-  AtomDirettaReleaseBlock release_block) {
+  AtomDirettaReleaseBlock release_block,
+  AtomDirettaChangeBlockRef change_ref) {
   clear_error();
   if (target_id == nullptr || *target_id == '\0') {
     set_error("Diretta target id is required");
     return nullptr;
   }
   if (sample_rate == 0 || channels == 0 || source_context == nullptr ||
-      next_block == nullptr || release_block == nullptr) {
+      next_block == nullptr || release_block == nullptr || change_ref == nullptr) {
     set_error("invalid Diretta Source Direct configuration");
     return nullptr;
   }
@@ -316,6 +474,7 @@ void* atom_diretta_open_direct(
     source_context,
     next_block,
     release_block,
+    change_ref,
     "PCM",
     nullptr);
 }
@@ -328,14 +487,15 @@ void* atom_diretta_open_dsd_direct(
   bool* wire_lsb_first,
   void* source_context,
   AtomDirettaNextBlock next_block,
-  AtomDirettaReleaseBlock release_block) {
+  AtomDirettaReleaseBlock release_block,
+  AtomDirettaChangeBlockRef change_ref) {
   clear_error();
   if (target_id == nullptr || *target_id == '\0') {
     set_error("Diretta target id is required");
     return nullptr;
   }
   if (bit_rate == 0 || channels == 0 || wire_lsb_first == nullptr ||
-      source_context == nullptr || next_block == nullptr || release_block == nullptr) {
+      source_context == nullptr || next_block == nullptr || release_block == nullptr || change_ref == nullptr) {
     set_error("invalid Diretta Native DSD configuration");
     return nullptr;
   }
@@ -357,6 +517,7 @@ void* atom_diretta_open_dsd_direct(
     source_context,
     next_block,
     release_block,
+    change_ref,
     "Native DSD",
     &used_alternate_format);
   if (connection != nullptr) {
@@ -373,6 +534,7 @@ bool atom_diretta_play(void* opaque) {
     return false;
   }
   try {
+    connection->source.play();
     connection->sync->play();
     return true;
   } catch (const std::exception& error) {
@@ -392,7 +554,7 @@ bool atom_diretta_pause(void* opaque) {
   }
   try {
     connection->sync->stop();
-    connection->sync->releaseSourceBlock();
+    connection->source.pause();
     return true;
   } catch (const std::exception& error) {
     set_error(error.what());

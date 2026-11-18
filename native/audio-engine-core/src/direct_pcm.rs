@@ -12,6 +12,8 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use ffmpeg_audio::sys;
 
+use crate::direct_storage::DirectStorage;
+
 const AV_CODEC_PROP_LOSSLESS_BIT: i32 = 1 << 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1023,7 +1025,7 @@ struct DirectPcmSlot {
     boundary_duration_micros: AtomicU64,
     boundary_generation: AtomicU64,
     boundary_exact_integer: AtomicBool,
-    frame: UnsafeCell<DirectPcmFrame>,
+    frame: UnsafeCell<DirectStorage<DirectPcmFrame>>,
 }
 
 impl DirectPcmSlot {
@@ -1037,7 +1039,7 @@ impl DirectPcmSlot {
             boundary_duration_micros: AtomicU64::new(0),
             boundary_generation: AtomicU64::new(0),
             boundary_exact_integer: AtomicBool::new(false),
-            frame: UnsafeCell::new(DirectPcmFrame::new()?),
+            frame: UnsafeCell::new(DirectStorage::new(DirectPcmFrame::new()?)),
         })
     }
 }
@@ -1241,9 +1243,13 @@ impl DirectPcmRing {
         Some((index, DirectPcmBlock { data, len }, sample_frames, boundary))
     }
 
-    fn next_block(&self) -> Option<DirectPcmBlock> {
+    fn next_block(&self, token: Option<&mut *const c_void>) -> Option<DirectPcmBlock> {
         self.release_in_flight();
-        self.acquire_block(true).map(|(_, block, _, _)| block)
+        let (index, block, _, _) = self.acquire_block(true)?;
+        if let Some(token) = token {
+            *token = unsafe { &*self.slots[index].frame.get() }.retain();
+        }
+        Some(block)
     }
 
     fn release_in_flight(&self) {
@@ -1292,7 +1298,9 @@ impl DirectPcmRing {
             slot.boundary_duration_micros.store(0, Ordering::Relaxed);
             slot.boundary_generation.store(0, Ordering::Relaxed);
             slot.boundary_exact_integer.store(false, Ordering::Relaxed);
-            unsafe { &mut *slot.frame.get() }.clear();
+            if let Some(frame) = unsafe { &mut *slot.frame.get() }.writable_if_unretained() {
+                frame.clear();
+            }
         }
     }
 }
@@ -1306,7 +1314,7 @@ fn seek_pcm_ring(
     ring.reset_for_transition();
     let first_slot = &ring.slots[0];
     first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
-    let first_frame = unsafe { &mut *first_slot.frame.get() };
+    let first_frame = unsafe { &mut *first_slot.frame.get() }.writable(DirectPcmFrame::new)?;
     let actual_position = decoder.seek_accurate(position_secs, first_frame)?;
     let format = first_frame.format()?;
     ensure!(
@@ -1323,7 +1331,7 @@ fn seek_pcm_ring(
         first_frame.preallocate_repack(format.sample_format, max_samples)?;
         first_frame.repack_planar(format.sample_format, first_frame.sample_offset)?;
         for slot in ring.slots.iter().skip(1) {
-            let frame = unsafe { &mut *slot.frame.get() };
+            let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
             frame.preallocate_repack(format.sample_format, max_samples)?;
         }
     }
@@ -1462,7 +1470,7 @@ fn seek_pcm_segment_ring(
     ring.reset_for_transition();
     let first_slot = &ring.slots[0];
     first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
-    let first_frame = unsafe { &mut *first_slot.frame.get() };
+    let first_frame = unsafe { &mut *first_slot.frame.get() }.writable(DirectPcmFrame::new)?;
     decoder.seek_sample_frame(target_sample, first_frame)?;
     ensure!(
         first_frame.format()? == expected_format,
@@ -1481,6 +1489,7 @@ fn seek_pcm_segment_ring(
         first_frame.repack_planar(expected_format.sample_format, first_frame.sample_offset)?;
         for slot in ring.slots.iter().skip(1) {
             unsafe { &mut *slot.frame.get() }
+                .writable(DirectPcmFrame::new)?
                 .preallocate_repack(expected_format.sample_format, max_samples)?;
         }
     }
@@ -1678,7 +1687,7 @@ fn install_staged_pcm_slot(
     mut staged: StagedPcmSource,
     slot: &DirectPcmSlot,
 ) -> Result<(DirectPcmDecoder, DirectPcmFormat, Option<u64>)> {
-    let frame = unsafe { &mut *slot.frame.get() };
+    let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
     std::mem::swap(frame, &mut staged.first_frame);
     slot.payload_ptr
         .store(frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
@@ -1736,7 +1745,7 @@ fn replace_pcm_ring(
     ring.reset_for_transition();
     let first_slot = &ring.slots[0];
     first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
-    let first_frame = unsafe { &mut *first_slot.frame.get() };
+    let first_frame = unsafe { &mut *first_slot.frame.get() }.writable(DirectPcmFrame::new)?;
     std::mem::swap(first_frame, &mut prepared);
     if new_format.memory_path.needs_repack() {
         let max_samples_per_channel = decoder
@@ -1746,7 +1755,7 @@ fn replace_pcm_ring(
             .checked_mul(usize::from(new_format.channels))
             .context("Source Direct handoff slot 预分配长度溢出")?;
         for slot in ring.slots.iter().skip(1) {
-            let frame = unsafe { &mut *slot.frame.get() };
+            let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
             frame.preallocate_repack(new_format.sample_format, max_samples)?;
         }
     }
@@ -1759,8 +1768,10 @@ fn replace_pcm_ring(
     first_slot
         .sample_frames
         .store(first_frame.samples_per_channel(), Ordering::Relaxed);
-    ring.exact_integer
-        .store(exact_integer_source(&decoder, new_format), Ordering::Release);
+    ring.exact_integer.store(
+        exact_integer_source(&decoder, new_format),
+        Ordering::Release,
+    );
     first_slot.state.store(SLOT_READY, Ordering::Release);
     Ok((decoder, new_format))
 }
@@ -1895,7 +1906,7 @@ impl DirectPcmSource {
         let ring = Arc::new(DirectPcmRing::new()?);
         let first_slot = &ring.slots[0];
         first_slot.state.store(SLOT_FILLING, Ordering::Relaxed);
-        let first_frame = unsafe { &mut *first_slot.frame.get() };
+        let first_frame = unsafe { &mut *first_slot.frame.get() }.writable(DirectPcmFrame::new)?;
         let (actual_position, initial_remaining_frames) = if let Some(start_frame75) = start_frame75
         {
             let (_, remaining, _) = prepare_pcm_segment_first_frame(
@@ -1927,7 +1938,7 @@ impl DirectPcmSource {
             first_frame.preallocate_repack(format.sample_format, max_samples)?;
             first_frame.repack_planar(format.sample_format, first_frame.sample_offset)?;
             for slot in ring.slots.iter().skip(1) {
-                let frame = unsafe { &mut *slot.frame.get() };
+                let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
                 frame.preallocate_repack(format.sample_format, max_samples)?;
             }
         }
@@ -2083,7 +2094,15 @@ impl DirectPcmSource {
                         continue;
                     }
 
-                    let frame = unsafe { &mut *slot.frame.get() };
+                    let frame =
+                        match unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new) {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                slot.state.store(SLOT_FREE, Ordering::Release);
+                                producer_ring.failed.store(true, Ordering::Release);
+                                return;
+                            }
+                        };
                     if remaining_frames == Some(0) {
                         if let Some(entry) = producer_staging.take_current() {
                             match install_staged_pcm_slot(entry.1, slot) {
@@ -2320,7 +2339,24 @@ pub unsafe extern "C" fn direct_pcm_next_block(
         return false;
     }
     let ring = unsafe { &*context.cast::<DirectPcmRing>() };
-    let Some(block) = ring.next_block() else {
+    let Some(block) = ring.next_block(None) else {
+        return false;
+    };
+    unsafe {
+        *data = block.data;
+        *len = block.len;
+    }
+    true
+}
+
+pub(crate) unsafe extern "C" fn diretta_pcm_next_block(
+    context: *mut c_void,
+    data: *mut *const u8,
+    len: *mut usize,
+    token: *mut *const c_void,
+) -> bool {
+    let ring = unsafe { &*context.cast::<DirectPcmRing>() };
+    let Some(block) = ring.next_block(Some(unsafe { &mut *token })) else {
         return false;
     };
     unsafe {
@@ -2990,7 +3026,7 @@ mod tests {
             .expect("解码 WavPack fixture 失败");
         let fixture = TempAudioFile::from_bytes("wv", &encoded);
         let source = DirectPcmSource::open_local(&fixture.path).unwrap();
-        let first_frame = unsafe { &*source.ring.slots[0].frame.get() };
+        let first_frame = unsafe { &*source.ring.slots[0].frame.get() }.data();
         let raw_plane_ptr = unsafe { first_frame.raw.as_ref().data[0] }.cast_const();
         let repack_ptr = first_frame.payload_ptr().unwrap();
 
@@ -3004,7 +3040,7 @@ mod tests {
             .checked_mul(usize::from(source.format().channels))
             .unwrap();
         for slot in &source.ring.slots {
-            let frame = unsafe { &*slot.frame.get() };
+            let frame = unsafe { &*slot.frame.get() }.data();
             match &frame.repack {
                 DirectPcmRepackBuffer::Signed16(buffer) => {
                     assert!(buffer.len() >= initial_samples)
@@ -3064,7 +3100,7 @@ mod tests {
         }
         let fixture = TempAudioFile::wav(96_000, 16, &pcm);
         let source = DirectPcmSource::open_local(&fixture.path).unwrap();
-        let first_frame = unsafe { &*source.ring.slots[0].frame.get() };
+        let first_frame = unsafe { &*source.ring.slots[0].frame.get() }.data();
         let ffmpeg_ptr = first_frame.payload_ptr().unwrap();
 
         assert_eq!(source.format().sample_rate, 96_000);
@@ -3079,6 +3115,33 @@ mod tests {
             first_frame.payload_bytes().unwrap()
         );
         unsafe { direct_pcm_release_block(source.callback_context()) };
+    }
+
+    #[test]
+    fn diretta_pcm_retained_payload_survives_seek() {
+        let pcm: Vec<u8> = (0_usize..256).map(|index| index as u8).collect();
+        let fixture = TempAudioFile::wav(8_000, 16, &pcm);
+        let (mut source, _) = DirectPcmSource::open_diretta_local_at(&fixture.path, 0.0).unwrap();
+        let context = source.callback_context();
+        let (mut old_data, mut old_len, mut old_token) = (ptr::null(), 0, ptr::null());
+        assert!(unsafe {
+            diretta_pcm_next_block(context, &mut old_data, &mut old_len, &mut old_token)
+        });
+        unsafe { direct_pcm_release_block(context) };
+
+        source.seek_while_paused(16.0 / 8_000.0).unwrap();
+        let (mut data, mut len, mut token) = (ptr::null(), 0, ptr::null());
+        assert!(unsafe { diretta_pcm_next_block(context, &mut data, &mut len, &mut token) });
+        assert_eq!(unsafe { slice::from_raw_parts(data, len) }, &pcm[64..]);
+        assert_eq!(
+            unsafe { slice::from_raw_parts(old_data, old_len) },
+            &pcm[..old_len]
+        );
+        unsafe {
+            crate::direct_storage::change_diretta_block_ref(old_token, false);
+            crate::direct_storage::change_diretta_block_ref(token, false);
+            direct_pcm_release_block(context);
+        }
     }
 
     #[test]
@@ -3099,7 +3162,7 @@ mod tests {
             DirectPcmSource::open_local_at(&fixture.path, target_secs).unwrap();
 
         assert_eq!(actual_position, target_secs);
-        let first_frame = unsafe { &*source.ring.slots[0].frame.get() };
+        let first_frame = unsafe { &*source.ring.slots[0].frame.get() }.data();
         let expected_ptr = first_frame.payload_ptr().unwrap();
         let mut data = ptr::null();
         let mut len = 0_usize;
@@ -3296,7 +3359,7 @@ mod tests {
     #[test]
     fn strict_ring_underrun_returns_no_block_instead_of_inserting_silence() {
         let ring = DirectPcmRing::new().unwrap();
-        assert!(ring.next_block().is_none());
+        assert!(ring.next_block(None).is_none());
     }
 
     #[test]

@@ -39,13 +39,15 @@ mod imp {
 
     use super::*;
     use crate::direct_dsd::{
-        direct_dsd_next_block, direct_dsd_release_block, DirectDsdBitOrder, DirectDsdMonitor,
+        direct_dsd_release_block, diretta_dsd_next_block, DirectDsdBitOrder, DirectDsdMonitor,
         DirectDsdSource, DirectDsdStageHandle,
     };
     use crate::direct_pcm::{
-        direct_pcm_next_block, direct_pcm_release_block, DirectPcmMonitor, DirectPcmSource,
+        direct_pcm_release_block, diretta_pcm_next_block, DirectPcmMonitor, DirectPcmSource,
         DirectPcmStageHandle,
     };
+
+    use crate::direct_storage::change_diretta_block_ref;
 
     const TEXT_CAPACITY: usize = 256;
     const MAX_SCAN_DEVICES: usize = 32;
@@ -66,9 +68,14 @@ mod imp {
         }
     }
 
-    type NextBlockCallback =
-        unsafe extern "C" fn(context: *mut c_void, data: *mut *const u8, len: *mut usize) -> bool;
+    type NextBlockCallback = unsafe extern "C" fn(
+        context: *mut c_void,
+        data: *mut *const u8,
+        len: *mut usize,
+        token: *mut *const c_void,
+    ) -> bool;
     type ReleaseBlockCallback = unsafe extern "C" fn(context: *mut c_void);
+    type ChangeBlockRef = unsafe extern "C" fn(token: *const c_void, retain: bool);
 
     unsafe extern "C" {
         fn atom_diretta_last_error() -> *const c_char;
@@ -81,6 +88,7 @@ mod imp {
             source_context: *mut c_void,
             next_block: NextBlockCallback,
             release_block: ReleaseBlockCallback,
+            change_ref: ChangeBlockRef,
         ) -> *mut c_void;
         fn atom_diretta_open_dsd_direct(
             target_id: *const c_char,
@@ -91,6 +99,7 @@ mod imp {
             source_context: *mut c_void,
             next_block: NextBlockCallback,
             release_block: ReleaseBlockCallback,
+            change_ref: ChangeBlockRef,
         ) -> *mut c_void;
         fn atom_diretta_play(handle: *mut c_void) -> bool;
         fn atom_diretta_pause(handle: *mut c_void) -> bool;
@@ -215,8 +224,9 @@ mod imp {
                     format.channels,
                     format.storage_bits,
                     source.callback_context(),
-                    direct_pcm_next_block,
+                    diretta_pcm_next_block,
                     direct_pcm_release_block,
+                    change_diretta_block_ref,
                 )
             };
             let raw = NonNull::new(raw)
@@ -346,8 +356,9 @@ mod imp {
                     source_lsb_first,
                     &mut wire_lsb_first,
                     source.callback_context(),
-                    direct_dsd_next_block,
+                    diretta_dsd_next_block,
                     direct_dsd_release_block,
+                    change_diretta_block_ref,
                 )
             };
             let raw = NonNull::new(raw)
@@ -465,9 +476,9 @@ mod tests {
     fn bridge_pull_callback_is_copy_free_and_native_dsd_has_no_sample_conversion() {
         let bridge = include_str!("../../../diretta-sys/src/bridge.cpp");
         let callback = bridge
-            .split("bool getNewStream(diretta_stream& stream) override")
+            .split("bool pull(diretta_stream& stream)")
             .nth(1)
-            .and_then(|tail| tail.split("private:").next())
+            .and_then(|tail| tail.split("const void* retain(").next())
             .expect("Diretta pull callback body should exist");
         for forbidden in ["memcpy", "setStream", "resize(", "mutex", "new "] {
             assert!(!callback.contains(forbidden));
