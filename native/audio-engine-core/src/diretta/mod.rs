@@ -85,6 +85,7 @@ mod imp {
             sample_rate: u32,
             channels: u16,
             storage_bits: u8,
+            wire_storage_bits: *mut u8,
             source_context: *mut c_void,
             next_block: NextBlockCallback,
             release_block: ReleaseBlockCallback,
@@ -206,7 +207,7 @@ mod imp {
 
         fn open_source(
             selector: &str,
-            source: DirectPcmSource,
+            mut source: DirectPcmSource,
             actual_position: f64,
         ) -> Result<(Self, f64)> {
             let target = selector_target(selector)
@@ -217,12 +218,14 @@ mod imp {
                 source.diretta_integer_source(),
                 "Diretta Source Direct 需要可输出的 integer PCM"
             );
+            let mut wire_storage_bits = format.storage_bits;
             let raw = unsafe {
                 atom_diretta_open_direct(
                     target.as_ptr(),
                     format.sample_rate,
                     format.channels,
                     format.storage_bits,
+                    &mut wire_storage_bits,
                     source.callback_context(),
                     diretta_pcm_next_block,
                     direct_pcm_release_block,
@@ -231,6 +234,12 @@ mod imp {
             };
             let raw = NonNull::new(raw)
                 .ok_or_else(|| last_error("failed to open Diretta Source Direct target"))?;
+            if wire_storage_bits != format.storage_bits {
+                if let Err(error) = source.enable_diretta_s16_widening() {
+                    unsafe { atom_diretta_close(raw.as_ptr()) };
+                    return Err(error);
+                }
+            }
             Ok((Self { raw, source }, actual_position))
         }
 

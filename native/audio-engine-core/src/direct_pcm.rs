@@ -63,6 +63,7 @@ pub struct DirectPcmFrame {
     payload_len: usize,
     sample_offset: usize,
     repack: DirectPcmRepackBuffer,
+    pcm32_wire: Vec<i32>,
 }
 
 impl DirectPcmFrame {
@@ -75,6 +76,7 @@ impl DirectPcmFrame {
             payload_len: 0,
             sample_offset: 0,
             repack: DirectPcmRepackBuffer::None,
+            pcm32_wire: Vec::new(),
         })
     }
 
@@ -117,6 +119,24 @@ impl DirectPcmFrame {
     pub fn payload_bytes(&self) -> Result<&[u8]> {
         let ptr = self.payload_ptr()?;
         Ok(unsafe { slice::from_raw_parts(ptr, self.payload_len) })
+    }
+
+    fn widen_s16_payload(&mut self) -> Result<(*mut u8, usize)> {
+        ensure!(
+            self.format()?.sample_format == DirectPcmSampleFormat::Signed16,
+            "Diretta S32 扩展需要 S16 源样本"
+        );
+        let samples = self.payload_len / size_of::<i16>();
+        let source = unsafe { slice::from_raw_parts(self.payload_ptr()?.cast::<i16>(), samples) };
+        self.pcm32_wire.resize(samples, 0);
+        for (dest, &sample) in self.pcm32_wire.iter_mut().zip(source) {
+            // 用高 16 位保存原样本，低位补零以保持原量程和有效位。
+            *dest = i32::from(sample) << 16;
+        }
+        Ok((
+            self.pcm32_wire.as_mut_ptr().cast(),
+            size_of_val(self.pcm32_wire.as_slice()),
+        ))
     }
 
     fn preallocate_repack(
@@ -1048,6 +1068,9 @@ impl DirectPcmSlot {
 unsafe impl Sync for DirectPcmSlot {}
 
 enum DirectPcmCommand {
+    EnableDirettaS16Widening {
+        response: mpsc::SyncSender<Result<()>>,
+    },
     Seek {
         position_secs: f64,
         response: mpsc::SyncSender<Result<f64>>,
@@ -1067,6 +1090,7 @@ enum DirectPcmCommand {
 
 struct DirectPcmRing {
     slots: Box<[DirectPcmSlot]>,
+    widen_diretta_s16: AtomicBool,
     consumer_index: AtomicUsize,
     in_flight: AtomicUsize,
     consumed_frames: AtomicU64,
@@ -1169,6 +1193,7 @@ impl DirectPcmRing {
         }
         Ok(Self {
             slots: slots.into_boxed_slice(),
+            widen_diretta_s16: AtomicBool::new(false),
             consumer_index: AtomicUsize::new(0),
             in_flight: AtomicUsize::new(NO_SLOT),
             consumed_frames: AtomicU64::new(0),
@@ -1180,6 +1205,34 @@ impl DirectPcmRing {
             failed: AtomicBool::new(false),
             stopped: AtomicBool::new(false),
         })
+    }
+
+    fn publish_payload(&self, slot: &DirectPcmSlot, frame: &mut DirectPcmFrame) -> Result<()> {
+        let (data, len) = if self.widen_diretta_s16.load(Ordering::Relaxed) {
+            frame.widen_s16_payload()?
+        } else {
+            (frame.payload_ptr()?.cast_mut(), frame.payload_len)
+        };
+        slot.payload_ptr.store(data, Ordering::Relaxed);
+        slot.payload_len.store(len, Ordering::Relaxed);
+        slot.sample_frames
+            .store(frame.samples_per_channel(), Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn enable_diretta_s16_widening(&self) -> Result<()> {
+        ensure!(
+            self.in_flight.load(Ordering::Acquire) == NO_SLOT,
+            "Diretta S32 传输槽需在开始播放前配置"
+        );
+        self.widen_diretta_s16.store(true, Ordering::Relaxed);
+        for slot in &self.slots {
+            if slot.state.load(Ordering::Acquire) == SLOT_READY {
+                let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
+                self.publish_payload(slot, frame)?;
+            }
+        }
+        Ok(())
     }
 
     fn acquire_block(
@@ -1335,15 +1388,7 @@ fn seek_pcm_ring(
             frame.preallocate_repack(format.sample_format, max_samples)?;
         }
     }
-    first_slot
-        .payload_ptr
-        .store(first_frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
-    first_slot
-        .payload_len
-        .store(first_frame.payload_len, Ordering::Relaxed);
-    first_slot
-        .sample_frames
-        .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+    ring.publish_payload(first_slot, first_frame)?;
     first_slot.state.store(SLOT_READY, Ordering::Release);
     Ok(actual_position)
 }
@@ -1493,15 +1538,7 @@ fn seek_pcm_segment_ring(
                 .preallocate_repack(expected_format.sample_format, max_samples)?;
         }
     }
-    first_slot
-        .payload_ptr
-        .store(first_frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
-    first_slot
-        .payload_len
-        .store(first_frame.payload_len, Ordering::Relaxed);
-    first_slot
-        .sample_frames
-        .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+    ring.publish_payload(first_slot, first_frame)?;
     first_slot.state.store(SLOT_READY, Ordering::Release);
     Ok((
         offset_sample as f64 / f64::from(sample_rate),
@@ -1685,15 +1722,12 @@ fn prepare_staged_pcm_source(
 
 fn install_staged_pcm_slot(
     mut staged: StagedPcmSource,
+    ring: &DirectPcmRing,
     slot: &DirectPcmSlot,
 ) -> Result<(DirectPcmDecoder, DirectPcmFormat, Option<u64>)> {
     let frame = unsafe { &mut *slot.frame.get() }.writable(DirectPcmFrame::new)?;
     std::mem::swap(frame, &mut staged.first_frame);
-    slot.payload_ptr
-        .store(frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
-    slot.payload_len.store(frame.payload_len, Ordering::Relaxed);
-    slot.sample_frames
-        .store(frame.samples_per_channel(), Ordering::Relaxed);
+    ring.publish_payload(slot, frame)?;
     slot.boundary_duration_micros
         .store(staged.duration_micros, Ordering::Relaxed);
     slot.boundary_generation
@@ -1759,15 +1793,7 @@ fn replace_pcm_ring(
             frame.preallocate_repack(new_format.sample_format, max_samples)?;
         }
     }
-    first_slot
-        .payload_ptr
-        .store(first_frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
-    first_slot
-        .payload_len
-        .store(first_frame.payload_len, Ordering::Relaxed);
-    first_slot
-        .sample_frames
-        .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+    ring.publish_payload(first_slot, first_frame)?;
     ring.exact_integer.store(
         exact_integer_source(&decoder, new_format),
         Ordering::Release,
@@ -1942,15 +1968,7 @@ impl DirectPcmSource {
                 frame.preallocate_repack(format.sample_format, max_samples)?;
             }
         }
-        first_slot
-            .payload_ptr
-            .store(first_frame.payload_ptr()?.cast_mut(), Ordering::Relaxed);
-        first_slot
-            .payload_len
-            .store(first_frame.payload_len, Ordering::Relaxed);
-        first_slot
-            .sample_frames
-            .store(first_frame.samples_per_channel(), Ordering::Relaxed);
+        ring.publish_payload(first_slot, first_frame)?;
         first_slot.state.store(SLOT_READY, Ordering::Release);
 
         let (control_tx, control_rx) = mpsc::channel();
@@ -1965,6 +1983,14 @@ impl DirectPcmSource {
                 let mut next_slot = 1 % producer_ring.slots.len();
                 while !producer_ring.stopped.load(Ordering::Acquire) {
                     match control_rx.try_recv() {
+                        Ok(DirectPcmCommand::EnableDirettaS16Widening { response }) => {
+                            let result = producer_ring.enable_diretta_s16_widening();
+                            if result.is_err() {
+                                producer_ring.failed.store(true, Ordering::Release);
+                            }
+                            let _ = response.send(result);
+                            continue;
+                        }
                         Ok(DirectPcmCommand::Seek {
                             position_secs,
                             response,
@@ -2064,7 +2090,7 @@ impl DirectPcmSource {
                             thread::sleep(Duration::from_millis(1));
                             continue;
                         }
-                        match install_staged_pcm_slot(entry.1, slot) {
+                        match install_staged_pcm_slot(entry.1, &producer_ring, slot) {
                             Ok((new_decoder, new_format, new_remaining)) => {
                                 decoder = new_decoder;
                                 active_format = new_format;
@@ -2105,7 +2131,7 @@ impl DirectPcmSource {
                         };
                     if remaining_frames == Some(0) {
                         if let Some(entry) = producer_staging.take_current() {
-                            match install_staged_pcm_slot(entry.1, slot) {
+                            match install_staged_pcm_slot(entry.1, &producer_ring, slot) {
                                 Ok((new_decoder, new_format, new_remaining)) => {
                                     decoder = new_decoder;
                                     active_format = new_format;
@@ -2144,24 +2170,17 @@ impl DirectPcmSource {
                                 producer_ring.failed.store(true, Ordering::Release);
                                 return;
                             }
-                            let data = match frame.payload_ptr() {
-                                Ok(value) => value,
-                                Err(_) => {
-                                    slot.state.store(SLOT_FREE, Ordering::Release);
-                                    producer_ring.failed.store(true, Ordering::Release);
-                                    return;
-                                }
-                            };
-                            slot.payload_ptr.store(data.cast_mut(), Ordering::Relaxed);
-                            slot.payload_len.store(frame.payload_len, Ordering::Relaxed);
-                            slot.sample_frames
-                                .store(frame.samples_per_channel(), Ordering::Relaxed);
+                            if producer_ring.publish_payload(slot, frame).is_err() {
+                                slot.state.store(SLOT_FREE, Ordering::Release);
+                                producer_ring.failed.store(true, Ordering::Release);
+                                return;
+                            }
                             slot.state.store(SLOT_READY, Ordering::Release);
                             next_slot = (next_slot + 1) % producer_ring.slots.len();
                         }
                         Ok(false) => {
                             if let Some(entry) = producer_staging.take_current() {
-                                match install_staged_pcm_slot(entry.1, slot) {
+                                match install_staged_pcm_slot(entry.1, &producer_ring, slot) {
                                     Ok((new_decoder, new_format, new_remaining)) => {
                                         decoder = new_decoder;
                                         active_format = new_format;
@@ -2262,6 +2281,18 @@ impl DirectPcmSource {
 
     pub fn callback_context(&self) -> *mut c_void {
         Arc::as_ptr(&self.ring).cast_mut().cast()
+    }
+
+    pub(crate) fn enable_diretta_s16_widening(&mut self) -> Result<()> {
+        let (response_tx, response_rx) = mpsc::sync_channel(0);
+        self.control_tx
+            .send(DirectPcmCommand::EnableDirettaS16Widening {
+                response: response_tx,
+            })
+            .context("提交 Diretta S32 传输槽设置失败")?;
+        response_rx
+            .recv()
+            .context("等待 Diretta S32 传输槽设置失败")?
     }
 
     pub fn seek_while_paused(&mut self, position_secs: f64) -> Result<f64> {
@@ -2615,6 +2646,70 @@ mod tests {
         assert!(exact_integer_source(&decoder, frame.format().unwrap()));
         assert!(diretta_integer_source(frame.format().unwrap()));
         assert_eq!(frame.payload_bytes().unwrap(), pcm);
+    }
+
+    #[test]
+    fn diretta_s32_slots_keep_s16_samples_across_decoder_refill_cue_and_seek() {
+        let samples: Vec<i16> = [i16::MIN, i16::MAX, -1, 1, 0, 12345]
+            .into_iter()
+            .cycle()
+            .take(96_000)
+            .collect();
+        let encode = |samples: &[i16]| -> Vec<u8> {
+            samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect()
+        };
+        let first = TempAudioFile::wav(44_100, 16, &encode(&samples));
+        let next_samples: Vec<i16> = samples[..4096].iter().map(|s| !s).collect();
+        let next = TempAudioFile::wav(44_100, 16, &encode(&next_samples));
+        let (mut source, _) = DirectPcmSource::open_diretta_local_at(&first.path, 0.0).unwrap();
+        source.enable_diretta_s16_widening().unwrap();
+        assert!(source.exact_integer_source());
+        assert_eq!(source.format().valid_bits, 16);
+        assert!(source
+            .diretta_stage_handle()
+            .stage_local(&next.path, 0.0, 1, Some(1), Some(2))
+            .unwrap());
+
+        let read_wire = |source: &DirectPcmSource, expected_len: usize| {
+            let mut wire = Vec::new();
+            let context = source.callback_context();
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while wire.len() < expected_len && std::time::Instant::now() < deadline {
+                let (mut data, mut len, mut token) = (ptr::null(), 0, ptr::null());
+                if unsafe { diretta_pcm_next_block(context, &mut data, &mut len, &mut token) } {
+                    let bytes = unsafe { slice::from_raw_parts(data, len) };
+                    let (slots, remainder) = bytes.as_chunks::<4>();
+                    assert!(remainder.is_empty());
+                    wire.extend(slots.iter().map(|slot| i32::from_le_bytes(*slot)));
+                    unsafe { crate::direct_storage::change_diretta_block_ref(token, false) };
+                } else {
+                    thread::sleep(Duration::from_millis(1));
+                }
+            }
+            unsafe { direct_pcm_release_block(context) };
+            wire
+        };
+        let cue = &next_samples[1176..2352];
+        let expected: Vec<i32> = samples
+            .iter()
+            .chain(cue)
+            .map(|&s| i32::from(s) << 16)
+            .collect();
+        assert_eq!(read_wire(&source, expected.len()), expected);
+        assert_eq!(source.monitor().boundary_generation(), 1);
+
+        source.seek_segment_while_paused(1, Some(2), 0.0).unwrap();
+        let expected: Vec<i32> = cue.iter().map(|&s| i32::from(s) << 16).collect();
+        assert_eq!(read_wire(&source, expected.len()), expected);
+
+        source
+            .replace_local_diretta_while_paused(&next.path)
+            .unwrap();
+        let expected: Vec<i32> = next_samples.iter().map(|&s| i32::from(s) << 16).collect();
+        assert_eq!(read_wire(&source, expected.len()), expected);
     }
 
     #[test]

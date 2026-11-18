@@ -445,6 +445,7 @@ void* atom_diretta_open_direct(
   std::uint32_t sample_rate,
   std::uint16_t channels,
   std::uint8_t storage_bits,
+  std::uint8_t* wire_storage_bits,
   void* source_context,
   AtomDirettaNextBlock next_block,
   AtomDirettaReleaseBlock release_block,
@@ -454,7 +455,7 @@ void* atom_diretta_open_direct(
     set_error("Diretta target id is required");
     return nullptr;
   }
-  if (sample_rate == 0 || channels == 0 || source_context == nullptr ||
+  if (sample_rate == 0 || channels == 0 || wire_storage_bits == nullptr || source_context == nullptr ||
       next_block == nullptr || release_block == nullptr || change_ref == nullptr) {
     set_error("invalid Diretta Source Direct configuration");
     return nullptr;
@@ -465,18 +466,25 @@ void* atom_diretta_open_direct(
     return nullptr;
   }
 
-  return open_direct_with_format(
+  const auto alternate = storage_bits == 16
+    ? DIRETTA::FormatID::FMT_PCM_SIGNED_32 : DIRETTA::FormatID::NONE;
+  bool widened = false;
+  auto* connection = open_direct_with_format(
     target_id,
     sample_rate,
     channels,
     format_id,
-    DIRETTA::FormatID::NONE,
+    alternate,
     source_context,
     next_block,
     release_block,
     change_ref,
     "PCM",
-    nullptr);
+    &widened);
+  if (connection != nullptr) {
+    *wire_storage_bits = widened ? 32 : storage_bits;
+  }
+  return connection;
 }
 
 void* atom_diretta_open_dsd_direct(
