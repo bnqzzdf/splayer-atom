@@ -171,6 +171,14 @@ Debian 11 构建在容器内使用 glibc 2.31。默认生成不含 Diretta 的 s
 pnpm package:core:debian11 --without-diretta
 ```
 
+当前提交尚未推送时，加 `--allow-unpublished` 可生成本地测试包。
+
+```bash
+pnpm package:core:debian11 --without-diretta --allow-unpublished
+```
+
+发布包仍要求当前提交可从网络远端获取。
+
 需要内置 Node 时，显式添加 `--bundle-runtime`：
 
 ```bash

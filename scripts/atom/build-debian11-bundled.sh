@@ -22,6 +22,7 @@ DIRETTA_MODE_SET=false
 DIRETTA_VARIANT=${DIRETTA_CPU_VARIANT:-}
 DIRETTA_VARIANT_SET=false
 BUNDLE_RUNTIME=false
+ALLOW_UNPUBLISHED=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -48,10 +49,14 @@ for arg in "$@"; do
     --bundle-runtime)
       BUNDLE_RUNTIME=true
       ;;
+    --allow-unpublished)
+      ALLOW_UNPUBLISHED=true
+      ;;
     --help)
-      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4|zen4] [--bundle-runtime]"
+      echo "用法: pnpm package:core:debian11 [--without-diretta | --with-diretta --diretta-variant=v2|v3|v4|zen4] [--bundle-runtime] [--allow-unpublished]"
       echo "默认生成 system-runtime；传 --bundle-runtime 才内置 Node"
       echo "包含 Diretta 时还需设置 DIRETTA_SDK_ROOT=/path/to/DirettaHostSDK"
+      echo "--allow-unpublished 允许用未发布提交生成本地测试包"
       exit 0
       ;;
     *)
@@ -143,6 +148,7 @@ run_docker run --rm \
   --env "ATOM_DEBIAN11_EXPORT_OWNER=$(id -u):$(id -g)" \
   --env "ATOM_DEBIAN11_DIRETTA_MODE=$DIRETTA_MODE" \
   --env "ATOM_DEBIAN11_BUNDLE_RUNTIME=$BUNDLE_RUNTIME" \
+  --env "ATOM_DEBIAN11_ALLOW_UNPUBLISHED=$ALLOW_UNPUBLISHED" \
   --volume "$ROOT_DIR/docker/atom-debian11/build.sh:/usr/local/bin/atom-debian11-build.sh:ro" \
   --workdir /src \
   "$IMAGE_NAME" \

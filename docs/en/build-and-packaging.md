@@ -206,6 +206,14 @@ package without Diretta, requiring Node `>=22.19.0` on the target machine:
 pnpm package:core:debian11 --without-diretta
 ```
 
+Use `--allow-unpublished` to build a local test package from an unpushed commit.
+
+```bash
+pnpm package:core:debian11 --without-diretta --allow-unpublished
+```
+
+Release packages still require the current commit to be reachable from a network remote.
+
 Add `--bundle-runtime` to include Node:
 
 ```bash

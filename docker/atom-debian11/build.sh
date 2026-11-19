@@ -4,6 +4,7 @@
 # 由 scripts/atom/build-debian11-bundled.sh 通过 docker run 调用，所需环境变量：
 #   ATOM_DEBIAN11_DIRETTA_MODE  with | without
 #   ATOM_DEBIAN11_BUNDLE_RUNTIME  true | false
+#   ATOM_DEBIAN11_ALLOW_UNPUBLISHED  true | false
 #   ATOM_DEBIAN11_EXPORT_OWNER  宿主 UID:GID
 #   DIRETTA_CPU_VARIANT         with 时必填：v2 | v3 | v4 | zen4
 #   DIRETTA_SDK_ROOT            with 时必填，宿主 SDK 只读挂载进来的路径
@@ -56,6 +57,9 @@ if [ "$MODE" = with ]; then
 fi
 if [ "${ATOM_DEBIAN11_BUNDLE_RUNTIME:-false}" = true ]; then
   set -- "$@" --bundle-runtime
+fi
+if [ "${ATOM_DEBIAN11_ALLOW_UNPUBLISHED:-false}" = true ]; then
+  set -- "$@" --allow-unpublished
 fi
 # 与 Core 打包共用时刻，避免给 out/ 中同一形态的旧包加上 Debian 11 标签。
 build_stamp=$(date +%Y%m%d-%H%M%S)
