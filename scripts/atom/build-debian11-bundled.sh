@@ -76,23 +76,23 @@ elif [ "$DIRETTA_VARIANT_SET" = true ]; then
   exit 2
 fi
 
-if [ "$(id -u)" -eq 0 ]; then
-  DOCKER="$DOCKER_BIN"
-elif command -v sudo >/dev/null 2>&1; then
-  DOCKER="sudo $DOCKER_BIN"
+if "$DOCKER_BIN" info >/dev/null 2>&1; then
+  DOCKER_USE_SUDO=false
+elif [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 \
+  && sudo "$DOCKER_BIN" info >/dev/null 2>&1; then
+  DOCKER_USE_SUDO=true
 else
-  DOCKER="$DOCKER_BIN"
-fi
-
-run_docker() {
-  # shellcheck disable=SC2086
-  $DOCKER "$@"
-}
-
-if ! run_docker info >/dev/null 2>&1; then
   echo "[Debian11] Docker 不可用，请确认 Docker daemon 和当前用户权限" >&2
   exit 1
 fi
+
+run_docker() {
+  if [ "$DOCKER_USE_SUDO" = true ]; then
+    sudo "$DOCKER_BIN" "$@"
+  else
+    "$DOCKER_BIN" "$@"
+  fi
+}
 
 echo "[Debian11] 构建镜像: ${IMAGE_NAME}"
 run_docker build \
