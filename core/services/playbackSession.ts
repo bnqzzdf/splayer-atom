@@ -124,8 +124,6 @@ let autoClose = {
   pendingStopOnEnd: false,
 };
 let autoCloseTimer: NodeJS.Timeout | null = null;
-let upnpObservedGeneration = -1;
-let upnpSeenPlaying = false;
 let upnpEndedGeneration = -1;
 
 const MAX_CONSECUTIVE_LOAD_FAILURES = 5;
@@ -320,15 +318,10 @@ const publishUpnpObservedStatus = (remote: UpnpOutputStatus = getUpnpOutputStatu
   });
 };
 
-const isNearUpnpEnd = (remote: UpnpOutputStatus): boolean => {
-  if (remote.duration <= 0) return false;
-  const tolerance = Math.max(2000, Math.min(5000, Math.round(remote.duration * 0.02)));
-  return remote.position >= Math.max(0, remote.duration - tolerance);
-};
-
 const handleUpnpNaturalEnd = (): void => {
   if (!ownsPlayback()) return;
   if (autoClose.pendingStopOnEnd) {
+    stopCurrentOutputBestEffort();
     resetAutoClose();
     publish();
     scheduleNextPlaybackPreload();
@@ -343,19 +336,9 @@ const handleUpnpNaturalEnd = (): void => {
 
 const handleUpnpObservation = (observation: UpnpOutputObservation): void => {
   if (!isUpnpSelected() || getSelectedUpnpOutput() !== selectedOutputId()) return;
-  if (observation.generation !== upnpObservedGeneration) {
-    upnpObservedGeneration = observation.generation;
-    upnpSeenPlaying = false;
-  }
   const remote = observation.status;
-  if (remote.state === "playing") upnpSeenPlaying = true;
   publishUpnpObservedStatus(remote);
-  if (
-    remote.state === "stopped" &&
-    upnpSeenPlaying &&
-    observation.generation !== upnpEndedGeneration &&
-    isNearUpnpEnd(remote)
-  ) {
+  if (remote.isFinished && observation.generation !== upnpEndedGeneration) {
     upnpEndedGeneration = observation.generation;
     handleUpnpNaturalEnd();
   }

@@ -68,9 +68,10 @@ test("basic UPnP output does not modify the native AudioPlayer surface", () => {
 test("UPnP P2 keeps renderer observations and output switching inside existing Core authority", () => {
   assert.match(upnpOutput, /const runCommand = <T>/);
   assert.match(upnpOutput, /setUpnpOutputObserver/);
+  assert.match(upnpOutput, /advanceUpnpEndTracker/);
+  assert.match(upnpOutput, /isNearUpnpEnd/);
   assert.match(session, /handleUpnpObservation/);
-  assert.match(session, /upnpSeenPlaying/);
-  assert.match(session, /isNearUpnpEnd/);
+  assert.match(session, /remote\.isFinished && observation\.generation !== upnpEndedGeneration/);
   assert.match(session, /prepareUpnpOutput\(deviceId!\)/);
   assert.doesNotMatch(session, /切换到 UPnP 将在 P2 实现|从 UPnP 切换输出将在 P2 实现/);
 });
@@ -203,5 +204,8 @@ test("UPnP CUE and SACD extraction stay behind the Atom media seam", () => {
   assert.match(coreExtract, /DirectPcmDecoder::open_local/);
   assert.match(coreExtract, /SacdTrackReader::open_track_raw/);
   assert.match(coreExtract, /extract_sacd_track_to_dsdiff/);
-  assert.doesNotMatch(nativePlayer, /extractCueWav|extractCueDsf|extractSacdDsf|extractSacdDff|media_extract/i);
+  assert.doesNotMatch(
+    nativePlayer,
+    /extractCueWav|extractCueDsf|extractSacdDsf|extractSacdDff|media_extract/i,
+  );
 });

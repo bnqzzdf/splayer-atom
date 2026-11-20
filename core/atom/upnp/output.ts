@@ -17,6 +17,7 @@ import {
 } from "@main/atom/upnp/media";
 
 const POLL_INTERVAL_MS = 1000;
+const NEAR_END_STALL_POLLS = 2;
 
 export interface UpnpOutputStatus {
   state: PlayerState;
@@ -29,6 +30,67 @@ export interface UpnpOutputObservation {
   generation: number;
   status: UpnpOutputStatus;
 }
+
+export interface UpnpEndTracker {
+  seenPlaying: boolean;
+  reachedNearEnd: boolean;
+  lastPlayingPosition: number;
+  stalledNearEndPolls: number;
+}
+
+export const createUpnpEndTracker = (): UpnpEndTracker => ({
+  seenPlaying: false,
+  reachedNearEnd: false,
+  lastPlayingPosition: -1,
+  stalledNearEndPolls: 0,
+});
+
+export const isNearUpnpEnd = (positionMs: number, durationMs: number): boolean => {
+  if (durationMs <= 0 || positionMs <= 0) return false;
+  const tolerance = Math.max(2000, Math.min(5000, Math.round(durationMs * 0.02)));
+  return positionMs >= Math.max(0, durationMs - tolerance);
+};
+
+// 部分 Renderer（如 DirettaRenderer syncBuffer）在单曲播完后仍维持 PLAYING，
+// 需结合曲尾位置停滞或曲尾后 RelTime 归零判定自然播完。
+export const advanceUpnpEndTracker = (
+  tracker: UpnpEndTracker,
+  sample: {
+    state: PlayerState;
+    positionMs: number;
+    durationMs: number;
+    positionAvailable: boolean;
+  },
+): { tracker: UpnpEndTracker; isFinished: boolean } => {
+  const { state, positionMs, durationMs, positionAvailable } = sample;
+  if (state === "playing") {
+    const next: UpnpEndTracker = { ...tracker, seenPlaying: true };
+    if (!positionAvailable || durationMs <= 0) return { tracker: next, isFinished: false };
+    if (tracker.reachedNearEnd && positionMs === 0) return { tracker: next, isFinished: true };
+    if (isNearUpnpEnd(positionMs, durationMs)) {
+      if (tracker.seenPlaying) next.reachedNearEnd = true;
+      next.stalledNearEndPolls =
+        tracker.lastPlayingPosition >= 0 && positionMs <= tracker.lastPlayingPosition
+          ? tracker.stalledNearEndPolls + 1
+          : 0;
+    } else {
+      next.reachedNearEnd = false;
+      next.stalledNearEndPolls = 0;
+    }
+    next.lastPlayingPosition = positionMs;
+    return { tracker: next, isFinished: next.stalledNearEndPolls >= NEAR_END_STALL_POLLS };
+  }
+  const next: UpnpEndTracker = {
+    ...tracker,
+    lastPlayingPosition: -1,
+    stalledNearEndPolls: 0,
+  };
+  const isFinished =
+    state === "stopped" &&
+    tracker.seenPlaying &&
+    (isNearUpnpEnd(positionMs, durationMs) || tracker.reachedNearEnd);
+  return { tracker: next, isFinished };
+};
 
 interface UpnpLoadOptions {
   filePath: string;
@@ -44,6 +106,8 @@ let selectedId: string | null = null;
 let selectedDescriptor: UpnpRendererDescriptor | null = null;
 let currentResource: UpnpMediaResource | null = null;
 let generation = 0;
+let positionEpoch = 0;
+let endTracker: UpnpEndTracker = createUpnpEndTracker();
 let status: UpnpOutputStatus = {
   state: "stopped",
   position: 0,
@@ -106,23 +170,38 @@ const refreshStatus = async (): Promise<void> => {
   if (refreshPending) return refreshPending;
   refreshPending = (async () => {
     const refreshGeneration = generation;
+    const refreshEpoch = positionEpoch;
     const renderer = await ensureDescriptor();
     const transportState = await getTransportInfo(renderer);
-    const position = await getPositionInfo(renderer).catch(() => ({
-      positionMs: status.position,
-      durationMs: status.duration,
-    }));
-    if (refreshGeneration !== generation) return;
+    let positionAvailable = true;
+    const position = await getPositionInfo(renderer).catch(() => {
+      positionAvailable = false;
+      return {
+        positionMs: status.position,
+        durationMs: status.duration,
+      };
+    });
+    if (refreshGeneration !== generation || refreshEpoch !== positionEpoch) return;
     const nextState = mapTransportState(transportState);
+    const duration = position.durationMs || status.duration;
+    const evaluated = advanceUpnpEndTracker(endTracker, {
+      state: nextState,
+      positionMs: position.positionMs,
+      durationMs: duration,
+      positionAvailable,
+    });
+    endTracker = evaluated.tracker;
     const observedPosition =
-      nextState === "stopped" && position.positionMs === 0 && status.position > 0
+      (nextState === "stopped" || evaluated.isFinished) &&
+      position.positionMs === 0 &&
+      status.position > 0
         ? status.position
         : position.positionMs;
     status = {
       state: nextState,
       position: observedPosition,
-      duration: position.durationMs || status.duration,
-      isFinished: false,
+      duration,
+      isFinished: evaluated.isFinished,
     };
     notifyObserver();
   })().finally(() => {
@@ -176,6 +255,9 @@ export const setUpnpOutputObserver = (
 /** 为当前 Renderer 设置一个已经准备好的本地媒体文件。 */
 export const loadUpnpFile = async (options: UpnpLoadOptions): Promise<void> => {
   const nextGeneration = ++generation;
+  ++positionEpoch;
+  endTracker = createUpnpEndTracker();
+  stopPolling();
   status = {
     state: "loading",
     position: 0,
@@ -230,6 +312,12 @@ export const playUpnpOutput = async (): Promise<void> => {
 };
 
 export const pauseUpnpOutput = async (): Promise<void> => {
+  ++positionEpoch;
+  endTracker = {
+    ...endTracker,
+    lastPlayingPosition: -1,
+    stalledNearEndPolls: 0,
+  };
   await runCommand(async () => {
     const renderer = await ensureDescriptor();
     await pauseAvTransport(renderer);
@@ -242,6 +330,8 @@ export const pauseUpnpOutput = async (): Promise<void> => {
 
 export const stopUpnpOutput = async (): Promise<void> => {
   ++generation;
+  ++positionEpoch;
+  endTracker = createUpnpEndTracker();
   stopPolling();
   try {
     await runCommand(async () => {
@@ -257,12 +347,25 @@ export const stopUpnpOutput = async (): Promise<void> => {
   }
 };
 
+const resetSeekEndTracker = (): void => {
+  ++positionEpoch;
+  endTracker = {
+    ...endTracker,
+    reachedNearEnd: false,
+    lastPlayingPosition: -1,
+    stalledNearEndPolls: 0,
+  };
+};
+
 export const seekUpnpOutput = async (positionMs: number): Promise<void> => {
+  const target = Math.max(0, positionMs);
+  resetSeekEndTracker();
   await runCommand(async () => {
     const renderer = await ensureDescriptor();
-    await seekAvTransport(renderer, Math.max(0, positionMs));
+    await seekAvTransport(renderer, target);
   });
-  status = { ...status, position: Math.max(0, positionMs) };
+  resetSeekEndTracker();
+  status = { ...status, position: target, isFinished: false };
   notifyObserver();
 };
 
@@ -271,6 +374,8 @@ export const getUpnpOutputStatus = (): UpnpOutputStatus => ({ ...status });
 /** 释放 UPnP 执行态，不影响 Core 持久化的 output preference。 */
 export const releaseUpnpOutput = async (): Promise<void> => {
   ++generation;
+  ++positionEpoch;
+  endTracker = createUpnpEndTracker();
   stopPolling();
   const previous = currentResource;
   currentResource = null;
