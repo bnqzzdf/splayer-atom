@@ -706,6 +706,13 @@
       "clean": "Clean",
       "dirty": "Dirty（含未提交修改）",
       "direttaSdk": "Diretta SDK",
+      "logLevel": "运行时日志级别",
+      "logLevelHint": "仅本次运行生效，重启 Core 后恢复默认（{level}）",
+      "logLevelUpdated": "日志级别已切换为 {level}",
+      "logLevelFailed": "切换日志级别失败",
+      "exportDiagnostics": "导出诊断信息",
+      "exportDiagnosticsSuccess": "已导出脱敏诊断信息",
+      "exportDiagnosticsFailed": "导出诊断信息失败",
       "thanks": {
         "splayerNext": "SPlayer Atom 基于此项目修改与重构，没有 SPlayer-Next 就没有本项目",
         "appleMusicLyrics": "类 Apple Music 歌词显示组件库",

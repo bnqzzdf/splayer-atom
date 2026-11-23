@@ -706,6 +706,13 @@
       "clean": "Clean",
       "dirty": "Dirty (uncommitted changes)",
       "direttaSdk": "Diretta SDK",
+      "logLevel": "Runtime Log Level",
+      "logLevelHint": "In-memory only; resets to default ({level}) after Core restarts",
+      "logLevelUpdated": "Log level switched to {level}",
+      "logLevelFailed": "Failed to switch log level",
+      "exportDiagnostics": "Export Diagnostics",
+      "exportDiagnosticsSuccess": "Redacted diagnostics exported",
+      "exportDiagnosticsFailed": "Failed to export diagnostics",
       "thanks": {
         "splayerNext": "SPlayer Atom is adapted and rebuilt from this project; it would not exist without SPlayer-Next",
         "appleMusicLyrics": "Apple Music-style lyrics rendering library",

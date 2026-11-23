@@ -10,13 +10,18 @@ import { CORE_NODE_RANGE, CORE_NODE_REFERENCE } from "./nodeRuntime";
 interface NativeBuildMetadata {
   diretta?: boolean;
   direttaSdkRelease?: number;
+  direttaCpuVariant?: string | null;
 }
 
 interface RuntimeReleaseMetadata {
   atomVersion?: string;
   atomCommit?: string;
   sourceDirty?: boolean;
+  buildDate?: string | null;
+  nodeBundled?: boolean;
+  bunBundled?: boolean;
   direttaSdkRelease?: number | null;
+  direttaCpuVariant?: string | null;
 }
 
 const envText = (name: string): string | null => {
@@ -92,7 +97,26 @@ export const getCoreInfo = (): CoreInfo => {
       nativeBuild.diretta === true
         ? (release.direttaSdkRelease ?? nativeBuild.direttaSdkRelease ?? null)
         : null,
+    direttaCpuVariant:
+      nativeBuild.diretta === true
+        ? (release.direttaCpuVariant ?? nativeBuild.direttaCpuVariant ?? null)
+        : null,
     protocol: { version: CORE_PROTOCOL_VERSION },
     capabilities: getCoreCapabilities(),
+  };
+};
+
+export const getCoreRuntimeBuildDetails = (): {
+  buildDate: string | null;
+  nodeBundled: boolean | null;
+  bunBundled: boolean | null;
+  packaged: boolean;
+} => {
+  const release = readRuntimeReleaseMetadata();
+  return {
+    buildDate: release.buildDate ?? null,
+    nodeBundled: typeof release.nodeBundled === "boolean" ? release.nodeBundled : null,
+    bunBundled: typeof release.bunBundled === "boolean" ? release.bunBundled : null,
+    packaged: runtimeEnvironment.isPackaged,
   };
 };

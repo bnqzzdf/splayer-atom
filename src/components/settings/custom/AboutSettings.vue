@@ -1,8 +1,19 @@
 <script setup lang="ts">
-import type { CoreInfo } from "@shared/types/core";
+import {
+  CORE_LOG_LEVELS,
+  type CoreInfo,
+  type CoreLogLevel,
+  type CoreLogLevelSnapshot,
+} from "@shared/types/core";
 import { getContributors, type Contributor } from "@/apis/github";
-import { getCoreInfo } from "@/core/controlClient";
+import {
+  getCoreDiagnostics,
+  getCoreInfo,
+  getCoreLogLevel,
+  setCoreLogLevel,
+} from "@/core/controlClient";
 import { useCopyText } from "@/composables/useCopyText";
+import { toast } from "@/composables/useToast";
 import ProductBrand from "@/components/brand/ProductBrand.vue";
 import { openExternal } from "@/utils/url";
 import { shortCommit } from "@/utils/commit";
@@ -24,6 +35,14 @@ const { t } = useI18n();
 const { copy } = useCopyText();
 /** 当前连接 Core 的 release / protocol 信息。 */
 const coreInfo = shallowRef<CoreInfo | null>(null);
+const logLevel = ref<CoreLogLevelSnapshot | null>(null);
+const switchingLogLevel = ref(false);
+const exportingDiagnostics = ref(false);
+
+const logLevelOptions = CORE_LOG_LEVELS.map((level) => ({
+  value: level,
+  label: level,
+}));
 
 interface EnvItem {
   label: string;
@@ -52,7 +71,14 @@ const envItems = computed<EnvItem[]>(() => {
       ? [
           coreRuntime(info),
           ...(info.capabilities.diretta && info.direttaSdkRelease
-            ? [{ label: "Diretta", value: `SDK ${info.direttaSdkRelease}` }]
+            ? [
+                {
+                  label: "Diretta",
+                  value: info.direttaCpuVariant
+                    ? `SDK ${info.direttaSdkRelease} (${info.direttaCpuVariant})`
+                    : `SDK ${info.direttaSdkRelease}`,
+                },
+              ]
             : []),
         ]
       : []),
@@ -96,6 +122,54 @@ const handleCopyEnvInfo = (): void => {
   copy(info);
 };
 
+const formatDiagnosticStamp = (date: Date): string => {
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+};
+
+const handleLogLevelChange = async (value: string | number | boolean): Promise<void> => {
+  if (switchingLogLevel.value) return;
+  const next = String(value) as CoreLogLevel;
+  if (!CORE_LOG_LEVELS.includes(next)) return;
+  switchingLogLevel.value = true;
+  try {
+    logLevel.value = await setCoreLogLevel(next);
+    toast.success(t("settings.about.logLevelUpdated", { level: logLevel.value.level }));
+  } catch (error) {
+    console.error("切换日志级别失败:", error);
+    toast.error(t("settings.about.logLevelFailed"));
+  } finally {
+    switchingLogLevel.value = false;
+  }
+};
+
+const handleExportDiagnostics = async (): Promise<void> => {
+  if (exportingDiagnostics.value) return;
+  exportingDiagnostics.value = true;
+  try {
+    const snapshot = await getCoreDiagnostics();
+    const version = (snapshot.core.version || APP_VERSION).replace(/[^a-zA-Z0-9._-]/g, "-");
+    const filename = `splayer-atom-diagnostics-${version}-${formatDiagnosticStamp(new Date())}.json`;
+    const blob = new Blob([`${JSON.stringify(snapshot, null, 2)}\n`], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success(t("settings.about.exportDiagnosticsSuccess"));
+  } catch (error) {
+    console.error("导出诊断信息失败:", error);
+    toast.error(t("settings.about.exportDiagnosticsFailed"));
+  } finally {
+    exportingDiagnostics.value = false;
+  }
+};
+
 interface Dependency {
   name: string;
   description: string;
@@ -137,12 +211,15 @@ const visibleDevelopers = computed(() =>
 const hasMoreDevelopers = computed(() => developers.value.length > 6);
 
 onMounted(async () => {
-  const [coreResult, contributorsResult] = await Promise.allSettled([
+  const [coreResult, logLevelResult, contributorsResult] = await Promise.allSettled([
     getCoreInfo(),
+    getCoreLogLevel(),
     getContributors(),
   ]);
   if (coreResult.status === "fulfilled") coreInfo.value = coreResult.value;
   else console.error("获取 Core 信息失败:", coreResult.reason);
+  if (logLevelResult.status === "fulfilled") logLevel.value = logLevelResult.value;
+  else console.error("获取日志级别失败:", logLevelResult.reason);
   if (contributorsResult.status === "fulfilled") developers.value = contributorsResult.value;
   else console.error("获取贡献者失败:", contributorsResult.reason);
 });
@@ -270,14 +347,25 @@ onMounted(async () => {
 
     <!-- 环境信息 -->
     <section>
-      <div class="flex items-center justify-between mb-3 px-1">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
         <h3 class="flex items-center gap-2 text-lg font-semibold text-on-surface">
           <span class="w-0.75 h-4 rounded-full bg-primary" />
           {{ t("settings.section.envInfo") }}
         </h3>
-        <SButton variant="ghost" circle size="small" @click="handleCopyEnvInfo">
-          <template #icon><IconLucideCopy /></template>
-        </SButton>
+        <div class="flex items-center gap-1.5">
+          <SButton
+            variant="ghost"
+            size="small"
+            :disabled="exportingDiagnostics"
+            @click="handleExportDiagnostics"
+          >
+            <template #icon><IconLucideDownload /></template>
+            {{ t("settings.about.exportDiagnostics") }}
+          </SButton>
+          <SButton variant="ghost" circle size="small" @click="handleCopyEnvInfo">
+            <template #icon><IconLucideCopy /></template>
+          </SButton>
+        </div>
       </div>
       <SCard
         variant="settings"
@@ -300,6 +388,25 @@ onMounted(async () => {
             <IconLucideArrowUpRight class="size-3 shrink-0" />
           </a>
           <span v-else class="text-on-surface break-words">{{ item.value }}</span>
+        </div>
+        <div
+          v-if="logLevel"
+          class="pt-3 mt-3 border-t border-outline/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 select-none"
+        >
+          <div class="min-w-0">
+            <div class="text-sm text-on-surface">{{ t("settings.about.logLevel") }}</div>
+            <div class="text-xs text-on-surface/60">
+              {{ t("settings.about.logLevelHint", { level: logLevel.defaultLevel }) }}
+            </div>
+          </div>
+          <div class="w-32 shrink-0">
+            <SSelect
+              :model-value="logLevel.level"
+              :options="logLevelOptions"
+              :disabled="switchingLogLevel"
+              @update:model-value="handleLogLevelChange"
+            />
+          </div>
         </div>
       </SCard>
     </section>

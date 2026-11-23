@@ -35,6 +35,8 @@ import {
   type CacheKind,
 } from "@main/services/cache";
 import { getCoreInfo } from "@main/atom/runtime/coreInfo";
+import { collectCoreDiagnostics } from "@main/atom/runtime/diagnostics";
+import { coreLog, getLogLevelSnapshot, parseLogLevel, setLogLevel } from "@main/utils/logger";
 import { loadPlayerSource } from "@main/services/playerLoad";
 import {
   callProviderApi,
@@ -403,6 +405,19 @@ export const buildHeadlessRoutes = (): Hono => {
   });
 
   api.post("/system/network-proxy/test", async (c) => c.json({ ok: await testNetworkProxy() }));
+  api.get("/system/log-level", (c) => c.json(getLogLevelSnapshot()));
+  api.post("/system/log-level", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { level?: unknown } | null;
+    const level = typeof body?.level === "string" ? parseLogLevel(body.level) : null;
+    if (!level) return c.json({ error: "invalid_log_level" }, 400);
+    const snapshot = setLogLevel(level);
+    coreLog.info(`运行时日志级别已切换为 ${snapshot.level}`);
+    return c.json(snapshot);
+  });
+  api.get("/system/diagnostics", async (c) => {
+    c.header("Cache-Control", "no-store");
+    return c.json(await collectCoreDiagnostics());
+  });
 
   api.post("/providers/call", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {

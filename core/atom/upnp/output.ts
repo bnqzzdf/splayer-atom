@@ -371,6 +371,19 @@ export const seekUpnpOutput = async (positionMs: number): Promise<void> => {
 
 export const getUpnpOutputStatus = (): UpnpOutputStatus => ({ ...status });
 
+export const getCachedUpnpRenderers = (): Array<{
+  id: string;
+  name: string;
+  avTransportService: string;
+  hasConnectionManager: boolean;
+}> =>
+  [...descriptors.values()].map((renderer) => ({
+    id: renderer.id,
+    name: renderer.name,
+    avTransportService: renderer.avTransport.serviceType,
+    hasConnectionManager: Boolean(renderer.connectionManager),
+  }));
+
 /** 释放 UPnP 执行态，不影响 Core 持久化的 output preference。 */
 export const releaseUpnpOutput = async (): Promise<void> => {
   ++generation;

@@ -1,5 +1,10 @@
 import { assertCoreProtocolCompatible } from "@shared/constants/coreProtocol";
-import type { CoreInfo } from "@shared/types/core";
+import type {
+  CoreDiagnosticsSnapshot,
+  CoreInfo,
+  CoreLogLevel,
+  CoreLogLevelSnapshot,
+} from "@shared/types/core";
 import type { IpcResponse } from "@shared/types/player";
 
 const location = typeof window !== "undefined" ? window.location : null;
@@ -77,3 +82,15 @@ export const coreCommand = async (path: string, body?: unknown): Promise<IpcResp
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };
+
+export const getCoreLogLevel = (): Promise<CoreLogLevelSnapshot> =>
+  request<CoreLogLevelSnapshot>("/system/log-level");
+
+export const setCoreLogLevel = (level: CoreLogLevel): Promise<CoreLogLevelSnapshot> =>
+  request<CoreLogLevelSnapshot>("/system/log-level", {
+    method: "POST",
+    body: JSON.stringify({ level }),
+  });
+
+export const getCoreDiagnostics = (): Promise<CoreDiagnosticsSnapshot> =>
+  request<CoreDiagnosticsSnapshot>("/system/diagnostics");
