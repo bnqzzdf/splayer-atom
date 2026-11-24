@@ -180,12 +180,17 @@ if [ -n "$SERVICE_USER" ]; then
 fi
 
 stop_service() {
+    _keep_native=${1:-0}
     if [ "$INIT" = systemd ] && command -v systemctl >/dev/null 2>&1; then
         systemctl stop splayer-atom-core >/dev/null 2>&1 || true
     elif [ "$INIT" = openrc ] && command -v rc-service >/dev/null 2>&1; then
         rc-service splayer-atom-core stop >/dev/null 2>&1 || true
     elif [ "$INIT" = audiosys ] && [ -x "$PREFIX/service/splayeratomctl.sh" ]; then
-        "$PREFIX/service/splayeratomctl.sh" -Action stop >/dev/null 2>&1 || true
+        if [ "$_keep_native" = 1 ]; then
+            "$PREFIX/service/splayeratomctl.sh" -Action stop -KeepNative >/dev/null 2>&1 || true
+        else
+            "$PREFIX/service/splayeratomctl.sh" -Action stop >/dev/null 2>&1 || true
+        fi
     fi
 }
 
@@ -236,9 +241,6 @@ uninstall() {
         rc-update del splayer-atom-core default >/dev/null 2>&1 || true
         rm -f /etc/init.d/splayer-atom-core /etc/conf.d/splayer-atom-core
     elif [ "$INIT" = audiosys ]; then
-        if [ -x "$PREFIX/service/splayeratomctl.sh" ]; then
-            "$PREFIX/service/splayeratomctl.sh" -Action stop >/dev/null 2>&1 || true
-        fi
         if [ -x "$PREFIX/service/install-audiosys.sh" ]; then
             "$PREFIX/service/install-audiosys.sh" uninstall >/dev/null 2>&1 || true
         fi
@@ -258,7 +260,7 @@ uninstall() {
 rollback() {
     latest=$(find "$PREFIX" -maxdepth 1 -type d -name '.backup-*' 2>/dev/null | sort | tail -1)
     [ -n "$latest" ] || die "没有可回滚的备份"
-    stop_service
+    stop_service 1
     for item in app renderer node_modules runtime bin service docs variants native runtime.json install.sh; do
         rm -rf "$PREFIX/$item"
     done
@@ -271,7 +273,7 @@ rollback() {
 if [ "$ACTION" = uninstall ]; then uninstall; exit 0; fi
 if [ "$ACTION" = rollback ]; then rollback; exit 0; fi
 
-stop_service
+stop_service 1
 BACKUP=""
 if [ -d "$PREFIX/app" ]; then
     BACKUP="$PREFIX/.backup-$(date +%Y%m%d-%H%M%S)"

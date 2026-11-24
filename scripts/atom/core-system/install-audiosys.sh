@@ -1,5 +1,5 @@
 #!/bin/sh
-# AudioSys 安装适配：写 CONFIG/networkfs.sh 开机钩子、建软链、注入网页菜单卡片。
+# AudioSys 安装适配：优先写入官方增量目录 auto_start.sh，旧固件回退 CONFIG/networkfs.sh，并建软链与菜单卡片。
 # 用法：install-audiosys.sh install|uninstall
 set -u
 export LC_ALL=C LANG=C
@@ -11,6 +11,8 @@ CTL="$ATOM_DIR/service/splayeratomctl.sh"
 MENU="$ATOM_DIR/service/splayeratom-menu.sh"
 HOOK_BEGIN='# >>> splayeratom (added by install-audiosys.sh) >>>'
 HOOK_END='# <<< splayeratom <<<'
+SCRIPT_SERVER_LIVE=${ATOM_SCRIPT_SERVER_LIVE:-/opt/script-server}
+SCRIPT_SERVER_SYNC=${ATOM_SCRIPT_SERVER_SYNC:-/audiosys/sync/opt/script-server}
 CFG_MNT=""
 CFG_OWN_MOUNT=0
 CFG_REMOUNT_RO=0
@@ -18,6 +20,18 @@ CFG_REMOUNT_RO=0
 die() { echo "[AtomAudioSys] $*" >&2; exit 1; }
 info() { echo "[AtomAudioSys] $*"; }
 warn() { echo "[AtomAudioSys][WARN] $*" >&2; }
+
+use_auto_start() {
+    [ -f "$SCRIPT_SERVER_LIVE/function/utils.sh" ] && [ -d "${ATOM_AUDIOSYS_DIR:-/audiosys}" ]
+}
+
+check_script_syntax() {
+    if command -v bash >/dev/null 2>&1; then
+        bash -n "$1" 2>/dev/null
+    else
+        sh -n "$1" 2>/dev/null
+    fi
+}
 
 find_cfg() {
     CFG_MNT=""
@@ -96,24 +110,62 @@ append_hook() {
     cat >> "$1" <<EOF
 
 $HOOK_BEGIN
-# AudioSys: /opt is RAM-backed. Recreate the control link and web-menu card
-# on every boot, and start Atom only when the persistent enable flag exists.
 if [ -x "$CTL" ]; then
-    mkdir -p /usr/local/bin 2>/dev/null
-    ln -sf "$CTL" /usr/local/bin/splayeratomctl 2>/dev/null
-    if [ -x "$MENU" ]; then
-        sh "$MENU" >/dev/null 2>&1 || true
-    fi
-    if [ -f "$ATOM_DIR/enable" ] && [ ! -e /tmp/splayeratom-hook.done ]; then
-        touch /tmp/splayeratom-hook.done 2>/dev/null || true
-        ( sleep 35; "$CTL" -Action start >/dev/null 2>&1 & ) >/dev/null 2>&1 &
-    fi
+    "$CTL" -Action boot
 fi
 $HOOK_END
 EOF
 }
 
-write_hook() {
+write_auto_start_hook() {
+    src=""
+    if [ -f "$SCRIPT_SERVER_SYNC/function/auto_start.sh" ]; then
+        src="$SCRIPT_SERVER_SYNC/function/auto_start.sh"
+    elif [ -f "$SCRIPT_SERVER_LIVE/function/auto_start.sh" ]; then
+        src="$SCRIPT_SERVER_LIVE/function/auto_start.sh"
+    fi
+    tmp="/tmp/.splayeratom-autostart.$$"
+    if [ -n "$src" ]; then
+        strip_hook "$src" > "$tmp" || { rm -f "$tmp"; return 1; }
+    else
+        printf '#!/bin/bash\n' > "$tmp"
+    fi
+    append_hook "$tmp"
+    if ! check_script_syntax "$tmp"; then
+        rm -f "$tmp"
+        die "生成的 auto_start.sh 语法检查失败，未覆盖原文件"
+    fi
+    for base in "$SCRIPT_SERVER_SYNC" "$SCRIPT_SERVER_LIVE"; do
+        mkdir -p "$base/function" 2>/dev/null || { rm -f "$tmp"; die "无法创建目录：$base/function"; }
+        cp "$tmp" "$base/function/auto_start.sh" || { rm -f "$tmp"; die "写入 $base/function/auto_start.sh 失败"; }
+        chmod 0755 "$base/function/auto_start.sh" 2>/dev/null || true
+    done
+    rm -f "$tmp"
+    sync 2>/dev/null || true
+    info "已写入官方增量开机钩子：$SCRIPT_SERVER_SYNC/function/auto_start.sh"
+    return 0
+}
+
+remove_auto_start_hook() {
+    for base in "$SCRIPT_SERVER_SYNC" "$SCRIPT_SERVER_LIVE"; do
+        target="$base/function/auto_start.sh"
+        [ -f "$target" ] || continue
+        grep -qF "$HOOK_BEGIN" "$target" 2>/dev/null || continue
+        tmp="/tmp/.splayeratom-autostart.$$"
+        strip_hook "$target" > "$tmp" || { rm -f "$tmp"; continue; }
+        if check_script_syntax "$tmp"; then
+            cp "$tmp" "$target" 2>/dev/null || true
+            chmod 0755 "$target" 2>/dev/null || true
+            info "已移除开机钩子：$target"
+        else
+            warn "剥离钩子后的 $target 语法检查失败，已保留原文件"
+        fi
+        rm -f "$tmp"
+    done
+    sync 2>/dev/null || true
+}
+
+write_cfg_hook() {
     find_cfg || { warn "未找到 CONFIG 分区（LABEL=CONFIG）；开机钩子未写入"; return 1; }
     hook="$CFG_MNT/networkfs.sh"
     ts=$(date +%Y%m%d-%H%M%S)
@@ -134,12 +186,16 @@ write_hook() {
     return 0
 }
 
-remove_hook() {
-    find_cfg || { warn "未找到 CONFIG 分区；钩子可能仍残留"; return 1; }
+remove_cfg_hook() {
+    quiet=${1:-0}
+    find_cfg || {
+        [ "$quiet" = "1" ] || warn "未找到 CONFIG 分区；钩子可能仍残留"
+        return 1
+    }
     hook="$CFG_MNT/networkfs.sh"
     if ! grep -qF "$HOOK_BEGIN" "$hook" 2>/dev/null; then
         release_cfg
-        info "CONFIG 分区没有 SPlayer Atom 钩子"
+        [ "$quiet" = "1" ] || info "CONFIG 分区没有 SPlayer Atom 钩子"
         return 0
     fi
     ts=$(date +%Y%m%d-%H%M%S)
@@ -154,13 +210,13 @@ remove_hook() {
     cat "$tmp" > "$hook"
     rm -f "$tmp"
     sync 2>/dev/null || true
-    info "已移除开机钩子"
+    info "已移除 CONFIG 开机钩子"
     release_cfg
     return 0
 }
 
 remove_card() {
-    for base in /opt/.gentooplayer /opt/script-server; do
+    for base in /opt/.gentooplayer "$SCRIPT_SERVER_LIVE" "$SCRIPT_SERVER_SYNC"; do
         rm -f "$base/web/conf/runners/zz_splayeratom_ctl.json" 2>/dev/null || true
     done
 }
@@ -173,7 +229,13 @@ install_all() {
         card=$(sh "$MENU" 2>/dev/null || true)
         [ -n "$card" ] && info "菜单卡片：$card"
     fi
-    write_hook || return 1
+    if use_auto_start; then
+        write_auto_start_hook || return 1
+        # 从旧版 CONFIG 钩子迁移过来时顺手清理，避免开机触发两次。
+        remove_cfg_hook 1 || true
+    else
+        write_cfg_hook || return 1
+    fi
 }
 
 uninstall_all() {
@@ -182,7 +244,8 @@ uninstall_all() {
         target=$(readlink /usr/local/bin/splayeratomctl 2>/dev/null || true)
         [ "$target" = "$CTL" ] && rm -f /usr/local/bin/splayeratomctl
     fi
-    remove_hook || true
+    remove_auto_start_hook || true
+    remove_cfg_hook 1 || true
 }
 
 case "${1:-install}" in
